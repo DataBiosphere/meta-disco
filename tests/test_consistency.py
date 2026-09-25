@@ -8,11 +8,12 @@ from typing import TypedDict
 import pytest
 
 from meta_disco.consistency import check_record, load_rules, render_report
+from meta_disco.models import CLASSIFICATION_FIELDS
 from meta_disco.output_utils import iter_records
 
 RULES = load_rules()
 
-_DIMS = ("data_modality", "data_type", "reference_assembly", "assay_type", "platform")
+_DIMS = CLASSIFICATION_FIELDS
 
 
 class _Record(TypedDict):
@@ -131,6 +132,23 @@ def test_checksum_classified_genomic_flags_auxiliary_inert():
     [v] = [x for x in check_record(rec, RULES) if x.rule_id == "auxiliary_inert"]
     assert v.offending_field == "data_modality"
     assert v.offending_value == "genomic"
+
+
+@pytest.mark.parametrize(
+    ("rule_id", "dims"),
+    [
+        (
+            "imaging_exclusive",
+            {"data_modality": _c("imaging.histology"), "data_type": _c("images"), "assay_type": _c("Histology")},
+        ),
+        ("auxiliary_inert", {"data_type": _c("checksum")}),
+    ],
+)
+def test_a_classified_instrument_model_breaks_the_inert_rules(rule_id, dims):
+    """A histology image or a checksum names no instrument (#532)."""
+    rec = _rec(instrument_model=_c("Revio"), **dims)
+    [v] = [x for x in check_record(rec, RULES) if x.rule_id == rule_id]
+    assert (v.offending_field, v.offending_value) == ("instrument_model", "Revio")
 
 
 def test_inert_checksum_with_all_not_applicable_is_clean():

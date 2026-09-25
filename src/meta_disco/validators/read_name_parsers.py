@@ -42,7 +42,6 @@ class IlluminaReadName:
 
     format: IlluminaFormat
     instrument: str
-    instrument_model: str | None
     lane: int
     tile: int
     x: int
@@ -64,7 +63,6 @@ class PacBioReadName:
     format: PacBioFormat
     movie: str
     zmw: int
-    instrument_model: str | None
     read_type: str | None = None
     start: int | None = None
     end: int | None = None
@@ -96,20 +94,27 @@ class MgiReadName:
     format: str = "mgi"
 
 
-# Illumina instrument ID prefix -> model name mapping
-# Order matters: more specific prefixes (A0, A1, VH) must come before less specific (A, N)
-ILLUMINA_INSTRUMENT_RULES = [
-    {"prefix": "A0", "model": "NovaSeq 6000"},
-    {"prefix": "A1", "model": "NovaSeq 6000"},
-    {"prefix": "A", "model": "NovaSeq"},
-    {"prefix": "M", "model": "MiSeq"},
-    {"prefix": "D", "model": "HiSeq 2500"},
-    {"prefix": "E", "model": "HiSeq X"},
-    {"prefix": "VH", "model": "NextSeq 2000"},
-    {"prefix": "N", "model": "NextSeq"},
-    {"prefix": "K", "model": "HiSeq 4000"},
-    {"prefix": "J", "model": "HiSeq 3000"},
-]
+# Names this module and its re-exporters no longer provide, each with why. Importing
+# one raises an ImportError that says so, instead of Python's bare "cannot import".
+REMOVED_NAMES = {
+    "infer_illumina_instrument_model": (
+        "removed in #532: an instrument-serial prefix is a vendor numbering convention, not "
+        "a statement of the model; the instrument_model dimension reads @RG PM instead"
+    ),
+}
+
+
+def removed_name(module: str, name: str) -> ImportError | None:
+    """The ImportError for a name in ``REMOVED_NAMES``, or None for any other name."""
+    why = REMOVED_NAMES.get(name)
+    return ImportError(f"{module}.{name} was {why}") if why else None
+
+
+def __getattr__(name: str):
+    error = removed_name(__name__, name)
+    if error:
+        raise error
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def extract_archive_accession(read_name: str) -> tuple[str | None, str | None, str]:
@@ -146,31 +151,6 @@ def extract_archive_accession(read_name: str) -> tuple[str | None, str | None, s
 
     # No accession found
     return None, None, read_name.lstrip("@")
-
-
-def infer_illumina_instrument_model(instrument_id: str) -> str | None:
-    """
-    Infer Illumina instrument model from instrument ID prefix.
-
-    Uses ILLUMINA_INSTRUMENT_RULES for prefix matching.
-    Order matters: more specific prefixes are checked first.
-
-    Args:
-        instrument_id: The instrument identifier (e.g., "A00297")
-
-    Returns:
-        Instrument model name or None if unknown
-    """
-    if not instrument_id:
-        return None
-
-    inst = instrument_id.upper()
-
-    for rule in ILLUMINA_INSTRUMENT_RULES:
-        if inst.startswith(rule["prefix"]):
-            return rule["model"]
-
-    return None
 
 
 def detect_paired_end_indicators(text: str) -> bool:
@@ -237,7 +217,6 @@ def parse_illumina_read_name(read_name: str) -> IlluminaReadName | None:
         return IlluminaReadName(
             format=IlluminaFormat.MODERN,
             instrument=instrument_id,
-            instrument_model=infer_illumina_instrument_model(instrument_id),
             run_number=int(groups[1]),
             flowcell=groups[2],
             lane=int(groups[3]),
@@ -261,7 +240,6 @@ def parse_illumina_read_name(read_name: str) -> IlluminaReadName | None:
         return IlluminaReadName(
             format=IlluminaFormat.LEGACY,
             instrument=instrument_id,
-            instrument_model=infer_illumina_instrument_model(instrument_id),
             lane=int(groups[1]),
             tile=int(groups[2]),
             x=int(groups[3]),
@@ -272,18 +250,6 @@ def parse_illumina_read_name(read_name: str) -> IlluminaReadName | None:
             archive_source=source,
         )
 
-    return None
-
-
-def _infer_pacbio_instrument_model(movie: str) -> str | None:
-    """Infer PacBio instrument model from movie name prefix."""
-    prefix = movie.split("_")[0] if "_" in movie else movie
-    if prefix.startswith("m84"):
-        return "Revio"
-    if prefix.startswith("m64"):
-        return "Sequel II/IIe"
-    if prefix.startswith("m54"):
-        return "Sequel"
     return None
 
 
@@ -305,12 +271,8 @@ def parse_pacbio_read_name(read_name: str) -> PacBioReadName | None:
     """
     name = read_name.lstrip("@")
 
-    # PacBio movie ID pattern: m{instrument}_{date}_{time}
-    # Instrument IDs include:
-    #   m64011   - Sequel
-    #   m54329U  - Sequel II (U suffix)
-    #   m54306Ue - Sequel IIe (Ue suffix)
-    #   m84046   - Revio
+    # PacBio movie ID pattern: m{instrument}_{date}_{time}, e.g. m64011, m54329U,
+    # m84046. The instrument part is a serial number; it is not read as a model (#532).
     MOVIE_PATTERN = r"m\d+[A-Za-z]*_\d+_\d+"
 
     # CCS format: m64011_190830_220126/1/ccs or m54329U_220116_013607/102/ccs
@@ -323,7 +285,6 @@ def parse_pacbio_read_name(read_name: str) -> PacBioReadName | None:
             movie=movie,
             zmw=int(match.group(2)),
             read_type="CCS",
-            instrument_model=_infer_pacbio_instrument_model(movie),
         )
 
     # CLR (subread) format: m64011_190830_220126/1234/0_5000
@@ -338,7 +299,6 @@ def parse_pacbio_read_name(read_name: str) -> PacBioReadName | None:
             start=int(match.group(3)),
             end=int(match.group(4)),
             read_type="CLR",
-            instrument_model=_infer_pacbio_instrument_model(movie),
         )
 
     # Generic PacBio: m64011_190830_220126/1234
@@ -350,7 +310,6 @@ def parse_pacbio_read_name(read_name: str) -> PacBioReadName | None:
             format=PacBioFormat.GENERIC,
             movie=movie,
             zmw=int(match.group(2)),
-            instrument_model=_infer_pacbio_instrument_model(movie),
         )
 
     return None

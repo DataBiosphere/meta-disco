@@ -1229,7 +1229,7 @@ def test_a_retired_member_is_never_also_a_line_member():
 def test_the_row_field_pattern_lists_every_dimension(schema):
     """The schema's `EvidenceRow.field` pattern and `CLASSIFICATION_FIELDS` are one set.
 
-    The pattern spells the five names out rather than pointing at an enum, because
+    The pattern spells the names out rather than pointing at an enum, because
     they are slot *names* in that schema and not a vocabulary it declares. That only
     stays safe while the two agree: a dimension added to the tuple and not to the
     pattern would be written by this module and refused by the gate (#421).

@@ -40,6 +40,17 @@
             "status": "classified",
             "value": "genotypes"
           },
+          "instrument_model": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for instrument_model",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
+          },
           "platform": {
             "evidence": [
               {
@@ -135,6 +146,19 @@
             ],
             "status": "classified",
             "value": "images"
+          },
+          "instrument_model": {
+            "evidence": [
+              {
+                "reason": "SVS files are Aperio whole-slide histology images used for pathology analysis",
+                "rule_id": "image_svs_histology",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
           },
           "platform": {
             "evidence": [
@@ -232,6 +256,18 @@
             "status": "classified",
             "value": "index"
           },
+          "instrument_model": {
+            "evidence": [
+              {
+                "reason": "Parent file sample.flnc.bam had no value for instrument_model",
+                "rule_id": "inherited_from_parent",
+                "source_type": "derivation_inheritance",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
+          },
           "platform": {
             "evidence": [
               {
@@ -309,6 +345,18 @@
             ],
             "status": "classified",
             "value": "index"
+          },
+          "instrument_model": {
+            "evidence": [
+              {
+                "reason": "No parent to inherit instrument_model from: no file in this dataset carries a candidate parent name, matched case-insensitively",
+                "rule_id": "no_matching_parent_in_dataset",
+                "source_type": "derivation_inheritance",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
           },
           "platform": {
             "evidence": [
@@ -419,6 +467,17 @@
               {
                 "marker": "not_classified",
                 "reason": "No rule determined a value for data_type",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
+          },
+          "instrument_model": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for instrument_model",
                 "status": "not_classified"
               }
             ],

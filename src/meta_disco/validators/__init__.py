@@ -36,7 +36,6 @@ from .read_name_parsers import (
     detect_paired_end_indicators,
     detect_platform_from_read_name,
     extract_archive_accession,
-    infer_illumina_instrument_model,
     parse_illumina_read_name,
     parse_mgi_read_name,
     parse_ont_read_name,
@@ -89,7 +88,6 @@ __all__ = [
     "OntReadName",
     "MgiReadName",
     "extract_archive_accession",
-    "infer_illumina_instrument_model",
     "parse_illumina_read_name",
     "parse_ont_read_name",
     "parse_pacbio_read_name",
@@ -97,3 +95,13 @@ __all__ = [
     "detect_paired_end_indicators",
     "detect_platform_from_read_name",
 ]
+
+
+def __getattr__(name: str):
+    """Say why a removed name is gone (``read_name_parsers.REMOVED_NAMES``)."""
+    from .read_name_parsers import removed_name
+
+    error = removed_name(__name__, name)
+    if error:
+        raise error
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

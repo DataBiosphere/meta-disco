@@ -54,6 +54,9 @@
 #
 # - platform: Sequencing platform (ILLUMINA, PACBIO, ONT, MGI)
 #
+# - instrument_model: Sequencing instrument model, in ENA/SRA's spelling
+#   (Illumina NovaSeq 6000, Revio, PromethION)
+#
 #
 # FILE STRUCTURE (Multi-document YAML)
 # ------------------------------------
@@ -63,9 +66,9 @@
 #  meta_disco.file_name in #252, so it is no longer a document here.)
 # 1. rules: The classification rules (main content)
 # 2. validators: Python validator configurations for complex logic
-# 3. illumina_instruments: Instrument ID prefix to model mapping
-# 4. reference_contig_lengths: Chromosome sizes for reference detection
-# (Assay-type inference, which read other rules' answers, was removed in #88.)
+# 3. reference_contig_lengths: Chromosome sizes for reference detection
+# (Assay-type inference, which read other rules' answers, was removed in #88; the
+#  Illumina instrument-prefix table, a vendor numbering convention, in #532.)
 #
 #
 # RULE SCHEMA
@@ -124,6 +127,8 @@
 # - header_section: BAM header section (@HD, @RG, @PG, @SQ)
 # - header_field: field within section (PL, PN, SN, AS, DS)
 # - header_pattern: regex pattern to match in field value
+# - header_match_all: true if every record of the section must carry the field and
+#     match header_pattern (e.g. every @RG has a PM naming the model), not just one
 # - header_absent: true if header section should NOT exist
 # - vcf_header_type: VCF header line type (##reference, ##source, ##contig)
 # - vcf_pattern: regex pattern for VCF header content
@@ -138,6 +143,7 @@
 # - reference_assembly: set reference (GRCh38, GRCh37, CHM13)
 # - assay_type: set assay type (WGS, WES, RNA-seq, ATAC-seq, etc.)
 # - platform: set sequencing platform (ILLUMINA, PACBIO, ONT, MGI)
+# - instrument_model: set instrument model (Illumina NovaSeq 6000, Revio, etc.)
 #
 #
 #
@@ -186,7 +192,7 @@ rules:
   # file named for CHM13 *is* associated with CHM13 and the stamp — terminal in the
   # evaluator until #523 — was blocking `filename_ref_*` from saying so. It left `data_modality`
   # and `platform` explicitly to be reconsidered. This is that reconsideration: the
-  # four dimensions a parent supplies all behave alike now, and none is stamped.
+  # dimensions a parent supplies all behave alike now, and none is stamped.
   #
   # They *do* apply to an index file. The matched path in `classify_index_files`
   # proves it by inheriting `genomic` / `CHM13` / `ILLUMINA` / `WGS` from the parent;
@@ -233,6 +239,7 @@ rules:
         reference_assembly: not_applicable
         assay_type: not_applicable
         platform: not_applicable
+        instrument_model: not_applicable
     rationale: "Checksum file — a checksum, and no data of its own"
 
   # ---------------------------------------------------------------------------
@@ -250,6 +257,7 @@ rules:
         reference_assembly: not_applicable
         assay_type: not_applicable
         platform: not_applicable
+        instrument_model: not_applicable
     rationale: "Log file — a log, and no data of its own"
 
   # ---------------------------------------------------------------------------
@@ -319,6 +327,7 @@ rules:
       assay_type: Histology
       status:
         platform: not_applicable
+        instrument_model: not_applicable
         reference_assembly: not_applicable
     rationale: "SVS files are Aperio whole-slide histology images used for pathology analysis"
 
@@ -339,6 +348,7 @@ rules:
       status:
         data_modality: not_applicable
         platform: not_applicable
+        instrument_model: not_applicable
         reference_assembly: not_applicable
         assay_type: not_applicable
     rationale: "Image files are derived visualizations (QC plots, assembly graphs) — not primary experimental data"
@@ -396,6 +406,7 @@ rules:
       data_type: sequence
       status:
         platform: not_applicable
+        instrument_model: not_applicable
         assay_type: not_applicable
     rationale: "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences"
 
@@ -418,6 +429,7 @@ rules:
       data_type: pangenome
       status:
         platform: not_applicable
+        instrument_model: not_applicable
         assay_type: not_applicable
     rationale: "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph — a genomic assembly product, so no sequencing platform or assay applies"
 
@@ -670,6 +682,7 @@ rules:
         data_type: not_applicable
         assay_type: not_applicable
         platform: not_applicable
+        instrument_model: not_applicable
     rationale: "Target/capture region file — reference data, not primary experimental data"
 
   # ---------------------------------------------------------------------------
@@ -687,6 +700,7 @@ rules:
         data_type: not_applicable
         assay_type: not_applicable
         platform: not_applicable
+        instrument_model: not_applicable
     rationale: "QC/stats file — supplementary data, not primary experimental data"
 
   - id: text_expression
@@ -757,6 +771,50 @@ rules:
     then:
       platform: ONT
     rationale: "PL:ONT indicates Oxford Nanopore long-read sequencing"
+
+  # ---------------------------------------------------------------------------
+  # Instrument model from the @RG PM field (#532). The SAM spec defines PM as the
+  # platform model but leaves its text free, so each rule matches one whole value
+  # that names exactly one ENA/SRA model, and declares the platform that model
+  # implies from the same evidence. Values that name several are not read:
+  # `SEQUELII` (Sequel II and Sequel IIe both), `SEQUEL` (not shown to name one
+  # model: a submitter says Sequel II on 124 of the corpus files that carry it, so
+  # it may be written for Sequel II runs too; unconfirmed), `NovaSeq` (a family),
+  # and the ONT
+  # flow-cell positions and device serials (`1A`, `PC48B200`) written into the
+  # same field. Nor is any read-name serial prefix (`A00297`, `m84046`): that is a
+  # vendor numbering convention no standard states, not the file naming its model.
+  # `header_match_all` makes every @RG carry a PM naming the model: a BAM merged from
+  # runs on two instruments (PM:SEQUELII and PM:REVIO), or one with a read group
+  # that gives no PM, names none.
+  # ---------------------------------------------------------------------------
+  - id: instrument_model_revio
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@RG"
+      header_field: "PM"
+      header_pattern: "^REVIO$"
+      header_match_all: true
+    then:
+      instrument_model: Revio
+      platform: PACBIO
+    rationale: "@RG PM is REVIO, which names the PacBio Revio; the model implies the platform"
+
+  - id: instrument_model_novaseq_x
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@RG"
+      header_field: "PM"
+      header_pattern: "^NovaSeq X$"
+      header_match_all: true
+    then:
+      instrument_model: Illumina NovaSeq X
+      platform: ILLUMINA
+    rationale: "PM:NovaSeq X names the Illumina NovaSeq X, and so the platform; `NovaSeq X Plus` is a different value and not matched"
 
   - id: ont_basecall_dna
     tier: 3
@@ -1107,39 +1165,6 @@ validators:
     module: "meta_disco.validators.read_name_parsers"
     function: "parse_ont_read_name"
     applies_to: ["fastq_header"]
-
-  illumina_instrument_model:
-    description: "Infer Illumina instrument model from instrument ID prefix"
-    module: "meta_disco.validators.read_name_parsers"
-    function: "infer_illumina_instrument_model"
-    applies_to: ["header", "fastq_header"]
-
----
-# =============================================================================
-# ILLUMINA INSTRUMENT ID PREFIX MAPPING
-# =============================================================================
-
-illumina_instruments:
-  - prefix: "A0"
-    model: "NovaSeq 6000"
-  - prefix: "A1"
-    model: "NovaSeq 6000"
-  - prefix: "A"
-    model: "NovaSeq"
-  - prefix: "M"
-    model: "MiSeq"
-  - prefix: "D"
-    model: "HiSeq 2500"
-  - prefix: "E"
-    model: "HiSeq X"
-  - prefix: "VH"
-    model: "NextSeq 2000"
-  - prefix: "N"
-    model: "NextSeq"
-  - prefix: "K"
-    model: "HiSeq 4000"
-  - prefix: "J"
-    model: "HiSeq 3000"
 
 ---
 # =============================================================================

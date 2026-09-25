@@ -1484,18 +1484,18 @@ class TestSentinelValues:
     """Test that not_applicable/not_classified sentinels are used correctly."""
 
     def test_an_index_leaves_the_parents_dimensions_open(self, engine):
-        """All four are applicable to an index and undetermined without its parent.
+        """Every dimension but the kind is applicable to an index and undetermined without its parent.
 
         This test used to assert `reference_assembly` open and the other three
         `not_applicable`, on the reasoning — in its own docstring — that "reference IS
         applicable to indexes, it's determined by the parent file's alignment". That is
-        equally true of modality, platform and assay: the parent determines all four,
-        and the matched path in `classify_index_files` inherits all four. #437 made the
+        equally true of modality, platform and assay: the parent determines all of them,
+        and the matched path in `classify_index_files` inherits all of them. #437 made the
         rule treat them alike.
         """
         result = engine.classify_extended(FileInfo.from_filename("sample.bam.bai"))
         assert result.data_type == "index"
-        for field in ("data_modality", "reference_assembly", "platform", "assay_type"):
+        for field in (f for f in CLASSIFICATION_FIELDS if f != "data_type"):
             assert result.status_of(field) == NOT_CLASSIFIED, f"{field} should be open, not denied"
 
     def test_unclassified_fields_get_not_classified(self, engine):
@@ -1508,13 +1508,13 @@ class TestSentinelValues:
         """Evidence reason for not_classified should name the specific field."""
         result = engine.classify_extended(FileInfo.from_filename("sample.xyz"))
         checked = 0
-        for fld in ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]:
+        for fld in CLASSIFICATION_FIELDS:
             evidence = result.field_evidence[fld]
             nc_evidence = [e for e in evidence if e.get("marker") == "not_classified"]
             assert nc_evidence, f"Expected not_classified marker for {fld}"
             assert fld in nc_evidence[0]["reason"], f"Expected '{fld}' in reason, got: {nc_evidence[0]['reason']}"
             checked += 1
-        assert checked == 5
+        assert checked == len(CLASSIFICATION_FIELDS)
 
     def test_images_get_not_applicable_for_genomic_fields(self, engine):
         """Image files should get not_applicable for platform and reference."""

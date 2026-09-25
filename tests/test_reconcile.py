@@ -275,6 +275,28 @@ def test_ac6_an_authored_row_makes_one_claim_citing_its_row_raw_value_table_and_
     assert (claim["source"]["table"], claim["source"]["column"]) == ("hifi", "platform_name")
 
 
+def test_a_row_declaring_two_slots_claims_the_slot_its_line_does_not_name(tmp_path, run, evidence):
+    """A line on `platform` reaches `instrument_model` through a two-slot row (contract 3.10, #532)."""
+    two_slots = load(
+        tmp_path,
+        TABLE
+        + """  - id: platform.revio
+    match: {slot: platform, value: Revio}
+    declares: {platform: PACBIO, instrument_model: Revio}
+    reason: A PacBio instrument model.
+""",
+    )
+    write_run(run, [record(1)])
+    write_evidence(evidence, [("platform", drs(1), "Revio")], table="hifi", column="instrument_model")
+    go(run, tmp_path, evidence, two_slots)
+    model = slot(run, 1, "instrument_model")
+    assert (model["status"], model["value"]) == (CLASSIFIED, "Revio")
+    (claim,) = [e for e in model["evidence"] if "source" in e]
+    assert claim["rule_id"] == "platform.revio" and claim["raw_value"] == "Revio"
+    assert claim["source"]["column"] == "instrument_model"
+    assert slot(run, 1, "platform")["value"] == "PACBIO"
+
+
 def test_ac7_a_seeded_row_makes_no_claim(tmp_path, run, evidence, table):
     write_run(run, [record(1)])
     write_evidence(evidence, [("platform", drs(1), "MYSTERY")])

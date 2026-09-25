@@ -530,7 +530,8 @@ def reconcile_record(record: dict, record_slots: dict[str, SlotEvidence]) -> dic
     ``classifications`` that are not slots (a producer's scalar hints) pass through.
 
     Raises ``ValueError`` on a record missing a slot or a slot's ``status``: every
-    producer writes all five, so one without is damaged, and settling the rest would
+    producer writes every slot, so a record without one is damaged or was written
+    before the slot existed (``instrument_model``, #532), and settling the rest would
     write a reconciled record that silently lacks a dimension.
     """
     out = dict(record)
@@ -541,7 +542,10 @@ def reconcile_record(record: dict, record_slots: dict[str, SlotEvidence]) -> dic
     for slot in CLASSIFICATION_FIELDS:
         entry = classifications.get(slot)
         if not isinstance(entry, dict) or "status" not in entry:
-            raise ValueError(f"record {record.get('file_name')!r} has no {slot} slot with a status; it is damaged")
+            raise ValueError(
+                f"record {record.get('file_name')!r} has no {slot} slot with a status; it is damaged, "
+                "or the run predates the slot — re-run `make classify`"
+            )
         said = record_slots.get(slot, NO_EVIDENCE)
         inferred = {"value": entry.get("value"), "status": entry["status"]}
         status, value = resolve_slot(inferred, said.claims, SOURCE_PUBLISHED_VALUE in said.unreviewed)

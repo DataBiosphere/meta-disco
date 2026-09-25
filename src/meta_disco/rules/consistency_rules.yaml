@@ -55,14 +55,15 @@ rules:
   - id: imaging_exclusive
     description: >-
       A histology image carries no sequencing signal: when classified, data_type
-      must be images and assay_type must be Histology; platform and
-      reference_assembly must not be classified at all (a histology file with
+      must be images and assay_type must be Histology; platform, instrument_model
+      and reference_assembly must not be classified at all (a histology file with
       platform=ILLUMINA or reference=GRCh38 is unmistakably wrong).
     when: {data_modality: "imaging.histology"}
     require:
       data_type: {value_in: ["images"]}
       assay_type: {value_in: ["Histology"]}
       platform: {status_not: "classified"}
+      instrument_model: {status_not: "classified"}
       reference_assembly: {status_not: "classified"}
 
   # --- 5. platform <-> modality family ----------------------------------------
@@ -83,12 +84,13 @@ rules:
   - id: auxiliary_inert
     description: >-
       A checksum or log describes another file and carries no signal of its own,
-      so modality / reference / assay / platform must not be classified (e.g. a
-      .md5 classified genomic is inconsistent). Index inertness is the #312
-      propagation question and is intentionally out of scope here.
+      so modality / reference / assay / platform / instrument model must not be
+      classified (e.g. a .md5 classified genomic is inconsistent). Index inertness
+      is the #312 propagation question and is intentionally out of scope here.
     when: {data_type: {value_in: ["checksum", "log"]}}
     require:
       data_modality: {status_not: "classified"}
       reference_assembly: {status_not: "classified"}
       assay_type: {status_not: "classified"}
       platform: {status_not: "classified"}
+      instrument_model: {status_not: "classified"}

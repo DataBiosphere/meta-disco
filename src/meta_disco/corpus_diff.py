@@ -320,7 +320,7 @@ def run_labels(run_dir: Path, artifact: str) -> dict[FileKey, Counter[Labels]]:
     labels: dict[FileKey, Counter[Labels]] = defaultdict(Counter)
     # The corpus holds ~700K records but only a few dozen distinct label tuples, so
     # each tuple is interned: one shared object per distinct combination instead of
-    # a fresh tuple and five fresh strings per record.
+    # a fresh tuple and one fresh string per dimension per record.
     interned: dict[Labels, Labels] = {}
     for record in records:
         key: FileKey = (

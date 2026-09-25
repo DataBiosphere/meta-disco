@@ -154,7 +154,7 @@ JOIN_KEYS = frozenset(
 # matters: make_claim runs a few million times per corpus, and schema_vocab was
 # test- and validation-only before this.
 
-# The five classification dimension fields, in canonical output order. Single
+# The six classification dimension fields, in canonical output order. Single
 # source of truth for the field set — the rule engine, rule_loader's 'then' key
 # validation, and schema_vocab's dimensions all derive from this.
 CLASSIFICATION_FIELDS = (
@@ -163,6 +163,7 @@ CLASSIFICATION_FIELDS = (
     "platform",
     "reference_assembly",
     "assay_type",
+    "instrument_model",
 )
 
 
@@ -303,10 +304,10 @@ def all_not_classified(evidence: list[dict]) -> dict:
 
     The shared shape for a record we assert *nothing* about — a failed input
     contract (``metadata_schema.validation_failed_classifications``) or an
-    unreadable fetch (``header_classifier.classify_without_content``). Each of the
-    five dimensions gets ``not_classified`` status and a *fresh copy* of
-    ``evidence`` (its cause). The per-field copy is deliberate: one shared list
-    aliased across five fields would let a later in-place edit of one mutate all.
+    unreadable fetch (``header_classifier.classify_without_content``). Each
+    dimension gets ``not_classified`` status and a *fresh copy* of ``evidence``
+    (its cause). The per-field copy is deliberate: one shared list aliased across
+    the fields would let a later in-place edit of one mutate all.
     """
     return {
         fld: build_field_entry(None, status=NOT_CLASSIFIED, evidence=[dict(e) for e in evidence])

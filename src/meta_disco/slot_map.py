@@ -60,8 +60,8 @@ exclusions are structural. Two are enforced by the loader:
 The rest is the authoring rule, a judgment about the source's own schema that the
 loader does not enforce, recorded here and on the issue (#369) — never about a run.
 Contract 2.7 sorts columns into file links, metadata values and foreign keys. A
-**cell** maps where the column's name, in the source's schema, names one of our five
-facts. A table with **one** file-link column is a file table: its name describes the
+**cell** maps where the column's name, in the source's schema, names one of our
+dimensions. A table with **one** file-link column is a file table: its name describes the
 file, so its name tokens map. A table with **several** is an entity table (one row per
 sample, one column per file): its column names describe the files and map, and its
 name maps for a slot only where the fact is one every file in the row shares (a

@@ -68,14 +68,6 @@ class ValidatorConfig:
     applies_to: list[str]
 
 
-@dataclass
-class IlluminaInstrument:
-    """Mapping from instrument ID prefix to model name."""
-
-    prefix: str
-    model: str
-
-
 # Contigs the build key is computed over (bare names, without ``chr``). Changing
 # this set means regenerating the table (scripts/generate_reference_builds.py) —
 # ReferenceBuild's signature fields are named per contig, so the two have to
@@ -141,7 +133,6 @@ class UnifiedRules:
 
     rules: list[UnifiedRule]
     validators: dict[str, ValidatorConfig]
-    illumina_instruments: list[IlluminaInstrument]
     reference_contig_lengths: dict[str, dict[str, int]]
     reference_builds: list[ReferenceBuild]
 
@@ -215,6 +206,7 @@ class RuleLoader:
         "header_section",
         "header_field",
         "header_pattern",
+        "header_match_all",
         "header_absent",
         "vcf_header_type",
         "vcf_pattern",
@@ -313,31 +305,20 @@ class RuleLoader:
         if len(docs) > 1 and docs[1]:
             validators = self._parse_validators(docs[1].get("validators", {}))
 
-        # Third document: illumina instruments (optional). The assay-inference
-        # document that stood here is gone (#88): no rule reads another rule's answer.
-        # Documents are positional, so a file still in the five-document layout would
-        # read its assay document here as instruments; refuse it by name instead.
-        if any(isinstance(d, dict) and "assay_type_rules" in d for d in docs):
-            raise ValueError("Rules file carries an `assay_type_rules` document, removed in #88; delete it")
-        illumina_instruments = []
-        if len(docs) > 2 and docs[2]:
-            illumina_instruments = self._parse_illumina_instruments(docs[2].get("illumina_instruments", []))
-
-        # Fourth document: reference tables (both optional). Contig lengths drive
+        # Third document: reference tables (both optional). Contig lengths drive
         # the coarse family detection; reference_builds is the finer build table
         # read by validators.reference_builds (#340). They share a document
         # because both describe references, not because either depends on the
         # other — the coarse path does not consult the build table.
         reference_contig_lengths = {}
         reference_builds: list[ReferenceBuild] = []
-        if len(docs) > 3 and docs[3]:
-            reference_contig_lengths = docs[3].get("reference_contig_lengths", {})
-            reference_builds = self._parse_reference_builds(docs[3].get("reference_builds", []) or [])
+        if len(docs) > 2 and docs[2]:
+            reference_contig_lengths = docs[2].get("reference_contig_lengths", {})
+            reference_builds = self._parse_reference_builds(docs[2].get("reference_builds", []) or [])
 
         self._rules = UnifiedRules(
             rules=rules,
             validators=validators,
-            illumina_instruments=illumina_instruments,
             reference_contig_lengths=reference_contig_lengths,
             reference_builds=reference_builds,
         )
@@ -465,16 +446,6 @@ class RuleLoader:
             )
 
         return validators
-
-    def _parse_illumina_instruments(self, instruments_data: list[dict]) -> list[IlluminaInstrument]:
-        """Parse Illumina instrument mappings from YAML."""
-        return [
-            IlluminaInstrument(
-                prefix=inst.get("prefix", ""),
-                model=inst.get("model", ""),
-            )
-            for inst in instruments_data
-        ]
 
     @staticmethod
     def _signature_set(build: dict, key: str) -> frozenset:

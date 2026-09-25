@@ -2,7 +2,7 @@ id: https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/
 name: meta_disco_classification
 title: Meta-Disco File Classification Model
 description: >-
-  Full classification data model for meta-disco: the five metadata dimensions,
+  Full classification data model for meta-disco: the six metadata dimensions,
   per-field evidence, classification status, and typed derivation edges. Supersedes
   the retired anvil_file.yaml stub (issue #33) and realizes the data-model decision
   record in docs/derived-file-data-model.md.
@@ -22,6 +22,7 @@ description: >-
 prefixes:
   linkml: https://w3id.org/linkml/
   anvil: https://github.com/DataBiosphere/meta-disco/schema/
+  EFO: http://www.ebi.ac.uk/efo/EFO_
 default_prefix: anvil
 default_range: string
 
@@ -37,7 +38,7 @@ classes:
     tree_root: true
     description: >-
       One classified file. `classifications` carries the file's identity (the
-      five dimension fields — what it is); derived_from is a typed edge to the
+      six dimension fields — what it is); derived_from is a typed edge to the
       file it was derived from (where it came from). Matches the pipeline output
       shape (see docs/derived-file-data-model.md section 5a).
     slots:
@@ -54,9 +55,9 @@ classes:
 
   Classifications:
     description: >-
-      The five metadata dimensions for one file, each a Classification entry.
+      The six metadata dimensions for one file, each a Classification entry.
       The pipeline also emits some file-type-specific scalar hints here (e.g.
-      fastq's is_paired_end / instrument_model); those are not modeled yet and
+      fastq's is_paired_end / instrument_hint); those are not modeled yet and
       pass under the gate's closed=False mode (see #134 follow-up).
     slots:
       - data_modality
@@ -64,6 +65,7 @@ classes:
       - reference_assembly
       - assay_type
       - platform
+      - instrument_model
     slot_usage:
       data_modality:
         range: DataModalityClassification
@@ -79,6 +81,9 @@ classes:
         required: true
       platform:
         range: PlatformClassification
+        required: true
+      instrument_model:
+        range: InstrumentModelClassification
         required: true
 
   Classification:
@@ -138,6 +143,12 @@ classes:
       value:
         range: platform_enum
 
+  InstrumentModelInferred:
+    is_a: InferredConclusion
+    slot_usage:
+      value:
+        range: instrument_model_enum
+
   DataModalityClassification:
     is_a: Classification
     slot_usage:
@@ -179,6 +190,14 @@ classes:
         range: platform_enum
       inferred:
         range: PlatformInferred
+
+  InstrumentModelClassification:
+    is_a: Classification
+    slot_usage:
+      value:
+        range: instrument_model_enum
+      inferred:
+        range: InstrumentModelInferred
 
   ReferenceBuild:
     description: >-
@@ -456,10 +475,10 @@ classes:
     attributes:
       field:
         required: true
-        pattern: "^(data_modality|data_type|platform|reference_assembly|assay_type)\\Z"
+        pattern: "^(data_modality|data_type|platform|reference_assembly|assay_type|instrument_model)\\Z"
         description: >-
           The slot this row speaks to, spelled `field` on the wire and in the code
-          (contract 2.1). One of the five classification dimensions.
+          (contract 2.1). One of the six classification dimensions.
 
           Pinned by pattern rather than by an enum because the dimension names are
           slot *names* in this schema and not a vocabulary it declares;
@@ -725,12 +744,12 @@ slots:
   dataset_title:
     description: Title of the dataset the file belongs to.
   classifications:
-    description: The five classified dimensions for this file.
+    description: The six classified dimensions for this file.
     range: Classifications
     required: true
     inlined: true
 
-  # --- the five dimensions (ranges narrowed to *Classification in slot_usage) ---
+  # --- the six dimensions (ranges narrowed to *Classification in slot_usage) ---
   data_modality:
     description: The biological signal the file carries.
   data_type:
@@ -741,6 +760,10 @@ slots:
     description: The experimental assay that produced the upstream data.
   platform:
     description: The sequencing platform / instrument family.
+  instrument_model:
+    description: >-
+      The sequencing instrument's model, refining `platform` (#532): `Illumina NovaSeq
+      6000` where `platform` says `ILLUMINA`. Not applicable wherever `platform` is not.
 
   derived_from:
     description: Typed derivation edge to the parent file, if this is a derived file.
@@ -946,6 +969,101 @@ enums:
       MGI:
       ELEMENT:
       ULTIMA:
+
+  instrument_model_enum:
+    description: >-
+      Sequencing instrument models, spelled exactly as ENA/SRA's controlled
+      `INSTRUMENT_MODEL` strings (SRA.common.xsd, enasequence/schema) for the
+      platforms in `platform_enum`; SRA's `unspecified` is not a model and is not
+      here (a file whose model is unknown is `not_classified`). `meaning` is the EFO
+      term whose label names the same model, recorded where EFO has one and never
+      followed at run time. Where EFO's nearest term is broader or narrower (its one
+      `Illumina HiSeq X` for SRA's `HiSeq X Five` / `HiSeq X Ten`, its `ONT GridION
+      X5` for SRA's `GridION`) no meaning is recorded.
+    permissible_values:
+      # --- Illumina (SRA platform ILLUMINA) ---
+      "HiSeq X Five":
+      "HiSeq X Ten":
+      "Illumina Genome Analyzer":
+        meaning: EFO:0004200
+      "Illumina Genome Analyzer II":
+        meaning: EFO:0004201
+      "Illumina Genome Analyzer IIx":
+        meaning: EFO:0004202
+      "Illumina HiScanSQ":
+      "Illumina HiSeq 1000":
+        meaning: EFO:0004204
+      "Illumina HiSeq 1500":
+        meaning: EFO:0011027
+      "Illumina HiSeq 2000":
+        meaning: EFO:0004203
+      "Illumina HiSeq 2500":
+        meaning: EFO:0008565
+      "Illumina HiSeq 3000":
+        meaning: EFO:0008564
+      "Illumina HiSeq 4000":
+        meaning: EFO:0008563
+      "Illumina HiSeq X":
+        meaning: EFO:0008567
+      "Illumina iSeq 100":
+        meaning: EFO:0008635
+      "Illumina MiSeq":
+        meaning: EFO:0004205
+      "Illumina MiniSeq":
+        meaning: EFO:0008636
+      "Illumina NovaSeq X":
+        meaning: EFO:0022840
+      "Illumina NovaSeq X Plus":
+        meaning: EFO:0022841
+      "Illumina NovaSeq 6000":
+        meaning: EFO:0008637
+      "NextSeq 500":
+        meaning: EFO:0009173
+      "NextSeq 550":
+        meaning: EFO:0008566
+      "NextSeq 1000":
+        meaning: EFO:0010962
+      "NextSeq 2000":
+        meaning: EFO:0010963
+      # --- PacBio (SRA platform PACBIO_SMRT) ---
+      "Onso":
+        meaning: EFO:0920007
+      "PacBio RS":
+      "PacBio RS II":
+        meaning: EFO:0008631
+      "Revio":
+        meaning: EFO:0920006
+      "Sequel":
+        meaning: EFO:0008630
+      "Sequel II":
+        meaning: EFO:0700015
+      "Sequel IIe":
+      "Vega":
+      # --- Oxford Nanopore (SRA platform OXFORD_NANOPORE) ---
+      "MinION":
+        meaning: EFO:0008632
+      "GridION":
+      "PromethION":
+        meaning: EFO:0008634
+      # --- MGI (SRA platforms BGISEQ and DNBSEQ) ---
+      "BGISEQ-50":
+      "BGISEQ-500":
+      "MGISEQ-2000RS":
+      "DNBSEQ-T7":
+        meaning: EFO:0920057
+      "DNBSEQ-G400":
+      "DNBSEQ-G800":
+      "DNBSEQ-G50":
+      "DNBSEQ-G400 FAST":
+      "DNBSEQ-T10x4RS":
+      # --- Element (SRA platforms ELEMENT and AVITI) ---
+      "Element AVITI":
+        meaning: EFO:0920008
+      "AVITI 24":
+      # --- Ultima (SRA platform ULTIMA) ---
+      "UG 100":
+        meaning: EFO:0920005
+      "UG 200":
 
   classification_status_enum:
     description: >-

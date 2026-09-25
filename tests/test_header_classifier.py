@@ -1,5 +1,7 @@
 """Tests for the header classifier module."""
 
+import importlib
+
 import pytest
 
 from meta_disco.file_name import FileName
@@ -15,12 +17,19 @@ from meta_disco.header_classifier import (
     detect_paired_end_indicators,
     # Helper functions
     extract_archive_accession,
-    infer_illumina_instrument_model,
     parse_illumina_read_name,
     parse_ont_read_name,
     parse_pacbio_read_name,
 )
-from meta_disco.models import CLASSIFIED, CONFLICT, NOT_APPLICABLE, NOT_CLASSIFIED, field_status, field_value
+from meta_disco.models import (
+    CLASSIFICATION_FIELDS,
+    CLASSIFIED,
+    CONFLICT,
+    NOT_APPLICABLE,
+    NOT_CLASSIFIED,
+    field_status,
+    field_value,
+)
 from meta_disco.validators.read_name_parsers import IlluminaFormat, PacBioFormat
 
 
@@ -81,29 +90,6 @@ def val(result: dict, field: str):
 def test_extract_archive_accession(read_name, accession, source, remainder):
     """Archive accession extraction from FASTQ read names."""
     assert extract_archive_accession(read_name) == (accession, source, remainder)
-
-
-@pytest.mark.parametrize(
-    ("instrument_id", "model"),
-    [
-        pytest.param("A00297", "NovaSeq 6000", id="A0 prefix is NovaSeq 6000"),
-        pytest.param("A01234", "NovaSeq 6000", id="A0 prefix is NovaSeq 6000, second id"),
-        pytest.param("A23456", "NovaSeq", id="other A prefix is generic NovaSeq"),
-        pytest.param("M00123", "MiSeq", id="M prefix is MiSeq"),
-        pytest.param("M70001", "MiSeq", id="M prefix is MiSeq, second id"),
-        pytest.param("D00123", "HiSeq 2500", id="D prefix is HiSeq 2500"),
-        pytest.param("E00123", "HiSeq X", id="E prefix is HiSeq X"),
-        pytest.param("N00123", "NextSeq", id="N prefix is NextSeq 500/550"),
-        pytest.param("VH00123", "NextSeq 2000", id="VH prefix is NextSeq 2000"),
-        pytest.param("K00123", "HiSeq 4000", id="K prefix is HiSeq 4000"),
-        pytest.param("X00123", None, id="unknown prefix is None"),
-        pytest.param("", None, id="empty id is None"),
-        pytest.param("a00297", "NovaSeq 6000", id="lowercase input is handled"),
-    ],
-)
-def test_infer_illumina_instrument_model(instrument_id, model):
-    """Illumina instrument model inference from the instrument id."""
-    assert infer_illumina_instrument_model(instrument_id) == model
 
 
 @pytest.mark.parametrize(
@@ -241,20 +227,28 @@ def test_parse_ont_read_name(read_name, expected):
 # =============================================================================
 
 
+@pytest.mark.parametrize(
+    "module", ["meta_disco.header_classifier", "meta_disco.validators", "meta_disco.validators.read_name_parsers"]
+)
+def test_importing_the_removed_prefix_guess_says_why(module):
+    """The break is explicit: the ImportError names #532 rather than a bare missing name."""
+    with pytest.raises(ImportError, match="removed in #532"):
+        importlib.import_module(module).infer_illumina_instrument_model  # noqa: B018  the access is the test
+
+
 class TestFastqReadMetadata:
     """Test the FastqReadMetadata merge into a classification result dict."""
 
     # The flat scalar keys FastqReadMetadata owns, in the order it writes them.
     SCALAR_KEYS = (
         "is_paired_end",
-        "instrument_model",
         "instrument_hint",
         "archive_accession",
         "archive_source",
     )
 
     def test_empty_metadata_merges_all_none(self):
-        """A default (all-None) instance splices five None-valued scalar keys."""
+        """A default (all-None) instance splices four None-valued scalar keys."""
         entries = {"data_type": "reads"}
         FastqReadMetadata().merge_into(entries)
         assert list(entries.keys()) == ["data_type", *self.SCALAR_KEYS]
@@ -266,7 +260,6 @@ class TestFastqReadMetadata:
         entries = {"data_type": "reads"}
         FastqReadMetadata(
             is_paired_end=True,
-            instrument_model="NovaSeq 6000",
             instrument_hint="A00297",
             archive_accession="ERR3242571",
             archive_source="ENA",
@@ -274,28 +267,20 @@ class TestFastqReadMetadata:
         assert entries == {
             "data_type": "reads",
             "is_paired_end": True,
-            "instrument_model": "NovaSeq 6000",
             "instrument_hint": "A00297",
             "archive_accession": "ERR3242571",
             "archive_source": "ENA",
         }
 
     def test_empty_input_path_produces_ten_keys_in_order(self):
-        """The empty-reads path returns the five entry keys then the five scalars.
+        """The empty-reads path returns the dimension entries then the four scalars.
 
         Asserts insertion order, not just the key set: the output is json-dumped
         to NDJSON and the PR's contract is byte-identical output, so key order is
         part of what must not regress.
         """
         result = classify_from_fastq_header([])
-        assert list(result.keys()) == [
-            "data_modality",
-            "data_type",
-            "platform",
-            "reference_assembly",
-            "assay_type",
-            *self.SCALAR_KEYS,
-        ]
+        assert list(result.keys()) == [*CLASSIFICATION_FIELDS, *self.SCALAR_KEYS]
         for key in self.SCALAR_KEYS:
             assert result[key] is None
 
@@ -315,12 +300,22 @@ class TestFastqClassification:
         assert field_status(result, "data_modality") == NOT_CLASSIFIED
         assert val(result, "data_type") == "reads"
 
-    def test_illumina_instrument_model(self):
-        """Extract Illumina instrument model."""
-        reads = ["@A00297:44:HFKH3DSXX:2:1354:30508:28839 1:N:0:ATCACG"]
-        result = classify_from_fastq_header(reads)
-        assert result["instrument_model"] == "NovaSeq 6000"
-        assert result["instrument_hint"] == "A00297"
+    @pytest.mark.parametrize(
+        "read",
+        [
+            pytest.param("@A00297:44:HFKH3DSXX:2:1354:30508:28839 1:N:0:ATCACG", id="illumina serial A00297"),
+            pytest.param("@m84046_230828_225743_s2/1234/ccs", id="pacbio movie m84046"),
+        ],
+    )
+    def test_a_read_name_serial_does_not_classify_the_instrument_model(self, read):
+        """The serial prefix is a vendor numbering convention, not the model (#532).
+
+        The dimension is an entry like the other five, and stays ``not_classified``
+        because no rule reads a model from a read name.
+        """
+        result = classify_from_fastq_header([read])
+        assert field_status(result, "instrument_model") == NOT_CLASSIFIED
+        assert field_value(result, "instrument_model") is None
 
     def test_ena_reformatted(self):
         """Classify ENA-reformatted FASTQ with accession extraction."""
@@ -332,7 +327,6 @@ class TestFastqClassification:
         assert val(result, "platform") == "ILLUMINA"
         assert result["archive_accession"] == "ERR3242571"
         assert result["archive_source"] == "ENA"
-        assert result["instrument_model"] == "NovaSeq 6000"
 
     def test_sra_reformatted(self):
         """Classify SRA-reformatted FASTQ."""
@@ -561,6 +555,47 @@ class TestBamCramClassification:
 @RG\tID:sample1\tPL:ONT\tSM:sample1"""
         result = classify_from_header(header)
         assert val(result, "platform") == "ONT"
+
+    @pytest.mark.parametrize(
+        ("pl", "pm", "model"),
+        [
+            pytest.param("PACBIO", "REVIO", "Revio", id="REVIO names Revio"),
+            pytest.param("PACBIO", "SEQUEL", None, id="SEQUEL is not shown to name one model"),
+            pytest.param("ILLUMINA", "NovaSeq X", "Illumina NovaSeq X", id="NovaSeq X"),
+            pytest.param("PACBIO", "SEQUELII", None, id="SEQUELII is Sequel II or IIe"),
+            pytest.param("ILLUMINA", "NovaSeq", None, id="NovaSeq is a family"),
+            pytest.param("ILLUMINA", "NovaSeq X Plus", None, id="NovaSeq X Plus is not NovaSeq X"),
+            pytest.param("ILLUMINA", "Unknown", None, id="Unknown names nothing"),
+            pytest.param("ONT", "1A", None, id="an ONT flow-cell position is not a model"),
+        ],
+    )
+    def test_instrument_model_from_rg_pm(self, pl, pm, model):
+        """@RG PM claims a model only where the whole value names exactly one (#532)."""
+        header = f"@HD\tVN:1.6\n@RG\tID:rg1\tPL:{pl}\tPM:{pm}\tSM:s"
+        result = classify_from_header(header)
+        assert field_value(result, "instrument_model") == model
+        assert field_status(result, "instrument_model") == (CLASSIFIED if model else NOT_CLASSIFIED)
+
+    def test_read_groups_naming_two_models_name_neither(self):
+        """A BAM merged from runs on two instruments gets no model (#532)."""
+        header = "@HD\tVN:1.6\n@RG\tID:a\tPL:PACBIO\tPM:SEQUELII\n@RG\tID:b\tPL:PACBIO\tPM:REVIO"
+        result = classify_from_header(header)
+        assert field_status(result, "instrument_model") == NOT_CLASSIFIED
+
+    def test_a_read_group_without_pm_leaves_the_model_unknown(self):
+        """A second read group that gives no PM could be any instrument (#532)."""
+        header = "@HD\tVN:1.6\n@RG\tID:a\tPL:PACBIO\tPM:REVIO\n@RG\tID:b\tPL:PACBIO"
+        assert field_status(classify_from_header(header), "instrument_model") == NOT_CLASSIFIED
+
+    def test_every_read_group_naming_one_model_names_it(self):
+        header = "@HD\tVN:1.6\n@RG\tID:a\tPL:PACBIO\tPM:REVIO\n@RG\tID:b\tPL:PACBIO\tPM:REVIO"
+        assert field_value(classify_from_header(header), "instrument_model") == "Revio"
+
+    @pytest.mark.parametrize(("pm", "platform"), [("REVIO", "PACBIO"), ("NovaSeq X", "ILLUMINA")])
+    def test_a_pm_model_declares_its_platform_without_pl(self, pm, platform):
+        """The model implies the platform, so a header with PM and no PL still has one."""
+        result = classify_from_header(f"@HD\tVN:1.6\n@RG\tID:rg1\tPM:{pm}\tSM:s")
+        assert field_value(result, "platform") == platform
 
     def test_grch38_from_sq(self):
         """Detect GRCh38 from @SQ AS field."""

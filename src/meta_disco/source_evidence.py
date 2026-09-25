@@ -38,7 +38,7 @@ neither can check is that a stored run was classified from that input: that need
 run's output to record the catalog it enhances, which is #404 and is not built.
 
 **The file.** One ``.ndjson`` file: line 1 is the envelope, every later line is one
-evidence row. NDJSON rather than a JSON array because 708,088 files by 5 dimensions
+evidence row. NDJSON rather than a JSON array because 708,088 files by six dimensions
 by several sources is millions of rows, and a whole-file ``json.load`` is already the
 memory ceiling this corpus keeps hitting (#374); ``anvil_files_metadata.ndjson`` is
 the existing precedent. Putting the envelope on line 1 rather than in a sidecar
@@ -175,7 +175,7 @@ PARTIAL_SUFFIX = ".partial"
 
 # The dimension names as a set, for the membership check every row pays twice — on
 # the way in and on the way out. `CLASSIFICATION_FIELDS` stays the tuple it is
-# because its order is the canonical output order; this is the same five names.
+# because its order is the canonical output order; this is the same names.
 _FIELDS = frozenset(CLASSIFICATION_FIELDS)
 
 # One encoder for the write loop, built once. Compact separators drop ~7% of the

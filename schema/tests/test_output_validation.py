@@ -28,7 +28,7 @@ Two levels of validation:
 
 Both run ``closed=False``: structure, required slots, and enum ranges are enforced,
 but keys the schema does not model — the fastq scalar hints inside
-``classifications`` (``is_paired_end``, ``instrument_model``, ``archive_*``) — are
+``classifications`` (``is_paired_end``, ``instrument_hint``, ``archive_*``) — are
 tolerated. Modeling those and tightening to ``closed=True`` is a #134 follow-up.
 (Evidence's ``value``/``status``/``tier`` are modeled, so they are validated, not
 merely tolerated.)

@@ -704,6 +704,17 @@ def _write_rules_file(tmp_path, rule):
     return path
 
 
+def test_every_rule_that_rules_out_a_platform_rules_out_an_instrument_model():
+    """No platform, no instrument (#532). Each rule states both itself; neither is derived from the other."""
+    missing = [
+        rule.id
+        for rule in get_unified_rules().rules
+        if rule.then_status.get("platform") == "not_applicable"
+        and rule.then_status.get("instrument_model") != "not_applicable"
+    ]
+    assert not missing, f"rules stamp platform not_applicable but not instrument_model: {missing}"
+
+
 def test_loader_rejects_unknown_when_key(tmp_path):
     path = _write_rules_file(
         tmp_path,

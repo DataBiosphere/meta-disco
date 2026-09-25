@@ -68,7 +68,7 @@ class LinkMLMeta(RootModel):
 
 linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
      'default_range': 'string',
-     'description': 'Full classification data model for meta-disco: the five '
+     'description': 'Full classification data model for meta-disco: the six '
                     'metadata dimensions, per-field evidence, classification '
                     'status, and typed derivation edges. Supersedes the retired '
                     'anvil_file.yaml stub (issue #33) and realizes the data-model '
@@ -91,7 +91,9 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
      'id': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
      'imports': ['linkml:types'],
      'name': 'meta_disco_classification',
-     'prefixes': {'anvil': {'prefix_prefix': 'anvil',
+     'prefixes': {'EFO': {'prefix_prefix': 'EFO',
+                          'prefix_reference': 'http://www.ebi.ac.uk/efo/EFO_'},
+                  'anvil': {'prefix_prefix': 'anvil',
                             'prefix_reference': 'https://github.com/DataBiosphere/meta-disco/schema/'},
                   'linkml': {'prefix_prefix': 'linkml',
                              'prefix_reference': 'https://w3id.org/linkml/'}},
@@ -175,6 +177,59 @@ class PlatformEnum(str, Enum):
     MGI = "MGI"
     ELEMENT = "ELEMENT"
     ULTIMA = "ULTIMA"
+
+
+class InstrumentModelEnum(str, Enum):
+    """
+    Sequencing instrument models, spelled exactly as ENA/SRA's controlled `INSTRUMENT_MODEL` strings (SRA.common.xsd, enasequence/schema) for the platforms in `platform_enum`; SRA's `unspecified` is not a model and is not here (a file whose model is unknown is `not_classified`). `meaning` is the EFO term whose label names the same model, recorded where EFO has one and never followed at run time. Where EFO's nearest term is broader or narrower (its one `Illumina HiSeq X` for SRA's `HiSeq X Five` / `HiSeq X Ten`, its `ONT GridION X5` for SRA's `GridION`) no meaning is recorded.
+    """
+    HiSeq_X_Five = "HiSeq X Five"
+    HiSeq_X_Ten = "HiSeq X Ten"
+    Illumina_Genome_Analyzer = "Illumina Genome Analyzer"
+    Illumina_Genome_Analyzer_II = "Illumina Genome Analyzer II"
+    Illumina_Genome_Analyzer_IIx = "Illumina Genome Analyzer IIx"
+    Illumina_HiScanSQ = "Illumina HiScanSQ"
+    Illumina_HiSeq_1000 = "Illumina HiSeq 1000"
+    Illumina_HiSeq_1500 = "Illumina HiSeq 1500"
+    Illumina_HiSeq_2000 = "Illumina HiSeq 2000"
+    Illumina_HiSeq_2500 = "Illumina HiSeq 2500"
+    Illumina_HiSeq_3000 = "Illumina HiSeq 3000"
+    Illumina_HiSeq_4000 = "Illumina HiSeq 4000"
+    Illumina_HiSeq_X = "Illumina HiSeq X"
+    Illumina_iSeq_100 = "Illumina iSeq 100"
+    Illumina_MiSeq = "Illumina MiSeq"
+    Illumina_MiniSeq = "Illumina MiniSeq"
+    Illumina_NovaSeq_X = "Illumina NovaSeq X"
+    Illumina_NovaSeq_X_Plus = "Illumina NovaSeq X Plus"
+    Illumina_NovaSeq_6000 = "Illumina NovaSeq 6000"
+    NextSeq_500 = "NextSeq 500"
+    NextSeq_550 = "NextSeq 550"
+    NextSeq_1000 = "NextSeq 1000"
+    NextSeq_2000 = "NextSeq 2000"
+    Onso = "Onso"
+    PacBio_RS = "PacBio RS"
+    PacBio_RS_II = "PacBio RS II"
+    Revio = "Revio"
+    Sequel = "Sequel"
+    Sequel_II = "Sequel II"
+    Sequel_IIe = "Sequel IIe"
+    Vega = "Vega"
+    MinION = "MinION"
+    GridION = "GridION"
+    PromethION = "PromethION"
+    BGISEQ_50 = "BGISEQ-50"
+    BGISEQ_500 = "BGISEQ-500"
+    MGISEQ_2000RS = "MGISEQ-2000RS"
+    DNBSEQ_T7 = "DNBSEQ-T7"
+    DNBSEQ_G400 = "DNBSEQ-G400"
+    DNBSEQ_G800 = "DNBSEQ-G800"
+    DNBSEQ_G50 = "DNBSEQ-G50"
+    DNBSEQ_G400_FAST = "DNBSEQ-G400 FAST"
+    DNBSEQ_T10x4RS = "DNBSEQ-T10x4RS"
+    Element_AVITI = "Element AVITI"
+    AVITI_24 = "AVITI 24"
+    UG_100 = "UG 100"
+    UG_200 = "UG 200"
 
 
 class ClassificationStatusEnum(str, Enum):
@@ -373,7 +428,7 @@ class EvidenceMarkerEnum(str, Enum):
 
 class ClassificationRecord(ConfiguredBaseModel):
     """
-    One classified file. `classifications` carries the file's identity (the five dimension fields — what it is); derived_from is a typed edge to the file it was derived from (where it came from). Matches the pipeline output shape (see docs/derived-file-data-model.md section 5a).
+    One classified file. `classifications` carries the file's identity (the six dimension fields — what it is); derived_from is a typed edge to the file it was derived from (where it came from). Matches the pipeline output shape (see docs/derived-file-data-model.md section 5a).
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
          'tree_root': True})
@@ -386,13 +441,13 @@ class ClassificationRecord(ConfiguredBaseModel):
     file_id: Optional[str] = Field(default=None, description="""The repository's own file identifier, and the durable one: it survives a catalog re-index, which `entry_id` does not (#433). It is the join key, not the handle a resolver takes — that is `drs_uri`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     drs_uri: Optional[str] = Field(default=None, description="""The file's DRS URI: what a resolver dereferences to reach the bytes. Carried, never derived from `file_id` — thousands of records wrap a different object id, so a reconstructed URI resolves to the wrong file or to nothing (#433).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     dataset_title: Optional[str] = Field(default=None, description="""Title of the dataset the file belongs to.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
-    classifications: Classifications = Field(default=..., description="""The five classified dimensions for this file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
+    classifications: Classifications = Field(default=..., description="""The six classified dimensions for this file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     derived_from: Optional[DerivationEdge] = Field(default=None, description="""Typed derivation edge to the parent file, if this is a derived file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
 
 
 class Classifications(ConfiguredBaseModel):
     """
-    The five metadata dimensions for one file, each a Classification entry. The pipeline also emits some file-type-specific scalar hints here (e.g. fastq's is_paired_end / instrument_model); those are not modeled yet and pass under the gate's closed=False mode (see #134 follow-up).
+    The six metadata dimensions for one file, each a Classification entry. The pipeline also emits some file-type-specific scalar hints here (e.g. fastq's is_paired_end / instrument_hint); those are not modeled yet and pass under the gate's closed=False mode (see #134 follow-up).
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
          'slot_usage': {'assay_type': {'name': 'assay_type',
@@ -404,6 +459,9 @@ class Classifications(ConfiguredBaseModel):
                         'data_type': {'name': 'data_type',
                                       'range': 'DataTypeClassification',
                                       'required': True},
+                        'instrument_model': {'name': 'instrument_model',
+                                             'range': 'InstrumentModelClassification',
+                                             'required': True},
                         'platform': {'name': 'platform',
                                      'range': 'PlatformClassification',
                                      'required': True},
@@ -416,6 +474,7 @@ class Classifications(ConfiguredBaseModel):
     reference_assembly: ReferenceAssemblyClassification = Field(default=..., description="""The reference genome the file's coordinates are expressed against.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
     assay_type: AssayTypeClassification = Field(default=..., description="""The experimental assay that produced the upstream data.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
     platform: PlatformClassification = Field(default=..., description="""The sequencing platform / instrument family.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
+    instrument_model: InstrumentModelClassification = Field(default=..., description="""The sequencing instrument's model, refining `platform` (#532): `Illumina NovaSeq 6000` where `platform` says `ILLUMINA`. Not applicable wherever `platform` is not.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
 
 
 class Classification(ConfiguredBaseModel):
@@ -483,6 +542,14 @@ class PlatformInferred(InferredConclusion):
     status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
 
 
+class InstrumentModelInferred(InferredConclusion):
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'value': {'name': 'value', 'range': 'instrument_model_enum'}}})
+
+    value: Optional[InstrumentModelEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+
+
 class DataModalityClassification(Classification):
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
          'slot_usage': {'inferred': {'name': 'inferred',
@@ -544,6 +611,19 @@ class PlatformClassification(Classification):
     evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     inferred: Optional[PlatformInferred] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+
+
+class InstrumentModelClassification(Classification):
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'inferred': {'name': 'inferred',
+                                     'range': 'InstrumentModelInferred'},
+                        'value': {'name': 'value', 'range': 'instrument_model_enum'}}})
+
+    value: Optional[InstrumentModelEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    inferred: Optional[InstrumentModelInferred] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
 
 
 class ReferenceBuild(ConfiguredBaseModel):
@@ -796,14 +876,14 @@ class EvidenceRow(ConfiguredBaseModel):
 
     raw_value: str = Field(default=..., description="""What the source wrote, verbatim (contract 1.4) — not casefolded, trimmed, corrected or suppressed. The same slot an `Evidence` claim carries beside its mapped value; on a row it is the whole content, because a row maps nothing.
 No pattern and no enum, deliberately: a source's spellings are its own, a value our vocabulary has no word for is the review queue's input rather than an error (contract 3.7), and an empty cell is something the source published, whose meaning is a rule's to decide.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'Evidence']} })
-    field: str = Field(default=..., description="""The slot this row speaks to, spelled `field` on the wire and in the code (contract 2.1). One of the five classification dimensions.
+    field: str = Field(default=..., description="""The slot this row speaks to, spelled `field` on the wire and in the code (contract 2.1). One of the six classification dimensions.
 Pinned by pattern rather than by an enum because the dimension names are slot *names* in this schema and not a vocabulary it declares; `test_the_row_field_pattern_lists_every_dimension` holds it to `CLASSIFICATION_FIELDS`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow']} })
     target_key_value: str = Field(default=..., description="""The value to match against the envelope's `target_key`, already in the target's value space — the importer owns the mapping between its own key and the target's. Empty is refused: a row with nothing to match on can attach to no file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow']} })
     column: Optional[str] = Field(default=None, description="""The column the raw value was read from. The one member of the source that varies within a file — repository, dataset, table and url are on the envelope — and absent for a source whose table has no columns to name.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceRow']} })
 
     @field_validator('field')
     def pattern_field(cls, v):
-        pattern=re.compile(r"^(data_modality|data_type|platform|reference_assembly|assay_type)\Z")
+        pattern=re.compile(r"^(data_modality|data_type|platform|reference_assembly|assay_type|instrument_model)\Z")
         if isinstance(v, list):
             for element in v:
                 if isinstance(element, str) and not pattern.match(element):
@@ -968,11 +1048,13 @@ DataTypeInferred.model_rebuild()
 ReferenceAssemblyInferred.model_rebuild()
 AssayTypeInferred.model_rebuild()
 PlatformInferred.model_rebuild()
+InstrumentModelInferred.model_rebuild()
 DataModalityClassification.model_rebuild()
 DataTypeClassification.model_rebuild()
 ReferenceAssemblyClassification.model_rebuild()
 AssayTypeClassification.model_rebuild()
 PlatformClassification.model_rebuild()
+InstrumentModelClassification.model_rebuild()
 ReferenceBuild.model_rebuild()
 ClaimSource.model_rebuild()
 EvidenceFileSource.model_rebuild()

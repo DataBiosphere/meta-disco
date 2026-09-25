@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from .evidence import BedSignals, SegmentTag
 from .file_name import FileName
 from .models import (
+    CLASSIFICATION_FIELDS,
     CLASSIFIED,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
@@ -27,7 +28,6 @@ from .models import (
 from .validators.read_name_parsers import (
     detect_paired_end_indicators,
     extract_archive_accession,
-    infer_illumina_instrument_model,  # noqa: F401  re-exported for backward compat
     parse_illumina_read_name,
     parse_ont_read_name,  # noqa: F401  re-exported for backward compat
     parse_pacbio_read_name,
@@ -46,17 +46,16 @@ GRAPH_TEXT_EXTENSIONS = (".gfa", ".gfa.gz", ".rgfa", ".rgfa.gz")
 class FastqReadMetadata:
     """FASTQ-specific scalar metadata spliced into a classification result.
 
-    The five scalars ``classify_from_fastq_header`` derives while inspecting a
+    The four scalars ``classify_from_fastq_header`` derives while inspecting a
     file's reads: the paired-end flag (from read names, falling back to the
-    filename), the instrument model (from the Illumina or PacBio read-name
-    parse), the Illumina instrument hint, and the ENA/SRA archive accession and
-    source. Both build sites in that function construct this and call
-    ``merge_into``, so the key set is declared in one place instead of two
-    literals that must be kept in sync.
+    filename), the Illumina instrument hint, and the ENA/SRA archive accession and
+    source. The instrument *model* is not among them: it is the ``instrument_model``
+    dimension, and no rule reads it from a read name (#532). Both build sites in
+    that function construct this and call ``merge_into``, so the key set is
+    declared in one place instead of two literals that must be kept in sync.
     """
 
     is_paired_end: bool | None = None
-    instrument_model: str | None = None
     instrument_hint: str | None = None
     archive_accession: str | None = None
     archive_source: str | None = None
@@ -171,7 +170,8 @@ def classify_from_header(
     Returns:
         Dict with per-field classifications:
             - {field}: {value, status, evidence[]} for each of
-              data_modality, data_type, assay_type, reference_assembly, platform
+              data_modality, data_type, assay_type, reference_assembly, platform,
+              instrument_model
     """
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
@@ -254,7 +254,8 @@ def classify_from_vcf_header(
     Returns:
         Dict with per-field classifications:
             - {field}: {value, status, evidence[]} for each of
-              data_modality, data_type, assay_type, reference_assembly, platform
+              data_modality, data_type, assay_type, reference_assembly, platform,
+              instrument_model
     """
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
@@ -328,16 +329,12 @@ def classify_from_fastq_header(
 
     Returns:
         Dict with:
-            - data_modality: str or None
-            - data_type: str (typically "reads")
-            - platform: str or None (ILLUMINA, PACBIO, ONT, etc.)
+            - {field}: {value, status, evidence[]} for each of CLASSIFICATION_FIELDS;
+              no rule reads ``instrument_model`` from a read name (#532)
             - is_paired_end: bool or None
-            - instrument_model: str or None (for Illumina)
             - instrument_hint: str or None (instrument ID from read name)
             - archive_accession: str or None (ENA/SRA accession if present)
             - archive_source: str or None (ENA, SRA, DDBJ)
-            - matched_rules: list of rule IDs
-            - evidence: list of dicts
     """
     from .rule_engine import ExtendedFileInfo
 
@@ -347,13 +344,9 @@ def classify_from_fastq_header(
     # (reads are unaligned), matching the non-empty path (#131); the remaining
     # dimensions are not_classified.
     if not reads or not reads[0]:
-        entries = {
-            "data_modality": build_field_entry(None, status=NOT_CLASSIFIED),
-            "data_type": build_field_entry("reads", status=CLASSIFIED),
-            "platform": build_field_entry(None, status=NOT_CLASSIFIED),
-            "reference_assembly": build_field_entry(None, status=NOT_APPLICABLE),
-            "assay_type": build_field_entry(None, status=NOT_CLASSIFIED),
-        }
+        entries = {fld: build_field_entry(None, status=NOT_CLASSIFIED) for fld in CLASSIFICATION_FIELDS}
+        entries["data_type"] = build_field_entry("reads", status=CLASSIFIED)
+        entries["reference_assembly"] = build_field_entry(None, status=NOT_APPLICABLE)
         FastqReadMetadata().merge_into(entries)
         return entries
 
@@ -398,8 +391,7 @@ def classify_from_fastq_header(
     if is_paired_end is None and name.raw:
         is_paired_end = detect_paired_end_indicators(name.raw)
 
-    # Extract instrument model and archive info from read names
-    instrument_model = None
+    # Extract the instrument hint and archive info from read names
     instrument_hint = None
     archive_accession = None
     archive_source = None
@@ -414,23 +406,19 @@ def classify_from_fastq_header(
         # Try to parse as Illumina
         parsed = parse_illumina_read_name(read)
         if parsed:
-            instrument_model = parsed.instrument_model
             instrument_hint = parsed.instrument
             if parsed.archive_accession:
                 archive_accession = parsed.archive_accession
                 archive_source = parsed.archive_source
             break
 
-        # Try to parse as PacBio
-        pacbio = parse_pacbio_read_name(read)
-        if pacbio:
-            instrument_model = pacbio.instrument_model
+        # A PacBio read name carries no hint or accession to read; stop at it
+        if parse_pacbio_read_name(read):
             break
 
     classifications = result.to_output_dict()
     FastqReadMetadata(
         is_paired_end=is_paired_end,
-        instrument_model=instrument_model,
         instrument_hint=instrument_hint,
         archive_accession=archive_accession,
         archive_source=archive_source,
@@ -1114,3 +1102,13 @@ def classify_from_bed_signals(
             )
 
     return result.to_output_dict()
+
+
+def __getattr__(name: str):
+    """Say why a removed name is gone (``read_name_parsers.REMOVED_NAMES``)."""
+    from .validators.read_name_parsers import removed_name
+
+    error = removed_name(__name__, name)
+    if error:
+        raise error
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

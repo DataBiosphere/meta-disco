@@ -433,6 +433,7 @@ class ExtendedClassificationResult:
     reference_assembly: str | None = None
     assay_type: str | None = None
     platform: str | None = None
+    instrument_model: str | None = None
     field_evidence: dict[str, list[dict]] = field(default_factory=lambda: {fld: [] for fld in CLASSIFICATION_FIELDS})
     # Resolved status per dimension (epic #116 / #136): the dimension attributes
     # above hold a real value or None only — the sentinel (not_applicable /
@@ -1088,7 +1089,9 @@ class RuleEngine:
 
         from .validators.header_extractors import match_sam_header_pattern
 
-        return match_sam_header_pattern(file_info.parsed_bam_header, section, field_name, pattern)
+        return match_sam_header_pattern(
+            file_info.parsed_bam_header, section, field_name, pattern, every=bool(when.get("header_match_all"))
+        )
 
     def _match_vcf_header(self, when: dict[str, Any], file_info: ExtendedFileInfo) -> bool:
         """Match conditions against VCF header content."""

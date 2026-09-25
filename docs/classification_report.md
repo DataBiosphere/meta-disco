@@ -2,19 +2,20 @@
 
 ## Executive Summary
 
-This report documents the rule-based metadata classification system for biological data files from the AnVIL (Analysis, Visualization, and Informatics Lab-space) platform. The system infers five classification dimensions from file metadata without requiring full file downloads.
+This report documents the rule-based metadata classification system for biological data files from the AnVIL (Analysis, Visualization, and Informatics Lab-space) platform. The system infers six classification dimensions from file metadata without requiring full file downloads.
 
 ### Classification Dimensions
 
-The classifier populates five orthogonal metadata fields:
+The classifier populates six metadata fields:
 
 | Field | Question Answered | Example Values |
 | ----- | ----------------- | -------------- |
 | `data_modality` | What biology is measured? | genomic, transcriptomic, epigenomic |
 | `data_type` | What artifact is this? | alignments, variant_calls, reads |
-| `platform` | What sequencing instrument? | ILLUMINA, PACBIO, ONT |
+| `platform` | Which sequencing platform (vendor)? | ILLUMINA, PACBIO, ONT |
 | `reference_assembly` | What reference genome? | GRCh38, GRCh37, CHM13 |
 | `assay_type` | What method class? | WGS, WES, RNAseq |
+| `instrument_model` | Which instrument model, within the platform? | Illumina NovaSeq 6000, Revio, PromethION |
 
 #### data_modality
 
@@ -159,29 +160,53 @@ Each JSON file contains:
 
 #### Classification Record Structure
 
-Each record in `classifications` contains all five classification dimensions:
+Each record carries the file's identity and a `classifications` object with one
+`{value, status, evidence}` entry per dimension; `value` is null unless `status` is
+`classified`. An abridged record from the output-shape golden fixture
+(`tests/fixtures/golden/expected_output.json`), with two of the six entries shown
+in full:
 
 ```json
 {
-  "file_name": "HG01874.chr17.hc.vcf.gz",
-  "md5sum": "e1dca89aef536083f15093c39a0daa8f",
-  "file_size": 158571384,
-  "data_modality": "genomic",
-  "data_type": "variant_calls",
-  "platform": "ILLUMINA",
-  "reference_assembly": "CHM13",
-  "assay_type": "WGS",
-  "confidence": 0.90,
-  "matched_rules": ["vcf_contig_length", "vcf_gatk_haplotypecaller"],
-  "evidence": [
-    {
-      "rule_id": "vcf_contig_length",
-      "matched": "4 contigs matched CHM13 chromosome lengths",
-      "classification": "CHM13",
-      "confidence": 0.98,
-      "rationale": "Chromosome lengths are unique to each reference assembly..."
+  "file_name": "sample.vcf.gz",
+  "file_format": ".vcf.gz",
+  "file_size": 5000,
+  "md5sum": "cccccccccccccccccccccccccccccccc",
+  "entry_id": "g-vcf-1",
+  "file_id": "g-file-c",
+  "drs_uri": "drs://golden/v2_g-object-c",
+  "dataset_title": "GOLDEN_FIXTURE",
+  "derived_from": null,
+  "classifications": {
+    "data_modality": {
+      "value": "genomic",
+      "status": "classified",
+      "evidence": [
+        {
+          "rule_id": "variant_default_genomic",
+          "reason": "VCF files contain variant calls (genomic data)",
+          "value": "genomic",
+          "tier": 1,
+          "source_type": "filename_rule"
+        }
+      ]
+    },
+    "data_type": {"value": "variants", "status": "classified", "evidence": ["..."]},
+    "platform": {"value": null, "status": "not_classified", "evidence": ["..."]},
+    "reference_assembly": {"value": null, "status": "not_classified", "evidence": ["..."]},
+    "assay_type": {"value": null, "status": "not_classified", "evidence": ["..."]},
+    "instrument_model": {
+      "value": null,
+      "status": "not_classified",
+      "evidence": [
+        {
+          "marker": "not_classified",
+          "reason": "No rule determined a value for instrument_model",
+          "status": "not_classified"
+        }
+      ]
     }
-  ]
+  }
 }
 ```
 
@@ -766,7 +791,7 @@ Result: Parent VCF not found in dataset
 2. Files were moved between datasets without indexes
 3. Incomplete data uploads
 
-**Output location:** Index files that took no parent still get a classification record — the extension identifies the file as an index without any parent, so `data_type` is `index` and the other four dimensions are `not_classified` (they apply; nothing here can determine them). *Why* no parent was taken is recorded separately, in the `unmatched_files` array of `index_classifications.json`. That array is a diagnostic, not a statement that a file is missing from the output. Every entry carries:
+**Output location:** Index files that took no parent still get a classification record — the extension identifies the file as an index without any parent, so `data_type` is `index` and the other dimensions are `not_classified` (they apply; nothing here can determine them). *Why* no parent was taken is recorded separately, in the `unmatched_files` array of `index_classifications.json`. That array is a diagnostic, not a statement that a file is missing from the output. Every entry carries:
 - `file_name`, `file_format`, `file_md5sum`, `entry_id`, `file_id`, `drs_uri`, `dataset_id`, `dataset_title`: the file's identity
 - `index_extension`: the index extension matched
 - `candidates_tried`: Parent filenames attempted
@@ -783,7 +808,7 @@ The `metadata` block counts the two separately, as `unmatched` and `ambiguous_pa
 
 Both kinds get a record because the alternative was worse. Dropping them sent the files to the catch-all producer instead, which classified them from the extension alone — and coverage counts `not_applicable` as *classified*, so a file was reported as determined precisely where it is not.
 
-What the catch-all's tier-1 `index_file` rule says today: `data_type: index`, and nothing else (#437). It is the backstop for an index file the index producer misses; it fires on nothing in the current corpus because the producer misses nothing, and #430 kept it for that reason. The four dimensions a parent supplies stay open — they apply to an index file, and a rule that cannot see the parent cannot determine them, so denying them would be a confident wrong answer that coverage counts as classified. That is the same shape `classify_index_files` gives a parentless index, so the two agree. Neither ever sees the same file, because the catch-all skips whatever the producer wrote; the rule is what answers an index file the producer did not reach, such as a partial run.
+What the catch-all's tier-1 `index_file` rule says today: `data_type: index`, and nothing else (#437). It is the backstop for an index file the index producer misses; it fires on nothing in the current corpus because the producer misses nothing, and #430 kept it for that reason. The dimensions a parent supplies stay open — they apply to an index file, and a rule that cannot see the parent cannot determine them, so denying them would be a confident wrong answer that coverage counts as classified. That is the same shape `classify_index_files` gives a parentless index, so the two agree. Neither ever sees the same file, because the catch-all skips whatever the producer wrote; the rule is what answers an index file the producer did not reach, such as a partial run.
 
 ### 6.2 Recommendations
 

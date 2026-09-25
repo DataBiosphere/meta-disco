@@ -1,5 +1,5 @@
 # A whole ClassificationRecord in the pipeline output shape (issue #134).
-# The five dimensions live under `classifications`; each is a Classification
+# The six dimensions live under `classifications`; each is a Classification
 # entry with a required `status` and a `value` that is null unless classified.
 md5sum: "aaa111"
 file_name: "NA12878.bam"
@@ -30,5 +30,9 @@ classifications:
     evidence: []
   platform:
     value: "ILLUMINA"
+    status: "classified"
+    evidence: []
+  instrument_model:
+    value: "Illumina NovaSeq 6000"
     status: "classified"
     evidence: []
