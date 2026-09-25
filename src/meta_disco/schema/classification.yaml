@@ -1062,6 +1062,7 @@ enums:
       "AVITI 24":
       # --- Ultima (SRA platform ULTIMA) ---
       "UG 100":
+        meaning: EFO:0920005
       "UG 200":
 
   classification_status_enum:
