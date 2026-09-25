@@ -156,25 +156,14 @@ def extract_sam_field(header: SAMHeader, section: str, field: str) -> list[str]:
     Returns:
         List of field values found (may be empty)
     """
-    values = []
+    return [record[field] for record in _section_records(header, section) if field in record]
 
-    if section == "@HD" and header.hd:
-        if field in header.hd:
-            values.append(header.hd[field])
-    elif section == "@SQ" and header.sq:
-        for sq in header.sq:
-            if field in sq:
-                values.append(sq[field])
-    elif section == "@RG" and header.rg:
-        for rg in header.rg:
-            if field in rg:
-                values.append(rg[field])
-    elif section == "@PG" and header.pg:
-        for pg in header.pg:
-            if field in pg:
-                values.append(pg[field])
 
-    return values
+def _section_records(header: SAMHeader, section: str) -> list[dict[str, str]]:
+    """The records of one tag-value section (@HD, @SQ, @RG, @PG); empty for any other."""
+    if section == "@HD":
+        return [header.hd] if header.hd else []
+    return {"@SQ": header.sq, "@RG": header.rg, "@PG": header.pg}.get(section) or []
 
 
 def match_sam_header_pattern(header: SAMHeader, section: str, field: str, pattern: str, every: bool = False) -> bool:
@@ -186,18 +175,20 @@ def match_sam_header_pattern(header: SAMHeader, section: str, field: str, patter
         section: Section name (@HD, @SQ, @RG, @PG)
         field: Field name (e.g., PL, PN, SN)
         pattern: Regex pattern to match
-        every: If True, every value of the field must match, and there must be at
-            least one; otherwise one matching value is enough
+        every: If True, every record of the section must carry the field and match,
+            and there must be at least one record; otherwise one matching value is
+            enough. A record without the field fails it: an @RG with no PM leaves
+            that read group's model unknown.
 
     Returns:
-        True if any value matches (``every=False``), or if the field has values and
-        all of them match (``every=True``)
+        True if any value matches (``every=False``), or if the section has records
+        and each carries a matching value (``every=True``)
     """
-    values = extract_sam_field(header, section, field)
     compiled = re.compile(pattern, re.IGNORECASE)
     if every:
-        return bool(values) and all(compiled.search(v) for v in values)
-    return any(compiled.search(v) for v in values)
+        records = _section_records(header, section)
+        return bool(records) and all(field in r and compiled.search(r[field]) for r in records)
+    return any(compiled.search(v) for v in extract_sam_field(header, section, field))
 
 
 def has_sam_section(header: SAMHeader, section: str) -> bool:

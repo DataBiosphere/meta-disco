@@ -582,6 +582,11 @@ class TestBamCramClassification:
         result = classify_from_header(header)
         assert field_status(result, "instrument_model") == NOT_CLASSIFIED
 
+    def test_a_read_group_without_pm_leaves_the_model_unknown(self):
+        """A second read group that gives no PM could be any instrument (#532)."""
+        header = "@HD\tVN:1.6\n@RG\tID:a\tPL:PACBIO\tPM:REVIO\n@RG\tID:b\tPL:PACBIO"
+        assert field_status(classify_from_header(header), "instrument_model") == NOT_CLASSIFIED
+
     def test_every_read_group_naming_one_model_names_it(self):
         header = "@HD\tVN:1.6\n@RG\tID:a\tPL:PACBIO\tPM:REVIO\n@RG\tID:b\tPL:PACBIO\tPM:REVIO"
         assert field_value(classify_from_header(header), "instrument_model") == "Revio"
