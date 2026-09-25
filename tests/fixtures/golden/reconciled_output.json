@@ -154,7 +154,7 @@
             "evidence": [
               {
                 "reason": "Filename contains IsoSeq indicator (flnc = full-length non-chimeric transcript reads)",
-                "rule_id": "alignment_isoseq_filename",
+                "rule_id": "isoseq_filename",
                 "source_type": "filename_rule",
                 "tier": 2,
                 "value": "transcriptomic.bulk"
@@ -171,20 +171,20 @@
           "data_type": {
             "evidence": [
               {
-                "reason": "Filename contains IsoSeq indicator (flnc = full-length non-chimeric transcript reads)",
-                "rule_id": "alignment_isoseq_filename",
-                "source_type": "filename_rule",
-                "tier": 2,
-                "value": "alignments"
+                "reason": "No @SQ lines: no read is placed on a reference, so the file holds unaligned reads and has no reference. Common for PacBio HiFi and ONT mod-base deliverables",
+                "rule_id": "unaligned_no_sq",
+                "source_type": "header_rule",
+                "tier": 3,
+                "value": "reads"
               }
             ],
             "inferred": {
               "status": "classified",
-              "value": "alignments"
+              "value": "reads"
             },
             "status": "classified",
             "use": "meta_disco",
-            "value": "alignments"
+            "value": "reads"
           },
           "instrument_model": {
             "evidence": [
@@ -235,7 +235,7 @@
           "reference_assembly": {
             "evidence": [
               {
-                "reason": "Absence of @SQ lines indicates unaligned reads. Common for PacBio HiFi deliverables before alignment",
+                "reason": "No @SQ lines: no read is placed on a reference, so the file holds unaligned reads and has no reference. Common for PacBio HiFi and ONT mod-base deliverables",
                 "rule_id": "unaligned_no_sq",
                 "source_type": "header_rule",
                 "status": "not_applicable",

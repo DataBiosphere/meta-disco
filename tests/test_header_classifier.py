@@ -618,7 +618,6 @@ class TestBamCramClassification:
 @PG\tID:STAR\tPN:STAR\tVN:2.7.9a"""
         result = classify_from_header(header)
         assert val(result, "data_modality") == "transcriptomic.bulk"
-        assert val(result, "data_type") == "alignments"
 
     def test_bwa_aligner_genomic(self):
         """Detect genomic from BWA aligner."""
@@ -626,7 +625,6 @@ class TestBamCramClassification:
 @PG\tID:bwa\tPN:bwa\tVN:0.7.17"""
         result = classify_from_header(header)
         assert val(result, "data_modality") == "genomic"
-        assert val(result, "data_type") == "alignments"
 
     def test_readtype_ccs_no_modality_inference(self):
         """READTYPE=CCS no longer implies genomic — modality left to other signals."""
@@ -696,7 +694,6 @@ class TestBamCramClassification:
         header = "@HD\tVN:1.6"
         result = classify_from_header(header, name=FileName.parse("sample.flnc.bam"))
         assert val(result, "data_modality") == "transcriptomic.bulk"
-        assert val(result, "data_type") == "alignments"
 
     def test_real_filename_recovers_pacbio_platform(self):
         """A hifi filename recovers platform even when the header names none —
@@ -712,6 +709,68 @@ class TestBamCramClassification:
 @PG\tID:STAR\tPN:STAR\tVN:2.7.9a"""
         result = classify_from_header(header, name=FileName.parse("sample.bam"))
         assert val(result, "data_modality") == "transcriptomic.bulk"
+
+
+class TestAlignedOrUnaligned:
+    """`@SQ` alone decides `data_type`: none means reads, some means alignments (#537).
+
+    The headers are trimmed from real corpus files. Neither the name (`hifi`,
+    `.flnc.`) nor an `@PG` line naming an aligner decides it.
+    """
+
+    # m64136_210522_014758.hifi_reads.bam: PacBio's CCS output, never aligned.
+    HIFI_READS = (
+        "@HD\tVN:1.5\tSO:unknown\tpb:3.0.1\n"
+        "@RG\tID:1c979136\tPL:PACBIO\tDS:READTYPE=CCS;BINDINGKIT=101-894-200\tPU:m64136_210522_014758\tPM:SEQUELII\n"
+        "@PG\tID:ccs-6.0.0\tPN:ccs\tVN:6.0.0\n"
+        "@PG\tID:pbmerge-1.6.1\tPN:pbmerge\tVN:1.6.1"
+    )
+    # Guppy mod-base BAM: Guppy writes a minimap2 `@PG` whether or not it aligned.
+    GUPPY_MODBASE = (
+        "@HD\tVN:1.6\tSO:coordinate\n"
+        "@RG\tID:0017e8d0_2021-05-05_dna_r9.4.1_promethion_768_922a514b\t"
+        "DS:runid=0017e8d0 basecall_model=2021-05-05_dna_r9.4.1_promethion_768_922a514b\tPL:ONT\n"
+        "@PG\tID:aligner\tPN:minimap2\tVN:2.24-r1122\n"
+        "@PG\tID:basecaller\tPN:guppy\tVN:6.4.6+ae70e8f"
+    )
+    # NA19682.lymph.m84203_…_s4.flnc.bam: Kinnex Iso-Seq full-length reads.
+    KINNEX_FLNC = (
+        "@HD\tVN:1.6\tSO:coordinate\tpb:5.0.0\n"
+        "@RG\tID:70ec1597/2--12\tPL:PACBIO\tDS:READTYPE=SEGMENT;SOURCE=CCS\n"
+        "@PG\tID:ccs\tPN:ccs\tVN:8.0.1 (commit v8.0.1)\n"
+        "@PG\tID:refine\tVN:4.1.2 (commit v4.1.2)"
+    )
+    # HG00438.f1_assembly_v2.hap1.bam: an assembly aligned to GRCh38 with minimap2.
+    ALIGNED_MINIMAP2 = (
+        "@HD\tVN:1.6\tSO:coordinate\n"
+        "@SQ\tSN:chr1\tLN:248956422\n"
+        "@SQ\tSN:chr2\tLN:242193529\n"
+        "@PG\tID:minimap2\tPN:minimap2\tVN:2.17-r941\tCL:minimap2 -a -xasm5 --cs -r2k -t8 "
+        "GCA_000001405.15_GRCh38_no_alt_analysis_set.fna HG00438.paternal.f1_assembly_v2.fa"
+    )
+
+    @pytest.mark.parametrize(
+        ("header", "file_name"),
+        [
+            pytest.param(HIFI_READS, "m64136_210522_014758.hifi_reads.bam", id="PacBio hifi_reads"),
+            pytest.param(
+                GUPPY_MODBASE,
+                "08_25_21_R941_HG02004_2_Guppy_6.4.6_450bps_modbases_5mc_cg_sup_prom_pass.bam",
+                id="Guppy mod-base with a minimap2 @PG",
+            ),
+            pytest.param(KINNEX_FLNC, "NA19682.lymph.m84203_240912_223637_s3.flnc.bam", id="Kinnex flnc"),
+        ],
+    )
+    def test_no_sq_is_reads(self, header, file_name):
+        result = classify_from_header(header, name=FileName.parse(file_name))
+        assert val(result, "data_type") == "reads"
+        claims = [e for e in result["data_type"]["evidence"] if "value" in e]
+        assert [(e["rule_id"], e["tier"]) for e in claims] == [("unaligned_no_sq", 3)]
+
+    def test_sq_with_minimap2_is_alignments(self):
+        result = classify_from_header(self.ALIGNED_MINIMAP2, name=FileName.parse("HG00438.f1_assembly_v2.hap1.bam"))
+        assert val(result, "data_type") == "alignments"
+        assert val(result, "data_modality") == "genomic"
 
 
 # =============================================================================

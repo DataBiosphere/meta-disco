@@ -440,7 +440,9 @@ rules:
   # ---------------------------------------------------------------------------
   # Alignment files - assay/platform indicators in the filename
   # ---------------------------------------------------------------------------
-  - id: alignment_isoseq_filename
+  # Neither `.flnc.` nor `hifi` says whether the file is aligned: PacBio delivers both
+  # as unaligned BAMs. `@SQ` decides `data_type` (aligned_has_sq / unaligned_no_sq, #537).
+  - id: isoseq_filename
     tier: 2
     scope: filename
     when:
@@ -448,17 +450,15 @@ rules:
       filename_pattern: "(?i)\\.flnc\\."
     then:
       data_modality: transcriptomic.bulk
-      data_type: alignments
     rationale: "Filename contains IsoSeq indicator (flnc = full-length non-chimeric transcript reads)"
 
-  - id: alignment_hifi_filename
+  - id: hifi_filename
     tier: 2
     scope: filename
     when:
       extensions: [".bam", ".cram", ".sam"]
       filename_pattern: "(?i)(^|[._-])hifi|_pb_"
     then:
-      data_type: alignments
       platform: PACBIO
     rationale: "HiFi names PacBio's read chemistry: it says the platform, not the assay or the modality — Iso-Seq is HiFi too (#430)"
 
@@ -838,7 +838,6 @@ rules:
       header_pattern: "STAR"
     then:
       data_modality: transcriptomic.bulk
-      data_type: alignments
       assay_type: RNA-seq
     rationale: "STAR (Spliced Transcripts Alignment to a Reference) is the most widely used RNA-seq aligner. Presence strongly indicates RNA-seq data"
 
@@ -855,7 +854,6 @@ rules:
       header_pattern: "bwa"
     then:
       data_modality: genomic
-      data_type: alignments
     rationale: "BWA (Burrows-Wheeler Aligner) is the standard short-read aligner for DNA sequencing. Commonly used for WGS, WES, and ChIP-seq"
 
   - id: program_minimap2
@@ -868,8 +866,7 @@ rules:
       header_pattern: "minimap2"
     then:
       data_modality: genomic
-      data_type: alignments
-    rationale: "Minimap2 is a versatile aligner for long reads (PacBio, ONT) and assemblies. Can also be used for direct RNA with -ax splice preset"
+    rationale: "Minimap2 is a versatile aligner for long reads (PacBio, ONT) and assemblies. Can also be used for direct RNA with -ax splice preset. It says nothing about data_type: Guppy writes a minimap2 @PG into BAMs it never aligned (#537)"
 
   - id: program_ccs
     tier: 3
@@ -889,6 +886,27 @@ rules:
 
 
 
+  # ---------------------------------------------------------------------------
+  # Aligned or unaligned: decided by @SQ alone (#537)
+  # ---------------------------------------------------------------------------
+  # @SQ lines are the reference a BAM/CRAM's reads are placed on. A header with
+  # none has nowhere to place a read, so the file holds reads; a header with some
+  # is aligned. Every parsed header matches exactly one of the two rules (the SAM
+  # spec requires SN on every @SQ line). Neither the file name nor an @PG line
+  # decides this: Guppy writes an aligner @PG into BAMs it never aligned. A header
+  # that keeps @SQ over reads that are all unmapped is beyond a header rule (#538).
+  - id: aligned_has_sq
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@SQ"
+      header_field: "SN"
+      header_pattern: "."
+    then:
+      data_type: alignments
+    rationale: "@SQ lines declare the reference the reads are aligned to"
+
   - id: unaligned_no_sq
     tier: 3
     scope: header
@@ -897,9 +915,10 @@ rules:
       header_section: "@SQ"
       header_absent: true
     then:
+      data_type: reads
       status:
         reference_assembly: not_applicable
-    rationale: "Absence of @SQ lines indicates unaligned reads. Common for PacBio HiFi deliverables before alignment"
+    rationale: "No @SQ lines: no read is placed on a reference, so the file holds unaligned reads and has no reference. Common for PacBio HiFi and ONT mod-base deliverables"
 
   # ===========================================================================
   # TIER 3: VCF HEADER RULES
