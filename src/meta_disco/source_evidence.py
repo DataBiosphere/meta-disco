@@ -175,7 +175,7 @@ PARTIAL_SUFFIX = ".partial"
 
 # The dimension names as a set, for the membership check every row pays twice — on
 # the way in and on the way out. `CLASSIFICATION_FIELDS` stays the tuple it is
-# because its order is the canonical output order; this is the same five names.
+# because its order is the canonical output order; this is the same names.
 _FIELDS = frozenset(CLASSIFICATION_FIELDS)
 
 # One encoder for the write loop, built once. Compact separators drop ~7% of the

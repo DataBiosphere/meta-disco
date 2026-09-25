@@ -177,21 +177,26 @@ def extract_sam_field(header: SAMHeader, section: str, field: str) -> list[str]:
     return values
 
 
-def match_sam_header_pattern(header: SAMHeader, section: str, field: str, pattern: str) -> bool:
+def match_sam_header_pattern(header: SAMHeader, section: str, field: str, pattern: str, every: bool = False) -> bool:
     """
-    Check if any value in a SAM header field matches a regex pattern.
+    Check whether a SAM header field's values match a regex pattern.
 
     Args:
         header: Parsed SAMHeader object
         section: Section name (@HD, @SQ, @RG, @PG)
         field: Field name (e.g., PL, PN, SN)
         pattern: Regex pattern to match
+        every: If True, every value of the field must match, and there must be at
+            least one; otherwise one matching value is enough
 
     Returns:
-        True if any field value matches the pattern
+        True if any value matches (``every=False``), or if the field has values and
+        all of them match (``every=True``)
     """
     values = extract_sam_field(header, section, field)
     compiled = re.compile(pattern, re.IGNORECASE)
+    if every:
+        return bool(values) and all(compiled.search(v) for v in values)
     return any(compiled.search(v) for v in values)
 
 

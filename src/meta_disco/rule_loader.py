@@ -206,6 +206,7 @@ class RuleLoader:
         "header_section",
         "header_field",
         "header_pattern",
+        "header_match_all",
         "header_absent",
         "vcf_header_type",
         "vcf_pattern",

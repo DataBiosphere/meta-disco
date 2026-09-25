@@ -127,6 +127,8 @@
 # - header_section: BAM header section (@HD, @RG, @PG, @SQ)
 # - header_field: field within section (PL, PN, SN, AS, DS)
 # - header_pattern: regex pattern to match in field value
+# - header_match_all: true if every value of the field (e.g. every @RG's PM) must
+#     match header_pattern, not just one; a field with no values then matches nothing
 # - header_absent: true if header section should NOT exist
 # - vcf_header_type: VCF header line type (##reference, ##source, ##contig)
 # - vcf_pattern: regex pattern for VCF header content
@@ -775,12 +777,15 @@ rules:
   # platform model but leaves its text free, so each rule matches one whole value
   # that names exactly one ENA/SRA model, and declares the platform that model
   # implies from the same evidence. Values that name several are not read:
-  # `SEQUELII` (Sequel II and Sequel IIe both), `SEQUEL` (written on Sequel II runs
-  # too: in the corpus it sits on m64 movies, and a submitter says Sequel II on 124
-  # such files), `NovaSeq` (a family), and the ONT
+  # `SEQUELII` (Sequel II and Sequel IIe both), `SEQUEL` (not shown to name one
+  # model: a submitter says Sequel II on 124 of the corpus files that carry it, so
+  # it may be written for Sequel II runs too; unconfirmed), `NovaSeq` (a family),
+  # and the ONT
   # flow-cell positions and device serials (`1A`, `PC48B200`) written into the
   # same field. Nor is any read-name serial prefix (`A00297`, `m84046`): that is a
   # vendor numbering convention no standard states, not the file naming its model.
+  # `header_match_all` makes every @RG that carries PM name the model: a BAM merged
+  # from runs on two instruments (PM:SEQUELII and PM:REVIO) names neither.
   # ---------------------------------------------------------------------------
   - id: instrument_model_revio
     tier: 3
@@ -790,6 +795,7 @@ rules:
       header_section: "@RG"
       header_field: "PM"
       header_pattern: "^REVIO$"
+      header_match_all: true
     then:
       instrument_model: Revio
       platform: PACBIO
@@ -803,6 +809,7 @@ rules:
       header_section: "@RG"
       header_field: "PM"
       header_pattern: "^NovaSeq X$"
+      header_match_all: true
     then:
       instrument_model: Illumina NovaSeq X
       platform: ILLUMINA

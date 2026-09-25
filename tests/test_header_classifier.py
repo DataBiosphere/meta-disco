@@ -549,7 +549,7 @@ class TestBamCramClassification:
         ("pl", "pm", "model"),
         [
             pytest.param("PACBIO", "REVIO", "Revio", id="REVIO names Revio"),
-            pytest.param("PACBIO", "SEQUEL", None, id="SEQUEL is written on Sequel II runs too"),
+            pytest.param("PACBIO", "SEQUEL", None, id="SEQUEL is not shown to name one model"),
             pytest.param("ILLUMINA", "NovaSeq X", "Illumina NovaSeq X", id="NovaSeq X"),
             pytest.param("PACBIO", "SEQUELII", None, id="SEQUELII is Sequel II or IIe"),
             pytest.param("ILLUMINA", "NovaSeq", None, id="NovaSeq is a family"),
@@ -564,6 +564,16 @@ class TestBamCramClassification:
         result = classify_from_header(header)
         assert field_value(result, "instrument_model") == model
         assert field_status(result, "instrument_model") == (CLASSIFIED if model else NOT_CLASSIFIED)
+
+    def test_read_groups_naming_two_models_name_neither(self):
+        """A BAM merged from runs on two instruments gets no model (#532)."""
+        header = "@HD\tVN:1.6\n@RG\tID:a\tPL:PACBIO\tPM:SEQUELII\n@RG\tID:b\tPL:PACBIO\tPM:REVIO"
+        result = classify_from_header(header)
+        assert field_status(result, "instrument_model") == NOT_CLASSIFIED
+
+    def test_every_read_group_naming_one_model_names_it(self):
+        header = "@HD\tVN:1.6\n@RG\tID:a\tPL:PACBIO\tPM:REVIO\n@RG\tID:b\tPL:PACBIO\tPM:REVIO"
+        assert field_value(classify_from_header(header), "instrument_model") == "Revio"
 
     @pytest.mark.parametrize(("pm", "platform"), [("REVIO", "PACBIO"), ("NovaSeq X", "ILLUMINA")])
     def test_a_pm_model_declares_its_platform_without_pl(self, pm, platform):

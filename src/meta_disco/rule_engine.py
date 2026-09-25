@@ -1089,7 +1089,9 @@ class RuleEngine:
 
         from .validators.header_extractors import match_sam_header_pattern
 
-        return match_sam_header_pattern(file_info.parsed_bam_header, section, field_name, pattern)
+        return match_sam_header_pattern(
+            file_info.parsed_bam_header, section, field_name, pattern, every=bool(when.get("header_match_all"))
+        )
 
     def _match_vcf_header(self, when: dict[str, Any], file_info: ExtendedFileInfo) -> bool:
         """Match conditions against VCF header content."""
