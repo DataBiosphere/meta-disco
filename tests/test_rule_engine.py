@@ -937,7 +937,11 @@ class TestTextFiles:
     @pytest.mark.parametrize(
         ("filename", "expected"),
         [
-            pytest.param("sample.stats.txt", {"data_modality": NOT_APPLICABLE}, id="QC stats file is not_applicable"),
+            pytest.param(
+                "sample.stats.txt",
+                {"data_type": "qc_report", "data_modality": NOT_CLASSIFIED},
+                id="QC report is qc_report, modality left open",
+            ),
             pytest.param(
                 "expression.counts.csv",
                 {"data_modality": "transcriptomic.bulk", "data_type": "expression_matrix"},
@@ -1112,19 +1116,13 @@ class TestReferenceRuleFileKinds:
 
 class TestSameTierNotApplicableConflicts:
     """A not_applicable and a value from two same-tier rules are a conflict, not a
-    not_applicable win (#523). No corpus file hit either case when the terminal rule
-    was removed; these pin the outcome for names that would."""
+    not_applicable win (#523). No corpus file hit this case when the terminal rule
+    was removed; the test pins the outcome for a name that would."""
 
     def test_assembly_fasta_named_for_a_reference(self, engine):
         # fasta_assembly_filename says not_applicable; filename_ref_chm13 says CHM13.
         result = engine.classify_extended(FileInfo.from_filename("HG002.CHM13.hap1.fasta"))
         assert result.status_of("reference_assembly") == CONFLICT
-
-    def test_stats_file_named_for_expression(self, engine):
-        # text_stats says not_applicable; text_expression says a value.
-        result = engine.classify_extended(FileInfo.from_filename("gene_expression.stats.txt"))
-        assert result.status_of("data_modality") == CONFLICT
-        assert result.status_of("data_type") == CONFLICT
 
 
 class TestConflictingClassificationFields:
@@ -1137,6 +1135,12 @@ class TestConflictingClassificationFields:
         assert result.status_of("data_modality") == CONFLICT
         evidence = result.field_evidence.get("data_modality", [])
         assert any(e.get("marker") == "conflict" for e in evidence)
+
+    def test_data_type_conflict(self, engine):
+        """Same-tier rules disagreeing on data_type produce a conflict."""
+        # text_stats says qc_report and text_expression says expression_matrix, both at tier 2.
+        result = engine.classify_extended(FileInfo.from_filename("gene_expression.stats.txt"))
+        assert result.status_of("data_type") == CONFLICT
 
     def test_conflict_preserves_prior_evidence(self, engine):
         """Conflict marker is appended to existing evidence, not replaced."""

@@ -133,6 +133,10 @@ class DataTypeEnum(str, Enum):
     expression_matrix = "expression_matrix"
     quantification = "quantification"
     annotations = "annotations"
+    annotationsFULL_STOPcoverage = "annotations.coverage"
+    """
+    Mean read depth per genome window, measured from an alignment (e.g. a mosdepth `regions.bed.gz`). No `meaning`: EDAM has no data term for coverage or read depth, only the process (operation_3230).
+    """
     peaks = "peaks"
     signal = "signal"
     raw_signal = "raw_signal"
@@ -140,7 +144,10 @@ class DataTypeEnum(str, Enum):
     images = "images"
     index = "index"
     checksum = "checksum"
-    statistics = "statistics"
+    qc_report = "qc_report"
+    """
+    A quality-control report about another file, such as samtools stats, a mosdepth summary or distribution, or bcftools stats.
+    """
     log = "log"
     interval_set = "interval_set"
 

@@ -5,6 +5,7 @@ import pytest
 from meta_disco.file_name import FileName
 from meta_disco.header_classifier import BedSignals, classify_from_bed_signals
 from meta_disco.models import (
+    CONFLICT,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
     FileInfo,
@@ -167,12 +168,10 @@ class TestRegionsPattern:
     """Test regions pattern matching."""
 
     def test_regions_bed_matches(self):
-        """Regions BED files should match regions rule."""
+        """mosdepth's regions.bed.gz is a coverage track."""
         filename = "HG04191.regions.bed.gz"
         rule_id = get_matched_rule_id(filename)
-        assert rule_id == "bed_regions"
-        result = classify_bed(filename)
-        assert result["data_modality"] == "genomic"
+        assert rule_id == "bed_mosdepth_regions"
 
 
 class TestReferencePatterns:
@@ -200,20 +199,20 @@ class TestReferencePatterns:
 
 
 class TestRulePrecedence:
-    """Test that rule precedence works correctly."""
+    """Same-tier BED rules that match one file: agreement stands, disagreement conflicts."""
 
-    def test_methylation_before_regions(self):
-        """Methylation pattern should match before regions pattern."""
-        # This file has both .cpg. and .regions.bed
-        filename = "sample.cpg.regions.bed"
-        rule_id = get_matched_rule_id(filename)
-        assert rule_id == "bed_methylation"  # Should match first
+    def test_methylation_and_mosdepth_regions_conflict(self):
+        """`.cpg.` says annotations and mosdepth's `.regions.bed.gz` says annotations.coverage,
+        both at tier 2; only the methylation rule speaks to data_modality."""
+        result = engine.classify_extended(FileInfo.from_filename("sample.cpg.regions.bed.gz"))
+        assert result.status_of("data_type") == CONFLICT
+        assert result.data_modality == "epigenomic.methylation"
 
-    def test_assembly_qc_and_regions_agree(self):
-        """File matching both assembly_qc and regions should still be genomic."""
-        filename = "sample.hap1.callable.regions.bed"
-        result = classify_bed(filename)
-        assert _get_val(result, "data_modality") == "genomic"
+    def test_assembly_qc_and_mosdepth_regions(self):
+        """Only assembly_qc speaks to data_modality; annotations vs annotations.coverage conflicts."""
+        result = engine.classify_extended(FileInfo.from_filename("sample.hap1.callable.regions.bed.gz"))
+        assert result.data_modality == "genomic"
+        assert result.status_of("data_type") == CONFLICT
 
     def test_no_specific_pattern_gets_no_default(self):
         """A BED no specific pattern matches gets no modality: there is no default (#88)."""

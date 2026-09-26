@@ -923,6 +923,11 @@ enums:
       expression_matrix:      # a features × samples abundance matrix
       quantification:         # one sample's per-feature abundance table (e.g. Salmon quant.sf); not a features × samples matrix (cf. expression_matrix)
       annotations:
+      "annotations.coverage":
+        description: >-
+          Mean read depth per genome window, measured from an alignment (e.g. a
+          mosdepth `regions.bed.gz`). No `meaning`: EDAM has no data term for
+          coverage or read depth, only the process (operation_3230).
       peaks:
       signal:
       raw_signal:
@@ -931,7 +936,11 @@ enums:
       # --- descriptive class ---
       index:
       checksum:
-      statistics:
+      qc_report:
+        description: >-
+          A quality-control report about another file, such as samtools stats,
+          a mosdepth summary or distribution, or bcftools stats.
+        meaning: EDAM:data_3914
       log:
       interval_set:
 

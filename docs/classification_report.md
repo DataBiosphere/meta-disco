@@ -748,7 +748,7 @@ BED files are classified using filename pattern matching and dataset context.
 
 | Rule | Count | Data Modality | Description |
 | ---- | ----- | ------------- | ----------- |
-| `bed_regions` | 6,997 | genomic | `.regions.bed` analysis regions |
+| `bed_mosdepth_regions` | 6,997 | genomic | mosdepth `.regions.bed.gz` coverage (`annotations.coverage`) |
 | `bed_assembly_qc` | 5,100 | N/A | Assembly QC (haplotype, flagger, switch) |
 | `bed_default` | 1,523 | genomic | Unmatched patterns (default) |
 | `bed_methylation` | 28 | epigenomic.methylation | CpG methylation (modbam2bed) |
