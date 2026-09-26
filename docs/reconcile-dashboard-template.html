@@ -67,9 +67,19 @@
     marked <em>(unreviewed)</em> spoke with a raw value no authored translation row reads.</p>
   <div class="scroll" id="conflicts"></div>
 
+  <h2>Values by dataset</h2>
+  <p class="note">What each dataset holds, per dimension: every file counted once, under its reconciled value or, where
+    it has none, its status (#545). A cell's shade is its share of the dataset's files. <em>Has a value</em> is the
+    share with a value; <em>determined</em> adds <code>not_applicable</code>, a slot settled as having no value.</p>
+  <p><label>Dimension: <select id="values-slot"></select></label></p>
+  <div class="scroll" id="values"></div>
+
   <h2>Change since the previous reconciled run</h2>
   <p class="note" id="change-note"></p>
   <div class="scroll" id="change"></div>
+  <h3>Values that moved, by dataset</h3>
+  <p class="note" id="moved-note"></p>
+  <div class="scroll" id="moved"></div>
 
   <h2>The join, per evidence file</h2>
   <p class="note">Whether each value from the source tables found its file in this run. A value that found no file,
@@ -94,7 +104,8 @@
       const head = '<tr>' + header.map(h => `<th>${esc(h)}</th>`).join('') + '</tr>';
       const body = rows.map(r => '<tr>' + r.map(c => {
         const cell = typeof c === 'object' ? c : {text: c};
-        return `<td class="${cell.cls || ''}">${esc(cell.text)}</td>`;
+        const style = cell.shade ? ` style="background: rgba(9, 105, 218, ${cell.shade.toFixed(3)})"` : '';
+        return `<td class="${cell.cls || ''}"${style}>${esc(cell.text)}</td>`;
       }).join('') + '</tr>').join('');
       return `<table>${head}${body}</table>`;
     }
@@ -176,8 +187,50 @@
           + evidenceTable(ev) + '</details>';
     }
 
-    select.addEventListener('change', () => render(Number(select.value)));
-    render(-1);
+    const STATUSES = new Set(['conflict', 'not_applicable', 'not_classified']);
+    const share = v => (v * 100).toFixed(0) + '%';
+    const slotSelect = document.getElementById('values-slot');
+    slotSelect.innerHTML = Object.keys(DATA.values).map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+
+    function renderValues() {
+      const index = Number(select.value);
+      const matrix = DATA.values[slotSelect.value];
+      // A dataset shows its own row; the whole run shows every dataset and the totals.
+      const rows = index < 0 ? [...matrix.rows.filter(r => r.files), matrix.total]
+        : matrix.rows.filter(r => r.dataset === DATA.datasets[index].name);
+      document.getElementById('values').innerHTML = table(
+        ['dataset', ...matrix.columns, 'files', 'has a value', 'determined'],
+        rows.map(r => [
+          r.dataset === DATA.all ? 'all' : shown(r.dataset),
+          ...matrix.columns.map(c => {
+            const v = r.counts[c];
+            // Shade values only: a status is the absence of one.
+            const shade = v && r.files && !STATUSES.has(c) ? 0.08 + 0.55 * v / r.files : 0;
+            return {text: v ? n(v) : '·', cls: 'num' + (c === 'conflict' && v ? ' conflict' : ''), shade};
+          }),
+          {text: n(r.files), cls: 'num'},
+          {text: share(r.has_value), cls: 'num'},
+          {text: share(r.determined), cls: 'num'},
+        ]),
+      );
+    }
+
+    function renderMoved() {
+      const note = document.getElementById('moved-note');
+      const index = Number(select.value);
+      const moved = DATA.values_change;
+      if (!DATA.previous) { note.textContent = 'No earlier reconciled run to compare with.'; document.getElementById('moved').innerHTML = ''; return; }
+      if (moved === null) { note.textContent = `${DATA.previous.run}'s report predates the per-value counts (#545): nothing to compare.`; document.getElementById('moved').innerHTML = ''; return; }
+      const rows = index < 0 ? moved : moved.filter(m => m.dataset === DATA.datasets[index].name);
+      note.textContent = rows.length ? `${n(rows.length)} counts (a dataset's count of one value) moved, largest change first.` : 'No dataset\'s count of any value moved.';
+      document.getElementById('moved').innerHTML = rows.length ? table(['dataset', 'dimension', 'value', 'before', 'after', 'change'],
+        rows.map(m => [shown(m.dataset), m.dimension, m.value, {text: n(m.before), cls: 'num'}, {text: n(m.after), cls: 'num'}, {text: signed(m.delta), cls: 'num'}])) : '';
+    }
+
+    const renderAll = () => { render(Number(select.value)); renderValues(); renderMoved(); };
+    select.addEventListener('change', renderAll);
+    slotSelect.addEventListener('change', renderValues);
+    renderAll();
   </script>
 </body>
 </html>

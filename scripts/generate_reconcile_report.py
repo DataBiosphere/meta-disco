@@ -8,7 +8,9 @@ and ``docs/reconcile-dashboard.html`` (from ``docs/reconcile-dashboard-template.
 Both show, for the whole run and per dataset: how each slot of each dimension settled
 (the slot categories of ``meta_disco.reconcile``), the conflict rate, the join per
 evidence file, and the conflicts listed by their distinct competing values (contract
-5.1). With a previous reconciled run, each category's change per dimension.
+5.1). With a previous reconciled run, each category's change per dimension. Per
+dimension, the values each dataset holds (#545), and with a previous run the cells (a dataset's
+count of one value) that moved.
 
 Usage:
     python scripts/generate_reconcile_report.py
@@ -23,7 +25,7 @@ import json
 import sys
 from pathlib import Path
 
-from meta_disco.models import CLASSIFICATION_FIELDS
+from meta_disco.models import CLASSIFICATION_FIELDS, CONFLICT, NOT_APPLICABLE, NOT_CLASSIFIED
 from meta_disco.output_utils import RECONCILED_DIR, find_latest_run, list_runs
 from meta_disco.reconcile import (
     CONFLICT_CATEGORIES,
@@ -44,6 +46,14 @@ ALL = EVERY_DATASET
 # for the file, and the gaps inference left that a source filled.
 ADDED = "added_over_published"
 FILLED_OVER = "filled_over_inference"
+# A slot's statuses, shown after its values in a values table: a file counted under one
+# has no value for the slot.
+VALUE_STATUSES = (CONFLICT, NOT_APPLICABLE, NOT_CLASSIFIED)
+# A slot with more values than this is shown in the markdown with each dotted term under
+# its top-level term (`variants.germline` under `variants`); the dashboard shows every term.
+MARKDOWN_VALUE_COLUMNS = 12
+# The most moved cells the markdown lists; the dashboard lists them all.
+MARKDOWN_MOVED_CELLS = 40
 
 
 def shown(dataset: str) -> str:
@@ -197,6 +207,68 @@ def change(new: dict, old: dict, dataset: str | None = None) -> list[dict]:
     return rows
 
 
+def values_matrix(report: dict, slot: str) -> dict:
+    """One dimension's values per dataset: its columns, a row per dataset, and a totals row.
+
+    Columns are the slot's values, most files first, then :data:`VALUE_STATUSES` present in
+    the run. A row's counts sum to its dataset's files. *Has a value* is the share with a
+    value; *determined* adds ``not_applicable``, a slot settled as having no value.
+    """
+    per_dataset = {d: report.get("values", {}).get(d, {}).get(slot, {}) for d in sorted(report["files"])}
+    totals: dict[str, int] = {}
+    for counts in per_dataset.values():
+        for value, n in counts.items():
+            totals[value] = totals.get(value, 0) + n
+    values = sorted((v for v in totals if v not in VALUE_STATUSES), key=lambda v: (-totals[v], v))
+    cols = values + [v for v in VALUE_STATUSES if v in totals]
+
+    def row(name: str, counts: dict[str, int]) -> dict:
+        files = sum(counts.values())
+        valued = sum(counts.get(v, 0) for v in values)
+        return {
+            "dataset": name,
+            "counts": {c: counts.get(c, 0) for c in cols},
+            "files": files,
+            "has_value": valued / files if files else 0.0,
+            "determined": (valued + counts.get(NOT_APPLICABLE, 0)) / files if files else 0.0,
+        }
+
+    return {
+        "columns": cols,
+        "values": values,
+        "rows": [row(d, c) for d, c in per_dataset.items()],
+        "total": row(ALL, totals),
+    }
+
+
+def values_change(new: dict, old: dict) -> list[dict] | None:
+    """Every (dataset, slot, value) count that differs between ``old`` and ``new``, largest change first.
+
+    None when ``old`` predates the per-value counts (#545), so nothing can be compared.
+    """
+    if "values" not in old:
+        return None
+    moved = []
+    for dataset in sorted(set(new["values"]) | set(old["values"])):
+        for slot in CLASSIFICATION_FIELDS:
+            now = new["values"].get(dataset, {}).get(slot, {})
+            was = old["values"].get(dataset, {}).get(slot, {})
+            for value in sorted(set(now) | set(was)):
+                before, after = was.get(value, 0), now.get(value, 0)
+                if before != after:
+                    moved.append(
+                        {
+                            "dataset": dataset,
+                            "dimension": slot,
+                            "value": value,
+                            "before": before,
+                            "after": after,
+                            "delta": after - before,
+                        }
+                    )
+    return sorted(moved, key=lambda m: (-abs(m["delta"]), m["dataset"], m["dimension"], m["value"]))
+
+
 def provenance(report: dict) -> dict:
     return {
         "run": report["run"],
@@ -212,7 +284,10 @@ def provenance(report: dict) -> dict:
 def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
     """The payload ``reconcile-dashboard-template.html`` reads, and the markdown renders: every table precomputed per scope.
 
-    These key names are the contract with that template's JavaScript. ``run`` is the
+    These key names are the contract with that template's JavaScript. ``values`` holds
+    each dimension's :func:`values_matrix` across all datasets, which the template narrows
+    to the chosen dataset's row, and ``values_change`` the moved cells, None where there is
+    no previous run or it predates the per-value counts. ``run`` is the
     whole run's scope and ``datasets`` a list of each dataset's, carrying its title as
     ``name`` — apart from the run, so no title can stand in for it, and a list rather than
     a map, so no title is read as a JavaScript object key (``__proto__``). A scope's ``change`` is None where there is no previous run
@@ -247,6 +322,8 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
         "all": ALL,
         "run": scope(None),
         "datasets": [{"name": dataset, **scope(dataset)} for dataset in sorted(report["files"])],
+        "values": {slot: values_matrix(report, slot) for slot in CLASSIFICATION_FIELDS},
+        "values_change": values_change(report, previous) if previous else None,
     }
 
 
@@ -267,6 +344,100 @@ def _headline_table(rows: list[dict], cols: list[dict], fmt=_n) -> list[str]:
         [r["dimension"], *(fmt(r["counts"][c["key"]]) for c in cols), fmt(r[ADDED]), fmt(r[FILLED_OVER])] for r in rows
     ]
     return md_table(header, body, align="right")
+
+
+def _pct(share: float) -> str:
+    return f"{share:.0%}"
+
+
+def _grouped(matrix: dict) -> tuple[dict, dict[str, list[str]]]:
+    """``matrix`` with each dotted value summed under its top-level term, and the terms each group holds.
+
+    Only the values are grouped; the statuses stay their own columns. A term with no dot
+    is its own group, and a group of one term keeps its name.
+    """
+    groups: dict[str, list[str]] = {}
+    for value in matrix["values"]:
+        groups.setdefault(value.split(".", 1)[0], []).append(value)
+
+    def regroup(row: dict) -> dict:
+        counts = {g: sum(row["counts"][v] for v in members) for g, members in groups.items()}
+        counts.update({c: row["counts"][c] for c in matrix["columns"] if c in VALUE_STATUSES})
+        return {**row, "counts": counts}
+
+    order = sorted(groups, key=lambda g: (-sum(matrix["total"]["counts"][v] for v in groups[g]), g))
+    cols = order + [c for c in matrix["columns"] if c in VALUE_STATUSES]
+    grouped = {
+        "columns": cols,
+        "rows": [regroup(r) for r in matrix["rows"]],
+        "total": regroup(matrix["total"]),
+    }
+    return grouped, {g: members for g, members in groups.items() if members != [g]}
+
+
+def _values_table(matrix: dict) -> list[str]:
+    header = ["dataset", *matrix["columns"], "files", "has a value", "determined"]
+
+    def cells(row: dict, name: str) -> list[str]:
+        return [
+            name,
+            *(_n(row["counts"][c]) if row["counts"][c] else "·" for c in matrix["columns"]),
+            _n(row["files"]),
+            _pct(row["has_value"]),
+            _pct(row["determined"]),
+        ]
+
+    body = [cells(r, md_code(shown(r["dataset"]))) for r in matrix["rows"] if r["files"]]
+    body.append(cells(matrix["total"], "**all**"))
+    return md_table(header, body, align="right")
+
+
+def _values_section(values: dict[str, dict]) -> list[str]:
+    lines = [
+        "## Values by dataset",
+        "",
+        "What each dataset holds, per dimension: every file counted once, under its reconciled value or, "
+        "where it has none, its status (#545). *Has a value* is the share of the dataset's files with a value; "
+        "*determined* adds `not_applicable`, a slot settled as having no value.",
+        "",
+    ]
+    for slot in CLASSIFICATION_FIELDS:
+        matrix = values[slot]
+        lines += [f"### {slot}", ""]
+        if len(matrix["values"]) > MARKDOWN_VALUE_COLUMNS:
+            matrix, groups = _grouped(matrix)
+            lines += [
+                f"{len(values[slot]['values'])} values, shown with each dotted term under its top-level term "
+                "(the dashboard shows every term): "
+                + "; ".join(f"`{g}` = {', '.join(f'`{m}`' for m in members)}" for g, members in groups.items())
+                + ".",
+                "",
+            ]
+        lines += [*_values_table(matrix), ""]
+    return lines
+
+
+def _moved_cells(moved: list[dict]) -> list[str]:
+    if not moved:
+        return ["No dataset's count of any value moved."]
+    shown_cells = moved[:MARKDOWN_MOVED_CELLS]
+    lines = md_table(
+        ["dataset", "dimension", "value", "before", "after", "change"],
+        [
+            [
+                md_code(shown(m["dataset"])),
+                m["dimension"],
+                md_code(m["value"]),
+                _n(m["before"]),
+                _n(m["after"]),
+                _signed(m["delta"]),
+            ]
+            for m in shown_cells
+        ],
+    )
+    if len(moved) > len(shown_cells):
+        lines += ["", f"{len(moved) - len(shown_cells):,} more cells moved; the dashboard lists every one."]
+    return lines
 
 
 def competing(inputs: dict[str, list[str]]) -> str:
@@ -354,6 +525,7 @@ def render_markdown(data: dict) -> str:
         "",
         *_conflict_table(whole["conflict_rows"], with_dataset=True),
         "",
+        *_values_section(data["values"]),
         "## Change since the previous reconciled run",
         "",
     ]
@@ -367,7 +539,14 @@ def render_markdown(data: dict) -> str:
             "Each cell is this run's count minus that run's.",
             "",
             *_headline_table(whole["change"], cols, fmt=_signed),
+            "",
+            "### Values that moved, by dataset",
+            "",
         ]
+        if data["values_change"] is None:
+            lines.append(f"`{q['run']}`'s report predates the per-value counts (#545): nothing to compare.")
+        else:
+            lines += _moved_cells(data["values_change"])
     lines += [
         "",
         "## The join, per evidence file",
