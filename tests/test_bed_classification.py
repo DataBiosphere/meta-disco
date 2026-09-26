@@ -173,6 +173,12 @@ class TestRegionsPattern:
         rule_id = get_matched_rule_id(filename)
         assert rule_id == "bed_mosdepth_regions"
 
+    def test_uncompressed_regions_bed_is_not_mosdepth(self):
+        """mosdepth writes its regions BED gzipped; a plain `.regions.bed` is not claimed as coverage."""
+        result = classify_bed("sample.regions.bed")
+        assert "bed_mosdepth_regions" not in result["rules_matched"]
+        assert result["data_type"] != "annotations.coverage"
+
 
 class TestReferencePatterns:
     """Test reference assembly pattern matching."""

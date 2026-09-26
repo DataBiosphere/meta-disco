@@ -748,8 +748,8 @@ roadmap starts to cash in on generation.
    *both* classes — a descriptive file is `data_type: index` (or `checksum` /
    `qc_report` / `log`), **not** `not_applicable`. Only the genuinely biological
    dimensions `data_modality / assay_type / platform` are `not_applicable` for a
-   descriptive file — except a QC report, which shares them with the file it
-   summarizes and leaves them open (#541, Section 7b).
+   descriptive file — except a QC report, which shares them and `instrument_model`
+   with the file it summarizes and leaves all four open (#541, Section 7b).
 4. **Factor, don't subtype.** The parent is named by the link (`parent_kind` +
    `parent_md5sum`), never baked into the content type as `bam_index`. This keeps
    the `data_type` enum additive (M+N) and the parent single-sourced.
