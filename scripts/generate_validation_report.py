@@ -34,7 +34,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import TypedDict
 
-from meta_disco.output_utils import find_latest_run
 from meta_disco.summaries import escape_md_cell
 
 DIMENSIONS = ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]
@@ -343,9 +342,35 @@ def generate_html_dashboard(all_results: dict, run_time: str, output_path: Path)
     output_path.write_text(html)
 
 
+def report_run_time(run_dir: Path | None, hprc_results_path: Path) -> str:
+    """The timestamp of the run the report's numbers come from.
+
+    ``run_dir`` where one is given; otherwise the one run the HPRC results name
+    (``validate_against_hprc`` records the run directories it read, #550), since
+    those results are the report's only source. A results file naming no run, or
+    several, gives "unrecorded" rather than borrowing another run's name. Nothing
+    in this script opens the run: only its directory name is read.
+    """
+    if run_dir is None:
+        runs = []
+        if hprc_results_path.is_file():
+            runs = json.loads(hprc_results_path.read_text()).get("metadata", {}).get("runs", [])
+        if len(runs) != 1:
+            return "unrecorded"
+        run_dir = Path(runs[0])
+    try:
+        return datetime.strptime(run_dir.name, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return run_dir.name
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate validation report")
-    parser.add_argument("--run-dir", type=Path, help="Run directory, read for its name as the report timestamp")
+    parser.add_argument(
+        "--run-dir",
+        type=Path,
+        help="Run directory, read for its name as the report timestamp (default: the run the HPRC results name)",
+    )
     parser.add_argument(
         "--hprc-results",
         type=Path,
@@ -355,19 +380,8 @@ def main():
     parser.add_argument("--output", type=Path, default=Path("docs/validation-report.md"), help="Output markdown file")
     args = parser.parse_args()
 
-    try:
-        run_dir = args.run_dir or find_latest_run(Path("output/anvil"))
-    except FileNotFoundError as exc:
-        print(exc, file=sys.stderr)
-        raise SystemExit(1) from None
-    # Only the directory *name* is read, for the run timestamp below — since #466
-    # deleted `load_our_classifications`, nothing in this script opens the run.
-    print(f"Run: {run_dir.name}")
-
-    try:
-        run_time = datetime.strptime(run_dir.name, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
-    except ValueError:
-        run_time = run_dir.name
+    run_time = report_run_time(args.run_dir, args.hprc_results)
+    print(f"Run: {run_time}")
 
     # Run comparisons
     all_results = {}

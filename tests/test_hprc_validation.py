@@ -157,3 +157,57 @@ class TestValidateDimension:
         mismatch, counters = self._score("GRCh38", "CHM13")
         assert mismatch == {"ours": "GRCh38", "expected": "CHM13"}
         assert counters["reference_assembly_mismatch"] == 1
+
+
+class TestReportRunTime:
+    """The validation report names the run its HPRC results were read from (#550)."""
+
+    def _results(self, tmp_path, runs):
+        import json
+
+        path = tmp_path / "hprc_validation_results.json"
+        path.write_text(json.dumps({"metadata": {"runs": runs}, "dimensions": {}}))
+        return path
+
+    def test_the_run_the_results_name(self, tmp_path):
+        from generate_validation_report import report_run_time
+
+        path = self._results(tmp_path, ["output/hprc/20260926_121312"])
+        assert report_run_time(None, path) == "2026-09-26 12:13:12"
+
+    def test_no_single_run_is_unrecorded_not_borrowed(self, tmp_path):
+        from generate_validation_report import report_run_time
+
+        assert report_run_time(None, self._results(tmp_path, [])) == "unrecorded"
+        two = ["output/hprc/20260926_121312", "output/hprc/20260926_063656"]
+        assert report_run_time(None, self._results(tmp_path, two)) == "unrecorded"
+
+    def test_an_explicit_run_dir_wins(self, tmp_path):
+        from pathlib import Path
+
+        from generate_validation_report import report_run_time
+
+        path = self._results(tmp_path, ["output/hprc/20260926_121312"])
+        assert report_run_time(Path("output/hprc/20260101_000000"), path) == "2026-01-01 00:00:00"
+
+
+def test_a_skipped_input_contributes_no_run(tmp_path):
+    """Only inputs actually loaded name the validated runs: a missing path from another run is skipped (#550)."""
+    import json
+
+    from validate_against_hprc import validate_against_hprc
+
+    from meta_disco.validation_maps import HPRC_CATALOG_NAMES
+
+    catalogs = tmp_path / "catalogs"
+    catalogs.mkdir()
+    for name in HPRC_CATALOG_NAMES:  # cached and empty, so nothing is fetched
+        (catalogs / f"{name}.json").write_text("[]")
+    loaded = tmp_path / "hprc" / "20260926_121312" / "bam_classifications.json"
+    loaded.parent.mkdir(parents=True)
+    loaded.write_text(json.dumps({"classifications": []}))
+    missing = tmp_path / "hprc" / "20260926_063656" / "vcf_classifications.json"
+
+    out = tmp_path / "results.json"
+    validate_against_hprc([loaded, missing], out, catalogs)
+    assert json.loads(out.read_text())["metadata"]["runs"] == [loaded.parent.as_posix()]
