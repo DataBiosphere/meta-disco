@@ -61,6 +61,7 @@ from .models import (
     SOURCE_PUBLISHED_VALUE,
     UNMAPPED,
     field_detail,
+    field_label,
 )
 from .output_utils import (
     RECONCILED_DIR,
@@ -633,7 +634,7 @@ class Report:
             covering = self.covering(dataset, slot)
             category = self._category(settled, said)
             self.slots[dataset][slot][category] += 1
-            self.values[dataset][slot][settled["value"] if settled["status"] == CLASSIFIED else settled["status"]] += 1
+            self.values[dataset][slot][field_label(reconciled, slot)] += 1
             if category in CONFLICT_CATEGORIES:
                 self.conflicts[dataset][slot][category][self._competing(settled, said, own)] += 1
             if (

@@ -69,7 +69,8 @@
 
   <h2>Values by dataset</h2>
   <p class="note">What each dataset holds, per dimension: every file counted once, under its reconciled value or, where
-    it has none, its status (#545). A cell's shade is its share of the dataset's files. <em>Has a value</em> is the
+    it has none, its status (#545). A value's cell is shaded by its share of the dataset's files; statuses are
+    unshaded. <em>Has a value</em> is the
     share with a value; <em>determined</em> adds <code>not_applicable</code>, a slot settled as having no value.</p>
   <p><label>Dimension: <select id="values-slot"></select></label></p>
   <div class="scroll" id="values"></div>
@@ -187,25 +188,27 @@
           + evidenceTable(ev) + '</details>';
     }
 
-    const STATUSES = new Set(['conflict', 'not_applicable', 'not_classified']);
-    const share = v => (v * 100).toFixed(0) + '%';
+    // To one decimal, rounded down, so a dataset short of every file never reads 100%.
+    const share = v => v >= 1 ? '100%' : (Math.floor(v * 1000) / 10).toFixed(1) + '%';
     const slotSelect = document.getElementById('values-slot');
     slotSelect.innerHTML = Object.keys(DATA.values).map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
 
-    function renderValues() {
-      const index = Number(select.value);
+    function renderValues(index) {
       const matrix = DATA.values[slotSelect.value];
-      // A dataset shows its own row; the whole run shows every dataset and the totals.
-      const rows = index < 0 ? [...matrix.rows.filter(r => r.files), matrix.total]
-        : matrix.rows.filter(r => r.dataset === DATA.datasets[index].name);
+      const values = new Set(matrix.values);
+      const columns = [...matrix.values, ...matrix.statuses];
+      // A dataset shows its own row; the whole run shows every dataset and the totals. The
+      // totals row is labelled here, not by its dataset field, so no title can pass for it.
+      const labelled = index < 0 ? [...matrix.rows.map(r => [shown(r.dataset), r]), [DATA.all, matrix.total]]
+        : matrix.rows.filter(r => r.dataset === DATA.datasets[index].name).map(r => [shown(r.dataset), r]);
       document.getElementById('values').innerHTML = table(
-        ['dataset', ...matrix.columns, 'files', 'has a value', 'determined'],
-        rows.map(r => [
-          r.dataset === DATA.all ? 'all' : shown(r.dataset),
-          ...matrix.columns.map(c => {
+        ['dataset', ...columns, 'files', 'has a value', 'determined'],
+        labelled.map(([name, r]) => [
+          name,
+          ...columns.map(c => {
             const v = r.counts[c];
             // Shade values only: a status is the absence of one.
-            const shade = v && r.files && !STATUSES.has(c) ? 0.08 + 0.55 * v / r.files : 0;
+            const shade = v && r.files && values.has(c) ? 0.08 + 0.55 * v / r.files : 0;
             return {text: v ? n(v) : '·', cls: 'num' + (c === 'conflict' && v ? ' conflict' : ''), shade};
           }),
           {text: n(r.files), cls: 'num'},
@@ -215,21 +218,27 @@
       );
     }
 
-    function renderMoved() {
-      const note = document.getElementById('moved-note');
-      const index = Number(select.value);
+    function renderMoved(index) {
       const moved = DATA.values_change;
-      if (!DATA.previous) { note.textContent = 'No earlier reconciled run to compare with.'; document.getElementById('moved').innerHTML = ''; return; }
-      if (moved === null) { note.textContent = `${DATA.previous.run}'s report predates the per-value counts (#545): nothing to compare.`; document.getElementById('moved').innerHTML = ''; return; }
-      const rows = index < 0 ? moved : moved.filter(m => m.dataset === DATA.datasets[index].name);
-      note.textContent = rows.length ? `${n(rows.length)} counts (a dataset's count of one value) moved, largest change first.` : 'No dataset\'s count of any value moved.';
+      const rows = !DATA.previous || moved === null ? []
+        : (index < 0 ? moved : moved.filter(m => m.dataset === DATA.datasets[index].name));
+      document.getElementById('moved-note').textContent =
+        !DATA.previous ? 'No earlier reconciled run to compare with.'
+        : moved === null ? `${DATA.previous.run}'s report predates the per-value counts (#545): nothing to compare.`
+        : (DATA.values_new_dimensions.length ? `New since ${DATA.previous.run}, so not compared: ${DATA.values_new_dimensions.join(', ')}. ` : '')
+          + (rows.length ? `${n(rows.length)} counts of a value in a dataset moved, largest change first.` : "No dataset's count of any value moved.");
       document.getElementById('moved').innerHTML = rows.length ? table(['dataset', 'dimension', 'value', 'before', 'after', 'change'],
         rows.map(m => [shown(m.dataset), m.dimension, m.value, {text: n(m.before), cls: 'num'}, {text: n(m.after), cls: 'num'}, {text: signed(m.delta), cls: 'num'}])) : '';
     }
 
-    const renderAll = () => { render(Number(select.value)); renderValues(); renderMoved(); };
+    const renderAll = () => {
+      const index = Number(select.value);
+      render(index);
+      renderValues(index);
+      renderMoved(index);
+    };
     select.addEventListener('change', renderAll);
-    slotSelect.addEventListener('change', renderValues);
+    slotSelect.addEventListener('change', () => renderValues(Number(select.value)));
     renderAll();
   </script>
 </body>
