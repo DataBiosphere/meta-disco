@@ -45,7 +45,7 @@
 # - data_modality: What biological data type (genomic, transcriptomic.bulk,
 #   epigenomic.methylation, imaging.histology, etc.)
 #
-# - data_type: File content type (alignments, variants, reads, peaks, signal, etc.)
+# - data_type: File content type (alignments, variants, reads, peaks, annotations.coverage, etc.)
 #
 # - reference_assembly: Reference genome (GRCh38, GRCh37, CHM13, or null for
 #   unaligned/raw data)
@@ -656,18 +656,23 @@ rules:
     rationale: "mosdepth's `<prefix>.regions.bed.gz`: mean read depth per genome window, measured from an alignment"
 
   # ---------------------------------------------------------------------------
-  # Signal track classification
+  # STAR coverage tracks
   # ---------------------------------------------------------------------------
-  - id: signal_rnaseq
+  # STAR's `--outWigType` read coverage, which STAR writes as `Signal.Unique[Multiple].str{1,2}.out.bg`
+  # (unique or unique+multi-mapped reads), converted to bigWig with the strand spelled
+  # `strand+`/`strand-` (#543). The pattern matches only that converted form, the one in the
+  # corpus. The reference, platform and model are the alignment's, which the name does not show.
+  - id: star_signal_coverage
     tier: 2
     scope: filename
     when:
-      extensions: [".bigwig", ".bw", ".bigWig", ".bedGraph"]
-      filename_pattern: "(?i)rna|transcriptome|coverage"
+      extensions: [".bw", ".bigwig"]
+      filename_pattern: "[._-]Signal\\.Unique(Multiple)?\\.strand[+-]\\."
     then:
       data_modality: transcriptomic.bulk
-      data_type: signal
-    rationale: "Signal track with RNA/coverage indicator"
+      data_type: annotations.coverage
+      assay_type: RNA-seq
+    rationale: "A `Signal.Unique[Multiple].strand±` bigWig: STAR's per-base read depth, and STAR is an RNA-seq aligner"
 
   # ---------------------------------------------------------------------------
   # Intervals - target/capture region files (reference data, not primary)

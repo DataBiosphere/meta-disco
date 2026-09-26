@@ -190,11 +190,7 @@ _ACCESSION_TOKEN = re.compile(r"[A-Za-z0-9]{8,}")
 # "versus"), the latter 117 records. `grch37` is listed with them because `b37` and
 # `hs37` are the same shape, though only one file matches it today. For these, an
 # intra-word match is the wanted behavior.
-#
-# `signal_rnaseq` matches `rna` inside the gene symbol TRNAU1AP on 16 ENCORE signal
-# tracks; whether to anchor the token or teach the series' naming is an open question
-# there, so #430 left it alone rather than pre-empting the answer.
-KNOWN_UNANCHORED = frozenset({"filename_ref_grch38", "filename_ref_grch37", "filename_ref_chm13", "signal_rnaseq"})
+KNOWN_UNANCHORED = frozenset({"filename_ref_grch38", "filename_ref_grch37", "filename_ref_chm13"})
 
 
 def _subdir(tmp_path, name):

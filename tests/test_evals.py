@@ -924,6 +924,44 @@ class TestDerivedFileTierPrecedence:
             },
         )
 
+    @pytest.mark.parametrize(
+        "filename",
+        [
+            "TRNAU1AP-BG293LV03-26_Signal.Unique.strand+.bw",
+            "TRNAU1AP-BG293LV03-26_Signal.Unique.strand-.bw",
+            "SRSF1-BG293LV01-12_Signal.UniqueMultiple.strand+.bw",
+            "SRSF1-BG293LV01-12_Signal.UniqueMultiple.strand-.bigwig",
+        ],
+    )
+    def test_star_signal_track_is_rnaseq_coverage(self, filename):
+        """STAR's per-strand signal bigWig is RNA-seq read coverage (#543); the reference,
+        platform and model are the alignment's, which the name does not show."""
+        assert_dimensions(
+            engine.classify_extended(FileInfo.from_filename(filename)),
+            {
+                "data_type": "annotations.coverage",
+                "data_modality": "transcriptomic.bulk",
+                "assay_type": "RNA-seq",
+                "reference_assembly": NOT_CLASSIFIED,
+                "platform": NOT_CLASSIFIED,
+                "instrument_model": NOT_CLASSIFIED,
+            },
+        )
+
+    @pytest.mark.parametrize(
+        "filename",
+        [
+            "sample_rna.bw",  # `rna` in a name no longer says transcriptomic (#543)
+            "HG01258_mat_hprc_r2_v1.0.1.R941_minimap2_2.28.5mC.bigwig",  # methylation, not depth
+        ],
+    )
+    def test_other_bigwig_stays_unclassified(self, filename):
+        result = engine.classify_extended(FileInfo.from_filename(filename))
+        assert "star_signal_coverage" not in result.rules_matched
+        assert_dimensions(
+            result, {"data_type": NOT_CLASSIFIED, "data_modality": NOT_CLASSIFIED, "assay_type": NOT_CLASSIFIED}
+        )
+
     # --- BED tier precedence: specific rules beat fallbacks ---
 
     def test_assembly_qc_beats_intervals_targets(self):
