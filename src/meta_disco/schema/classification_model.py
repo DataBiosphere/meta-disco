@@ -184,6 +184,15 @@ GRC assemblies are named at the major release: contig lengths are identical acro
     """
 
 
+class ReferenceFamilyEnum(str, Enum):
+    """
+    The assembly families: the `reference_assembly_enum` terms with no `is_a` parent, which `ReferenceBuild.base` ranges over (#473). A release or a hybrid is a value, never a family. `tests/test_rule_vocabulary.py` holds this list to those terms.
+    """
+    GRCh37 = "GRCh37"
+    GRCh38 = "GRCh38"
+    CHM13 = "CHM13"
+
+
 class ReferenceNameSourceEnum(str, Enum):
     """
     Which part of a file's header a declared reference name was read from (issue #354). See ``ReferenceBuild.name_source``.
@@ -668,7 +677,7 @@ class ReferenceBuild(ConfiguredBaseModel):
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
-    base: Optional[ReferenceAssemblyEnum] = Field(default=None, description="""Assembly family of the resolved build (``CHM13``, ``GRCh38``), derived by the resolver from exact signatures. Where both are known it is the value or an ancestor of it, since a contradicting one is dropped (#345); recorded here so a build is readable on its own; null when no single family was identified. Range-constrained rather than merely documented as such, so a table entry naming a family outside the vocabulary fails validation instead of passing as free text.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild']} })
+    base: Optional[ReferenceFamilyEnum] = Field(default=None, description="""Assembly family of the resolved build (``CHM13``, ``GRCh38``), derived by the resolver from exact signatures. Where both are known it is the value or an ancestor of it, since a contradicting one is dropped (#345); recorded here so a build is readable on its own; null when no single family was identified. Range-constrained to the families rather than merely documented as such, so a table entry naming a release, a hybrid or anything outside the vocabulary fails validation instead of passing.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild']} })
     version: Optional[str] = Field(default=None, description="""Build version within the family. Free text by necessity: T2T releases (``v1.0``, ``v1.1``, ``v2.0``) and GRC patches (``p12``) are not the same kind of thing, and CHM13 has no patch concept. Where a build grafts a chromosome from elsewhere the origin is part of the version (``v1.0+GRCh38chrY``), because that is a real difference in the reference. Null unless the evidence identifies exactly one build.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild', 'EvidenceTarget']} })
     chr1_m5: Optional[str] = Field(default=None, description="""MD5 of the chr1 sequence, from SAM ``@SQ M5``. Identifies the sequence, not the packaging: two references with different decoy or alt content share this value when their chr1 is the same. Null for VCF, whose ``##contig`` md5 attribute is optional in the specification and unpopulated in practice.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild']} })
     chry_m5: Optional[str] = Field(default=None, description="""MD5 of the chrY sequence, from SAM ``@SQ M5``. Recorded because chr1 alone cannot separate some builds — CHM13 v2.0 is v1.1 plus a chrY, so their autosomes are identical. One build can appear with more than one value here at identical chrY length; the header cannot say why, so both are recorded as observations and neither is preferred.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild']} })

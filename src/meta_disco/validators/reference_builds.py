@@ -284,7 +284,10 @@ def assembly_term(family: str, identity: ReferenceIdentity) -> str:
     build of another family (the contradiction #345 describes), and a GRC patch all
     leave the family as the answer. Never a term the evidence did not single out: an
     ambiguous CHM13 v1.0 file, whose candidates are v1.0 and both of its hybrids,
-    stays ``CHM13`` rather than taking the release all three share.
+    stays ``CHM13`` rather than taking the release all three share. The evidence
+    includes the header's declared reference name wherever :func:`resolve_identity`
+    let it break a tie among the builds the signatures allow — a VCF naming
+    ``chm13.draft_v1.0.fasta`` with chr1 at v1.0's length resolves to v1.0 that way.
     """
     if identity.base != family or identity.version is None:
         return family

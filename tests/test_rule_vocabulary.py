@@ -563,7 +563,7 @@ def test_loader_refuses_a_state_condition(tmp_path):
 
 
 def test_reference_build_families_in_vocabulary():
-    """reference_builds[*].family must be a reference_assembly_enum value (#340).
+    """reference_builds[*].family must be a reference_family_enum value (#340, #473).
 
     The build table is non-rule data in the same YAML as the rules, and its
     generated comment asserts that `family` matches the enum — this is what makes
@@ -575,9 +575,23 @@ def test_reference_build_families_in_vocabulary():
     violations = [
         f"{build.family}/{build.version}: family={build.family!r}"
         for build in rules.reference_builds
-        if not schema_vocab.value_in_vocabulary("reference_assembly", build.family)
+        if build.family not in schema_vocab.reference_family_values()
     ]
     assert not violations, "reference_builds families not in the schema vocabulary:\n  " + "\n  ".join(violations)
+
+
+def test_the_families_are_the_reference_terms_with_no_parent():
+    """reference_family_enum lists exactly the reference_assembly_enum terms at the top of its is_a hierarchy (#473).
+
+    The families are written twice in the schema, once as terms and once as the range
+    of ``ReferenceBuild.base``; this is what keeps the two lists one list.
+    """
+    tops = {
+        v
+        for v in schema_vocab.dimension_values("reference_assembly")
+        if not schema_vocab.value_ancestors("reference_assembly", v)
+    }
+    assert schema_vocab.reference_family_values() == tops
 
 
 def test_dimension_values_unknown_field_raises_clear_error():

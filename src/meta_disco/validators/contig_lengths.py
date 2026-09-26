@@ -7,8 +7,9 @@ are missing. We use a subset of chromosomes for efficiency.
 Sources:
 - GRCh38: https://www.ncbi.nlm.nih.gov/assembly/GCF_000001405.40
 - GRCh37: https://www.ncbi.nlm.nih.gov/assembly/GCF_000001405.13
-- CHM13: https://www.ncbi.nlm.nih.gov/assembly/GCF_009914755.1 (T2T-CHM13v2.0; the
-  earlier releases fall inside the matching tolerance, see #473)
+- CHM13: https://www.ncbi.nlm.nih.gov/assembly/GCF_009914755.1 (T2T-CHM13v2.0; an
+  earlier release matches it on most chromosomes, not all — see
+  ``CONTIG_LENGTH_TOLERANCE`` and #473)
 
 Data loaded from the bundled unified_rules.yaml (package data of meta_disco.rules,
 single source of truth).
@@ -67,10 +68,12 @@ CHROMOSOME_MAX_LENGTHS: dict[str, tuple[int, int, int]] = {
 }
 
 
-# How far, in bp, a length may sit from a table row and still match it. One row per
-# family spans its releases on this allowance: CHM13 v1.0 sits up to 657 bp from the
-# v2.0 row (#473), while the families differ by at least 16,408 bp on every chromosome.
-# BED coordinate detection rules an assembly out past the same allowance.
+# How far, in bp, a length may sit from a table row and still match it: small drift
+# between releases matches, while the families differ by at least 16,408 bp on every
+# chromosome. CHM13 v1.0 is within it of the v2.0 row on 18 of 23 chromosomes, and
+# not on the acrocentrics (chr13, 14, 15, 21, 22: 28,980-737,009 bp longer), so a
+# v1.0 file matches on its other chromosomes (#473). BED coordinate detection rules
+# an assembly out past the same allowance.
 CONTIG_LENGTH_TOLERANCE = 1000
 
 

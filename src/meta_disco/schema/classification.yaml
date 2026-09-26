@@ -229,15 +229,15 @@ classes:
       across a shared namespace, and nothing outside this class needs them.
     attributes:
       base:
-        range: reference_assembly_enum
+        range: reference_family_enum
         description: >-
           Assembly family of the resolved build (``CHM13``, ``GRCh38``), derived by
           the resolver from exact signatures. Where both are known it is the value
           or an ancestor of it, since a contradicting one is dropped (#345);
           recorded here so a build is readable on its own; null when no single
-          family was identified. Range-constrained rather than merely documented
-          as such, so a table entry naming a family outside the vocabulary fails
-          validation instead of passing as free text.
+          family was identified. Range-constrained to the families rather than
+          merely documented as such, so a table entry naming a release, a hybrid or
+          anything outside the vocabulary fails validation instead of passing.
       version:
         description: >-
           Build version within the family. Free text by necessity: T2T releases
@@ -995,6 +995,17 @@ enums:
         is_a: T2T-CHM13v1.0
         description: T2T-CHM13v1.0 with HG002's chrY grafted on.
       # GRCm39:  # mouse — pending issue #15
+
+  reference_family_enum:
+    description: >-
+      The assembly families: the `reference_assembly_enum` terms with no `is_a`
+      parent, which `ReferenceBuild.base` ranges over (#473). A release or a hybrid
+      is a value, never a family. `tests/test_rule_vocabulary.py` holds this list to
+      those terms.
+    permissible_values:
+      GRCh37:
+      GRCh38:
+      CHM13:
 
   reference_name_source_enum:
     description: >-

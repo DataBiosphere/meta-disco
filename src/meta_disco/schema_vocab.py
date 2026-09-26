@@ -31,6 +31,8 @@ STATUS_ENUM = "classification_status_enum"
 MARKER_ENUM = "evidence_marker_enum"
 # The reference-build ``name_source`` vocabulary (issue #354).
 NAME_SOURCE_ENUM = "reference_name_source_enum"
+# The assembly families a reference build's ``base`` may name (issue #473).
+REFERENCE_FAMILY_ENUM = "reference_family_enum"
 
 # The claim-record vocabularies (issue #392): the kind of source behind a claim,
 # the states a claim can take when it consulted a source and produced no value,
@@ -185,6 +187,16 @@ def name_source_values() -> frozenset[str]:
     the schema path) if the schema is missing the enum.
     """
     return _enum_values(NAME_SOURCE_ENUM)
+
+
+def reference_family_values() -> frozenset[str]:
+    """Return the assembly families from the schema, the values ``ReferenceBuild.base`` may take.
+
+    The ``reference_assembly_enum`` terms with no ``is_a`` parent, listed as their own
+    enum so the schema can range ``base`` over them (#473). Raises KeyError (with the
+    schema path) if the schema is missing the enum.
+    """
+    return _enum_values(REFERENCE_FAMILY_ENUM)
 
 
 def relation_values() -> frozenset[str]:

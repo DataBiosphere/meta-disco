@@ -104,7 +104,7 @@ class ReferenceBuild:
     chrY checksum at identical length, so a build is described by everything seen
     for it rather than by a representative example.
 
-    ``family`` is a ``reference_assembly_enum`` value, checked against the schema
+    ``family`` is a ``reference_family_enum`` value, checked against the schema
     by ``tests/test_rule_vocabulary.py``. ``version`` is free text: T2T releases
     (``v1.0``/``v2.0``) and GRC patches (``p12``) are not the same kind of thing,
     and where a build grafts a chromosome from elsewhere the origin is part of the

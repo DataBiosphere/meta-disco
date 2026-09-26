@@ -729,9 +729,10 @@ class Report:
         if own is None:
             return SILENT
         others = {d for c in said.claims if (d := declaration(c)) is not None}
-        # Agreement is nesting, as resolve_slot has it (#473): a source's CHM13 agrees
-        # with inference's T2T-CHM13v2.0.
-        if any(most_specific(slot, {own, other}) is None for other in others):
+        # Agreement is nesting over every declaration, as resolve_slot has it (#473): a
+        # source's CHM13 agrees with inference's T2T-CHM13v2.0, but not when another
+        # source's sibling release makes the slot a conflict.
+        if most_specific(slot, others | {own}) is None:
             return DISAGREED
         if others:
             return AGREED
@@ -748,10 +749,8 @@ class Report:
             }
             if own is not None:
                 others.add(own)
-            # Agreement is nesting, as resolve_slot has it (#473).
-            if most_specific(slot, declared) is None or any(
-                most_specific(slot, declared | {other}) is None for other in others
-            ):
+            # Agreement is nesting over every declaration, as resolve_slot has it (#473).
+            if most_specific(slot, declared | others) is None:
                 return DISAGREED
             # The same rule the slot's category uses: verbatim if any claim is verbatim.
             return MATCH if any(not is_harmonized(c) for c in mine) else HARMONIZED

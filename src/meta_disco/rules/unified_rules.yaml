@@ -1202,10 +1202,11 @@ reference_contig_lengths:
   # so even a single-contig VCF can be definitively classified.
   #
   # Each row is one NCBI assembly, at the accession cited in
-  # validators/contig_lengths.py. The CHM13 row is T2T-CHM13v2.0 (#473); it spans
-  # the earlier releases because matching allows 1000 bp, and v1.0 differs from it
-  # by at most 657 bp (chr3). Which release a file is comes from reference_builds
-  # below, not from this row.
+  # validators/contig_lengths.py. The CHM13 row is T2T-CHM13v2.0 (#473). v1.1 has
+  # the same lengths and no chrY. v1.0 (no chrY) differs on all 23 of its chromosomes:
+  # within 1000 bp on 18, but by 28,980-737,009 bp on the acrocentrics (chr13, 14, 15, 21,
+  # 22), so a v1.0 file matches this row on its other chromosomes, not on those.
+  # Which release a file is comes from reference_builds below, not from this row.
   GRCh38:
     chr1: 248956422
     chr2: 242193529
@@ -1290,7 +1291,7 @@ reference_builds:
   # transcribed. Re-run that script to refresh; see its docstring for why the
   # key is (chr1, chrY) and what it deliberately does not decide.
   #
-  # `family` matches reference_assembly_enum and is what the coarse classifier
+  # `family` matches reference_family_enum and is what the coarse classifier
   # already emits. `version` is free text: T2T versions (v1.0/v1.1/v2.0) and GRC
   # patches (p12) are different kinds of thing, and CHM13 has no patch concept.
   # A null version means the observed evidence does not pin one down.

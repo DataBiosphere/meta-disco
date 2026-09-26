@@ -22,11 +22,12 @@ script had three checks and only this one worked:
 - **GRCh37/GRCh38 against Ensembl.** This one. Ported.
 
 CHM13 is checked against NCBI instead, because Ensembl's REST API does not serve
-it. The row is T2T-CHM13v2.0 (#473) and matches it exactly on all 24 contigs; the
-earlier releases fall inside ``detect_reference_from_contigs``' ±1000 bp, and the
-exact-match table in ``rule_loader.reference_builds`` is what tells them apart.
-Before #473 the row mixed releases — v1.0's chr1-chr3, v1.1/v2.0's chrX, v2.0's
-chrY — which is why three of its lengths disagreed with NCBI (#466).
+it. The row is T2T-CHM13v2.0 (#473) and matches it exactly on all 24 contigs. A
+v1.0 file still detects as CHM13 because most of its chromosomes fall within
+``detect_reference_from_contigs``' ±1000 bp (its acrocentrics do not), and the
+exact-match table in ``rule_loader.reference_builds`` is what tells the releases
+apart. Before #473 the row was v2.0's lengths except chr1-chr3, which were v1.0's
+— which is why three of its lengths disagreed with NCBI (#466).
 
 GRCh38 and GRCh37 match their cited NCBI accessions exactly too, on all 24
 contigs.

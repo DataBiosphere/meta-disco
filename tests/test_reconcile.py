@@ -65,6 +65,10 @@ rows:
     match: {slot: reference_assembly, value: CHM13v2}
     declares: {reference_assembly: T2T-CHM13v2.0}
     reason: The v2.0 release.
+  - id: reference_assembly.chm13v1
+    match: {slot: reference_assembly, value: CHM13v1}
+    declares: {reference_assembly: T2T-CHM13v1.0}
+    reason: The v1.0 release.
   - id: reference_assembly.unaligned
     match: {slot: reference_assembly, value: unaligned}
     declares: {reference_assembly: not_applicable}
@@ -910,3 +914,14 @@ def test_an_inference_conflict_lists_its_competing_values_or_none_when_inherited
     # An index file's conflict inherited from its parent carries no marker, so no values.
     inherited = {"inferred": {"value": None, "status": CONFLICT}, "evidence": [{"status": CONFLICT}]}
     assert Report._competing(inherited, SlotEvidence(), None) == (("inference", ()),)
+
+
+def test_a_parent_beside_two_sibling_releases_is_scored_disagreed(tmp_path, run, evidence, table):
+    """Scoring nests over every declaration, as the slot does: the slot is a conflict, so no input agreed (#473)."""
+    write_run(run, [record(1, reference_assembly="CHM13")])
+    write_evidence(evidence, [("reference_assembly", drs(1), "CHM13v2")])
+    published(evidence, [("reference_assembly", drs(1), "CHM13v1")])
+    result = go(run, tmp_path, evidence, table)
+    assert slot(run, 1, "reference_assembly")["status"] == CONFLICT
+    scored = result["inputs"][DATASET]["reference_assembly"]
+    assert scored["inference"] == {"disagreed": 1}

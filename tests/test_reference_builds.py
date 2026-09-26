@@ -832,16 +832,16 @@ class TestSchemaContract:
     """
 
     def test_every_table_family_is_a_vocabulary_value(self):
-        """``ReferenceBuild.base`` is range-constrained to reference_assembly_enum
-        in the schema, so a table entry outside the vocabulary would emit a build
-        that fails validation."""
+        """``ReferenceBuild.base`` is range-constrained to reference_family_enum
+        in the schema, so a table entry naming anything but a family would emit a
+        build that fails validation."""
         for build in get_unified_rules().reference_builds:
-            assert schema_vocab.value_in_vocabulary("reference_assembly", build.family), build.family
+            assert build.family in schema_vocab.reference_family_values(), build.family
 
     def test_an_emitted_base_is_a_vocabulary_value(self):
         """The same constraint on the path that actually produces output."""
         entry = classify_from_header(CHM13_V2)["reference_assembly"]
-        assert schema_vocab.value_in_vocabulary("reference_assembly", entry["build"]["base"])
+        assert entry["build"]["base"] in schema_vocab.reference_family_values()
 
     def test_the_emitted_build_carries_exactly_the_declared_attributes(self):
         """The schema declares five class-local attributes; the emitted object

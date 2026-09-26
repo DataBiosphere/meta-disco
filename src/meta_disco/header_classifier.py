@@ -1020,8 +1020,10 @@ def _infer_bed_reference(signals: BedSignals) -> tuple[str | None, str]:
 
     ref_lengths = _get_engine().rules.reference_contig_lengths
 
-    # The allowance contig-length matching makes, so a position from an earlier
-    # release of a family does not rule out the family's row (#473).
+    # The allowance contig-length matching makes (#473). It covers CHM13 v1.0's
+    # small overhangs past the v2.0 row (chr1 169 bp, chr3 657 bp), not its
+    # acrocentrics, where a v1.0 position can still rule CHM13 out; no cached BED
+    # does so today.
     tolerance = CONTIG_LENGTH_TOLERANCE
     ruled_out = set()
     evidence_details = []
