@@ -182,10 +182,12 @@ def validate_against_hprc(
 
     # Load our classifications
     all_classifications = []
+    loaded_paths: list[Path] = []
     for input_path in input_paths:
         if not input_path.exists():
             print(f"  Skipping {input_path} (not found)")
             continue
+        loaded_paths.append(input_path)
         print(f"Loading {input_path}...", flush=True)
         with input_path.open() as f:
             data = json.load(f)
@@ -320,9 +322,10 @@ def validate_against_hprc(
                 "metadata": {
                     "catalogs_loaded": {name: len(catalogs.get(name, [])) for name in HPRC_CATALOG_NAMES},
                     "source": HPRC_CATALOG_BASE_URL,
-                    # The run directories the classifications were read from, so a
-                    # report of these results names the run that produced them.
-                    "runs": sorted({p.parent.as_posix() for p in input_paths}),
+                    # The run directories the classifications were read from — the
+                    # files actually loaded, not a skipped one — so a report of these
+                    # results names the run that produced them.
+                    "runs": sorted({p.parent.as_posix() for p in loaded_paths}),
                 },
                 "by_catalog": catalog_stats,
                 "dimensions": dim_results,
