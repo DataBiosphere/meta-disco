@@ -14,6 +14,7 @@ import pytest
 
 from meta_disco.corpus_diff import run_labels
 from meta_disco.models import (
+    CLASSIFICATION_FIELDS,
     CLASSIFIED,
     CONFLICT,
     JOIN_KEY_DRS_URI,
@@ -353,6 +354,7 @@ def test_the_report_counts_each_datasets_values_and_they_sum_to_its_files(tmp_pa
     write_evidence(evidence, [("reference_assembly", drs(1), "CHM13")])
     report = go(run, tmp_path, evidence, table)
     assert report["values"][DATASET]["reference_assembly"] == {"GRCh38": 1, CONFLICT: 1, NOT_CLASSIFIED: 1}
+    assert set(report["values"][DATASET]) == set(CLASSIFICATION_FIELDS)
     for slot, counts in report["values"][DATASET].items():
         assert sum(counts.values()) == report["files"][DATASET], slot
 

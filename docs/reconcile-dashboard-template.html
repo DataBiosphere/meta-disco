@@ -209,7 +209,7 @@
             const v = r.counts[c];
             // Shade values only: a status is the absence of one.
             const shade = v && r.files && values.has(c) ? 0.08 + 0.55 * v / r.files : 0;
-            return {text: v ? n(v) : '·', cls: 'num' + (c === 'conflict' && v ? ' conflict' : ''), shade};
+            return {text: v ? n(v) : '·', cls: 'num', shade};
           }),
           {text: n(r.files), cls: 'num'},
           {text: share(r.has_value), cls: 'num'},
