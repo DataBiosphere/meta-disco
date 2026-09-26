@@ -130,6 +130,8 @@
 # - header_match_all: true if every record of the section must carry the field and
 #     match header_pattern (e.g. every @RG has a PM naming the model), not just one
 # - header_absent: true if header section should NOT exist
+# - header_present: true if header section should have at least one record (takes
+#     no header_field / header_pattern: it asks only whether the section is there)
 # - vcf_header_type: VCF header line type (##reference, ##source, ##contig)
 # - vcf_pattern: regex pattern for VCF header content
 # - fastq_pattern: regex pattern for FASTQ read name
@@ -440,7 +442,9 @@ rules:
   # ---------------------------------------------------------------------------
   # Alignment files - assay/platform indicators in the filename
   # ---------------------------------------------------------------------------
-  - id: alignment_isoseq_filename
+  # No filename rule claims `data_type`: `@SQ` decides it (aligned_has_sq /
+  # unaligned_no_sq, #537). `.flnc.` and `hifi` do not say whether the file is aligned.
+  - id: isoseq_filename
     tier: 2
     scope: filename
     when:
@@ -448,21 +452,19 @@ rules:
       filename_pattern: "(?i)\\.flnc\\."
     then:
       data_modality: transcriptomic.bulk
-      data_type: alignments
     rationale: "Filename contains IsoSeq indicator (flnc = full-length non-chimeric transcript reads)"
 
-  - id: alignment_hifi_filename
+  - id: hifi_filename
     tier: 2
     scope: filename
     when:
       extensions: [".bam", ".cram", ".sam"]
       filename_pattern: "(?i)(^|[._-])hifi|_pb_"
     then:
-      data_type: alignments
       platform: PACBIO
     rationale: "HiFi names PacBio's read chemistry: it says the platform, not the assay or the modality — Iso-Seq is HiFi too (#430)"
 
-  - id: alignment_star_aligner
+  - id: star_filename
     tier: 2
     scope: filename
     when:
@@ -470,7 +472,6 @@ rules:
       filename_pattern: "(?i)Aligned\\.sortedByCoord|_STAR_|\\.star\\."
     then:
       data_modality: transcriptomic.bulk
-      data_type: alignments
       assay_type: RNA-seq
     rationale: "STAR aligner output indicates RNA-seq"
 
@@ -838,7 +839,6 @@ rules:
       header_pattern: "STAR"
     then:
       data_modality: transcriptomic.bulk
-      data_type: alignments
       assay_type: RNA-seq
     rationale: "STAR (Spliced Transcripts Alignment to a Reference) is the most widely used RNA-seq aligner. Presence strongly indicates RNA-seq data"
 
@@ -855,7 +855,6 @@ rules:
       header_pattern: "bwa"
     then:
       data_modality: genomic
-      data_type: alignments
     rationale: "BWA (Burrows-Wheeler Aligner) is the standard short-read aligner for DNA sequencing. Commonly used for WGS, WES, and ChIP-seq"
 
   - id: program_minimap2
@@ -868,7 +867,6 @@ rules:
       header_pattern: "minimap2"
     then:
       data_modality: genomic
-      data_type: alignments
     rationale: "Minimap2 is a versatile aligner for long reads (PacBio, ONT) and assemblies. Can also be used for direct RNA with -ax splice preset"
 
   - id: program_ccs
@@ -889,6 +887,25 @@ rules:
 
 
 
+  # ---------------------------------------------------------------------------
+  # Aligned or unaligned: decided by @SQ alone (#537)
+  # ---------------------------------------------------------------------------
+  # The two rules test the same predicate (has_sam_section), so a parsed .bam/.cram
+  # header matches exactly one of them; with no header, neither fires. Neither the
+  # file name nor an @PG line decides this: Guppy writes a minimap2 @PG into BAMs it
+  # never aligned. A header that keeps @SQ over reads that are all unmapped is
+  # beyond a header rule (#538).
+  - id: aligned_has_sq
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@SQ"
+      header_present: true
+    then:
+      data_type: alignments
+    rationale: "@SQ lines declare a reference, so the file is aligned to it. The reads themselves are not read (#538)"
+
   - id: unaligned_no_sq
     tier: 3
     scope: header
@@ -897,9 +914,10 @@ rules:
       header_section: "@SQ"
       header_absent: true
     then:
+      data_type: reads
       status:
         reference_assembly: not_applicable
-    rationale: "Absence of @SQ lines indicates unaligned reads. Common for PacBio HiFi deliverables before alignment"
+    rationale: "No @SQ lines: the header declares no reference, so the file holds unaligned reads. Common for PacBio HiFi and ONT mod-base deliverables"
 
   # ===========================================================================
   # TIER 3: VCF HEADER RULES

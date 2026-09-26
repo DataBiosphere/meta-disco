@@ -85,7 +85,7 @@ reference_assembly
 
 #### assay_type
 
-The top-level assay/method class. Declared only by rules that see evidence of the assay (`alignment_star_aligner`, `program_star`, `salmon_quant`, `bed_expression`, `idat_methylation`, `image_svs_histology`), each of which also declares the modality its assay implies. Nothing infers an assay from another rule's answer (#88), and nothing infers `WGS` or `WES` (#430).
+The top-level assay/method class. Declared only by rules that see evidence of the assay (`star_filename`, `program_star`, `salmon_quant`, `bed_expression`, `idat_methylation`, `image_svs_histology`), each of which also declares the modality its assay implies. Nothing infers an assay from another rule's answer (#88), and nothing infers `WGS` or `WES` (#430).
 
 ```
 assay_type
@@ -392,9 +392,9 @@ Match regular expressions against filenames to infer modality or reference.
 
 | Rule                        | Pattern                  | Classification               |
 | --------------------------- | ------------------------ | ---------------------------- |
-| `alignment_isoseq_filename` | `(?i)\.flnc\.`           | data_modality transcriptomic.bulk |
+| `isoseq_filename`           | `(?i)\.flnc\.`           | data_modality transcriptomic.bulk |
 | `filename_ref_grch38`       | `(?i)(hg38\|grch38\|…)`   | reference_assembly GRCh38, only on a file kind that holds coordinates on a reference (#523) |
-| `alignment_hifi_filename`   | `(?i)(^\|[._-])hifi\|_pb_` | platform PACBIO — the chemistry, not a modality or assay (#430) |
+| `hifi_filename`             | `(?i)(^\|[._-])hifi\|_pb_` | platform PACBIO — the chemistry, not a modality or assay (#430) |
 
 #### Header Inspection Rules
 
@@ -405,6 +405,7 @@ Parse file headers (without downloading entire files) to extract metadata.
 - `@RG PL:` - Platform (ILLUMINA, PACBIO, ONT)
 - `@PG PN:` - Program name (STAR, BWA, minimap2)
 - `@SQ AS:` - Assembly (GRCh38, GRCh37)
+- `@SQ` present or absent - Data type (alignments or reads, #537)
 
 **VCF Headers:**
 
@@ -491,6 +492,18 @@ size does not distinguish the two. The engine still accepts `file_size_min_gb` /
 
 Every other aligner, basecaller and platform tag rule fired on nothing in either
 catalog and was removed (#430).
+
+**Data Type Detection (from @SQ alone):**
+
+| Signal         | Data type  | Rule              |
+| -------------- | ---------- | ----------------- |
+| `@SQ` present  | alignments | `aligned_has_sq`  |
+| `@SQ` absent   | reads      | `unaligned_no_sq` |
+
+`@SQ` lines are the reference a file's reads are placed on, so their presence decides
+aligned or unaligned. Neither the name (`hifi`, `.flnc.`) nor an `@PG` aligner does:
+Guppy writes a `PN:minimap2` entry into BAMs it never aligned (#537). A header keeping
+`@SQ` over reads that are all unmapped is beyond a header rule (#538).
 
 ### 4.2 VCF Header Rules
 

@@ -19,7 +19,9 @@ file_format (extension)
 
 ## Alignments (.bam, .cram)
 
-**data_type**: `alignments`
+**data_type**:
+- `alignments` ← header has `@SQ` lines (`aligned_has_sq`)
+- `reads` ← header has no `@SQ` line (`unaligned_no_sq`). Neither the name nor an `@PG` aligner decides it (#537)
 
 **data_modality**:
 - `genomic` ← header @RG DS basecall model (`dna_`), header @PG PN (bwa, minimap2)
