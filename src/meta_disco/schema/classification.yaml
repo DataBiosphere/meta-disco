@@ -23,6 +23,7 @@ prefixes:
   linkml: https://w3id.org/linkml/
   anvil: https://github.com/DataBiosphere/meta-disco/schema/
   EFO: http://www.ebi.ac.uk/efo/EFO_
+  EDAM: http://edamontology.org/
 default_prefix: anvil
 default_range: string
 
