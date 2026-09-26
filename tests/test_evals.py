@@ -28,6 +28,7 @@ that skips with the cause named rather than falling through to a live fetch (#38
 
 import pytest
 
+from meta_disco import schema_vocab
 from meta_disco.evidence import SegmentTag
 from meta_disco.fetchers import parse_gfa_segment_tags
 from meta_disco.file_name import FileName
@@ -232,7 +233,7 @@ class TestVcfE2E:
         result = classify_vcf("0000d4b336dbc16a216ebdfeaf092702", "HG01809.chr21.hc.vcf.gz", file_size=76348632)
         assert result is not None
         ref = get_val(result, "reference_assembly")
-        assert ref in ("GRCh38", "GRCh37", "CHM13"), f"Expected a reference, got {ref}"
+        assert schema_vocab.value_in_vocabulary("reference_assembly", ref), f"Expected a reference, got {ref}"
 
     def test_vcf_has_contig_evidence(self):
         """VCF reference should come from contig length detection."""

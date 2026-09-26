@@ -25,6 +25,7 @@ from meta_disco.header_classifier import classify_from_header, classify_from_vcf
 from meta_disco.models import field_status, field_value
 from meta_disco.rule_loader import KEY_CONTIGS, SIGNATURE_FIELDS, RuleLoader, get_unified_rules
 from meta_disco.validators.reference_builds import (
+    BUILD_TERMS,
     IDENTITY_FIELDS,
     NAME_SOURCE_COMMAND_LINE,
     NAME_SOURCE_REFERENCE_FIELD,
@@ -34,6 +35,7 @@ from meta_disco.validators.reference_builds import (
     _candidates,
     _consistent,
     _has_signatures,
+    assembly_term,
     identity_from_sam,
     identity_from_vcf,
     observe_sam,
@@ -399,26 +401,67 @@ class TestReferenceFromCommandLine:
         assert reference_from_command_line(command_line) == expected
 
 
-class TestAdditive:
-    """The coarse value is untouched — this change only ever adds detail."""
+class TestBuildDecidesTheValue:
+    """A build resolved inside the detected family names the value (#473)."""
 
-    def test_coarse_value_is_unchanged_when_the_build_resolves(self):
-        entry = classify_from_header(CHM13_V2)["reference_assembly"]
-        assert field_value({"reference_assembly": entry}, "reference_assembly") == "CHM13"
+    def _entry(self, header):
+        entry = classify_from_header(header)["reference_assembly"]
+        return entry, field_value({"reference_assembly": entry}, "reference_assembly")
+
+    def test_a_resolved_release_is_the_value(self):
+        entry, value = self._entry(CHM13_V2)
+        assert value == "T2T-CHM13v2.0"
         assert field_status({"reference_assembly": entry}, "reference_assembly") == "classified"
-        assert entry["build"]["version"] == "v2.0"
+        # The build stays whole beside it: its family is the value's ancestor, which
+        # agrees with the value rather than contradicting it.
+        assert (entry["build"]["base"], entry["build"]["version"]) == ("CHM13", "v2.0")
 
-    def test_coarse_value_survives_an_unresolvable_build(self):
-        """A reference we cannot pin down must not cost the file its family.
+    def test_a_hybrid_is_its_own_term_never_its_release(self):
+        """A grafted-chrY build is wrong on chrY as its parent release, so it gets its own term."""
+        header = CHM13_V1_GRCH38Y + "@SQ\tSN:chr2\tLN:242696747\n@SQ\tSN:chr3\tLN:201106605\n"
+        entry, value = self._entry(header)
+        assert value == "t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r"
+        assert entry["build"]["version"] == "v1.0+GRCh38chrY"
+
+    def test_the_evidence_names_the_build(self):
+        entry, _ = self._entry(CHM13_V2)
+        (claim,) = [e for e in entry["evidence"] if e.get("rule_id") == "contig_length_detection"]
+        assert claim["value"] == "T2T-CHM13v2.0"
+        assert "CHM13 v2.0" in claim["reason"]
+
+    def test_an_unresolvable_build_leaves_the_family(self):
+        """A reference we cannot pin down must not cost the file its family, nor guess a release.
 
         The lengths here still match CHM13 within the coarse detector's
         tolerance, so the dimension stays classified while the build does not
-        resolve — the two paths are independent.
+        resolve.
         """
         header = "@SQ\tSN:chr1\tLN:248387328\n@SQ\tSN:chr2\tLN:242696747\n@SQ\tSN:chr3\tLN:201106605\n"
-        entry = classify_from_header(header)["reference_assembly"]
-        assert field_value({"reference_assembly": entry}, "reference_assembly") == "CHM13"
+        entry, value = self._entry(header)
+        assert value == "CHM13"
         assert entry.get("build", {}).get("version") is None
+
+    def test_a_grc_patch_is_not_a_term(self):
+        """GRC terms are major releases (#399): a resolved GRCh38 build is ``GRCh38``."""
+        identity = ReferenceIdentity(base="GRCh38", version="p12")
+        assert assembly_term("GRCh38", identity) == "GRCh38"
+
+    def test_an_ambiguous_version_leaves_the_family(self):
+        """v1.0 and both its hybrids share chr1, so a chr1-only file is ``CHM13``, not v1.0."""
+        assert assembly_term("CHM13", ReferenceIdentity(base="CHM13")) == "CHM13"
+
+    def test_a_build_of_another_family_does_not_set_the_value(self):
+        """The #345 contradiction: the build never replaces the family contig lengths detected."""
+        assert assembly_term("GRCh38", ReferenceIdentity(base="CHM13", version="v2.0")) == "GRCh38"
+
+    def test_the_vcf_path_takes_the_release_too(self):
+        header = (
+            "##fileformat=VCFv4.2\n##reference=file:///ref/chm13v2.0.fasta\n"
+            "##contig=<ID=chr1,length=248387328>\n##contig=<ID=chr2,length=242696752>\n"
+            "##contig=<ID=chrY,length=62460029>\n"
+        )
+        entry = classify_from_vcf_header(header)["reference_assembly"]
+        assert field_value({"reference_assembly": entry}, "reference_assembly") == "T2T-CHM13v2.0"
 
     def test_only_reference_assembly_carries_a_build(self):
         classifications = classify_from_header(CHM13_V2)
@@ -431,6 +474,36 @@ class TestAdditive:
         answer."""
         entry = classify_from_header("@HD\tVN:1.6\n")["reference_assembly"]
         assert "build" not in entry
+
+
+class TestBuildTerms:
+    """``BUILD_TERMS`` is held to the build table and to the schema's hierarchy (#473)."""
+
+    def test_the_terms_are_exactly_the_rows_of_the_families_they_cover(self):
+        """A CHM13 row added to the table without a term would quietly stay ``CHM13``."""
+        rows = get_unified_rules().reference_builds
+        vocabulary = schema_vocab.dimension_values("reference_assembly")
+        # A family with terms below it in the schema, read from the schema rather than
+        # from BUILD_TERMS, so a family the table misses entirely is caught too.
+        families = {a[-1] for a in (schema_vocab.value_ancestors("reference_assembly", v) for v in vocabulary) if a}
+        assert set(BUILD_TERMS) == {(row.family, row.version) for row in rows if row.family in families}
+
+    def test_every_term_sits_under_its_family(self):
+        wrong = [
+            (key, term)
+            for key, term in BUILD_TERMS.items()
+            if key[0] not in schema_vocab.value_ancestors("reference_assembly", term)
+        ]
+        assert not wrong
+
+    def test_every_term_below_a_family_is_reachable(self):
+        """Each term the schema places under a family is one some build resolves to."""
+        below = {
+            value
+            for value in schema_vocab.dimension_values("reference_assembly")
+            if schema_vocab.value_ancestors("reference_assembly", value)
+        }
+        assert below == set(BUILD_TERMS.values())
 
 
 class TestVcfPath:
@@ -525,9 +598,22 @@ class TestCoarseValueReconciliation:
         assert build["chry_m5"] == "ce3e31103314a704255f3cd90369ecce"
         assert build["name"].startswith("t2t-chm13")
 
+    def test_a_build_is_compared_by_its_own_term(self):
+        """A family value a rule set agrees with any release under it; a sibling release does not (#473)."""
+        from types import SimpleNamespace
+
+        from meta_disco.header_classifier import _reconcile_with_coarse_value
+
+        v2 = ReferenceIdentity(base="CHM13", version="v2.0")
+        kept = _reconcile_with_coarse_value(SimpleNamespace(reference_assembly="CHM13"), v2)
+        assert kept == v2
+        dropped = _reconcile_with_coarse_value(SimpleNamespace(reference_assembly="T2T-CHM13v1.0"), v2)
+        assert (dropped.base, dropped.version) == (None, None)
+
     def test_an_agreeing_build_is_untouched(self):
+        """The value is the build's release, and the build's family is its ancestor (#473)."""
         entry = classify_from_header(CHM13_V2)["reference_assembly"]
-        assert entry["value"] == "CHM13"
+        assert entry["value"] == "T2T-CHM13v2.0"
         assert entry["build"]["base"] == "CHM13"
         assert entry["build"]["version"] == "v2.0"
 
@@ -542,7 +628,7 @@ class TestDeclaredAbsence:
         which — it fits the GRCh38-grafted build and contradicts v1.0 and the
         HG002-grafted build, both declared to have no contig named chrY."""
         entry = classify_from_vcf_header(T2T_VCF)["reference_assembly"]
-        assert entry["value"] == "CHM13"
+        assert entry["value"] == "t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r"
         assert entry["build"]["base"] == "CHM13"
         assert entry["build"]["version"] == "v1.0+GRCh38chrY"
 
@@ -550,7 +636,7 @@ class TestDeclaredAbsence:
         """Scenario 2. chr1 says v1.1 or v2.0; a chrY at HG002's length fits
         v2.0 and contradicts v1.1, which is declared to have no chrY."""
         entry = classify_from_vcf_header(T2T_CHRY_VCF)["reference_assembly"]
-        assert entry["value"] == "CHM13"
+        assert entry["value"] == "T2T-CHM13v2.0"
         assert entry["build"]["base"] == "CHM13"
         assert entry["build"]["version"] == "v2.0"
 
@@ -746,16 +832,16 @@ class TestSchemaContract:
     """
 
     def test_every_table_family_is_a_vocabulary_value(self):
-        """``ReferenceBuild.base`` is range-constrained to reference_assembly_enum
-        in the schema, so a table entry outside the vocabulary would emit a build
-        that fails validation."""
+        """``ReferenceBuild.base`` is range-constrained to reference_family_enum
+        in the schema, so a table entry naming anything but a family would emit a
+        build that fails validation."""
         for build in get_unified_rules().reference_builds:
-            assert schema_vocab.value_in_vocabulary("reference_assembly", build.family), build.family
+            assert build.family in schema_vocab.reference_family_values(), build.family
 
     def test_an_emitted_base_is_a_vocabulary_value(self):
         """The same constraint on the path that actually produces output."""
         entry = classify_from_header(CHM13_V2)["reference_assembly"]
-        assert schema_vocab.value_in_vocabulary("reference_assembly", entry["build"]["base"])
+        assert entry["build"]["base"] in schema_vocab.reference_family_values()
 
     def test_the_emitted_build_carries_exactly_the_declared_attributes(self):
         """The schema declares five class-local attributes; the emitted object

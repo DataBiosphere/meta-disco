@@ -5,7 +5,7 @@
 # -------
 # This file contains all rules for classifying biological data files (BAM, CRAM,
 # FASTQ, VCF, BED, etc.) to determine their data_modality (genomic, transcriptomic,
-# epigenomic), reference_assembly (GRCh38, GRCh37, CHM13), and other metadata.
+# epigenomic), reference_assembly (GRCh38, GRCh37, CHM13 and its releases), and other metadata.
 #
 # The rule engine is used by the AnVIL Explorer and Terra Data Repository to
 # automatically classify files based on filename patterns, file size, and
@@ -47,8 +47,8 @@
 #
 # - data_type: File content type (alignments, variants, reads, peaks, annotations.coverage, etc.)
 #
-# - reference_assembly: Reference genome (GRCh38, GRCh37, CHM13, or null for
-#   unaligned/raw data)
+# - reference_assembly: Reference genome (GRCh38, GRCh37, CHM13 or a T2T release
+#   from the header's build, or null for unaligned/raw data)
 #
 # - assay_type: Experimental method (WGS, WES, RNA-seq, ATAC-seq, ChIP-seq, etc.)
 #
@@ -1197,8 +1197,16 @@ validators:
 
 reference_contig_lengths:
   # All 22 autosomes + X + Y for each assembly.
-  # Every chromosome has a unique length per assembly (min diff 41Kbp),
+  # Every chromosome has a unique length per assembly (min diff 16,408 bp,
+  # GRCh38 against GRCh37 on chr16),
   # so even a single-contig VCF can be definitively classified.
+  #
+  # Each row is one NCBI assembly, at the accession cited in
+  # validators/contig_lengths.py. The CHM13 row is T2T-CHM13v2.0 (#473). v1.1 has
+  # the same lengths and no chrY. v1.0 (no chrY) differs on all 23 of its chromosomes:
+  # within 1000 bp on 18, but by 28,980-737,009 bp on the acrocentrics (chr13, 14, 15, 21,
+  # 22), so a v1.0 file matches this row on its other chromosomes, not on those.
+  # Which release a file is comes from reference_builds below, not from this row.
   GRCh38:
     chr1: 248956422
     chr2: 242193529
@@ -1252,9 +1260,9 @@ reference_contig_lengths:
     chrY: 59373566
 
   CHM13:
-    chr1: 248387497
-    chr2: 242696747
-    chr3: 201106605
+    chr1: 248387328
+    chr2: 242696752
+    chr3: 201105948
     chr4: 193574945
     chr5: 182045439
     chr6: 172126628
@@ -1283,7 +1291,7 @@ reference_builds:
   # transcribed. Re-run that script to refresh; see its docstring for why the
   # key is (chr1, chrY) and what it deliberately does not decide.
   #
-  # `family` matches reference_assembly_enum and is what the coarse classifier
+  # `family` matches reference_family_enum and is what the coarse classifier
   # already emits. `version` is free text: T2T versions (v1.0/v1.1/v2.0) and GRC
   # patches (p12) are different kinds of thing, and CHM13 has no patch concept.
   # A null version means the observed evidence does not pin one down.

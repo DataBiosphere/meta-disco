@@ -279,7 +279,7 @@ def emit_yaml(rows: list[dict]) -> str:
         "  # transcribed. Re-run that script to refresh; see its docstring for why the",
         "  # key is (chr1, chrY) and what it deliberately does not decide.",
         "  #",
-        "  # `family` matches reference_assembly_enum and is what the coarse classifier",
+        "  # `family` matches reference_family_enum and is what the coarse classifier",
         "  # already emits. `version` is free text: T2T versions (v1.0/v1.1/v2.0) and GRC",
         "  # patches (p12) are different kinds of thing, and CHM13 has no patch concept.",
         "  # A null version means the observed evidence does not pin one down.",

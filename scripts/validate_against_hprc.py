@@ -25,6 +25,7 @@ import requests
 
 from meta_disco.models import STATUS_LABELS, field_label, field_value
 from meta_disco.output_utils import find_latest_run
+from meta_disco.schema_vocab import most_specific
 from meta_disco.validation_maps import (
     HPRC_CATALOG_BASE_URL,
     HPRC_CATALOG_NAMES,
@@ -145,7 +146,9 @@ def validate_dimension(
         counters[f"{dim_name}_unknown"] += 1
         return None
 
-    if our_value.upper() == expected_value.upper():
+    # A value below the truth in the vocabulary's is_a hierarchy is the truth, told more
+    # precisely: HPRC's `CHM13` against our `T2T-CHM13v2.0` (#473).
+    if our_value.upper() == expected_value.upper() or most_specific(dim_name, {our_value, expected_value}) == our_value:
         counters[f"{dim_name}_match"] += 1
         return None
 

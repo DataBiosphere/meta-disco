@@ -61,6 +61,14 @@ rows:
     match: {slot: reference_assembly, value: CHM13}
     declares: {reference_assembly: CHM13}
     reason: The CHM13 assembly.
+  - id: reference_assembly.chm13v2
+    match: {slot: reference_assembly, value: CHM13v2}
+    declares: {reference_assembly: T2T-CHM13v2.0}
+    reason: The v2.0 release.
+  - id: reference_assembly.chm13v1
+    match: {slot: reference_assembly, value: CHM13v1}
+    declares: {reference_assembly: T2T-CHM13v1.0}
+    reason: The v1.0 release.
   - id: reference_assembly.unaligned
     match: {slot: reference_assembly, value: unaligned}
     declares: {reference_assembly: not_applicable}
@@ -328,11 +336,14 @@ def inferred(status: str, value: str | None = None) -> dict:
 
 
 def test_ac8_agreement_classifies():
-    assert resolve_slot(inferred(CLASSIFIED, "GRCh38"), [claim("GRCh38")], False) == (CLASSIFIED, "GRCh38")
+    assert resolve_slot("reference_assembly", inferred(CLASSIFIED, "GRCh38"), [claim("GRCh38")], False) == (
+        CLASSIFIED,
+        "GRCh38",
+    )
 
 
 def test_ac9_a_source_fills_a_gap_inference_left():
-    assert resolve_slot(inferred(NOT_CLASSIFIED, None), [claim("PACBIO")], False) == (CLASSIFIED, "PACBIO")
+    assert resolve_slot("platform", inferred(NOT_CLASSIFIED, None), [claim("PACBIO")], False) == (CLASSIFIED, "PACBIO")
 
 
 def test_ac10_disagreement_is_a_conflict_with_both_declarations_recorded(tmp_path, run, evidence, table):
@@ -360,21 +371,65 @@ def test_the_report_counts_each_datasets_values_and_they_sum_to_its_files(tmp_pa
 
 
 def test_ac11_not_applicable_beside_a_value_is_a_conflict():
-    assert resolve_slot(inferred(NOT_APPLICABLE, None), [claim("GRCh38")], False) == (CONFLICT, None)
+    assert resolve_slot("reference_assembly", inferred(NOT_APPLICABLE, None), [claim("GRCh38")], False) == (
+        CONFLICT,
+        None,
+    )
     assert use_for(CONFLICT) == USE_PUBLISHED
 
 
 def test_ac12_not_classified_yields_to_not_applicable():
-    assert resolve_slot(inferred(NOT_CLASSIFIED, None), [claim(status=NOT_APPLICABLE)], False) == (NOT_APPLICABLE, None)
+    assert resolve_slot(
+        "reference_assembly", inferred(NOT_CLASSIFIED, None), [claim(status=NOT_APPLICABLE)], False
+    ) == (NOT_APPLICABLE, None)
 
 
 def test_ac13_two_agreeing_sources_and_a_silent_inference():
     two = [claim("PACBIO"), claim("PACBIO", source_type=SOURCE_PUBLISHED_VALUE)]
-    assert resolve_slot(inferred(NOT_CLASSIFIED, None), two, False) == (CLASSIFIED, "PACBIO")
+    assert resolve_slot("platform", inferred(NOT_CLASSIFIED, None), two, False) == (CLASSIFIED, "PACBIO")
 
 
 def test_ac14_an_inference_conflict_stands_beside_a_source_value():
-    assert resolve_slot(inferred(CONFLICT, None), [claim("PACBIO")], False) == (CONFLICT, None)
+    assert resolve_slot("platform", inferred(CONFLICT, None), [claim("PACBIO")], False) == (CONFLICT, None)
+
+
+def test_values_that_nest_agree_and_the_deepest_is_the_value():
+    """``CHM13`` and one of its releases are one answer at two levels of detail (#473), either way round."""
+    release = "T2T-CHM13v2.0"
+    assert resolve_slot("reference_assembly", inferred(CLASSIFIED, release), [claim("CHM13")], False) == (
+        CLASSIFIED,
+        release,
+    )
+    assert resolve_slot("reference_assembly", inferred(CLASSIFIED, "CHM13"), [claim(release)], False) == (
+        CLASSIFIED,
+        release,
+    )
+
+
+def test_sibling_releases_still_conflict():
+    """Two releases do not nest: neither is the other's parent (#473)."""
+    got = resolve_slot("reference_assembly", inferred(CLASSIFIED, "T2T-CHM13v1.0"), [claim("T2T-CHM13v2.0")], False)
+    assert got == (CONFLICT, None)
+
+
+def test_a_source_naming_the_parent_agrees_but_is_not_credited_with_the_release(tmp_path, run, evidence, table):
+    write_run(run, [record(1, reference_assembly="T2T-CHM13v2.0")])
+    write_evidence(evidence, [("reference_assembly", drs(1), "CHM13")])
+    result = go(run, tmp_path, evidence, table)
+    ref = slot(run, 1, "reference_assembly")
+    assert (ref["status"], ref["value"], ref["use"]) == (CLASSIFIED, "T2T-CHM13v2.0", USE_META_DISCO)
+    assert result["slots"][DATASET]["reference_assembly"] == {"filled_by_inference": 1}
+    scored = result["inputs"][DATASET]["reference_assembly"]
+    assert scored["inference"] == {"agreed": 1} and scored[SOURCE_REPOSITORY_METADATA] == {"match": 1}
+
+
+def test_a_source_naming_the_release_fills_it_over_inferences_family(tmp_path, run, evidence, table):
+    write_run(run, [record(1, reference_assembly="CHM13")])
+    write_evidence(evidence, [("reference_assembly", drs(1), "CHM13v2")])
+    result = go(run, tmp_path, evidence, table)
+    ref = slot(run, 1, "reference_assembly")
+    assert (ref["status"], ref["value"]) == (CLASSIFIED, "T2T-CHM13v2.0")
+    assert result["slots"][DATASET]["reference_assembly"] == {"filled_by_submitter_harmonized": 1}
 
 
 # --- the artifacts ----------------------------------------------------------------------
@@ -472,9 +527,9 @@ def test_ac23_use_follows_the_status_and_value_is_null_unless_classified():
     assert use_for(CLASSIFIED) == use_for(NOT_APPLICABLE) == USE_META_DISCO
     assert use_for(CONFLICT) == use_for(NOT_CLASSIFIED) == USE_PUBLISHED
     for status, value in (
-        resolve_slot(inferred(CLASSIFIED, "GRCh38"), [claim("CHM13")], False),
-        resolve_slot(inferred(NOT_CLASSIFIED, None), [], True),
-        resolve_slot(inferred(NOT_APPLICABLE, None), [], False),
+        resolve_slot("reference_assembly", inferred(CLASSIFIED, "GRCh38"), [claim("CHM13")], False),
+        resolve_slot("reference_assembly", inferred(NOT_CLASSIFIED, None), [], True),
+        resolve_slot("reference_assembly", inferred(NOT_APPLICABLE, None), [], False),
     ):
         assert (value is None) == (status != CLASSIFIED)
 
@@ -859,3 +914,14 @@ def test_an_inference_conflict_lists_its_competing_values_or_none_when_inherited
     # An index file's conflict inherited from its parent carries no marker, so no values.
     inherited = {"inferred": {"value": None, "status": CONFLICT}, "evidence": [{"status": CONFLICT}]}
     assert Report._competing(inherited, SlotEvidence(), None) == (("inference", ()),)
+
+
+def test_a_parent_beside_two_sibling_releases_is_scored_disagreed(tmp_path, run, evidence, table):
+    """Scoring nests over every declaration, as the slot does: the slot is a conflict, so no input agreed (#473)."""
+    write_run(run, [record(1, reference_assembly="CHM13")])
+    write_evidence(evidence, [("reference_assembly", drs(1), "CHM13v2")])
+    published(evidence, [("reference_assembly", drs(1), "CHM13v1")])
+    result = go(run, tmp_path, evidence, table)
+    assert slot(run, 1, "reference_assembly")["status"] == CONFLICT
+    scored = result["inputs"][DATASET]["reference_assembly"]
+    assert scored["inference"] == {"disagreed": 1}

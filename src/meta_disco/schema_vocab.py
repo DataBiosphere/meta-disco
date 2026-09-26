@@ -9,6 +9,7 @@ checkout. The rule engine's emitted values are validated against these enums (se
 The ``schema/`` project is the LinkML tooling that maintains and validates it.
 """
 
+from collections.abc import Iterable
 from functools import cache
 from importlib.resources import files
 
@@ -30,6 +31,8 @@ STATUS_ENUM = "classification_status_enum"
 MARKER_ENUM = "evidence_marker_enum"
 # The reference-build ``name_source`` vocabulary (issue #354).
 NAME_SOURCE_ENUM = "reference_name_source_enum"
+# The assembly families a reference build's ``base`` may name (issue #473).
+REFERENCE_FAMILY_ENUM = "reference_family_enum"
 
 # The claim-record vocabularies (issue #392): the kind of source behind a claim,
 # the states a claim can take when it consulted a source and produced no value,
@@ -60,8 +63,8 @@ def default_schema_path():
 
 
 @cache
-def _load_enums() -> dict[str, frozenset[str]]:
-    """Load all enums from the schema as ``{enum_name: {permissible values}}``."""
+def _load_schema_enums() -> dict[str, dict]:
+    """Load the schema's ``enums`` block, each permissible value with its definition."""
     resource = None
     try:
         resource = default_schema_path()
@@ -84,10 +87,13 @@ def _load_enums() -> dict[str, frozenset[str]]:
             "src/meta_disco/schema/ is present."
         ) from e
     schema = yaml.safe_load(text)
-    return {
-        name: frozenset(((defn or {}).get("permissible_values") or {}).keys())
-        for name, defn in schema.get("enums", {}).items()
-    }
+    return {name: dict((defn or {}).get("permissible_values") or {}) for name, defn in schema.get("enums", {}).items()}
+
+
+@cache
+def _load_enums() -> dict[str, frozenset[str]]:
+    """Load all enums from the schema as ``{enum_name: {permissible values}}``."""
+    return {name: frozenset(values) for name, values in _load_schema_enums().items()}
 
 
 def dimension_values(field: str) -> frozenset[str]:
@@ -104,6 +110,50 @@ def dimension_values(field: str) -> frozenset[str]:
     if enum_name not in enums:
         raise KeyError(f"Schema at {default_schema_path()} is missing enum {enum_name!r} for dimension {field!r}")
     return enums[enum_name]
+
+
+def value_ancestors(field: str, value: str) -> tuple[str, ...]:
+    """The terms above ``value`` in its dimension's ``is_a`` hierarchy, nearest first.
+
+    Empty for a term with no parent, which is every term of an enum that declares no
+    ``is_a``. ``reference_assembly_enum`` is the one that does (#473): a hybrid's
+    ancestors are its T2T release and then ``CHM13``. Raises ValueError for a value
+    outside the dimension's vocabulary or an ``is_a`` chain that names a missing
+    term or loops, and the same errors as ``dimension_values`` for an unrecognized
+    field or a missing enum.
+    """
+    if not value_in_vocabulary(field, value):
+        raise ValueError(f"{value!r} is not a {field} term")
+    values = _load_schema_enums()[DIMENSION_ENUMS[field]]
+    ancestors: list[str] = []
+    parent = (values[value] or {}).get("is_a")
+    while parent is not None:
+        if parent not in values or parent in ancestors or parent == value:
+            raise ValueError(f"{field} term {value!r} has a broken is_a chain at {parent!r}")
+        ancestors.append(parent)
+        parent = (values[parent] or {}).get("is_a")
+    return tuple(ancestors)
+
+
+def most_specific(field: str, values: Iterable[str]) -> str | None:
+    """The one of ``values`` that every other is, or sits below in the ``is_a`` hierarchy; None if they do not nest.
+
+    Values that nest are one answer at two levels of detail — ``CHM13`` and
+    ``T2T-CHM13v2.0`` are both true of a v2.0 file — so the deepest is the answer
+    (#473). Two siblings (``T2T-CHM13v1.0`` beside ``T2T-CHM13v2.0``) do not nest,
+    and neither does anything outside the vocabulary (``not_applicable``) beside a
+    different value. A single value is returned as it is, in the vocabulary or not.
+    """
+    distinct = set(values)
+    if len(distinct) == 1:
+        return next(iter(distinct))
+    if not all(value_in_vocabulary(field, v) for v in distinct):
+        return None
+    for candidate in distinct:
+        above = value_ancestors(field, candidate)
+        if all(v == candidate or v in above for v in distinct):
+            return candidate
+    return None
 
 
 def status_values() -> frozenset[str]:
@@ -137,6 +187,16 @@ def name_source_values() -> frozenset[str]:
     the schema path) if the schema is missing the enum.
     """
     return _enum_values(NAME_SOURCE_ENUM)
+
+
+def reference_family_values() -> frozenset[str]:
+    """Return the assembly families from the schema, the values ``ReferenceBuild.base`` may take.
+
+    The ``reference_assembly_enum`` terms with no ``is_a`` parent, listed as their own
+    enum so the schema can range ``base`` over them (#473). Raises KeyError (with the
+    schema path) if the schema is missing the enum.
+    """
+    return _enum_values(REFERENCE_FAMILY_ENUM)
 
 
 def relation_values() -> frozenset[str]:

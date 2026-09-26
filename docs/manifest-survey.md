@@ -287,14 +287,14 @@ Every entity `type` in each dataset's verbatim manifest with its row count. `anv
 | `anvil_file` | harmonized | 309,979 | — | — | — |
 | `file_inventory` | submitter | 309,979 | 309,979 | — | — |
 | `anvil_activity` | harmonized | 98,144 | — | — | — |
-| `PAR_interval_CHM13v2` | submitter | 31,158 | 62,316 | data_type = interval_set; reference_assembly = CHM13 | — |
+| `PAR_interval_CHM13v2` | submitter | 31,158 | 62,316 | data_type = interval_set; reference_assembly = T2T-CHM13v2.0 | — |
 | `PAR_interval_GRCh38` | submitter | 30,864 | 30,864 | data_type = interval_set; reference_assembly = GRCh38 | — |
-| `1KGP_CHM13v2_sample` | submitter | 3,202 | 184,105 | reference_assembly = CHM13 | — |
-| `SGDP_CHM13v2_sample` | submitter | 279 | 16,324 | reference_assembly = CHM13 | — |
+| `1KGP_CHM13v2_sample` | submitter | 3,202 | 184,105 | reference_assembly = T2T-CHM13v2.0 | — |
+| `SGDP_CHM13v2_sample` | submitter | 279 | 16,324 | reference_assembly = T2T-CHM13v2.0 | — |
 | `SGDP_GRCh38_sample` | submitter | 279 | 16,324 | reference_assembly = GRCh38 | — |
 | `workspace_attributes` | submitter | 67 | 0 | — | — |
-| `1KGP_CHM13v2_chromosome` | submitter | 24 | 240 | reference_assembly = CHM13 | — |
-| `SGDP_CHM13v2_chromosome` | submitter | 24 | 168 | reference_assembly = CHM13 | — |
+| `1KGP_CHM13v2_chromosome` | submitter | 24 | 240 | reference_assembly = T2T-CHM13v2.0 | — |
+| `SGDP_CHM13v2_chromosome` | submitter | 24 | 168 | reference_assembly = T2T-CHM13v2.0 | — |
 | `SGDP_GRCh38_chromosome` | submitter | 24 | 168 | reference_assembly = GRCh38 | — |
 | `anvil_dataset` | harmonized | 1 | — | — | — |
 | `anvil_project` | harmonized | 1 | — | — | — |

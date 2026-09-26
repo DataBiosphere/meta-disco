@@ -92,7 +92,9 @@ make probe-tdr PROJECT=<tdr data project> SNAPSHOT=<snapshot name>
 The LinkML schema (`classification.yaml`) defines the `ClassificationRecord` — the
 six metadata dimensions nested under `classifications`, each a `{value, status,
 evidence}` entry — plus the controlled vocabulary:
-- **reference_assembly_enum**: GRCh37, GRCh38, CHM13
+- **reference_assembly_enum**: NCBI's assembly names as an `is_a` hierarchy (#473):
+  GRCh37, GRCh38, and CHM13 (any release, or release unknown) above
+  T2T-CHM13v1.0/v1.1/v2.0 and the three grafted-chrY hybrids under their release
 - **data_modality_enum**: genomic, transcriptomic.*, epigenomic.*, imaging.histology
 - **classification_status_enum**: classified, not_applicable, not_classified, conflict
 - **instrument_model_enum**: ENA/SRA's instrument-model strings for the platforms in

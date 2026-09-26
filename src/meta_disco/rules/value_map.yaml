@@ -362,7 +362,38 @@ rows:
   # --- reference_assembly ---------------------------------------------------------
   - id: "reference_assembly.chm13"
     match: {slot: reference_assembly, value: "chm13"}
+    declares: {reference_assembly: CHM13}
+    reason: Names CHM13 and no release, so it is the release-unknown term (#473).
     seeded_from: ["anvil/anvil15/ANVIL_HPRC/20260920T175642Z", "anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "reference_assembly.chm13v2"
+    match: {slot: reference_assembly, value: "CHM13v2"}
+    declares: {reference_assembly: T2T-CHM13v2.0}
+    reason: >-
+      The submitter's name for NCBI's T2T-CHM13v2.0, in the ANVIL_T2T_CHRY table
+      names; `v2` names the release (#473).
+  - id: "reference_assembly.grch38_gencode40"
+    match: {slot: reference_assembly, value: "GRCh38 + Gencode40"}
+    declares: {reference_assembly: GRCh38}
+    reason: >-
+      GRCh38 with a GENCODE annotation release. The annotation is not part of the
+      assembly and does not imply a patch, so the assembly is GRCh38 (#473).
+  - id: "reference_assembly.chm13_v1_0_grch38_chry"
+    match:
+      slot: reference_assembly
+      value: "t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r"
+      alternates: ["chm13.draft_v1.0_plus38Y"]
+    declares: {reference_assembly: t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r}
+    reason: >-
+      The term itself, and the T2T 1KGP files' own label for the same reference:
+      CHM13 v1.0 with GRCh38's chrY (#473).
+  - id: "reference_assembly.chm13_v1_1_grch38_chry"
+    match: {slot: reference_assembly, value: "CHM13Y_EBV_v1.1"}
+    declares: {reference_assembly: CHM13Y_EBV_v1.1}
+    reason: The term itself, CHM13 v1.1 with GRCh38's chrY (#473).
+  - id: "reference_assembly.chm13_v1_0_hg002_chry"
+    match: {slot: reference_assembly, value: "t2t-chm13.20200921.HG002chrY.chrEBV"}
+    declares: {reference_assembly: t2t-chm13.20200921.HG002chrY.chrEBV}
+    reason: The term itself, CHM13 v1.0 with HG002's chrY (#473).
   - id: "reference_assembly.grch38"
     match: {slot: reference_assembly, value: "grch38", alternates: ["hg38"]}
     declares: {reference_assembly: GRCh38}

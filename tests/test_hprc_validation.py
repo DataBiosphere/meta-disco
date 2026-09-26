@@ -135,3 +135,25 @@ class TestSharedConstants:
 
     def test_catalog_base_url(self):
         assert "human-pangenomics" in HPRC_CATALOG_BASE_URL
+
+
+class TestValidateDimension:
+    """A value more specific than HPRC's truth, under it in the vocabulary, matches (#473)."""
+
+    def _score(self, ours, expected):
+        from collections import Counter
+
+        from validate_against_hprc import validate_dimension
+
+        counters = Counter()
+        mismatch = validate_dimension(ours, expected, counters, "reference_assembly")
+        return mismatch, counters
+
+    def test_a_release_under_the_truth_matches(self):
+        mismatch, counters = self._score("T2T-CHM13v2.0", "CHM13")
+        assert mismatch is None and counters["reference_assembly_match"] == 1
+
+    def test_another_family_still_mismatches(self):
+        mismatch, counters = self._score("GRCh38", "CHM13")
+        assert mismatch == {"ours": "GRCh38", "expected": "CHM13"}
+        assert counters["reference_assembly_mismatch"] == 1

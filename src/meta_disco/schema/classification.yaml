@@ -24,6 +24,7 @@ prefixes:
   anvil: https://github.com/DataBiosphere/meta-disco/schema/
   EFO: http://www.ebi.ac.uk/efo/EFO_
   EDAM: http://edamontology.org/
+  insdc.gca: "https://identifiers.org/insdc.gca:"
 default_prefix: anvil
 default_range: string
 
@@ -202,10 +203,13 @@ classes:
 
   ReferenceBuild:
     description: >-
-      The specific reference build a file was aligned to, refining the coarse
-      family in ``reference_assembly.value`` (issue #340). Two files can both be
-      ``CHM13`` and be aligned to builds whose coordinates differ; this says
-      which one.
+      The specific reference build a file was aligned to (issue #340): the
+      observations a header offers about its reference, and the build they
+      identify, if any. Where the header's contig lengths detect a family, the
+      build resolves inside it, and the build has a term of its own (the CHM13
+      releases and hybrids), that term is the value of ``reference_assembly``
+      (issue #473); the patch within a GRC release, which the vocabulary does
+      not name, stays here.
 
       ``chr1_m5``, ``chry_m5``, ``name`` and ``name_source`` are OBSERVED, read
       from the file's own header. ``base`` and ``version`` are DERIVED by
@@ -215,22 +219,25 @@ classes:
       when the version is not. An ambiguous file keeps its observations rather
       than being assigned a nearest match.
 
-      Not a claim: it carries no tier, never competes in claim resolution, and
-      cannot change which ``value`` won. Absent entirely when nothing was
-      observed.
+      Not a claim itself: it carries no tier and never competes in claim
+      resolution. It sets the value only through the contig-detection claim,
+      which takes the build's term in place of the family's. Absent entirely when
+      nothing was observed.
 
       Declared as class-local ``attributes`` rather than global ``slots``:
       ``name``, ``base`` and ``version`` are the kind of identifier that collides
       across a shared namespace, and nothing outside this class needs them.
     attributes:
       base:
-        range: reference_assembly_enum
+        range: reference_family_enum
         description: >-
-          Assembly family of the resolved build. Duplicates the coarse value when
-          both are known, so a build is readable on its own; null when no single
-          family was identified. Range-constrained rather than merely documented
-          as such, so a table entry naming a family outside the vocabulary fails
-          validation instead of passing as free text.
+          Assembly family of the resolved build (``CHM13``, ``GRCh38``), derived by
+          the resolver from exact signatures. Where both are known it is the value
+          or an ancestor of it, since a contradicting one is dropped (#345);
+          recorded here so a build is readable on its own; null when no single
+          family was identified. Range-constrained to the families rather than
+          merely documented as such, so a table entry naming a release, a hybrid or
+          anything outside the vocabulary fails validation instead of passing.
       version:
         description: >-
           Build version within the family. Free text by necessity: T2T releases
@@ -946,11 +953,62 @@ enums:
       interval_set:
 
   reference_assembly_enum:
+    description: >-
+      Reference assemblies, named as NCBI names them (issue #473). A file gets the
+      most specific term its evidence supports, and `is_a` records the terms as a
+      hierarchy. A record carries only its own term, so a filter on a parent
+      includes the terms below it only where the consumer walks the hierarchy
+      (`schema_vocab.value_ancestors`); `value == "CHM13"` alone does not.
+
+      GRC assemblies are named at the major release: contig lengths are identical
+      across patch releases, so contig lengths can never tell a patch (#399). Where
+      a header's declared reference name does tell one, the patch stays on
+      `ReferenceBuild.version`. `CHM13`
+      is every CHM13 release, and is also the term for a CHM13 file whose release
+      cannot be told. Under it are NCBI's T2T releases, and under each release the
+      references that graft another genome's chrY onto it. NCBI names none of those
+      hybrids, so each is spelled as the reference FASTA that files declare,
+      extension dropped. A hybrid is its own coordinate system on chrY and its parent
+      release everywhere else, which is why it sits under that release.
+
+      `meaning` is recorded where one term is one NCBI assembly: the three T2T
+      releases. The GRC terms each span their patch releases, and `CHM13` spans the
+      T2T releases.
     permissible_values:
       GRCh37:
       GRCh38:
       CHM13:
+        description: Any CHM13 release, or CHM13 whose release cannot be told.
+      T2T-CHM13v1.0:
+        is_a: CHM13
+        meaning: insdc.gca:GCA_009914755.2
+      T2T-CHM13v1.1:
+        is_a: CHM13
+        meaning: insdc.gca:GCA_009914755.3
+      T2T-CHM13v2.0:
+        is_a: CHM13
+        meaning: insdc.gca:GCA_009914755.4
+      t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r:
+        is_a: T2T-CHM13v1.0
+        description: T2T-CHM13v1.0 with GRCh38's chrY grafted on.
+      CHM13Y_EBV_v1.1:
+        is_a: T2T-CHM13v1.1
+        description: T2T-CHM13v1.1 with GRCh38's chrY grafted on.
+      t2t-chm13.20200921.HG002chrY.chrEBV:
+        is_a: T2T-CHM13v1.0
+        description: T2T-CHM13v1.0 with HG002's chrY grafted on.
       # GRCm39:  # mouse — pending issue #15
+
+  reference_family_enum:
+    description: >-
+      The assembly families: the `reference_assembly_enum` terms with no `is_a`
+      parent, which `ReferenceBuild.base` ranges over (#473). A release or a hybrid
+      is a value, never a family. `tests/test_rule_vocabulary.py` holds this list to
+      those terms.
+    permissible_values:
+      GRCh37:
+      GRCh38:
+      CHM13:
 
   reference_name_source_enum:
     description: >-

@@ -7,7 +7,9 @@ are missing. We use a subset of chromosomes for efficiency.
 Sources:
 - GRCh38: https://www.ncbi.nlm.nih.gov/assembly/GCF_000001405.40
 - GRCh37: https://www.ncbi.nlm.nih.gov/assembly/GCF_000001405.13
-- CHM13: https://www.ncbi.nlm.nih.gov/assembly/GCF_009914755.1
+- CHM13: https://www.ncbi.nlm.nih.gov/assembly/GCF_009914755.1 (T2T-CHM13v2.0; an
+  earlier release matches it on most chromosomes, not all — see
+  ``CONTIG_LENGTH_TOLERANCE`` and #473)
 
 Data loaded from the bundled unified_rules.yaml (package data of meta_disco.rules,
 single source of truth).
@@ -36,7 +38,8 @@ def _load_contig_lengths() -> dict[str, dict[str, int]]:
 
 # Chromosome lengths for each reference assembly
 # All 22 autosomes + X + Y with both chr-prefixed and bare names.
-# Every chromosome has a unique length per assembly (min diff 41Kbp).
+# Every chromosome has a unique length per assembly (min diff 16,408 bp, GRCh38
+# against GRCh37 on chr16).
 REFERENCE_CONTIG_LENGTHS: dict[str, dict[str, int]] = _load_contig_lengths()
 
 # The candidates a normalized contig name can match: each assembly's length for that
@@ -65,15 +68,26 @@ CHROMOSOME_MAX_LENGTHS: dict[str, tuple[int, int, int]] = {
 }
 
 
+# How far, in bp, a length may sit from a table row and still match it: small drift
+# between releases matches, while the families differ by at least 16,408 bp on every
+# chromosome. CHM13 v1.0 is within it of the v2.0 row on 18 of 23 chromosomes, and
+# not on the acrocentrics (chr13, 14, 15, 21, 22: 28,980-737,009 bp longer), so a
+# v1.0 file matches on its other chromosomes (#473). BED coordinate detection rules
+# an assembly out past the same allowance.
+CONTIG_LENGTH_TOLERANCE = 1000
+
+
 def detect_reference_from_contigs(
-    contigs: Iterable[tuple[str, int | None]], tolerance: int = 1000
+    contigs: Iterable[tuple[str, int | None]], tolerance: int = CONTIG_LENGTH_TOLERANCE
 ) -> tuple[str | None, int]:
     """
     Detect reference assembly from ``(contig name, length)`` pairs.
 
     This is a definitive signal - chromosome lengths are unique to each assembly.
-    Uses fuzzy matching with tolerance to handle minor version differences
-    (e.g., CHM13 v1.0 vs v2.0 differ by < 1000bp per chromosome).
+    Uses fuzzy matching with tolerance to handle minor version differences, so a
+    file from an earlier release matches its family's row on most chromosomes;
+    the vote is per contig, so the ones that do not match (CHM13 v1.0's
+    acrocentrics, see ``CONTIG_LENGTH_TOLERANCE``) are outvoted rather than fatal.
 
     Each contig is one dictionary lookup: the closest of its name's candidates —
     at most one per assembly — within ``tolerance`` votes, an exact length being
@@ -82,7 +96,7 @@ def detect_reference_from_contigs(
 
     Args:
         contigs: ``(name, length)`` pairs, the name with or without a ``chr`` prefix
-        tolerance: Max difference in bp to consider a match (default 1000)
+        tolerance: Max difference in bp to consider a match (default CONTIG_LENGTH_TOLERANCE)
 
     Returns:
         Tuple of (assembly, vote_count)
@@ -124,8 +138,8 @@ def detect_reference_from_max_positions(
     positions exceed chromosome lengths.
 
     When header-based detection fails, we can use max variant positions to
-    rule out references. If a variant exists at a position beyond a reference's
-    chromosome length, that reference is ruled out.
+    rule out references. If a variant sits more than ``CONTIG_LENGTH_TOLERANCE``
+    past a reference's chromosome length, that reference is ruled out.
 
     Args:
         max_positions: Dict mapping chromosome (without 'chr') to max position seen
@@ -150,13 +164,13 @@ def detect_reference_from_max_positions(
 
         # Rule out references where position exceeds chromosome length
         ruled_out_any = False
-        if max_pos > chm13_len:
+        if max_pos > chm13_len + CONTIG_LENGTH_TOLERANCE:
             possible.discard("CHM13")
             ruled_out_any = True
-        if max_pos > grch38_len:
+        if max_pos > grch38_len + CONTIG_LENGTH_TOLERANCE:
             possible.discard("GRCh38")
             ruled_out_any = True
-        if max_pos > grch37_len:
+        if max_pos > grch37_len + CONTIG_LENGTH_TOLERANCE:
             possible.discard("GRCh37")
             ruled_out_any = True
         if ruled_out_any:

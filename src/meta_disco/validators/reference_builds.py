@@ -7,11 +7,15 @@ tolerance precisely so that minor build differences do not defeat detection. Thi
 module answers "which *build*", and so it does the opposite: exact matching only,
 and ``None`` rather than a nearest neighbour.
 
-Nothing here changes the coarse value. It is produced entirely by
-``contig_lengths``, and a build that cannot be resolved leaves it exactly as it
-was and simply adds no detail. The interaction runs the other way only:
-``header_classifier._reconcile_with_coarse_value`` withholds a derived family
-that contradicts the coarse value (issue #345).
+The family comes from ``contig_lengths`` alone; this module never introduces
+one. What it adds is the release: where the build resolves inside the detected
+family, :func:`assembly_term` names the ``reference_assembly`` term the build is
+(``T2T-CHM13v2.0``, or a hybrid's own term), and the contig-detection claim takes
+that term in place of the family's (issue #473). A build that cannot be resolved
+leaves the family as the value and adds no detail. A derived family that
+contradicts the detected one is withheld, by
+``header_classifier._reconcile_with_coarse_value`` (issue #345), and so never
+reaches the value either.
 
 The key is (chr1, chrY)
 -----------------------
@@ -223,10 +227,11 @@ class ReferenceIdentity:
     candidate build agrees on the family, which is often true when the version
     is not — several CHM13 builds share a chr1.
 
-    ``base`` duplicates the coarse ``reference_assembly`` value when both are
-    known. That is deliberate: this object is meant to be readable on its own,
-    and a consumer holding an identity should not have to look elsewhere to learn
-    which family it belongs to.
+    ``base`` is the family: where both are known it is the ``reference_assembly``
+    value or an ancestor of it (``CHM13`` under ``T2T-CHM13v2.0``, #473). That is
+    deliberate: this object is meant to be readable on its own, and a consumer
+    holding an identity should not have to look elsewhere to learn which family
+    it belongs to.
     """
 
     base: str | None = None
@@ -254,6 +259,40 @@ class ReferenceIdentity:
         omitted upstream when nothing was found at all.
         """
         return asdict(self)
+
+
+# The ``reference_assembly`` term each build is, keyed as the build table keys a row:
+# (family, version) (#473). Only a family with terms below it in the schema's ``is_a``
+# hierarchy is here: a GRC patch (``p12``) has no term of its own, so a GRCh38 build
+# is the family's term. ``tests/test_reference_builds.py`` holds this to the table and
+# the schema: every CHM13 row has an entry, and every entry's term sits under its
+# family.
+BUILD_TERMS: dict[tuple[str, str], str] = {
+    ("CHM13", "v1.0"): "T2T-CHM13v1.0",
+    ("CHM13", "v1.0+GRCh38chrY"): "t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r",
+    ("CHM13", "v1.0+HG002chrY"): "t2t-chm13.20200921.HG002chrY.chrEBV",
+    ("CHM13", "v1.1"): "T2T-CHM13v1.1",
+    ("CHM13", "v1.1+GRCh38chrY"): "CHM13Y_EBV_v1.1",
+    ("CHM13", "v2.0"): "T2T-CHM13v2.0",
+}
+
+
+def assembly_term(family: str, identity: ReferenceIdentity) -> str:
+    """The ``reference_assembly`` term for a file whose contig lengths detected ``family``.
+
+    The build's own term where the identity resolved exactly one build of that family
+    and :data:`BUILD_TERMS` names one; ``family`` otherwise — an unresolved version, a
+    build of another family (the contradiction #345 describes), and a GRC patch all
+    leave the family as the answer. Never a term the evidence did not single out: an
+    ambiguous CHM13 v1.0 file, whose candidates are v1.0 and both of its hybrids,
+    stays ``CHM13`` rather than taking the release all three share. The evidence
+    includes the header's declared reference name wherever :func:`resolve_identity`
+    let it break a tie among the builds the signatures allow — a VCF naming
+    ``chm13.draft_v1.0.fasta`` with chr1 at v1.0's length resolves to v1.0 that way.
+    """
+    if identity.base != family or identity.version is None:
+        return family
+    return BUILD_TERMS.get((family, identity.version), family)
 
 
 def observe_sam(header_text: str) -> tuple[list[ContigSignature], DeclaredReference | None]:

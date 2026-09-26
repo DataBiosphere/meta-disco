@@ -25,6 +25,7 @@ from .models import (
     all_not_classified,
     build_field_entry,
 )
+from .schema_vocab import most_specific
 from .validators.read_name_parsers import (
     detect_paired_end_indicators,
     extract_archive_accession,
@@ -85,6 +86,32 @@ def _get_engine() -> "RuleEngine":
 # =============================================================================
 
 
+def _add_contig_claim(result, rule_id: str, family: str, matches: int, identity) -> None:
+    """Add the contig-detection ``reference_assembly`` claim, at ``CONTENT_TIER``.
+
+    ``family`` is what the contig lengths detected; the claim's value is
+    :func:`~.validators.reference_builds.assembly_term` of it: the resolved build's
+    term where the build lies inside that family and has one (a CHM13 release or
+    hybrid), and ``family`` otherwise (#473). The reason names both readings when they differ, so the evidence says
+    which build turned ``CHM13`` into a release.
+    """
+    from .rule_engine import CONTENT_TIER
+    from .validators.reference_builds import assembly_term
+
+    value = assembly_term(family, identity)
+    reason = f"Reference {family} detected from {matches} matching contig lengths (definitive)"
+    if value != family:
+        reason += f"; the header's build is {family} {identity.version}"
+    result.add_claim(
+        "reference_assembly",
+        rule_id=rule_id,
+        tier=CONTENT_TIER,
+        source_type=SOURCE_CONTIG_DETECTION,
+        reason=reason,
+        value=value,
+    )
+
+
 def _record_reference_build(result, identity) -> None:
     """Attach the observed reference build to ``reference_assembly``'s detail (#340).
 
@@ -116,17 +143,25 @@ def _record_reference_build(result, identity) -> None:
 
 
 def _reconcile_with_coarse_value(result, identity):
-    """Drop a derived family that contradicts the coarse ``reference_assembly``.
+    """Drop a derived build that contradicts the resolved ``reference_assembly``.
 
-    The two answers are produced independently — the coarse value by
-    ``contig_lengths``' fuzzy family match, the build by exact signature
-    matching — and they can disagree. The case that shows up in this corpus is a
+    The build is compared by its own term (:func:`assembly_term` of its family,
+    #473): it agrees with the value when the two nest, as
+    :func:`~.schema_vocab.most_specific` has it — one is the other or an ``is_a``
+    ancestor of it. A ``T2T-CHM13v2.0`` build agrees with a ``T2T-CHM13v2.0``
+    value and with a ``CHM13`` one a filename rule set; a v2.0 build under a
+    ``T2T-CHM13v1.0`` value would not.
+
+    The family and the build are derived independently — the family by
+    ``contig_lengths``' fuzzy match, the build by exact signature matching — and
+    they can disagree; the value is then the family alone, since
+    :func:`assembly_term` takes the build's term only inside the detected family. The case that shows up in this corpus is a
     chrY-only header from the CHM13 build carrying a *grafted GRCh38 chrY*: the
     coarse detector sees only that borrowed chrY and says GRCh38, while the
     signature and declared name identify the CHM13 build it actually belongs to.
 
-    The resolver is the better answer there, but this change is strictly
-    additive and must not restate the dimension's value. Emitting both would
+    The resolver is the better answer there, but it only ever refines the family
+    the contig lengths detected (#473) and never replaces it. Emitting both would
     publish a record asserting two families at once, which is worse than
     publishing neither. So the derivations are dropped and the *observations* —
     the checksums seen and the name declared — are kept, exactly as they are for
@@ -138,8 +173,12 @@ def _reconcile_with_coarse_value(result, identity):
     reconciliation becomes dead code and should be removed with it: a record that
     cannot contradict itself needs no guard against contradiction.
     """
+    from .validators.reference_builds import assembly_term
+
     coarse = result.reference_assembly
-    if identity.base is None or coarse is None or identity.base == coarse:
+    if identity.base is None or coarse is None:
+        return identity
+    if most_specific("reference_assembly", {assembly_term(identity.base, identity), coarse}) is not None:
         return identity
     return replace(identity, base=None, version=None)
 
@@ -173,7 +212,7 @@ def classify_from_header(
               data_modality, data_type, assay_type, reference_assembly, platform,
               instrument_model
     """
-    from .rule_engine import CONTENT_TIER, ExtendedFileInfo
+    from .rule_engine import ExtendedFileInfo
 
     # Use the real filename so its tokens reach the tier-2 filename rules. The
     # AnVIL file_format is redundant with the name and not consulted (#157). When
@@ -201,30 +240,26 @@ def classify_from_header(
     engine = _get_engine()
     result = engine.classify_extended(file_info, include_tier3=True)
 
+    # Resolve the specific build behind the family (#340). Runs whatever the
+    # contig detection concluded, including when it concluded nothing — an
+    # unresolvable file still keeps its observed checksums so a later table row can
+    # resolve it without re-fetching.
+    identity = resolve_identity(signatures, declared)
+
     # Apply contig-based reference. Read from the @SQ contig lengths, so it lands
     # at CONTENT_TIER and out-ranks any disagreeing filename/header rule; add_claim
-    # re-resolves from the full list, so a filename_ref rule that agrees stays in
-    # the evidence chain rather than being clobbered (#226/#227).
+    # re-resolves from the full list, so a filename_ref rule stays in the evidence
+    # chain rather than being clobbered (#226/#227). The value is the
+    # resolved build's term where the build lies inside the detected family and has
+    # one (CHM13's releases and hybrids), and the family otherwise (#473) — one
+    # claim, so the two readings of one header never compete at the same tier.
     if contig_ref:
-        reason = f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
-        result.add_claim(
-            "reference_assembly",
-            rule_id="contig_length_detection",
-            tier=CONTENT_TIER,
-            source_type=SOURCE_CONTIG_DETECTION,
-            reason=reason,
-            value=contig_ref,
-        )
+        _add_contig_claim(result, "contig_length_detection", contig_ref, contig_matches, identity)
         # No modality claim follows from the contigs: DNA and RNA reads aligned to
         # one genome share its @SQ dictionary, so "aligned to a genome" does not say
         # which the reads are. The "genomic" guess this used to make is removed (#88).
 
-    # Resolve the specific build behind the coarse family (#340). Additive: this
-    # never sets or changes reference_assembly, only records which build the
-    # header names. Runs whatever the contig detection above concluded, including
-    # when it concluded nothing — an unresolvable file still keeps its observed
-    # checksums so a later table row can resolve it without re-fetching.
-    _record_reference_build(result, resolve_identity(signatures, declared))
+    _record_reference_build(result, identity)
 
     return result.to_output_dict()
 
@@ -257,7 +292,7 @@ def classify_from_vcf_header(
               data_modality, data_type, assay_type, reference_assembly, platform,
               instrument_model
     """
-    from .rule_engine import CONTENT_TIER, ExtendedFileInfo
+    from .rule_engine import ExtendedFileInfo
 
     # Use the real filename so its tokens reach the tier-2 filename rules. The
     # AnVIL file_format is redundant with the name and not consulted (#157). When
@@ -286,25 +321,20 @@ def classify_from_vcf_header(
     engine = _get_engine()
     result = engine.classify_extended(file_info, include_tier3=True)
 
+    # Resolve the specific build (#340) — see the BAM path. VCF gives the resolver
+    # less to work with than BAM does: ##contig carries no checksum, so builds that
+    # differ only in sequence stay ambiguous here and resolve to a null version
+    # rather than a guess, which leaves the family as the value.
+    identity = resolve_identity(signatures, declared)
+
     # Apply contig-based reference. Read from the ##contig lengths, so it lands at
     # CONTENT_TIER and out-ranks any disagreeing filename/header rule; add_claim
-    # re-resolves from the full list (#226/#227).
+    # re-resolves from the full list (#226/#227). The value is the build's term
+    # where it resolved inside the family and has one (#473), as on the BAM path.
     if contig_ref:
-        reason = f"Reference {contig_ref} detected from {contig_matches} matching contig lengths (definitive)"
-        result.add_claim(
-            "reference_assembly",
-            rule_id="vcf_contig_length",
-            tier=CONTENT_TIER,
-            source_type=SOURCE_CONTIG_DETECTION,
-            reason=reason,
-            value=contig_ref,
-        )
+        _add_contig_claim(result, "vcf_contig_length", contig_ref, contig_matches, identity)
 
-    # Resolve the specific build (#340), additively — see the BAM path. VCF gives
-    # the resolver less to work with than BAM does: ##contig carries no checksum,
-    # so builds that differ only in sequence stay ambiguous here and resolve to a
-    # null version rather than a guess.
-    _record_reference_build(result, resolve_identity(signatures, declared))
+    _record_reference_build(result, identity)
 
     return result.to_output_dict()
 
@@ -986,9 +1016,15 @@ def _infer_bed_reference(signals: BedSignals) -> tuple[str | None, str]:
     if not has_chr_prefix:
         return "GRCh37", "Chromosomes lack 'chr' prefix, consistent with GRCh37/b37 naming"
 
+    from .validators.contig_lengths import CONTIG_LENGTH_TOLERANCE
+
     ref_lengths = _get_engine().rules.reference_contig_lengths
 
-    tolerance = 500
+    # The allowance contig-length matching makes (#473). It covers CHM13 v1.0's
+    # small overhangs past the v2.0 row (chr1 169 bp, chr3 657 bp), not its
+    # acrocentrics, where a v1.0 position can still rule CHM13 out; no cached BED
+    # does so today.
+    tolerance = CONTIG_LENGTH_TOLERANCE
     ruled_out = set()
     evidence_details = []
 

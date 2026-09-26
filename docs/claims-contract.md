@@ -214,6 +214,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 4.4 Sources that agree classify the slot, and every agreeing source is recorded.
     A slot on which only one input speaks takes that input's declaration — a value classifies it, a status is
     preserved as that status. Filling a gap is not a disagreement.
+    Two values agree when one sits below the other in the slot's `is_a` hierarchy (#473): `CHM13` and
+    `T2T-CHM13v2.0` are one answer at two levels of detail, and the slot takes the deeper. Siblings
+    (`T2T-CHM13v1.0` beside `T2T-CHM13v2.0`) do not nest, and disagree (4.5).
 
 4.5 Inputs 1, 2, 3 and 4 that disagree produce a **conflict**. No value is asserted from them, and every
     competing declaration is recorded with the rule behind it.
