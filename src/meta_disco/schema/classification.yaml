@@ -955,8 +955,10 @@ enums:
   reference_assembly_enum:
     description: >-
       Reference assemblies, named as NCBI names them (issue #473). A file gets the
-      most specific term its evidence supports, and `is_a` makes the terms a
-      hierarchy, so a filter on a parent includes everything below it.
+      most specific term its evidence supports, and `is_a` records the terms as a
+      hierarchy. A record carries only its own term, so a filter on a parent
+      includes the terms below it only where the consumer walks the hierarchy
+      (`schema_vocab.value_ancestors`); `value == "CHM13"` alone does not.
 
       GRC assemblies are named at the major release: contig lengths are identical
       across patch releases, so a patch can never be known from content (#399), and

@@ -157,7 +157,7 @@ class DataTypeEnum(str, Enum):
 
 class ReferenceAssemblyEnum(str, Enum):
     """
-    Reference assemblies, named as NCBI names them (issue #473). A file gets the most specific term its evidence supports, and `is_a` makes the terms a hierarchy, so a filter on a parent includes everything below it.
+    Reference assemblies, named as NCBI names them (issue #473). A file gets the most specific term its evidence supports, and `is_a` records the terms as a hierarchy. A record carries only its own term, so a filter on a parent includes the terms below it only where the consumer walks the hierarchy (`schema_vocab.value_ancestors`); `value == "CHM13"` alone does not.
 GRC assemblies are named at the major release: contig lengths are identical across patch releases, so a patch can never be known from content (#399), and the patch, where a header names one, stays on `ReferenceBuild.version`. `CHM13` is every CHM13 release, and is also the term for a CHM13 file whose release cannot be told. Under it are NCBI's T2T releases, and under each release the references that graft another genome's chrY onto it. NCBI names none of those hybrids, so each is spelled as the reference FASTA that files declare, extension dropped. A hybrid is its own coordinate system on chrY and its parent release everywhere else, which is why it sits under that release.
 `meaning` is recorded where one term is one NCBI assembly: the three T2T releases. The GRC terms each span their patch releases, and `CHM13` spans the T2T releases.
     """
