@@ -97,6 +97,8 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
                           'prefix_reference': 'http://www.ebi.ac.uk/efo/EFO_'},
                   'anvil': {'prefix_prefix': 'anvil',
                             'prefix_reference': 'https://github.com/DataBiosphere/meta-disco/schema/'},
+                  'insdc.gca': {'prefix_prefix': 'insdc.gca',
+                                'prefix_reference': 'https://identifiers.org/insdc.gca:'},
                   'linkml': {'prefix_prefix': 'linkml',
                              'prefix_reference': 'https://w3id.org/linkml/'}},
      'source_file': '../src/meta_disco/schema/classification.yaml',
@@ -154,9 +156,32 @@ class DataTypeEnum(str, Enum):
 
 
 class ReferenceAssemblyEnum(str, Enum):
+    """
+    Reference assemblies, named as NCBI names them (issue #473). A file gets the most specific term its evidence supports, and `is_a` makes the terms a hierarchy, so a filter on a parent includes everything below it.
+GRC assemblies are named at the major release: contig lengths are identical across patch releases, so a patch can never be known from content (#399), and the patch, where a header names one, stays on `ReferenceBuild.version`. `CHM13` is every CHM13 release, and is also the term for a CHM13 file whose release cannot be told. Under it are NCBI's T2T releases, and under each release the references that graft another genome's chrY onto it. NCBI names none of those hybrids, so each is spelled as the reference FASTA that files declare, extension dropped. A hybrid is its own coordinate system on chrY and its parent release everywhere else, which is why it sits under that release.
+`meaning` is recorded where one term is one NCBI assembly: the three T2T releases. The GRC terms each span their patch releases, and `CHM13` spans the T2T releases.
+    """
     GRCh37 = "GRCh37"
     GRCh38 = "GRCh38"
     CHM13 = "CHM13"
+    """
+    Any CHM13 release, or CHM13 whose release cannot be told.
+    """
+    T2T_CHM13v1FULL_STOP0 = "T2T-CHM13v1.0"
+    T2T_CHM13v1FULL_STOP1 = "T2T-CHM13v1.1"
+    T2T_CHM13v2FULL_STOP0 = "T2T-CHM13v2.0"
+    t2t_chm13FULL_STOP20200921FULL_STOPwithGRCh38chrYFULL_STOPchrEBVFULL_STOPchrYKI270740v1r = "t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r"
+    """
+    T2T-CHM13v1.0 with GRCh38's chrY grafted on.
+    """
+    CHM13Y_EBV_v1FULL_STOP1 = "CHM13Y_EBV_v1.1"
+    """
+    T2T-CHM13v1.1 with GRCh38's chrY grafted on.
+    """
+    t2t_chm13FULL_STOP20200921FULL_STOPHG002chrYFULL_STOPchrEBV = "t2t-chm13.20200921.HG002chrY.chrEBV"
+    """
+    T2T-CHM13v1.0 with HG002's chrY grafted on.
+    """
 
 
 class ReferenceNameSourceEnum(str, Enum):
@@ -636,14 +661,14 @@ class InstrumentModelClassification(Classification):
 
 class ReferenceBuild(ConfiguredBaseModel):
     """
-    The specific reference build a file was aligned to, refining the coarse family in ``reference_assembly.value`` (issue #340). Two files can both be ``CHM13`` and be aligned to builds whose coordinates differ; this says which one.
+    The specific reference build a file was aligned to (issue #340): the observations a header offers about its reference, and the build they identify, if any. Where the header's contig lengths detect a family and the build resolves inside it, the build's term is the value of ``reference_assembly`` (issue #473); the patch within a GRC release, which the vocabulary does not name, stays here.
     ``chr1_m5``, ``chry_m5``, ``name`` and ``name_source`` are OBSERVED, read from the file's own header. ``base`` and ``version`` are DERIVED by matching those observations against a table of known builds. ``version`` is null unless the evidence identifies exactly one build; ``base`` is filled whenever every candidate agrees on the family, which is often true when the version is not. An ambiguous file keeps its observations rather than being assigned a nearest match.
-    Not a claim: it carries no tier, never competes in claim resolution, and cannot change which ``value`` won. Absent entirely when nothing was observed.
+    Not a claim itself: it carries no tier and never competes in claim resolution. It sets the value only through the contig-detection claim, which takes the build's term in place of the family's. Absent entirely when nothing was observed.
     Declared as class-local ``attributes`` rather than global ``slots``: ``name``, ``base`` and ``version`` are the kind of identifier that collides across a shared namespace, and nothing outside this class needs them.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
-    base: Optional[ReferenceAssemblyEnum] = Field(default=None, description="""Assembly family of the resolved build. Duplicates the coarse value when both are known, so a build is readable on its own; null when no single family was identified. Range-constrained rather than merely documented as such, so a table entry naming a family outside the vocabulary fails validation instead of passing as free text.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild']} })
+    base: Optional[ReferenceAssemblyEnum] = Field(default=None, description="""Assembly family of the resolved build (``CHM13``, ``GRCh38``): the family contig lengths detect, so where both are known it is the value or an ancestor of it, recorded here so a build is readable on its own; null when no single family was identified. Range-constrained rather than merely documented as such, so a table entry naming a family outside the vocabulary fails validation instead of passing as free text.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild']} })
     version: Optional[str] = Field(default=None, description="""Build version within the family. Free text by necessity: T2T releases (``v1.0``, ``v1.1``, ``v2.0``) and GRC patches (``p12``) are not the same kind of thing, and CHM13 has no patch concept. Where a build grafts a chromosome from elsewhere the origin is part of the version (``v1.0+GRCh38chrY``), because that is a real difference in the reference. Null unless the evidence identifies exactly one build.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild', 'EvidenceTarget']} })
     chr1_m5: Optional[str] = Field(default=None, description="""MD5 of the chr1 sequence, from SAM ``@SQ M5``. Identifies the sequence, not the packaging: two references with different decoy or alt content share this value when their chr1 is the same. Null for VCF, whose ``##contig`` md5 attribute is optional in the specification and unpopulated in practice.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild']} })
     chry_m5: Optional[str] = Field(default=None, description="""MD5 of the chrY sequence, from SAM ``@SQ M5``. Recorded because chr1 alone cannot separate some builds — CHM13 v2.0 is v1.1 plus a chrY, so their autosomes are identical. One build can appear with more than one value here at identical chrY length; the header cannot say why, so both are recorded as observations and neither is preferred.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ReferenceBuild']} })

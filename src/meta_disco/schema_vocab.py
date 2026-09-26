@@ -60,8 +60,8 @@ def default_schema_path():
 
 
 @cache
-def _load_enums() -> dict[str, frozenset[str]]:
-    """Load all enums from the schema as ``{enum_name: {permissible values}}``."""
+def _load_schema_enums() -> dict[str, dict]:
+    """Load the schema's ``enums`` block, each permissible value with its definition."""
     resource = None
     try:
         resource = default_schema_path()
@@ -84,10 +84,13 @@ def _load_enums() -> dict[str, frozenset[str]]:
             "src/meta_disco/schema/ is present."
         ) from e
     schema = yaml.safe_load(text)
-    return {
-        name: frozenset(((defn or {}).get("permissible_values") or {}).keys())
-        for name, defn in schema.get("enums", {}).items()
-    }
+    return {name: dict((defn or {}).get("permissible_values") or {}) for name, defn in schema.get("enums", {}).items()}
+
+
+@cache
+def _load_enums() -> dict[str, frozenset[str]]:
+    """Load all enums from the schema as ``{enum_name: {permissible values}}``."""
+    return {name: frozenset(values) for name, values in _load_schema_enums().items()}
 
 
 def dimension_values(field: str) -> frozenset[str]:
@@ -104,6 +107,26 @@ def dimension_values(field: str) -> frozenset[str]:
     if enum_name not in enums:
         raise KeyError(f"Schema at {default_schema_path()} is missing enum {enum_name!r} for dimension {field!r}")
     return enums[enum_name]
+
+
+def value_ancestors(field: str, value: str) -> tuple[str, ...]:
+    """The terms above ``value`` in its dimension's ``is_a`` hierarchy, nearest first.
+
+    Empty for a term with no parent, which is every term of an enum that declares no
+    ``is_a``. ``reference_assembly_enum`` is the one that does (#473): a hybrid's
+    ancestors are its T2T release and then ``CHM13``. Raises ValueError for a value
+    outside the dimension's vocabulary, and the same errors as ``dimension_values``
+    for an unrecognized field or a missing enum.
+    """
+    if not value_in_vocabulary(field, value):
+        raise ValueError(f"{value!r} is not a {field} term")
+    values = _load_schema_enums()[DIMENSION_ENUMS[field]]
+    ancestors: list[str] = []
+    parent = (values[value] or {}).get("is_a")
+    while parent is not None:
+        ancestors.append(parent)
+        parent = (values[parent] or {}).get("is_a")
+    return tuple(ancestors)
 
 
 def status_values() -> frozenset[str]:

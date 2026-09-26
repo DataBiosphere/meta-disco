@@ -7,7 +7,8 @@ are missing. We use a subset of chromosomes for efficiency.
 Sources:
 - GRCh38: https://www.ncbi.nlm.nih.gov/assembly/GCF_000001405.40
 - GRCh37: https://www.ncbi.nlm.nih.gov/assembly/GCF_000001405.13
-- CHM13: https://www.ncbi.nlm.nih.gov/assembly/GCF_009914755.1
+- CHM13: https://www.ncbi.nlm.nih.gov/assembly/GCF_009914755.1 (T2T-CHM13v2.0; the
+  earlier releases fall inside the matching tolerance, see #473)
 
 Data loaded from the bundled unified_rules.yaml (package data of meta_disco.rules,
 single source of truth).

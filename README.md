@@ -26,7 +26,7 @@ A core component of meta-disco is its schema-based approach to metadata validati
 
 The schema defines the structure and constraints for metadata, including:
 
-- **Reference Assembly**: Specifies the genome reference assembly used (GRCh37, GRCh38, CHM13)
+- **Reference Assembly**: Specifies the genome reference assembly used, by NCBI's name (GRCh37, GRCh38, the T2T-CHM13 releases, or CHM13 where the release cannot be told)
 - **Data Modality**: Indicates the type of biological data (genomic, transcriptomic)
 - **File Identifiers**: Unique identifiers for files in the repository
 - **Filenames**: Names of the data files

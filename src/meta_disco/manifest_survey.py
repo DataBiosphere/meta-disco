@@ -131,7 +131,7 @@ READY_LOW = 0.10
 NAME_TOKENS: dict[str, tuple[str, str | None]] = {
     # reference_assembly
     "chm13": ("reference_assembly", "CHM13"),
-    "chm13v2": ("reference_assembly", "CHM13"),
+    "chm13v2": ("reference_assembly", "T2T-CHM13v2.0"),
     "grch38": ("reference_assembly", "GRCh38"),
     "hg38": ("reference_assembly", "GRCh38"),
     "grch37": ("reference_assembly", "GRCh37"),
