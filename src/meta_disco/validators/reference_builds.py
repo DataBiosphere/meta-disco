@@ -227,10 +227,11 @@ class ReferenceIdentity:
     candidate build agrees on the family, which is often true when the version
     is not — several CHM13 builds share a chr1.
 
-    ``base`` duplicates the coarse ``reference_assembly`` value when both are
-    known. That is deliberate: this object is meant to be readable on its own,
-    and a consumer holding an identity should not have to look elsewhere to learn
-    which family it belongs to.
+    ``base`` is the family: where both are known it is the ``reference_assembly``
+    value or an ancestor of it (``CHM13`` under ``T2T-CHM13v2.0``, #473). That is
+    deliberate: this object is meant to be readable on its own, and a consumer
+    holding an identity should not have to look elsewhere to learn which family
+    it belongs to.
     """
 
     base: str | None = None

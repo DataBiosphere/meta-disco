@@ -961,8 +961,9 @@ enums:
       (`schema_vocab.value_ancestors`); `value == "CHM13"` alone does not.
 
       GRC assemblies are named at the major release: contig lengths are identical
-      across patch releases, so a patch can never be known from content (#399), and
-      the patch, where a header names one, stays on `ReferenceBuild.version`. `CHM13`
+      across patch releases, so contig lengths can never tell a patch (#399). Where
+      a header's declared reference name does tell one, the patch stays on
+      `ReferenceBuild.version`. `CHM13`
       is every CHM13 release, and is also the term for a CHM13 file whose release
       cannot be told. Under it are NCBI's T2T releases, and under each release the
       references that graft another genome's chrY onto it. NCBI names none of those

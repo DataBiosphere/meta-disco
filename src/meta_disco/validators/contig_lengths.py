@@ -84,8 +84,10 @@ def detect_reference_from_contigs(
     Detect reference assembly from ``(contig name, length)`` pairs.
 
     This is a definitive signal - chromosome lengths are unique to each assembly.
-    Uses fuzzy matching with tolerance to handle minor version differences
-    (e.g., CHM13 v1.0 vs v2.0 differ by < 1000bp per chromosome).
+    Uses fuzzy matching with tolerance to handle minor version differences, so a
+    file from an earlier release matches its family's row on most chromosomes;
+    the vote is per contig, so the ones that do not match (CHM13 v1.0's
+    acrocentrics, see ``CONTIG_LENGTH_TOLERANCE``) are outvoted rather than fatal.
 
     Each contig is one dictionary lookup: the closest of its name's candidates —
     at most one per assembly — within ``tolerance`` votes, an exact length being
