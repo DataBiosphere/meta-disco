@@ -91,7 +91,9 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
      'id': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
      'imports': ['linkml:types'],
      'name': 'meta_disco_classification',
-     'prefixes': {'EFO': {'prefix_prefix': 'EFO',
+     'prefixes': {'EDAM': {'prefix_prefix': 'EDAM',
+                           'prefix_reference': 'http://edamontology.org/'},
+                  'EFO': {'prefix_prefix': 'EFO',
                           'prefix_reference': 'http://www.ebi.ac.uk/efo/EFO_'},
                   'anvil': {'prefix_prefix': 'anvil',
                             'prefix_reference': 'https://github.com/DataBiosphere/meta-disco/schema/'},
@@ -133,6 +135,10 @@ class DataTypeEnum(str, Enum):
     expression_matrix = "expression_matrix"
     quantification = "quantification"
     annotations = "annotations"
+    annotationsFULL_STOPcoverage = "annotations.coverage"
+    """
+    Mean read depth per genome window, measured from an alignment (e.g. a mosdepth `regions.bed.gz`). No `meaning`: EDAM has no data term for coverage or read depth, only the process (operation_3230).
+    """
     peaks = "peaks"
     signal = "signal"
     raw_signal = "raw_signal"
@@ -140,7 +146,10 @@ class DataTypeEnum(str, Enum):
     images = "images"
     index = "index"
     checksum = "checksum"
-    statistics = "statistics"
+    qc_report = "qc_report"
+    """
+    A quality-control report about another file, such as samtools stats, a mosdepth summary or distribution, or bcftools stats.
+    """
     log = "log"
     interval_set = "interval_set"
 

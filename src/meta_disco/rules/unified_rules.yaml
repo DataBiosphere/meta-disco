@@ -643,16 +643,17 @@ rules:
       data_type: annotations
     rationale: "BED file is assembly QC output (haplotype regions, error flags) on de novo genomic assemblies"
 
-  - id: bed_regions
+  - id: bed_mosdepth_regions
     tier: 2
     scope: filename
     when:
       extensions: [".bed"]
-      filename_pattern: "\\.regions\\.bed"
+      filename_pattern: "\\.regions\\.bed\\.gz$"
+    # The modality, assay, platform and model are the alignment's, which the name
+    # does not show: mosdepth writes this file for any alignment (#541).
     then:
-      data_modality: genomic
-      data_type: annotations
-    rationale: "BED file contains genomic analysis regions (callable, target, etc.)"
+      data_type: annotations.coverage
+    rationale: "mosdepth's `<prefix>.regions.bed.gz`: mean read depth per genome window, measured from an alignment"
 
   # ---------------------------------------------------------------------------
   # Signal track classification
@@ -676,7 +677,9 @@ rules:
     scope: filename
     when:
       extensions: [".bed"]
-      filename_pattern: "(?i)(^|[._-])(targets?|regions?|capture|exome)"
+      # Not bare `regions`: it names mosdepth's coverage tracks and assembly QC
+      # regions as often as a target list (#541).
+      filename_pattern: "(?i)(^|[._-])(targets?|capture|exome)"
     then:
       status:
         data_modality: not_applicable
@@ -687,8 +690,10 @@ rules:
     rationale: "Target/capture region file — reference data, not primary experimental data"
 
   # ---------------------------------------------------------------------------
-  # Text files - QC stats (not primary data)
+  # Text files - QC reports
   # ---------------------------------------------------------------------------
+  # A report shares its modality, assay, platform and model with the file it
+  # summarizes, which this rule cannot see, so it leaves them open (#541).
   - id: text_stats
     tier: 2
     scope: filename
@@ -696,13 +701,8 @@ rules:
       extensions: [".txt", ".tsv"]
       filename_pattern: "(?i)\\.stats\\.txt$|samtools\\.stats|(^|[._-])mosdepth"
     then:
-      status:
-        data_modality: not_applicable
-        data_type: not_applicable
-        assay_type: not_applicable
-        platform: not_applicable
-        instrument_model: not_applicable
-    rationale: "QC/stats file — supplementary data, not primary experimental data"
+      data_type: qc_report
+    rationale: "QC report (samtools stats, mosdepth, bcftools stats) about another file"
 
   - id: text_expression
     tier: 2

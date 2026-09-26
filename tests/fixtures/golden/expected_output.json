@@ -108,80 +108,58 @@
           "assay_type": {
             "evidence": [
               {
-                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
-                "rule_id": "intervals_targets",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 1
+                "marker": "not_classified",
+                "reason": "No rule determined a value for assay_type",
+                "status": "not_classified"
               }
             ],
-            "status": "not_applicable",
+            "status": "not_classified",
             "value": null
           },
           "data_modality": {
             "evidence": [
               {
-                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
-                "rule_id": "intervals_targets",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 1
-              },
-              {
-                "reason": "BED file contains genomic analysis regions (callable, target, etc.)",
-                "rule_id": "bed_regions",
-                "source_type": "filename_rule",
-                "tier": 2,
-                "value": "genomic"
+                "marker": "not_classified",
+                "reason": "No rule determined a value for data_modality",
+                "status": "not_classified"
               }
             ],
-            "status": "classified",
-            "value": "genomic"
+            "status": "not_classified",
+            "value": null
           },
           "data_type": {
             "evidence": [
               {
-                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
-                "rule_id": "intervals_targets",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 1
-              },
-              {
-                "reason": "BED file contains genomic analysis regions (callable, target, etc.)",
-                "rule_id": "bed_regions",
+                "reason": "mosdepth's `<prefix>.regions.bed.gz`: mean read depth per genome window, measured from an alignment",
+                "rule_id": "bed_mosdepth_regions",
                 "source_type": "filename_rule",
                 "tier": 2,
-                "value": "annotations"
+                "value": "annotations.coverage"
               }
             ],
             "status": "classified",
-            "value": "annotations"
+            "value": "annotations.coverage"
           },
           "instrument_model": {
             "evidence": [
               {
-                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
-                "rule_id": "intervals_targets",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 1
+                "marker": "not_classified",
+                "reason": "No rule determined a value for instrument_model",
+                "status": "not_classified"
               }
             ],
-            "status": "not_applicable",
+            "status": "not_classified",
             "value": null
           },
           "platform": {
             "evidence": [
               {
-                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
-                "rule_id": "intervals_targets",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 1
+                "marker": "not_classified",
+                "reason": "No rule determined a value for platform",
+                "status": "not_classified"
               }
             ],
-            "status": "not_applicable",
+            "status": "not_classified",
             "value": null
           },
           "reference_assembly": {

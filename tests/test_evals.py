@@ -879,29 +879,57 @@ class TestDerivedFileTierPrecedence:
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
         assert result.platform == "ONT"
 
-    # --- Stats files: reference_assembly applicable, other fields not_applicable (#106) ---
+    # --- QC reports: data_type qc_report, the source file's dimensions left open (#541) ---
+    # A report's modality, assay, platform and model are the summarized file's, which a
+    # filename rule cannot see. A reference in a stats file's name names the alignment
+    # the stats came from, not the file: text is not a kind the reference rules claim
+    # on (#523).
 
-    def test_stats_with_reference_in_filename(self):
-        """A reference in a stats file's name names the alignment the stats came from,
-        not the file: text is not a kind the reference rules claim on (#523)."""
-        result = engine.classify_extended(FileInfo.from_filename("HG01879.CHM13v2.chrX.samtools.stats.txt"))
-        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
-        assert result.status_of("data_modality") == NOT_APPLICABLE
-        assert result.status_of("platform") == NOT_APPLICABLE
+    @pytest.mark.parametrize(
+        "filename",
+        [
+            "HG03605.samtools.stats.txt",
+            "HG01879.CHM13v2.chrX.samtools.stats.txt",
+            "HG03605.mosdepth.summary.txt",
+            "HG00345.mosdepth.region.dist.txt",
+            "chr6.recalibrated.snp_indel.pass.bcftools.stats.txt",
+        ],
+    )
+    def test_qc_report_leaves_source_dimensions_open(self, filename):
+        assert_dimensions(
+            engine.classify_extended(FileInfo.from_filename(filename)),
+            {
+                "data_type": "qc_report",
+                "data_modality": NOT_CLASSIFIED,
+                "reference_assembly": NOT_CLASSIFIED,
+                "assay_type": NOT_CLASSIFIED,
+                "platform": NOT_CLASSIFIED,
+                "instrument_model": NOT_CLASSIFIED,
+            },
+        )
 
-    def test_stats_without_reference_in_filename(self):
-        """Stats file without reference hint should get not_classified, not not_applicable."""
-        result = engine.classify_extended(FileInfo.from_filename("HG00345.mosdepth.region.dist.txt"))
-        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
-        assert result.status_of("data_modality") == NOT_APPLICABLE
+    def test_mosdepth_regions_bed_is_coverage(self):
+        """mosdepth's regions.bed.gz is a coverage track, not a target list: intervals_targets
+        does not match it, so the alignment's modality, platform, assay and model stay open."""
+        result = engine.classify_extended(FileInfo.from_filename("HG03605.regions.bed.gz"))
+        assert "intervals_targets" not in result.rules_matched
+        assert_dimensions(
+            result,
+            {
+                "data_type": "annotations.coverage",
+                "data_modality": NOT_CLASSIFIED,
+                "assay_type": NOT_CLASSIFIED,
+                "platform": NOT_CLASSIFIED,
+                "instrument_model": NOT_CLASSIFIED,
+            },
+        )
 
     # --- BED tier precedence: specific rules beat fallbacks ---
 
     def test_assembly_qc_beats_intervals_targets(self):
         """Assembly QC BED (tier 2) should override intervals_targets (tier 1)."""
-        result = engine.classify_extended(
-            FileInfo.from_filename("HG01928.maternal.f1_assembly_v2_genbank.HSat2and3_Regions.bed")
-        )
+        result = engine.classify_extended(FileInfo.from_filename("sample.hap1.targets.bed"))
+        assert "intervals_targets" in result.rules_matched
         assert result.data_modality == "genomic"  # not not_applicable
 
     def test_capture_targets_not_applicable(self):

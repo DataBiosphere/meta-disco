@@ -270,97 +270,75 @@
           "assay_type": {
             "evidence": [
               {
-                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
-                "rule_id": "intervals_targets",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 1
+                "marker": "not_classified",
+                "reason": "No rule determined a value for assay_type",
+                "status": "not_classified"
               }
             ],
             "inferred": {
-              "status": "not_applicable",
+              "status": "not_classified",
               "value": null
             },
-            "status": "not_applicable",
-            "use": "meta_disco",
+            "status": "not_classified",
+            "use": "published",
             "value": null
           },
           "data_modality": {
             "evidence": [
               {
-                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
-                "rule_id": "intervals_targets",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 1
-              },
-              {
-                "reason": "BED file contains genomic analysis regions (callable, target, etc.)",
-                "rule_id": "bed_regions",
-                "source_type": "filename_rule",
-                "tier": 2,
-                "value": "genomic"
+                "marker": "not_classified",
+                "reason": "No rule determined a value for data_modality",
+                "status": "not_classified"
               }
             ],
             "inferred": {
-              "status": "classified",
-              "value": "genomic"
+              "status": "not_classified",
+              "value": null
             },
-            "status": "classified",
-            "use": "meta_disco",
-            "value": "genomic"
+            "status": "not_classified",
+            "use": "published",
+            "value": null
           },
           "data_type": {
             "evidence": [
               {
-                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
-                "rule_id": "intervals_targets",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 1
-              },
-              {
-                "reason": "BED file contains genomic analysis regions (callable, target, etc.)",
-                "rule_id": "bed_regions",
+                "reason": "mosdepth's `<prefix>.regions.bed.gz`: mean read depth per genome window, measured from an alignment",
+                "rule_id": "bed_mosdepth_regions",
                 "source_type": "filename_rule",
                 "tier": 2,
-                "value": "annotations"
+                "value": "annotations.coverage"
               }
             ],
             "inferred": {
               "status": "classified",
-              "value": "annotations"
+              "value": "annotations.coverage"
             },
             "status": "classified",
             "use": "meta_disco",
-            "value": "annotations"
+            "value": "annotations.coverage"
           },
           "instrument_model": {
             "evidence": [
               {
-                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
-                "rule_id": "intervals_targets",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 1
+                "marker": "not_classified",
+                "reason": "No rule determined a value for instrument_model",
+                "status": "not_classified"
               }
             ],
             "inferred": {
-              "status": "not_applicable",
+              "status": "not_classified",
               "value": null
             },
-            "status": "not_applicable",
-            "use": "meta_disco",
+            "status": "not_classified",
+            "use": "published",
             "value": null
           },
           "platform": {
             "evidence": [
               {
-                "reason": "Target/capture region file \u2014 reference data, not primary experimental data",
-                "rule_id": "intervals_targets",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 1
+                "marker": "not_classified",
+                "reason": "No rule determined a value for platform",
+                "status": "not_classified"
               },
               {
                 "join_key": "drs_uri",
@@ -378,12 +356,12 @@
               }
             ],
             "inferred": {
-              "status": "not_applicable",
+              "status": "not_classified",
               "value": null
             },
-            "status": "conflict",
-            "use": "published",
-            "value": null
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "PACBIO"
           },
           "reference_assembly": {
             "evidence": [

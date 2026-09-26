@@ -152,10 +152,10 @@ other two were delimiter-carrying (`\.chip\.|chip[-_]?seq|…`) and went for bei
 not for being unanchored.
 
 **data_modality**:
-- `genomic` ← regions.bed pattern
+- `genomic` ← assembly QC patterns (haplotype, flagger, switch errors)
 - `transcriptomic.bulk` ← filename (`TMM` or `counts` as a delimited token, leafcutter, `.TSS.`)
 - `epigenomic.methylation` ← filename (modbam2bed, or CpG as a delimited token)
-- `not_applicable` ← assembly QC patterns (haplotype, flagger, switch errors)
+- open ← mosdepth `.regions.bed.gz` (`annotations.coverage`): the alignment's modality, which the name does not show (#541)
 
 **assay_type**:
 - _(none)_ — `bed_methylation` used to assert `Bisulfite-seq` for every file it matched, including modbam2bed output, which is nanopore modified-base calling and not bisulfite. No file in either catalog supports a CpG name meaning bisulfite either, so the assay is left open (#430). `Bisulfite-seq` stays in the vocabulary for a rule that can claim it on evidence.

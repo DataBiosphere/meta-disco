@@ -205,7 +205,7 @@ derivation gets interesting:
 | File | node `data_type` | edge `relation` |
 | --- | --- | --- |
 | `NA12878.bam.bai` | `index` | `index_of` |
-| `sample.bam.stats` | `statistics` | `summarizes` |
+| `sample.samtools.stats.txt` | `qc_report` | `summarizes` |
 | a **subset** BAM carved from a larger BAM | `alignments` | `subset_of` |
 | a **liftover** BED (GRCh38→GRCh37) | `intervals` | `lifted_over_from` |
 | a **merged** VCF | `variants` | `merged_from` (many parents) |
@@ -376,7 +376,7 @@ at three increasing levels of precision. The first two need only the type — no
 parent file resolved at all.
 
 **Level 1 — companion co-selection (type only).** Because every descriptive file
-carries its own `data_type` (`index`, `stats`, …) and a `parent_kind`, the UI can
+carries its own `data_type` (`index`, `qc_report`, …) and a `parent_kind`, the UI can
 offer "include companion files" on any primary-file result: *"genomic alignments (1,240) — also show their 1,238
 indexes and 410 stats files."* This needs no resolved parent, inherits no values,
 and already covers the core "the `.bai` should appear alongside its BAM" case.
@@ -484,13 +484,18 @@ real, useful distinction. So we leave it **open** instead:
   platform of its own).
 - **a real value** = "this field has a direct answer about the file itself." →
   `data_type` on a descriptive file, which is its content type (`index`,
-  `checksum`, `statistics`, `log`) — *not* `not_applicable`.
+  `checksum`, `qc_report`, `log`) — *not* `not_applicable`.
 - **open** = "there is an answer; go find it via read-from-self or inherit." →
   `reference_assembly` on a stats / BED / index / `.fai` file.
 
 So a `.bai` is not "four fields closed, one open" — it is `data_type: index`
 (answered directly), `data_modality / assay_type / platform: not_applicable`
 (genuinely absent), and `reference_assembly` open (read-from-self or inherit).
+
+A QC report does not fit that split (#541): `HG03605.samtools.stats.txt` summarizes
+`HG03605.cram`, and the CRAM's modality, assay, platform and instrument model are
+the report's too. A filename rule cannot see the CRAM, so `text_stats` declares
+`data_type: qc_report` and leaves those four open rather than `not_applicable`.
 
 ---
 
@@ -532,9 +537,9 @@ index → alignment).
 
 Only a little new vocabulary is actually required:
 
-- **`statistics`** as a `data_type`. Samtools stats / flagstat / `*.stats` files
-  currently fall under `.txt`/`.tsv` → `text_ambiguous`, so they have no distinct
-  content type today. This value is new, and detecting it needs filename/content
+- **`qc_report`** as a `data_type` (added by #541 with `meaning: EDAM:data_3914`,
+  and declared by the filename rule `text_stats`). Samtools stats / mosdepth /
+  bcftools stats files are `.txt`/`.tsv`, so detecting them needs filename/content
   signals, not just extension.
 - **`interval_set`** as a `data_type` — *but with care*. A `.bed` is `intervals`
   in `extension_map`, yet BED is often **primary** data (peaks, annotations), not
@@ -545,7 +550,7 @@ Only a little new vocabulary is actually required:
 Proposed enumerations (starting point, to be ratified):
 
 ```
-data_type (descriptive class)  ∈ { index, statistics, checksum, log, archive, interval_set }
+data_type (descriptive class)  ∈ { index, qc_report, checksum, log, archive, interval_set }
 data_type (biological class)   ∈ { alignments, variants.*, reads, sequence,
                                    assembly, expression_matrix, … }   (already in use)
 parent_kind                    ∈ { alignment, variants, reads, sequence, intervals,
@@ -560,7 +565,7 @@ recognizes they fall into two **classes**:
 - **biological** — the bytes are the signal (`alignments`, `variants`, `sequence`,
   `assembly`, …);
 - **descriptive** — the bytes are about another file (`index`, `checksum`,
-  `statistics`, `log`).
+  `qc_report`, `log`).
 
 The class is a property *of each value*, not a separate dimension a classifier has
 to guess — `index` is always descriptive, `alignments` always biological. It's
@@ -741,9 +746,10 @@ roadmap starts to cash in on generation.
    is stored as a link to the parent.
 3. **Identity stays honest and complete.** `data_type` carries the content type in
    *both* classes — a descriptive file is `data_type: index` (or `checksum` /
-   `statistics` / `log`), **not** `not_applicable`. Only the genuinely biological
+   `qc_report` / `log`), **not** `not_applicable`. Only the genuinely biological
    dimensions `data_modality / assay_type / platform` are `not_applicable` for a
-   descriptive file.
+   descriptive file — except a QC report, which shares them and `instrument_model`
+   with the file it summarizes and leaves all four open (#541, Section 7b).
 4. **Factor, don't subtype.** The parent is named by the link (`parent_kind` +
    `parent_md5sum`), never baked into the content type as `bam_index`. This keeps
    the `data_type` enum additive (M+N) and the parent single-sourced.
@@ -790,8 +796,8 @@ roadmap starts to cash in on generation.
 
 ### Still genuinely open
 
-- **`statistics` data_type detection.** Stats files are `text_ambiguous` today; we
-  have reference detectors for BED coordinates and VCF positions, but parsing a
+- **`qc_report` reference detection.** `text_stats` classifies QC reports by name
+  (#541); we have reference detectors for BED coordinates and VCF positions, but parsing a
   samtools-stats per-chromosome table for `reference_assembly` (Section 7's
   read-from-self step) is **not yet implemented** and is new work.
 - **`interval_set` boundary.** Deciding which BEDs are descriptive companions vs.
