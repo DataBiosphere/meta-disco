@@ -199,10 +199,8 @@ evidence}` entry — plus the controlled vocabulary:
     names one (HPRC never will). `resolve_slot` is the whole resolution rule and
     `use_for` the per-slot `use` indicator (`meta_disco` | `published`) the indexer
     reads; per-input outcomes (match, harmonized, disagreed, unreviewed, no_claim, silent) are
-    computed in the report and never stored on a record. The per-slot attribution is stored:
-    `credited_to` (#552), one of `reconcile.SLOT_CATEGORIES`, computed once by
-    `reconcile.credited_to` and counted by the report, so a consumer reads it rather than
-    re-deriving the rule. `corpus_diff` must be told
+    computed in the report and never stored on a record. The per-slot attribution is
+    stored on the record, as `credited_to` (`reconcile.credited_to`, contract 6.10, #552). `corpus_diff` must be told
     which artifact it compares (`--artifact inference|reconciled`).
   - **No output record carries what a repository publishes** (#513). The `published`
     block (#424) and `make published-comparison` are deleted: the published values are

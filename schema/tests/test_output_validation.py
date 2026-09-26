@@ -55,7 +55,8 @@ _SCHEMA = _REPO_ROOT / "src/meta_disco/schema/classification.yaml"
 _GOLDEN = _REPO_ROOT / "tests/fixtures/golden/expected_output.json"
 _STANDALONE = _REPO_ROOT / "tests/fixtures/golden/standalone_output.json"
 # Both fixtures' rows as the reconcile stage writes them (#432): the same schema holds a
-# reconciled record, with `use` and `inferred` on each slot (contract 6.5).
+# reconciled record, with `use`, `inferred` and `credited_to` on each slot (contract 6.5,
+# #552).
 _RECONCILED = _REPO_ROOT / "tests/fixtures/golden/reconciled_output.json"
 # Absolute, because this suite runs with `schema/` as its working directory (`make
 # test-schema` is a sub-make): from there `python -m tests.test_output_shape` resolves

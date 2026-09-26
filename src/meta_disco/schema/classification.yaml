@@ -801,11 +801,9 @@ slots:
   credited_to:
     description: >-
       On a reconciled record only (#552): where this slot's answer is credited, the
-      per-slot category the reconcile report counts. A classified value goes to the
-      first source in the report's precedence (published, submitter, external) that
-      declared that value, verbatim before harmonized, else to inference; a conflict
-      to its kind; otherwise the slot's status. It attributes and never decides: the
-      value was settled before it is read.
+      per-slot category the reconcile report counts. The rule is
+      `reconcile.credited_to`'s. It attributes and never decides: the value was
+      settled before it is read.
     range: credited_to_enum
     required: false
   inferred:
@@ -1201,9 +1199,14 @@ enums:
       conflict_inference:
         description: Inference's own rules disagreed.
       conflict_sources:
-        description: Inference and the sources, or the sources among themselves, disagreed.
+        description: >-
+          A conflict inference's rules did not cause, on a slot where the published source
+          neither declared a value nor gave an unreviewed one.
       conflict_published:
-        description: The published source declared, or gave an unreviewed value, beside a disagreeing input.
+        description: >-
+          A conflict on a slot where the published source declared a value or gave an
+          unreviewed one — whichever inputs disagreed; the published value need not be
+          the disputed one.
       published_unreviewed:
         description: The published source gave a value no authored row reads, and no input answered.
       not_applicable:

@@ -113,19 +113,7 @@ INFERENCE = "inference"
 # but one spoke — unreviewed or no_claim — so it was not silent), disagreed (another
 # input's declaration does not agree with it, or its own rules conflicted), silent.
 #
-# Per slot, exactly one of: filled_by_<source> or filled_by_<source>_harmonized for the
-# first source in SOURCE_PRECEDENCE that declared the delivered value — verbatim before
-# harmonized — else filled_by_inference; published_unreviewed (`not_classified` because the
-# published source spoke with a value no authored row reads — work to do, not a
-# challenge); one of three kinds of `conflict`, first match wins: conflict_inference
-# (inference's own rules disagreed), conflict_published (the published source declared a
-# value another input disagrees with, or spoke with an unreviewed value beside another
-# input's), conflict_sources (inference and the other sources, or those sources among
-# themselves, disagreed); or the slot's other status (`not_applicable`, `not_classified`).
-# Precedence only attributes a value every declaring input agreed on; it never picks a
-# value (contract 6.8). Where declarations nest the delivered value is the deepest, which
-# the vocabulary picks, not precedence, and a source that named only its parent is not
-# credited with it. Whether inference agreed is its own outcome, in `inputs`.
+# Per slot: :func:`credited_to`, which states the rule.
 MATCH = "match"
 HARMONIZED = "harmonized"
 UNREVIEWED = "unreviewed"
@@ -539,12 +527,25 @@ def credited_to(settled: dict, said: SlotEvidence) -> str:
 
     Stored on the reconciled slot as ``credited_to`` by :func:`reconcile_record`, and
     counted from there by the report, so a record and the report's "how each slot
-    settled" table cannot disagree. The rule is the one the comment above
-    ``MATCH`` states: a classified value goes to the first source in
-    ``SOURCE_PRECEDENCE`` that declared that value — verbatim before harmonized —
-    else to inference; a conflict to its kind; otherwise the slot's status, or
-    ``published_unreviewed``. It attributes and never decides: ``resolve_slot``
-    settled the slot before this reads it.
+    settled" table cannot disagree. Exactly one of, first match wins:
+
+    - ``published_unreviewed``: ``not_classified`` because the published source spoke
+      with a value no authored row reads — work to do, not a challenge;
+    - a ``conflict``, by kind: ``conflict_inference`` (inference's own rules disagreed),
+      ``conflict_published`` (the published source declared a value or spoke with an
+      unreviewed one — whichever inputs disagreed, so its value need not be the disputed
+      one), else ``conflict_sources``;
+    - the slot's status where it is not ``classified`` (``not_applicable``,
+      ``not_classified``);
+    - ``filled_by_<source>`` or ``filled_by_<source>_harmonized`` for the first source in
+      ``SOURCE_PRECEDENCE`` that declared the delivered value — verbatim before
+      harmonized — else ``filled_by_inference``.
+
+    It attributes and never decides: ``resolve_slot`` settled the slot before this reads
+    it, and precedence never picks a value (contract 6.8). Where declarations nest, the
+    vocabulary picked the deepest (#473), and a source that named only its parent is not
+    credited with it. Whether inference agreed is its own outcome, in the report's
+    ``inputs``.
     """
     status = settled["status"]
     if status == NOT_CLASSIFIED and SOURCE_PUBLISHED_VALUE in said.unreviewed:
