@@ -419,7 +419,7 @@ BED files are classified using filename pattern matching and dataset context.
 | `modbam2bed\|cpg\|methylat` | epigenomic.methylation | CpG calls |
 | `TMM\|TPM\|counts\|leafcutter` | transcriptomic | Expression quantification |
 | `peak\|summit\|chip\|atac` | epigenomic.chromatin_accessibility | Peak calls |
-| `.regions.bed` | genomic | Callable regions |
+| `.regions.bed.gz` | not classified (the alignment's) | mosdepth coverage, `data_type: annotations.coverage` |
 | Assembly QC patterns | N/A | Derived artifacts |
 
 Reference inferred from filename patterns (hg38, chm13) or dataset context (T2T → CHM13).
