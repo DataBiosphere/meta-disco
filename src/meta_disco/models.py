@@ -248,9 +248,9 @@ def _assert_coherent(value, status) -> None:
 # (``build_field_entry``'s ``detail`` argument), and ``field_detail`` reads it back.
 ENTRY_KEYS = frozenset({"value", "status", "evidence"})
 
-# The keys the reconcile stage adds to a per-field entry (#432): not detail about the
-# dimension, so ``field_detail`` leaves them out.
-RECONCILED_ENTRY_KEYS = frozenset({"use", "inferred"})
+# The keys the reconcile stage adds to a per-field entry (#432, #552): not detail about
+# the dimension, so ``field_detail`` leaves them out.
+RECONCILED_ENTRY_KEYS = frozenset({"use", "inferred", "credited_to"})
 
 
 def build_field_entry(value, status=None, evidence=None, detail=None) -> dict:

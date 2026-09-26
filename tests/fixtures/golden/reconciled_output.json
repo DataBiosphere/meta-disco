@@ -4,6 +4,7 @@
       {
         "classifications": {
           "assay_type": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -20,6 +21,7 @@
             "value": null
           },
           "data_modality": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "PLINK files contain genotype data (genomic)",
@@ -38,6 +40,7 @@
             "value": "genomic"
           },
           "data_type": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "PLINK files contain genotype data (genomic)",
@@ -56,6 +59,7 @@
             "value": "genotypes"
           },
           "instrument_model": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -72,6 +76,7 @@
             "value": null
           },
           "platform": {
+            "credited_to": "filled_by_submitter_harmonized",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -102,6 +107,7 @@
             "value": "PACBIO"
           },
           "reference_assembly": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -135,6 +141,7 @@
       {
         "classifications": {
           "assay_type": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -151,6 +158,7 @@
             "value": null
           },
           "data_modality": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "Filename contains IsoSeq indicator (flnc = full-length non-chimeric transcript reads)",
@@ -169,6 +177,7 @@
             "value": "transcriptomic.bulk"
           },
           "data_type": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "No @SQ lines: the header declares no reference, so the file holds unaligned reads. Common for PacBio HiFi and ONT mod-base deliverables",
@@ -187,6 +196,7 @@
             "value": "reads"
           },
           "instrument_model": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -203,6 +213,7 @@
             "value": null
           },
           "platform": {
+            "credited_to": "filled_by_submitter_harmonized",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -233,6 +244,7 @@
             "value": "PACBIO"
           },
           "reference_assembly": {
+            "credited_to": "not_applicable",
             "evidence": [
               {
                 "reason": "No @SQ lines: the header declares no reference, so the file holds unaligned reads. Common for PacBio HiFi and ONT mod-base deliverables",
@@ -268,6 +280,7 @@
       {
         "classifications": {
           "assay_type": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -284,6 +297,7 @@
             "value": null
           },
           "data_modality": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -300,6 +314,7 @@
             "value": null
           },
           "data_type": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "mosdepth's `<prefix>.regions.bed.gz`: mean read depth per genome window, measured from an alignment",
@@ -318,6 +333,7 @@
             "value": "annotations.coverage"
           },
           "instrument_model": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -334,6 +350,7 @@
             "value": null
           },
           "platform": {
+            "credited_to": "filled_by_submitter_harmonized",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -364,6 +381,7 @@
             "value": "PACBIO"
           },
           "reference_assembly": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "Chromosomes lack 'chr' prefix, consistent with GRCh37/b37 naming",
@@ -399,6 +417,7 @@
       {
         "classifications": {
           "assay_type": {
+            "credited_to": "not_applicable",
             "evidence": [
               {
                 "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
@@ -417,6 +436,7 @@
             "value": null
           },
           "data_modality": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "Filename contains assembly/assembler indicator \u2014 de novo assembly",
@@ -442,6 +462,7 @@
             "value": "genomic"
           },
           "data_type": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
@@ -474,6 +495,7 @@
             "value": "assembly"
           },
           "instrument_model": {
+            "credited_to": "not_applicable",
             "evidence": [
               {
                 "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
@@ -492,6 +514,7 @@
             "value": null
           },
           "platform": {
+            "credited_to": "conflict_sources",
             "evidence": [
               {
                 "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
@@ -524,6 +547,7 @@
             "value": null
           },
           "reference_assembly": {
+            "credited_to": "not_applicable",
             "evidence": [
               {
                 "reason": "Filename contains assembly/assembler indicator \u2014 de novo assembly",
@@ -568,6 +592,7 @@
           "archive_accession": null,
           "archive_source": null,
           "assay_type": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -584,6 +609,7 @@
             "value": null
           },
           "data_modality": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "reason": "FASTQ modality cannot be determined from reads alone \u2014 could be genomic, transcriptomic, or epigenomic depending on assay",
@@ -602,6 +628,7 @@
             "value": null
           },
           "data_type": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "FASTQ files contain raw sequencing reads. Reference not applicable until alignment",
@@ -621,6 +648,7 @@
           },
           "instrument_hint": null,
           "instrument_model": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -638,6 +666,7 @@
           },
           "is_paired_end": false,
           "platform": {
+            "credited_to": "filled_by_submitter_harmonized",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -668,6 +697,7 @@
             "value": "PACBIO"
           },
           "reference_assembly": {
+            "credited_to": "not_applicable",
             "evidence": [
               {
                 "reason": "FASTQ files contain raw sequencing reads. Reference not applicable until alignment",
@@ -703,6 +733,7 @@
       {
         "classifications": {
           "assay_type": {
+            "credited_to": "not_applicable",
             "evidence": [
               {
                 "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
@@ -721,6 +752,7 @@
             "value": null
           },
           "data_modality": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
@@ -739,6 +771,7 @@
             "value": "genomic"
           },
           "data_type": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
@@ -764,6 +797,7 @@
             "value": "pangenome.reference"
           },
           "instrument_model": {
+            "credited_to": "not_applicable",
             "evidence": [
               {
                 "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
@@ -782,6 +816,7 @@
             "value": null
           },
           "platform": {
+            "credited_to": "conflict_sources",
             "evidence": [
               {
                 "reason": "Sequence-graph formats (GFA/rGFA/GBZ/vg/GBWT/xg) encode a pangenome graph \u2014 a genomic assembly product, so no sequencing platform or assay applies",
@@ -814,6 +849,7 @@
             "value": null
           },
           "reference_assembly": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "Filename contains GRCh38/hg38 reference indicator",
@@ -849,6 +885,7 @@
       {
         "classifications": {
           "assay_type": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "SVS files are Aperio whole-slide histology images used for pathology analysis",
@@ -867,6 +904,7 @@
             "value": "Histology"
           },
           "data_modality": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "SVS files are Aperio whole-slide histology images used for pathology analysis",
@@ -885,6 +923,7 @@
             "value": "imaging.histology"
           },
           "data_type": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "SVS files are Aperio whole-slide histology images used for pathology analysis",
@@ -903,6 +942,7 @@
             "value": "images"
           },
           "instrument_model": {
+            "credited_to": "not_applicable",
             "evidence": [
               {
                 "reason": "SVS files are Aperio whole-slide histology images used for pathology analysis",
@@ -921,6 +961,7 @@
             "value": null
           },
           "platform": {
+            "credited_to": "conflict_sources",
             "evidence": [
               {
                 "reason": "SVS files are Aperio whole-slide histology images used for pathology analysis",
@@ -953,6 +994,7 @@
             "value": null
           },
           "reference_assembly": {
+            "credited_to": "not_applicable",
             "evidence": [
               {
                 "reason": "SVS files are Aperio whole-slide histology images used for pathology analysis",
@@ -988,6 +1030,7 @@
       {
         "classifications": {
           "assay_type": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "reason": "Parent file sample.flnc.bam had no value for assay_type",
@@ -1005,6 +1048,7 @@
             "value": null
           },
           "data_modality": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "Inherited from parent file: sample.flnc.bam",
@@ -1022,6 +1066,7 @@
             "value": "transcriptomic.bulk"
           },
           "data_type": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": ".bai identifies an index file",
@@ -1039,6 +1084,7 @@
             "value": "index"
           },
           "instrument_model": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "reason": "Parent file sample.flnc.bam had no value for instrument_model",
@@ -1056,6 +1102,7 @@
             "value": null
           },
           "platform": {
+            "credited_to": "filled_by_submitter_harmonized",
             "evidence": [
               {
                 "reason": "Parent file sample.flnc.bam had no value for platform",
@@ -1087,6 +1134,7 @@
             "value": "PACBIO"
           },
           "reference_assembly": {
+            "credited_to": "not_applicable",
             "evidence": [
               {
                 "reason": "Parent file sample.flnc.bam marks reference_assembly not applicable",
@@ -1122,6 +1170,7 @@
       {
         "classifications": {
           "assay_type": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "reason": "No parent to inherit assay_type from: no file in this dataset carries a candidate parent name, matched case-insensitively",
@@ -1139,6 +1188,7 @@
             "value": null
           },
           "data_modality": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "reason": "No parent to inherit data_modality from: no file in this dataset carries a candidate parent name, matched case-insensitively",
@@ -1156,6 +1206,7 @@
             "value": null
           },
           "data_type": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": ".bai identifies an index file",
@@ -1173,6 +1224,7 @@
             "value": "index"
           },
           "instrument_model": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "reason": "No parent to inherit instrument_model from: no file in this dataset carries a candidate parent name, matched case-insensitively",
@@ -1190,6 +1242,7 @@
             "value": null
           },
           "platform": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "reason": "No parent to inherit platform from: no file in this dataset carries a candidate parent name, matched case-insensitively",
@@ -1207,6 +1260,7 @@
             "value": null
           },
           "reference_assembly": {
+            "credited_to": "published_unreviewed",
             "evidence": [
               {
                 "reason": "No parent to inherit reference_assembly from: no file in this dataset carries a candidate parent name, matched case-insensitively",
@@ -1259,6 +1313,7 @@
       {
         "classifications": {
           "assay_type": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -1275,6 +1330,7 @@
             "value": null
           },
           "data_modality": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -1291,6 +1347,7 @@
             "value": null
           },
           "data_type": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -1307,6 +1364,7 @@
             "value": null
           },
           "instrument_model": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -1323,6 +1381,7 @@
             "value": null
           },
           "platform": {
+            "credited_to": "filled_by_submitter_harmonized",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -1353,6 +1412,7 @@
             "value": "PACBIO"
           },
           "reference_assembly": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -1386,6 +1446,7 @@
       {
         "classifications": {
           "assay_type": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -1402,6 +1463,7 @@
             "value": null
           },
           "data_modality": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)",
@@ -1420,6 +1482,7 @@
             "value": "genomic"
           },
           "data_type": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)",
@@ -1438,6 +1501,7 @@
             "value": "variants"
           },
           "instrument_model": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -1454,6 +1518,7 @@
             "value": null
           },
           "platform": {
+            "credited_to": "filled_by_submitter_harmonized",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -1484,6 +1549,7 @@
             "value": "PACBIO"
           },
           "reference_assembly": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -1517,6 +1583,7 @@
       {
         "classifications": {
           "assay_type": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -1533,6 +1600,7 @@
             "value": null
           },
           "data_modality": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "VCF files contain variant calls (genomic data)",
@@ -1551,6 +1619,7 @@
             "value": "genomic"
           },
           "data_type": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "VCF files contain variant calls (genomic data)",
@@ -1569,6 +1638,7 @@
             "value": "variants"
           },
           "instrument_model": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -1585,6 +1655,7 @@
             "value": null
           },
           "platform": {
+            "credited_to": "filled_by_submitter_harmonized",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -1615,6 +1686,7 @@
             "value": "PACBIO"
           },
           "reference_assembly": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -1644,6 +1716,7 @@
       {
         "classifications": {
           "assay_type": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -1660,6 +1733,7 @@
             "value": null
           },
           "data_modality": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "VCF files contain variant calls (genomic data)",
@@ -1678,6 +1752,7 @@
             "value": "genomic"
           },
           "data_type": {
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
                 "reason": "VCF files contain variant calls (genomic data)",
@@ -1696,6 +1771,7 @@
             "value": "variants"
           },
           "instrument_model": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -1712,6 +1788,7 @@
             "value": null
           },
           "platform": {
+            "credited_to": "not_classified",
             "evidence": [
               {
                 "marker": "not_classified",
@@ -1728,6 +1805,7 @@
             "value": null
           },
           "reference_assembly": {
+            "credited_to": "conflict_inference",
             "evidence": [
               {
                 "reason": "Filename contains GRCh38/hg38 reference indicator",

@@ -96,7 +96,8 @@ USE_PUBLISHED = "published"
 
 INFERENCE = "inference"
 
-# Report labels, never stored on a record.
+# Report labels. The per-input outcomes are never stored on a record; the per-slot
+# category is, as the slot's `credited_to` (:func:`credited_to`, #552).
 #
 # Per input, scored against the other inputs' declarations for the same slot. Two
 # declarations agree when they are equal or nest in the slot's `is_a` hierarchy
@@ -149,7 +150,7 @@ def fill_category(name: str, harmonized: bool) -> str:
     return f"filled_by_{name}_harmonized" if harmonized else f"filled_by_{name}"
 
 
-# Every category ``Report._category`` returns, in the order a report reads them: each
+# Every category ``credited_to`` returns, in the order a report reads them: each
 # source's fills by precedence, inference's, the three kinds of conflict, then the slot's
 # other outcomes. Exactly one per slot, so a dimension's counts sum to the files.
 SLOT_CATEGORIES = (
@@ -533,12 +534,44 @@ def _translate(
 # --- the record ---------------------------------------------------------------------
 
 
+def credited_to(settled: dict, said: SlotEvidence) -> str:
+    """Where a settled slot's answer is credited: one of ``SLOT_CATEGORIES`` (#552).
+
+    Stored on the reconciled slot as ``credited_to`` by :func:`reconcile_record`, and
+    counted from there by the report, so a record and the report's "how each slot
+    settled" table cannot disagree. The rule is the one the comment above
+    ``MATCH`` states: a classified value goes to the first source in
+    ``SOURCE_PRECEDENCE`` that declared that value — verbatim before harmonized —
+    else to inference; a conflict to its kind; otherwise the slot's status, or
+    ``published_unreviewed``. It attributes and never decides: ``resolve_slot``
+    settled the slot before this reads it.
+    """
+    status = settled["status"]
+    if status == NOT_CLASSIFIED and SOURCE_PUBLISHED_VALUE in said.unreviewed:
+        return PUBLISHED_UNREVIEWED
+    if status == CONFLICT:
+        if settled["inferred"]["status"] == CONFLICT:
+            return CONFLICT_INFERENCE
+        published = any(c["source_type"] == SOURCE_PUBLISHED_VALUE and declaration(c) is not None for c in said.claims)
+        return CONFLICT_PUBLISHED if published or SOURCE_PUBLISHED_VALUE in said.unreviewed else CONFLICT_SOURCES
+    if status != CLASSIFIED:
+        return status
+    for source_type, name in SOURCE_PRECEDENCE:
+        # The source that declared the delivered value: where declarations nest,
+        # one naming only the parent did not supply the value (#473).
+        declaring = [c for c in said.claims if c["source_type"] == source_type and declaration(c) == settled["value"]]
+        if declaring:
+            return fill_category(name, harmonized=all(is_harmonized(c) for c in declaring))
+    return FILLED_BY_INFERENCE
+
+
 def reconcile_record(record: dict, record_slots: dict[str, SlotEvidence]) -> dict:
     """The reconciled record for one inference record: same identity, each slot settled.
 
     Each slot keeps inference's evidence as it is, adds the source claims after it, and
     gains ``inferred`` (what inference concluded, which its evidence alone cannot rebuild
-    without re-running tier resolution) and ``use``. Inference's per-dimension detail
+    without re-running tier resolution), ``use`` and ``credited_to`` (where the answer is
+    credited, :func:`credited_to`, #552). Inference's per-dimension detail
     (``models.field_detail``, e.g. ``build``) stays only while the slot still concludes
     inference's value — it describes that value. Keys of
     ``classifications`` that are not slots (a producer's scalar hints) pass through.
@@ -570,6 +603,7 @@ def reconcile_record(record: dict, record_slots: dict[str, SlotEvidence]) -> dic
             "inferred": inferred,
             "evidence": list(entry.get("evidence") or []) + said.claims,
         }
+        settled["credited_to"] = credited_to(settled, said)
         if (status, value) == (inferred["status"], inferred["value"]):
             settled.update(field_detail(record, slot))
         classifications[slot] = settled
@@ -645,7 +679,7 @@ class Report:
             said = record_slots.get(slot, NO_EVIDENCE)
             own = declaration(settled["inferred"])
             covering = self.covering(dataset, slot)
-            category = self._category(settled, said)
+            category = settled["credited_to"]
             self.slots[dataset][slot][category] += 1
             self.values[dataset][slot][field_label(reconciled, slot)] += 1
             if category in CONFLICT_CATEGORIES:
@@ -666,30 +700,6 @@ class Report:
                     published_silent = True
             if published_silent and settled["status"] == CLASSIFIED:
                 self.added_over_published[dataset][slot] += 1
-
-    @staticmethod
-    def _category(settled: dict, said: SlotEvidence) -> str:
-        status = settled["status"]
-        if status == NOT_CLASSIFIED and SOURCE_PUBLISHED_VALUE in said.unreviewed:
-            return PUBLISHED_UNREVIEWED
-        if status == CONFLICT:
-            if settled["inferred"]["status"] == CONFLICT:
-                return CONFLICT_INFERENCE
-            published = any(
-                c["source_type"] == SOURCE_PUBLISHED_VALUE and declaration(c) is not None for c in said.claims
-            )
-            return CONFLICT_PUBLISHED if published or SOURCE_PUBLISHED_VALUE in said.unreviewed else CONFLICT_SOURCES
-        if status != CLASSIFIED:
-            return status
-        for source_type, name in SOURCE_PRECEDENCE:
-            # The source that declared the delivered value: where declarations nest,
-            # one naming only the parent did not supply the value (#473).
-            declaring = [
-                c for c in said.claims if c["source_type"] == source_type and declaration(c) == settled["value"]
-            ]
-            if declaring:
-                return fill_category(name, harmonized=all(is_harmonized(c) for c in declaring))
-        return FILLED_BY_INFERENCE
 
     @staticmethod
     def _competing(settled: dict, said: SlotEvidence, own: str | None) -> tuple[tuple[str, tuple[str, ...]], ...]:

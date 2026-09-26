@@ -327,6 +327,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
      resolution, in one record. It necessarily repeats inference's claims, because 4.5 and 4.7 require every
      competing declaration to be present, and that repetition is the price of a record a person can read
      without performing a join.
+     Each slot also says where its answer is credited (`credited_to`, #552): the category the reconcile
+     report counts, computed once and stored, so a consumer reads it rather than re-deriving the report's
+     attribution. It attributes; it never decides the value (6.8).
 
 6.11 Each stage writes into its own subdirectory of the run, and both artifacts are **NDJSON**.
      One run's inference output is already 1.6 GB, with a single 551 MB file; a whole-file `json.load` of that

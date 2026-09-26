@@ -419,6 +419,7 @@ def test_a_source_naming_the_parent_agrees_but_is_not_credited_with_the_release(
     ref = slot(run, 1, "reference_assembly")
     assert (ref["status"], ref["value"], ref["use"]) == (CLASSIFIED, "T2T-CHM13v2.0", USE_META_DISCO)
     assert result["slots"][DATASET]["reference_assembly"] == {"filled_by_inference": 1}
+    assert ref["credited_to"] == "filled_by_inference"
     scored = result["inputs"][DATASET]["reference_assembly"]
     assert scored["inference"] == {"agreed": 1} and scored[SOURCE_REPOSITORY_METADATA] == {"match": 1}
 
@@ -430,6 +431,7 @@ def test_a_source_naming_the_release_fills_it_over_inferences_family(tmp_path, r
     ref = slot(run, 1, "reference_assembly")
     assert (ref["status"], ref["value"]) == (CLASSIFIED, "T2T-CHM13v2.0")
     assert result["slots"][DATASET]["reference_assembly"] == {"filled_by_submitter_harmonized": 1}
+    assert ref["credited_to"] == "filled_by_submitter_harmonized"
 
 
 # --- the artifacts ----------------------------------------------------------------------
@@ -925,3 +927,56 @@ def test_a_parent_beside_two_sibling_releases_is_scored_disagreed(tmp_path, run,
     assert slot(run, 1, "reference_assembly")["status"] == CONFLICT
     scored = result["inputs"][DATASET]["reference_assembly"]
     assert scored["inference"] == {"disagreed": 1}
+
+
+# --- credited_to (#552) ---------------------------------------------------------------
+
+
+def test_the_credited_to_enum_is_the_reports_slot_categories():
+    """The schema's credited_to values are exactly SLOT_CATEGORIES, so record and report share one vocabulary."""
+    from importlib.resources import files
+
+    import yaml
+
+    schema = yaml.safe_load((files("meta_disco.schema") / "classification.yaml").read_text(encoding="utf-8"))
+    assert set(schema["enums"]["credited_to_enum"]["permissible_values"]) == set(SLOT_CATEGORIES)
+
+
+def test_every_slot_carries_credited_to_and_the_report_counts_it(tmp_path, run, evidence, table):
+    """Counting the stored field per dataset and dimension reproduces the report's slots table exactly (#552)."""
+    from collections import Counter, defaultdict
+
+    write_run(
+        run,
+        [
+            record(1, reference_assembly="GRCh38"),
+            record(2, reference_assembly="GRCh38"),
+            record(3, reference_assembly="CHM13"),
+            record(4),
+        ],
+    )
+    write_evidence(
+        evidence,
+        [
+            ("reference_assembly", drs(1), "CHM13"),
+            ("reference_assembly", drs(3), "CHM13v2"),
+            ("platform", drs(4), "PACBIO_SMRT"),
+        ],
+    )
+    result = go(run, tmp_path, evidence, table)
+    counted: dict = defaultdict(Counter)
+    for row in iter_reconciled_records(run):
+        for dim in CLASSIFICATION_FIELDS:
+            counted[dim][row["classifications"][dim]["credited_to"]] += 1
+    assert {dim: dict(c) for dim, c in counted.items()} == result["slots"][DATASET]
+
+
+def test_the_schema_refuses_an_unknown_credited_to():
+    from pydantic import ValidationError
+
+    from meta_disco.schema.classification_model import PlatformClassification
+
+    entry = {"status": CLASSIFIED, "value": "PACBIO", "evidence": [], "credited_to": "filled_by_inference"}
+    assert PlatformClassification.model_validate(entry).credited_to == "filled_by_inference"
+    with pytest.raises(ValidationError):
+        PlatformClassification.model_validate({**entry, "credited_to": "filled_by_guessing"})
