@@ -1,7 +1,7 @@
 # Validation Report
 
 Comparing meta-disco rule engine classifications against external ground truth.
-Classification run: **2026-09-26 12:03:21**
+Classification run: **2026-09-26 12:13:12**
 
 | Source | Files Matched | Dimensions | Agree | Discrepancies |
 |---|---:|---:|---:|---:|

@@ -320,6 +320,9 @@ def validate_against_hprc(
                 "metadata": {
                     "catalogs_loaded": {name: len(catalogs.get(name, [])) for name in HPRC_CATALOG_NAMES},
                     "source": HPRC_CATALOG_BASE_URL,
+                    # The run directories the classifications were read from, so a
+                    # report of these results names the run that produced them.
+                    "runs": sorted({p.parent.as_posix() for p in input_paths}),
                 },
                 "by_catalog": catalog_stats,
                 "dimensions": dim_results,
