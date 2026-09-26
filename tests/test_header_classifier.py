@@ -27,6 +27,7 @@ from meta_disco.models import (
     CONFLICT,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
+    field_evidence,
     field_status,
     field_value,
 )
@@ -712,11 +713,7 @@ class TestBamCramClassification:
 
 
 class TestAlignedOrUnaligned:
-    """`@SQ` alone decides `data_type`: none means reads, some means alignments (#537).
-
-    The headers are trimmed from real corpus files. Neither the name (`hifi`,
-    `.flnc.`) nor an `@PG` line naming an aligner decides it.
-    """
+    """`@SQ` alone decides `data_type`: none means reads, some means alignments (#537)."""
 
     # m64136_210522_014758.hifi_reads.bam: PacBio's CCS output, never aligned.
     HIFI_READS = (
@@ -750,27 +747,39 @@ class TestAlignedOrUnaligned:
     )
 
     @pytest.mark.parametrize(
-        ("header", "file_name"),
+        ("header", "file_name", "data_type", "rule_id"),
         [
-            pytest.param(HIFI_READS, "m64136_210522_014758.hifi_reads.bam", id="PacBio hifi_reads"),
+            pytest.param(
+                HIFI_READS, "m64136_210522_014758.hifi_reads.bam", "reads", "unaligned_no_sq", id="PacBio hifi_reads"
+            ),
             pytest.param(
                 GUPPY_MODBASE,
                 "08_25_21_R941_HG02004_2_Guppy_6.4.6_450bps_modbases_5mc_cg_sup_prom_pass.bam",
+                "reads",
+                "unaligned_no_sq",
                 id="Guppy mod-base with a minimap2 @PG",
             ),
-            pytest.param(KINNEX_FLNC, "NA19682.lymph.m84203_240912_223637_s3.flnc.bam", id="Kinnex flnc"),
+            pytest.param(
+                KINNEX_FLNC,
+                "NA19682.lymph.m84203_240912_223637_s3.flnc.bam",
+                "reads",
+                "unaligned_no_sq",
+                id="Kinnex flnc",
+            ),
+            pytest.param(
+                ALIGNED_MINIMAP2,
+                "HG00438.f1_assembly_v2.hap1.bam",
+                "alignments",
+                "aligned_has_sq",
+                id="@SQ with a minimap2 @PG",
+            ),
         ],
     )
-    def test_no_sq_is_reads(self, header, file_name):
+    def test_sq_decides_data_type(self, header, file_name, data_type, rule_id):
         result = classify_from_header(header, name=FileName.parse(file_name))
-        assert val(result, "data_type") == "reads"
-        claims = [e for e in result["data_type"]["evidence"] if "value" in e]
-        assert [(e["rule_id"], e["tier"]) for e in claims] == [("unaligned_no_sq", 3)]
-
-    def test_sq_with_minimap2_is_alignments(self):
-        result = classify_from_header(self.ALIGNED_MINIMAP2, name=FileName.parse("HG00438.f1_assembly_v2.hap1.bam"))
-        assert val(result, "data_type") == "alignments"
-        assert val(result, "data_modality") == "genomic"
+        assert val(result, "data_type") == data_type
+        claims = [e for e in field_evidence(result, "data_type") if "value" in e]
+        assert [(e["rule_id"], e["tier"]) for e in claims] == [(rule_id, 3)]
 
 
 # =============================================================================

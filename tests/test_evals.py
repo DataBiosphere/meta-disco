@@ -152,6 +152,7 @@ class TestBamE2E:
         assert result is not None
         assert_output_format(result)
         assert get_val(result, "platform") == "PACBIO"
+        assert get_val(result, "data_type") == "reads"  # no @SQ (#537)
         assert field_status(result, "reference_assembly") == NOT_APPLICABLE
         assert field_status(result, "assay_type") == NOT_CLASSIFIED
 
@@ -166,6 +167,7 @@ class TestBamE2E:
         assert result is not None
         assert_output_format(result)
         assert get_val(result, "platform") == "ONT"
+        assert get_val(result, "data_type") == "reads"  # no @SQ, despite Guppy's minimap2 @PG (#537)
         # Long-read platform + genomic modality no longer infers WGS (#430).
         assert field_status(result, "assay_type") == NOT_CLASSIFIED
 

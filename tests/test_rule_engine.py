@@ -299,6 +299,68 @@ class TestThenStatus:
         assert out["reference_assembly"]["value"] is None
 
 
+class TestHeaderSectionPresence:
+    """`header_present` and `header_absent` read one predicate, so a header meets exactly
+    one of them, and a file with no header meets neither (#537)."""
+
+    @staticmethod
+    def _engine(tmp_path, section):
+        import yaml
+
+        def rule(rule_id, when, value):
+            return {
+                "id": rule_id,
+                "tier": 3,
+                "scope": "header",
+                "when": {"extensions": [".bam"], "header_section": section, **when},
+                "then": {"data_type": value},
+            }
+
+        path = tmp_path / "rules.yaml"
+        rules = [
+            rule("present", {"header_present": True}, "alignments"),
+            rule("absent", {"header_absent": True}, "reads"),
+        ]
+        path.write_text(yaml.safe_dump({"rules": rules}), encoding="utf-8")
+        return RuleEngine(path)
+
+    @pytest.mark.parametrize(
+        ("section", "header", "expected"),
+        [
+            pytest.param("@SQ", "@HD\tVN:1.6\n@SQ\tSN:chr1\tLN:248956422", "alignments", id="@SQ present"),
+            # The SAM spec requires SN, but presence does not read fields: a record counts.
+            pytest.param("@SQ", "@HD\tVN:1.6\n@SQ\tLN:248956422", "alignments", id="@SQ present without SN"),
+            pytest.param("@SQ", "@HD\tVN:1.6\n@PG\tID:x\tPN:x", "reads", id="@SQ absent"),
+            pytest.param("@RG", "@HD\tVN:1.6\n@RG\tID:a\tPL:ONT", "alignments", id="a section other than @SQ"),
+            pytest.param("@RG", "@HD\tVN:1.6", "reads", id="a section other than @SQ, absent"),
+        ],
+    )
+    def test_a_header_meets_exactly_one(self, tmp_path, section, header, expected):
+        engine = self._engine(tmp_path, section)
+        info = ExtendedFileInfo(name=FileName.parse("x.bam"), bam_header=header)
+        assert engine.classify_extended(info, include_tier3=True).data_type == expected
+
+    def test_no_header_meets_neither(self, tmp_path):
+        engine = self._engine(tmp_path, "@SQ")
+        info = ExtendedFileInfo(name=FileName.parse("x.bam"))
+        assert engine.classify_extended(info, include_tier3=True).status_of("data_type") == NOT_CLASSIFIED
+
+    @pytest.mark.parametrize(
+        "extra",
+        [{"header_absent": True}, {"header_field": "SN"}, {"header_pattern": "."}],
+        ids=["with header_absent", "with header_field", "with header_pattern"],
+    )
+    def test_header_present_refuses_a_second_test(self, tmp_path, extra):
+        import yaml
+
+        when = {"extensions": [".bam"], "header_section": "@SQ", "header_present": True, **extra}
+        path = tmp_path / "rules.yaml"
+        rule = {"id": "r", "tier": 3, "scope": "header", "when": when, "then": {"data_type": "alignments"}}
+        path.write_text(yaml.safe_dump({"rules": [rule]}), encoding="utf-8")
+        with pytest.raises(ValueError, match="'header_present' takes no"):
+            RuleEngine(path)
+
+
 class TestSetFieldValidation:
     """set_field rejects unknown fields/statuses instead of silently mis-storing."""
 

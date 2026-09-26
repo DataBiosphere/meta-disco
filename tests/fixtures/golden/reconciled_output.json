@@ -171,7 +171,7 @@
           "data_type": {
             "evidence": [
               {
-                "reason": "No @SQ lines: no read is placed on a reference, so the file holds unaligned reads and has no reference. Common for PacBio HiFi and ONT mod-base deliverables",
+                "reason": "No @SQ lines: the header declares no reference, so the file holds unaligned reads. Common for PacBio HiFi and ONT mod-base deliverables",
                 "rule_id": "unaligned_no_sq",
                 "source_type": "header_rule",
                 "tier": 3,
@@ -235,7 +235,7 @@
           "reference_assembly": {
             "evidence": [
               {
-                "reason": "No @SQ lines: no read is placed on a reference, so the file holds unaligned reads and has no reference. Common for PacBio HiFi and ONT mod-base deliverables",
+                "reason": "No @SQ lines: the header declares no reference, so the file holds unaligned reads. Common for PacBio HiFi and ONT mod-base deliverables",
                 "rule_id": "unaligned_no_sq",
                 "source_type": "header_rule",
                 "status": "not_applicable",

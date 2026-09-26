@@ -98,7 +98,7 @@ class ExtendedFileInfo:
     platform: str | None = None
 
     # The parse of each header, made once on first use and shared by everything
-    # that reads it: the tier-3 matchers, the header-absent check, and the
+    # that reads it: the tier-3 matchers, the header presence check, and the
     # classifiers' contig-length and build steps (#488). Owning the parse here,
     # on the object that holds the text, is what makes "parsed once per file" a
     # property of the object rather than a convention between modules. A missing
@@ -1050,11 +1050,12 @@ class RuleEngine:
         if (file_format := when.get("file_format")) and file_info.file_format != file_format:
             return False
 
-        # Check header section (tier 3) — skip if checking for absence
+        # Check header section (tier 3) — skip if checking for presence or absence
         if (
             rule.scope == "header"
             and when.get("header_section")
             and not when.get("header_absent")
+            and not when.get("header_present")
             and not self._match_bam_header(when, file_info)
         ):
             return False
@@ -1067,10 +1068,13 @@ class RuleEngine:
         if rule.scope == "fastq_header" and when.get("fastq_pattern") and not self._match_fastq_header(when, file_info):
             return False
 
-        # Check header absence (for unaligned detection). Kept as a guard clause
-        # (if ... : return False) to match the preceding checks rather than folding
-        # into `return not (...)`, which reads worse in this run of guards.
-        if when.get("header_absent") and not self._check_header_absent(when, file_info):  # noqa: SIM103
+        # Check header section presence / absence (aligned vs unaligned detection).
+        # With no header neither holds: an unread header is not evidence either way.
+        # Kept as guard clauses (if ... : return False) to match the preceding checks
+        # rather than folding into `return not (...)`, which reads worse in this run.
+        if when.get("header_absent") and self._has_header_section(when, file_info) is not False:
+            return False
+        if when.get("header_present") and self._has_header_section(when, file_info) is not True:  # noqa: SIM103
             return False
 
         return True
@@ -1119,17 +1123,19 @@ class RuleEngine:
 
         return bool(re.search(pattern, file_info.fastq_first_read, re.IGNORECASE))
 
-    def _check_header_absent(self, when: dict[str, Any], file_info: ExtendedFileInfo) -> bool:
-        """Check if a header section is absent (for unaligned detection)."""
+    def _has_header_section(self, when: dict[str, Any], file_info: ExtendedFileInfo) -> bool | None:
+        """Whether the BAM header has at least one record of ``header_section``.
+
+        ``None`` when there is no header to look in (or no section named), so a
+        caller asking for presence and one asking for absence both decline.
+        """
         section = when.get("header_section", "")
+        if not section or file_info.bam_header is None:
+            return None
 
-        if section == "@SQ" and file_info.bam_header is not None:
-            # Check if @SQ section is missing
-            from .validators.header_extractors import has_sam_section
+        from .validators.header_extractors import has_sam_section
 
-            return not has_sam_section(file_info.parsed_bam_header, section)
-
-        return False
+        return has_sam_section(file_info.parsed_bam_header, section)
 
     def _apply_rule(self, rule: UnifiedRule, result: ExtendedClassificationResult) -> None:
         """Collect claims from a rule without setting classification fields.

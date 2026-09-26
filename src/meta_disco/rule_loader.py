@@ -208,6 +208,7 @@ class RuleLoader:
         "header_pattern",
         "header_match_all",
         "header_absent",
+        "header_present",
         "vcf_header_type",
         "vcf_pattern",
         "fastq_pattern",
@@ -369,6 +370,14 @@ class RuleLoader:
                 raise ValueError(
                     f"Rule {rule_id}: unknown 'when' condition key(s) {sorted(unknown_when)}; "
                     f"valid keys are {sorted(self.VALID_WHEN_KEYS)}"
+                )
+            # A presence test reads only whether the section exists, so it cannot also
+            # ask for a field match, and present-and-absent can never both hold.
+            if when.get("header_present") and (
+                when.get("header_absent") or "header_field" in when or "header_pattern" in when
+            ):
+                raise ValueError(
+                    f"Rule {rule_id}: 'header_present' takes no 'header_absent', 'header_field' or 'header_pattern'"
                 )
 
             then = rule_data.get("then", {})

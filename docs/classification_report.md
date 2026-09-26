@@ -85,7 +85,7 @@ reference_assembly
 
 #### assay_type
 
-The top-level assay/method class. Declared only by rules that see evidence of the assay (`alignment_star_aligner`, `program_star`, `salmon_quant`, `bed_expression`, `idat_methylation`, `image_svs_histology`), each of which also declares the modality its assay implies. Nothing infers an assay from another rule's answer (#88), and nothing infers `WGS` or `WES` (#430).
+The top-level assay/method class. Declared only by rules that see evidence of the assay (`star_filename`, `program_star`, `salmon_quant`, `bed_expression`, `idat_methylation`, `image_svs_histology`), each of which also declares the modality its assay implies. Nothing infers an assay from another rule's answer (#88), and nothing infers `WGS` or `WES` (#430).
 
 ```
 assay_type
