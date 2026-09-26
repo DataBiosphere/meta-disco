@@ -8,18 +8,22 @@ them the way it reads a real run and a real import.
 """
 
 import json
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from meta_disco.corpus_diff import run_labels
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
     CONFLICT,
+    ENTRY_KEYS,
     JOIN_KEY_DRS_URI,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
+    RECONCILED_ENTRY_KEYS,
     SOURCE_PUBLISHED_VALUE,
     SOURCE_REPOSITORY_METADATA,
     ClaimSource,
@@ -40,7 +44,12 @@ from meta_disco.reconcile import (
     use_for,
 )
 from meta_disco.rule_engine import conflict_marker, make_claim
-from meta_disco.schema.classification_model import ClassificationRecord
+from meta_disco.schema.classification_model import (
+    Classification,
+    ClassificationRecord,
+    CreditedToEnum,
+    PlatformClassification,
+)
 from meta_disco.schema_vocab import dimension_values
 from meta_disco.source_evidence import EvidenceEntry, EvidenceFileSource, EvidenceTarget, claim_source_for
 from tests.metadata_fixtures import write_metadata
@@ -419,6 +428,7 @@ def test_a_source_naming_the_parent_agrees_but_is_not_credited_with_the_release(
     ref = slot(run, 1, "reference_assembly")
     assert (ref["status"], ref["value"], ref["use"]) == (CLASSIFIED, "T2T-CHM13v2.0", USE_META_DISCO)
     assert result["slots"][DATASET]["reference_assembly"] == {"filled_by_inference": 1}
+    assert ref["credited_to"] == "filled_by_inference"
     scored = result["inputs"][DATASET]["reference_assembly"]
     assert scored["inference"] == {"agreed": 1} and scored[SOURCE_REPOSITORY_METADATA] == {"match": 1}
 
@@ -430,6 +440,7 @@ def test_a_source_naming_the_release_fills_it_over_inferences_family(tmp_path, r
     ref = slot(run, 1, "reference_assembly")
     assert (ref["status"], ref["value"]) == (CLASSIFIED, "T2T-CHM13v2.0")
     assert result["slots"][DATASET]["reference_assembly"] == {"filled_by_submitter_harmonized": 1}
+    assert ref["credited_to"] == "filled_by_submitter_harmonized"
 
 
 # --- the artifacts ----------------------------------------------------------------------
@@ -925,3 +936,65 @@ def test_a_parent_beside_two_sibling_releases_is_scored_disagreed(tmp_path, run,
     assert slot(run, 1, "reference_assembly")["status"] == CONFLICT
     scored = result["inputs"][DATASET]["reference_assembly"]
     assert scored["inference"] == {"disagreed": 1}
+
+
+# --- credited_to (#552) ---------------------------------------------------------------
+
+
+def test_the_credited_to_enum_is_the_reports_slot_categories():
+    """The schema's credited_to values are exactly SLOT_CATEGORIES, so record and report share one vocabulary."""
+    assert {e.value for e in CreditedToEnum} == set(SLOT_CATEGORIES)
+
+
+def test_the_reconciled_entry_keys_are_the_schemas_reconciled_slots():
+    """RECONCILED_ENTRY_KEYS lists the slots a reconciled entry adds, so field_detail never passes one off as detail."""
+    assert set(Classification.model_fields) - ENTRY_KEYS == RECONCILED_ENTRY_KEYS
+
+
+def test_every_slot_carries_credited_to_and_the_report_counts_it(tmp_path, run, evidence, table):
+    """Each slot carries the category the rule gives it, and the report's slots table counts exactly those (#552).
+
+    The report counts the stored field, so the count equality alone is true by
+    construction; the per-file expectations below are what check the rule itself.
+    """
+    write_run(
+        run,
+        [
+            record(1, reference_assembly="GRCh38"),
+            record(2, reference_assembly="GRCh38"),
+            record(3, reference_assembly="CHM13"),
+            record(4),
+        ],
+    )
+    write_evidence(
+        evidence,
+        [
+            ("reference_assembly", drs(1), "CHM13"),
+            ("reference_assembly", drs(3), "CHM13v2"),
+            ("platform", drs(4), "PACBIO_SMRT"),
+        ],
+    )
+    result = go(run, tmp_path, evidence, table)
+    records = reconciled(run)
+    expected = {
+        "file-1": ("reference_assembly", "conflict_sources"),  # GRCh38 against a submitter's CHM13
+        "file-2": ("reference_assembly", "filled_by_inference"),  # no source spoke
+        "file-3": ("reference_assembly", "filled_by_submitter_harmonized"),  # CHM13v2 -> T2T-CHM13v2.0, deeper
+        "file-4": ("platform", "filled_by_submitter_harmonized"),  # PACBIO_SMRT -> PACBIO, inference silent
+    }
+    for file_id, (dim, category) in expected.items():
+        assert records[file_id]["classifications"][dim]["credited_to"] == category, file_id
+    assert records["file-4"]["classifications"]["reference_assembly"]["credited_to"] == NOT_CLASSIFIED
+    counted: dict = defaultdict(Counter)
+    for row in iter_reconciled_records(run):
+        for dim in CLASSIFICATION_FIELDS:
+            counted[dim][row["classifications"][dim]["credited_to"]] += 1
+    assert {dim: dict(c) for dim, c in counted.items()} == result["slots"][DATASET]
+
+
+def test_the_schema_refuses_an_unknown_credited_to():
+    """A reconciled slot's credited_to must be one of the categories."""
+    entry = {"status": CLASSIFIED, "value": "PACBIO", "evidence": [], "credited_to": "filled_by_inference"}
+    assert PlatformClassification.model_validate(entry).credited_to == "filled_by_inference"
+    with pytest.raises(ValidationError):
+        PlatformClassification.model_validate({**entry, "credited_to": "filled_by_guessing"})

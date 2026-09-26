@@ -94,14 +94,15 @@ classes:
       A single classified field: its resolved value (null unless status is
       'classified'), a status sentinel, and the evidence behind it. Subclasses
       narrow `value` to the right enum per dimension. A reconciled record (#432)
-      carries the same entry plus `use` and `inferred`; an inference record
-      carries neither.
+      carries the same entry plus `use`, `inferred` and `credited_to` (#552); an
+      inference record carries none of them.
     slots:
       - value
       - status
       - evidence
       - use
       - inferred
+      - credited_to
 
   InferredConclusion:
     abstract: true
@@ -797,6 +798,14 @@ slots:
       `not_classified`). Computed by reconcile so an export is structure only.
     range: use_enum
     required: false
+  credited_to:
+    description: >-
+      On a reconciled record only (#552): where this slot's answer is credited, the
+      per-slot category the reconcile report counts. The rule is
+      `reconcile.credited_to`'s. It attributes and never decides: the value was
+      settled before it is read.
+    range: credited_to_enum
+    required: false
   inferred:
     description: >-
       On a reconciled record only (#432): what inference concluded for this slot.
@@ -1166,6 +1175,44 @@ enums:
         description: Take this record's value; its status is `classified` or `not_applicable`.
       published:
         description: Keep the repository's published value; the status is `conflict` or `not_classified`.
+
+  credited_to_enum:
+    description: >-
+      Where a reconciled slot's answer is credited (#552): the reconcile report's slot
+      categories, one per slot, so a dimension's counts sum to its files. Held to
+      `reconcile.SLOT_CATEGORIES` by tests/test_reconcile.py.
+    permissible_values:
+      filled_by_published:
+        description: The published source declared the value, verbatim.
+      filled_by_published_harmonized:
+        description: The published source declared the value through a translation row.
+      filled_by_submitter:
+        description: A submitter table declared the value, verbatim.
+      filled_by_submitter_harmonized:
+        description: A submitter table declared the value through a translation row.
+      filled_by_external:
+        description: An external catalog declared the value, verbatim.
+      filled_by_external_harmonized:
+        description: An external catalog declared the value through a translation row.
+      filled_by_inference:
+        description: No source declared the value; inference supplied it.
+      conflict_inference:
+        description: Inference's own rules disagreed.
+      conflict_sources:
+        description: >-
+          A conflict inference's rules did not cause, on a slot where the published source
+          neither declared a value nor gave an unreviewed one.
+      conflict_published:
+        description: >-
+          A conflict on a slot where the published source declared a value or gave an
+          unreviewed one — whichever inputs disagreed; the published value need not be
+          the disputed one.
+      published_unreviewed:
+        description: The published source gave a value no authored row reads, and no input answered.
+      not_applicable:
+        description: The slot settled `not_applicable`.
+      not_classified:
+        description: The slot settled `not_classified`.
 
   relation_enum:
     description: >-
