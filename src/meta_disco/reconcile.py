@@ -61,6 +61,7 @@ from .models import (
     SOURCE_PUBLISHED_VALUE,
     UNMAPPED,
     field_detail,
+    field_label,
 )
 from .output_utils import (
     RECONCILED_DIR,
@@ -591,6 +592,10 @@ class Report:
     # Per dataset, slot and conflict category, the files per distinct set of competing
     # values (contract 5.1): which input said what, as :meth:`_competing` reads it.
     conflicts: dict = field(default_factory=lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(Counter))))
+    # Per dataset and slot, the files per reconciled value, or per status where the slot
+    # has none (`conflict`, `not_applicable`, `not_classified`): what a dataset holds, not
+    # how it was filled (#545). Like `slots`, each dataset's counts sum to its file count.
+    values: dict = field(default_factory=lambda: defaultdict(lambda: defaultdict(Counter)))
     # Per (dataset, slot), the source types whose evidence speaks to it: only those are
     # scored there.
     _covering: dict[tuple[str, str], tuple[str, ...]] = field(default_factory=dict)
@@ -629,6 +634,7 @@ class Report:
             covering = self.covering(dataset, slot)
             category = self._category(settled, said)
             self.slots[dataset][slot][category] += 1
+            self.values[dataset][slot][field_label(reconciled, slot)] += 1
             if category in CONFLICT_CATEGORIES:
                 self.conflicts[dataset][slot][category][self._competing(settled, said, own)] += 1
             if (
@@ -747,6 +753,7 @@ class Report:
         return {
             "files": dict(sorted(self.files.items())),
             "slots": plain(self.slots),
+            "values": plain(self.values),
             "inputs": plain(self.inputs),
             "added_over_published": plain(self.added_over_published),
             "filled_over_inference": plain(self.filled_over_inference),

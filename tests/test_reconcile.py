@@ -14,6 +14,7 @@ import pytest
 
 from meta_disco.corpus_diff import run_labels
 from meta_disco.models import (
+    CLASSIFICATION_FIELDS,
     CLASSIFIED,
     CONFLICT,
     JOIN_KEY_DRS_URI,
@@ -345,6 +346,17 @@ def test_ac10_disagreement_is_a_conflict_with_both_declarations_recorded(tmp_pat
     assert ref["inferred"] == {"value": "GRCh38", "status": CLASSIFIED}
     (source,) = [e for e in ref["evidence"] if "source" in e]
     assert (source["value"], source["rule_id"]) == ("CHM13", "reference_assembly.chm13")
+
+
+def test_the_report_counts_each_datasets_values_and_they_sum_to_its_files(tmp_path, run, evidence, table):
+    """Per dataset and slot, a file is counted under its reconciled value, or its status where it has none (#545)."""
+    write_run(run, [record(1, reference_assembly="GRCh38"), record(2, reference_assembly="GRCh38"), record(3)])
+    write_evidence(evidence, [("reference_assembly", drs(1), "CHM13")])
+    report = go(run, tmp_path, evidence, table)
+    assert report["values"][DATASET]["reference_assembly"] == {"GRCh38": 1, CONFLICT: 1, NOT_CLASSIFIED: 1}
+    assert set(report["values"][DATASET]) == set(CLASSIFICATION_FIELDS)
+    for slot, counts in report["values"][DATASET].items():
+        assert sum(counts.values()) == report["files"][DATASET], slot
 
 
 def test_ac11_not_applicable_beside_a_value_is_a_conflict():
