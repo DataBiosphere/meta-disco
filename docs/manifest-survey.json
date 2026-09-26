@@ -6116,7 +6116,7 @@
           "name_encodes": [
             {
               "dimension": "reference_assembly",
-              "value": "CHM13"
+              "value": "T2T-CHM13v2.0"
             }
           ],
           "origin": "submitter",
@@ -6410,7 +6410,7 @@
           "name_encodes": [
             {
               "dimension": "reference_assembly",
-              "value": "CHM13"
+              "value": "T2T-CHM13v2.0"
             }
           ],
           "origin": "submitter",
@@ -6476,7 +6476,7 @@
             },
             {
               "dimension": "reference_assembly",
-              "value": "CHM13"
+              "value": "T2T-CHM13v2.0"
             }
           ],
           "origin": "submitter",
@@ -6596,7 +6596,7 @@
           "name_encodes": [
             {
               "dimension": "reference_assembly",
-              "value": "CHM13"
+              "value": "T2T-CHM13v2.0"
             }
           ],
           "origin": "submitter",
@@ -6898,7 +6898,7 @@
           "name_encodes": [
             {
               "dimension": "reference_assembly",
-              "value": "CHM13"
+              "value": "T2T-CHM13v2.0"
             }
           ],
           "origin": "submitter",

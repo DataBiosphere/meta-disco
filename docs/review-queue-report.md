@@ -1,6 +1,6 @@
 # Review queue
 
-Source values the slot map routed to a slot but that no authored translation rule reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per source, dataset, table and column it was found in; "rule it would use" names the seeded rule that matches it, or — where none does. 41 listed, from evidence under data/source_evidence.
+Source values the slot map routed to a slot but that no authored translation rule reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per source, dataset, table and column it was found in; "rule it would use" names the seeded rule that matches it, or — where none does. 21 listed, from evidence under data/source_evidence.
 
 ## Published: the catalog's published columns
 
@@ -16,8 +16,6 @@ Source values the slot map routed to a slot but that no authored translation rul
 
 | files | raw value | source | dataset | table | column | rule it would use |
 | --- | --- | --- | --- | --- | --- | --- |
-| 2,932 | `'["GRCh38 + Gencode40"]'` | `anvil` | `AnVIL_ENCORE_RS293` | `anvil_file` | `reference_assembly` | — |
-| 1,544 | `'["GRCh38 + Gencode40"]'` | `anvil` | `AnVIL_ENCORE_293T` | `anvil_file` | `reference_assembly` | — |
 | 220 | `'["GRCm39"]'` | `anvil` | `AnVIL_IGVF_Mouse_R1` | `anvil_file` | `reference_assembly` | — |
 
 ## Submitter: the submitter tables
@@ -51,25 +49,7 @@ Source values the slot map routed to a slot but that no authored translation rul
 
 | files | raw value | source | dataset | table | column | rule it would use |
 | --- | --- | --- | --- | --- | --- | --- |
-| 184,105 | `'CHM13v2'` | `anvil` | `ANVIL_T2T_CHRY` | `1KGP_CHM13v2_sample` |  | — |
-| 62,316 | `'CHM13v2'` | `anvil` | `ANVIL_T2T_CHRY` | `PAR_interval_CHM13v2` |  | — |
-| 16,324 | `'CHM13v2'` | `anvil` | `ANVIL_T2T_CHRY` | `SGDP_CHM13v2_sample` |  | — |
-| 2,932 | `'GRCh38 + Gencode40'` | `anvil` | `AnVIL_ENCORE_RS293` | `file` | `reference_assembly` | — |
-| 1,544 | `'GRCh38 + Gencode40'` | `anvil` | `AnVIL_ENCORE_293T` | `file` | `reference_assembly` | — |
-| 462 | `'chm13'` | `anvil` | `AnVIL_HPRC_R2` | `to_ref_chm13_winnowmap` |  | reference_assembly.chm13 |
-| 240 | `'CHM13v2'` | `anvil` | `ANVIL_T2T_CHRY` | `1KGP_CHM13v2_chromosome` |  | — |
 | 220 | `'GRCm39'` | `anvil` | `AnVIL_IGVF_Mouse_R1` | `file` | `reference_assembly` | — |
-| 168 | `'CHM13v2'` | `anvil` | `ANVIL_T2T_CHRY` | `SGDP_CHM13v2_chromosome` |  | — |
-| 47 | `'chm13'` | `anvil` | `ANVIL_HPRC` | `assembly_sample` | `mat_chm13_aln_bai` | reference_assembly.chm13 |
-| 47 | `'chm13'` | `anvil` | `ANVIL_HPRC` | `assembly_sample` | `mat_chm13_aln_bam` | reference_assembly.chm13 |
-| 47 | `'chm13'` | `anvil` | `ANVIL_HPRC` | `assembly_sample` | `pat_chm13_aln_bai` | reference_assembly.chm13 |
-| 47 | `'chm13'` | `anvil` | `ANVIL_HPRC` | `assembly_sample` | `pat_chm13_aln_bam` | reference_assembly.chm13 |
-| 44 | `'chm13'` | `anvil` | `ANVIL_HPRC` | `assembly_annotation` | `mat_chm13_cat_genes` | reference_assembly.chm13 |
-| 44 | `'chm13'` | `anvil` | `ANVIL_HPRC` | `assembly_annotation` | `pat_chm13_cat_genes` | reference_assembly.chm13 |
-| 24 | `'chm13'` | `anvil` | `ANVIL_T2T` | `chromosome` | `chm13_pass_vcf_gz` | reference_assembly.chm13 |
-| 24 | `'chm13'` | `anvil` | `ANVIL_T2T` | `chromosome` | `chm13_raw_vcf_gz` | reference_assembly.chm13 |
-| 24 | `'chm13'` | `anvil` | `ANVIL_T2T` | `chromosome` | `chm13_recalibrated_vcf_gz` | reference_assembly.chm13 |
-| 6 | `'chm13'` | `anvil` | `AnVIL_HPRC_R2` | `alignments_v2` | `reference_coordinates` | reference_assembly.chm13 |
 | 6 | `'hg38, chm13'` | `anvil` | `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` | `sequencing` | `reference_genome_build` | — |
 
 ### assay_type
@@ -138,8 +118,14 @@ Every authored translation rule, by slot and most files first: the source values
 
 | files | published | submitter | external | rule | scope | matches | declares | reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 263,153 | 0 | 263,153 | 0 | reference_assembly.chm13v2 | `any` | `'CHM13v2'` | reference_assembly: T2T-CHM13v2.0 | The submitter's name for NCBI's T2T-CHM13v2.0, in the ANVIL_T2T_CHRY table names; `v2` names the release (#473). |
 | 48,613 | 0 | 48,613 | 0 | reference_assembly.grch38 | `any` | `'grch38' · 'hg38'` | reference_assembly: GRCh38 | Column-name spans naming the GRCh38 assembly; hg38 is UCSC's name for the same assembly. |
+| 8,952 | 4,476 | 4,476 | 0 | reference_assembly.grch38_gencode40 | `any` | `'GRCh38 + Gencode40'` | reference_assembly: GRCh38 | GRCh38 with a GENCODE annotation release. The annotation is not part of the assembly and does not imply a patch, so the assembly is GRCh38 (#473). |
 | 3,002 | 0 | 3,002 | 0 | reference_assembly.unaligned | `any` | `'unaligned'` | reference_assembly: not_applicable | The source's word for a file with no reference; the slot does not apply. |
+| 816 | 0 | 816 | 0 | reference_assembly.chm13 | `any` | `'chm13'` | reference_assembly: CHM13 | Names CHM13 and no release, so it is the release-unknown term (#473). |
+| 0 | 0 | 0 | 0 | reference_assembly.chm13_v1_0_grch38_chry | `any` | `'t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r' · 'chm13.draft_v1.0_plus38Y'` | reference_assembly: t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r | The term itself, and the T2T 1KGP files' own label for the same reference: CHM13 v1.0 with GRCh38's chrY (#473). |
+| 0 | 0 | 0 | 0 | reference_assembly.chm13_v1_0_hg002_chry | `any` | `'t2t-chm13.20200921.HG002chrY.chrEBV'` | reference_assembly: t2t-chm13.20200921.HG002chrY.chrEBV | The term itself, CHM13 v1.0 with HG002's chrY (#473). |
+| 0 | 0 | 0 | 0 | reference_assembly.chm13_v1_1_grch38_chry | `any` | `'CHM13Y_EBV_v1.1'` | reference_assembly: CHM13Y_EBV_v1.1 | The term itself, CHM13 v1.1 with GRCh38's chrY (#473). |
 
 ### assay_type
 

@@ -54,26 +54,30 @@ ENSEMBL_HOSTS = {
 }
 
 
-def _ensembl_top_level(host: str) -> dict[str, int]:
-    """``{contig name: length}`` for one assembly.
+def _get_json(url: str, upstream: str, **params) -> dict:
+    """The JSON body of one GET to an upstream publisher.
 
-    Skips on a transport error, a 5xx or a 429 — this test asserts about our
+    Skips on a transport error, a 5xx or a 429 — these tests assert about our
     table, and an outage upstream is not evidence of a defect here. A 4xx fails
     instead: that means *this* URL is wrong, and since nothing in `make test` or
     CI runs this file, skipping would retire the check without anyone noticing.
     """
-    url = f"{host}/info/assembly/homo_sapiens"
     try:
-        resp = requests.get(url, headers={"Content-Type": "application/json"}, timeout=30)
+        resp = requests.get(url, params=params, headers={"Content-Type": "application/json"}, timeout=30)
     except requests.RequestException as exc:
-        pytest.skip(f"Ensembl unreachable at {url}: {exc}")
+        pytest.skip(f"{upstream} unreachable at {url}: {exc}")
     if resp.status_code >= 500 or resp.status_code == 429:
-        pytest.skip(f"Ensembl returned {resp.status_code} for {url}")
+        pytest.skip(f"{upstream} returned {resp.status_code} for {url}")
     assert resp.status_code == 200, (
-        f"Ensembl returned {resp.status_code} for {url} — a 4xx means this test's URL is wrong, "
+        f"{upstream} returned {resp.status_code} for {url} — a 4xx means this test's URL is wrong, "
         "not that upstream is down, and skipping it would retire the check silently"
     )
-    regions = resp.json().get("top_level_region", [])
+    return resp.json()
+
+
+def _ensembl_top_level(host: str) -> dict[str, int]:
+    """``{contig name: length}`` for one assembly, from Ensembl."""
+    regions = _get_json(f"{host}/info/assembly/homo_sapiens", "Ensembl").get("top_level_region", [])
     return {r["name"]: r["length"] for r in regions if "name" in r and "length" in r}
 
 
@@ -141,22 +145,11 @@ NCBI_CHM13_V2 = "GCA_009914755.4"
 
 
 def test_chm13_matches_ncbi_t2t_chm13v2():
-    """The CHM13 row is NCBI's T2T-CHM13v2.0, on exactly the primary chromosomes (#473).
-
-    Skips on a transport error, a 5xx or a 429, and fails on a 4xx, for the reasons
-    ``_ensembl_top_level`` gives.
-    """
+    """The CHM13 row is NCBI's T2T-CHM13v2.0, on exactly the primary chromosomes (#473)."""
     url = f"https://api.ncbi.nlm.nih.gov/datasets/v2/genome/accession/{NCBI_CHM13_V2}/sequence_reports"
-    try:
-        resp = requests.get(url, params={"page_size": 100}, timeout=30)
-    except requests.RequestException as exc:
-        pytest.skip(f"NCBI unreachable at {url}: {exc}")
-    if resp.status_code >= 500 or resp.status_code == 429:
-        pytest.skip(f"NCBI returned {resp.status_code} for {url}")
-    assert resp.status_code == 200, f"NCBI returned {resp.status_code} for {url} — this test's URL is wrong"
     upstream = {
         r["chr_name"]: r["length"]
-        for r in resp.json().get("reports", [])
+        for r in _get_json(url, "NCBI", page_size=100).get("reports", [])
         if r.get("role") == "assembled-molecule" and r.get("chr_name") in PRIMARY_CHROMOSOMES
     }
     ours = {c: n for c, n in REFERENCE_CONTIG_LENGTHS["CHM13"].items() if not c.startswith("chr")}

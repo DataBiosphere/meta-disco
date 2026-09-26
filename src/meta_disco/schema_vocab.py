@@ -9,6 +9,7 @@ checkout. The rule engine's emitted values are validated against these enums (se
 The ``schema/`` project is the LinkML tooling that maintains and validates it.
 """
 
+from collections.abc import Iterable
 from functools import cache
 from importlib.resources import files
 
@@ -115,8 +116,9 @@ def value_ancestors(field: str, value: str) -> tuple[str, ...]:
     Empty for a term with no parent, which is every term of an enum that declares no
     ``is_a``. ``reference_assembly_enum`` is the one that does (#473): a hybrid's
     ancestors are its T2T release and then ``CHM13``. Raises ValueError for a value
-    outside the dimension's vocabulary, and the same errors as ``dimension_values``
-    for an unrecognized field or a missing enum.
+    outside the dimension's vocabulary or an ``is_a`` chain that names a missing
+    term or loops, and the same errors as ``dimension_values`` for an unrecognized
+    field or a missing enum.
     """
     if not value_in_vocabulary(field, value):
         raise ValueError(f"{value!r} is not a {field} term")
@@ -124,9 +126,32 @@ def value_ancestors(field: str, value: str) -> tuple[str, ...]:
     ancestors: list[str] = []
     parent = (values[value] or {}).get("is_a")
     while parent is not None:
+        if parent not in values or parent in ancestors or parent == value:
+            raise ValueError(f"{field} term {value!r} has a broken is_a chain at {parent!r}")
         ancestors.append(parent)
         parent = (values[parent] or {}).get("is_a")
     return tuple(ancestors)
+
+
+def most_specific(field: str, values: Iterable[str]) -> str | None:
+    """The one of ``values`` that every other is, or sits below in the ``is_a`` hierarchy; None if they do not nest.
+
+    Values that nest are one answer at two levels of detail — ``CHM13`` and
+    ``T2T-CHM13v2.0`` are both true of a v2.0 file — so the deepest is the answer
+    (#473). Two siblings (``T2T-CHM13v1.0`` beside ``T2T-CHM13v2.0``) do not nest,
+    and neither does anything outside the vocabulary (``not_applicable``) beside a
+    different value. A single value is returned as it is, in the vocabulary or not.
+    """
+    distinct = set(values)
+    if len(distinct) == 1:
+        return next(iter(distinct))
+    if not all(value_in_vocabulary(field, v) for v in distinct):
+        return None
+    for candidate in distinct:
+        above = value_ancestors(field, candidate)
+        if all(v == candidate or v in above for v in distinct):
+            return candidate
+    return None
 
 
 def status_values() -> frozenset[str]:

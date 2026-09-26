@@ -443,8 +443,8 @@ class TestBuildDecidesTheValue:
 
     def test_a_grc_patch_is_not_a_term(self):
         """GRC terms are major releases (#399): a resolved GRCh38 build is ``GRCh38``."""
-        family = ReferenceIdentity(base="GRCh38", version="p12")
-        assert assembly_term("GRCh38", family) == "GRCh38"
+        identity = ReferenceIdentity(base="GRCh38", version="p12")
+        assert assembly_term("GRCh38", identity) == "GRCh38"
 
     def test_an_ambiguous_version_leaves_the_family(self):
         """v1.0 and both its hybrids share chr1, so a chr1-only file is ``CHM13``, not v1.0."""
@@ -479,20 +479,14 @@ class TestBuildDecidesTheValue:
 class TestBuildTerms:
     """``BUILD_TERMS`` is held to the build table and to the schema's hierarchy (#473)."""
 
-    def test_every_row_of_a_family_with_releases_has_a_term(self):
+    def test_the_terms_are_exactly_the_rows_of_the_families_they_cover(self):
         """A CHM13 row added to the table without a term would quietly stay ``CHM13``."""
         rows = get_unified_rules().reference_builds
-        families_with_terms = {family for family, _ in BUILD_TERMS}
-        missing = [
-            (row.family, row.version)
-            for row in rows
-            if row.family in families_with_terms and (row.family, row.version) not in BUILD_TERMS
-        ]
-        assert not missing
-
-    def test_every_term_is_a_table_row(self):
-        rows = {(row.family, row.version) for row in get_unified_rules().reference_builds}
-        assert set(BUILD_TERMS) <= rows
+        vocabulary = schema_vocab.dimension_values("reference_assembly")
+        # A family with terms below it in the schema, read from the schema rather than
+        # from BUILD_TERMS, so a family the table misses entirely is caught too.
+        families = {a[-1] for a in (schema_vocab.value_ancestors("reference_assembly", v) for v in vocabulary) if a}
+        assert set(BUILD_TERMS) == {(row.family, row.version) for row in rows if row.family in families}
 
     def test_every_term_sits_under_its_family(self):
         wrong = [
@@ -603,6 +597,18 @@ class TestCoarseValueReconciliation:
         assert build["base"] is None and build["version"] is None
         assert build["chry_m5"] == "ce3e31103314a704255f3cd90369ecce"
         assert build["name"].startswith("t2t-chm13")
+
+    def test_a_build_is_compared_by_its_own_term(self):
+        """A family value a rule set agrees with any release under it; a sibling release does not (#473)."""
+        from types import SimpleNamespace
+
+        from meta_disco.header_classifier import _reconcile_with_coarse_value
+
+        v2 = ReferenceIdentity(base="CHM13", version="v2.0")
+        kept = _reconcile_with_coarse_value(SimpleNamespace(reference_assembly="CHM13"), v2)
+        assert kept == v2
+        dropped = _reconcile_with_coarse_value(SimpleNamespace(reference_assembly="T2T-CHM13v1.0"), v2)
+        assert (dropped.base, dropped.version) == (None, None)
 
     def test_an_agreeing_build_is_untouched(self):
         """The value is the build's release, and the build's family is its ancestor (#473)."""

@@ -75,6 +75,7 @@ from .pipeline import ANVIL_REPOSITORY, PUBLISHED_TABLES, RecordKey, is_key_valu
 from .records import JOIN_KEY_OUTPUT_FIELDS
 from .rule_engine import CONFLICT_MARKER, make_claim
 from .schema.classification_model import EvidenceFileEnvelope
+from .schema_vocab import most_specific
 from .slot_map import load_slot_map, published_slot_map_resource
 from .source_evidence import (
     DEFAULT_SOURCE_EVIDENCE_ROOT,
@@ -97,17 +98,19 @@ INFERENCE = "inference"
 
 # Report labels, never stored on a record.
 #
-# Per input, scored against the other inputs' declarations for the same slot. A source:
-# match or harmonized (it declared, and no other input declared differently), disagreed
-# (another input declared differently), unreviewed (its value has no authored row),
+# Per input, scored against the other inputs' declarations for the same slot. Two
+# declarations agree when they are equal or nest in the slot's `is_a` hierarchy
+# (`schema_vocab.most_specific`, #473): `CHM13` agrees with `T2T-CHM13v2.0`. A source:
+# match or harmonized (it declared, and every other input's declaration agrees with it),
+# disagreed (another input's does not), unreviewed (its value has no authored row),
 # no_claim (its value's authored row declares nothing for the slot, or declares
 # `not_classified`, which is no answer), silent. A source's `not_applicable` counts toward
 # match/harmonized like a value, so its harmonized total also covers slots whose category
 # is `not_applicable`; a source beside inference's own conflict is scored against the
 # other sources only, since that conflict declares nothing. Inference: agreed (a source declared
-# the same), added (every source was silent), unconfirmed (no source declared a value,
+# an agreeing value), added (every source was silent), unconfirmed (no source declared a value,
 # but one spoke — unreviewed or no_claim — so it was not silent), disagreed (another
-# input declared differently, or its own rules conflicted), silent.
+# input's declaration does not agree with it, or its own rules conflicted), silent.
 #
 # Per slot, exactly one of: filled_by_<source> or filled_by_<source>_harmonized for the
 # first source in SOURCE_PRECEDENCE that declared the delivered value — verbatim before
@@ -119,7 +122,9 @@ INFERENCE = "inference"
 # input's), conflict_sources (inference and the other sources, or those sources among
 # themselves, disagreed); or the slot's other status (`not_applicable`, `not_classified`).
 # Precedence only attributes a value every declaring input agreed on; it never picks a
-# value (contract 6.8). Whether inference agreed is its own outcome, in `inputs`.
+# value (contract 6.8). Where declarations nest the delivered value is the deepest, which
+# the vocabulary picks, not precedence, and a source that named only its parent is not
+# credited with it. Whether inference agreed is its own outcome, in `inputs`.
 MATCH = "match"
 HARMONIZED = "harmonized"
 UNREVIEWED = "unreviewed"
@@ -196,7 +201,9 @@ def declaration(entry: dict) -> str | None:
     return None
 
 
-def resolve_slot(inferred: dict, source_claims: Iterable[dict], published_unreviewed: bool) -> tuple[str, str | None]:
+def resolve_slot(
+    slot: str, inferred: dict, source_claims: Iterable[dict], published_unreviewed: bool
+) -> tuple[str, str | None]:
     """The reconciled ``(status, value)`` of one slot of one file, from inference's ``{value, status}``.
 
     In order:
@@ -205,7 +212,10 @@ def resolve_slot(inferred: dict, source_claims: Iterable[dict], published_unrevi
        says — agreeing with one of two disagreeing rules is not resolving them, which 4.7
        reserves for a curator rule (open question 1, decided 2026-09-22).
     2. The declarations differ — two values, or a value beside ``not_applicable`` (4.6):
-       ``conflict``.
+       ``conflict``, unless the values nest in the slot's ``is_a`` hierarchy
+       (:func:`~.schema_vocab.most_specific`, #473): ``CHM13`` beside
+       ``T2T-CHM13v2.0`` is one answer at two levels of detail, and the deepest is
+       the value (4.4).
     3. The published source spoke with a value no authored row reads (unreviewed): a
        ``conflict`` if any other input declared something, else ``not_classified`` —
        missing work, not a challenge.
@@ -222,7 +232,10 @@ def resolve_slot(inferred: dict, source_claims: Iterable[dict], published_unrevi
     if own is not None:
         declared.add(own)
     if len(declared) > 1:
-        return CONFLICT, None
+        deepest = most_specific(slot, declared)
+        if deepest is None:
+            return CONFLICT, None
+        declared = {deepest}
     if published_unreviewed:
         return (CONFLICT, None) if declared else (NOT_CLASSIFIED, None)
     if not declared:
@@ -549,7 +562,7 @@ def reconcile_record(record: dict, record_slots: dict[str, SlotEvidence]) -> dic
             )
         said = record_slots.get(slot, NO_EVIDENCE)
         inferred = {"value": entry.get("value"), "status": entry["status"]}
-        status, value = resolve_slot(inferred, said.claims, SOURCE_PUBLISHED_VALUE in said.unreviewed)
+        status, value = resolve_slot(slot, inferred, said.claims, SOURCE_PUBLISHED_VALUE in said.unreviewed)
         settled: dict = {
             "value": value,
             "status": status,
@@ -644,10 +657,10 @@ class Report:
             ):
                 self.filled_over_inference[dataset][slot] += 1
             per_input = self.inputs[dataset][slot]
-            per_input[INFERENCE][self._inference_outcome(settled, said, own)] += 1
+            per_input[INFERENCE][self._inference_outcome(slot, settled, said, own)] += 1
             published_silent = SOURCE_PUBLISHED_VALUE in self.coverage and SOURCE_PUBLISHED_VALUE not in covering
             for source_type in covering:
-                outcome = self._source_outcome(said, own, source_type)
+                outcome = self._source_outcome(slot, said, own, source_type)
                 per_input[source_type][outcome] += 1
                 if source_type == SOURCE_PUBLISHED_VALUE and outcome == SILENT:
                     published_silent = True
@@ -669,7 +682,11 @@ class Report:
         if status != CLASSIFIED:
             return status
         for source_type, name in SOURCE_PRECEDENCE:
-            declaring = [c for c in said.claims if c["source_type"] == source_type and declaration(c) is not None]
+            # The source that declared the delivered value: where declarations nest,
+            # one naming only the parent did not supply the value (#473).
+            declaring = [
+                c for c in said.claims if c["source_type"] == source_type and declaration(c) == settled["value"]
+            ]
             if declaring:
                 return fill_category(name, harmonized=all(is_harmonized(c) for c in declaring))
         return FILLED_BY_INFERENCE
@@ -706,26 +723,35 @@ class Report:
         return tuple(sorted((name, tuple(sorted(values))) for name, values in said_by.items()))
 
     @staticmethod
-    def _inference_outcome(settled: dict, said: SlotEvidence, own: str | None) -> str:
+    def _inference_outcome(slot: str, settled: dict, said: SlotEvidence, own: str | None) -> str:
         if settled["inferred"]["status"] == CONFLICT:
             return DISAGREED
         if own is None:
             return SILENT
-        others = {declaration(c) for c in said.claims} - {None}
-        if others - {own}:
+        others = {d for c in said.claims if (d := declaration(c)) is not None}
+        # Agreement is nesting, as resolve_slot has it (#473): a source's CHM13 agrees
+        # with inference's T2T-CHM13v2.0.
+        if any(most_specific(slot, {own, other}) is None for other in others):
             return DISAGREED
-        if own in others:
+        if others:
             return AGREED
         spoke = said.unreviewed or said.no_claim or any(c.get("status") == NOT_CLASSIFIED for c in said.claims)
         return UNCONFIRMED if spoke else ADDED
 
     @staticmethod
-    def _source_outcome(said: SlotEvidence, own: str | None, source_type: str) -> str:
+    def _source_outcome(slot: str, said: SlotEvidence, own: str | None, source_type: str) -> str:
         mine = [c for c in said.claims if c.get("source_type") == source_type and declaration(c) is not None]
         if mine:
-            declared = {declaration(c) for c in mine}
-            others = {declaration(c) for c in said.claims if c.get("source_type") != source_type} | {own}
-            if len(declared) > 1 or (others - {None}) - declared:
+            declared = {d for c in mine if (d := declaration(c)) is not None}
+            others = {
+                d for c in said.claims if c.get("source_type") != source_type and (d := declaration(c)) is not None
+            }
+            if own is not None:
+                others.add(own)
+            # Agreement is nesting, as resolve_slot has it (#473).
+            if most_specific(slot, declared) is None or any(
+                most_specific(slot, declared | {other}) is None for other in others
+            ):
                 return DISAGREED
             # The same rule the slot's category uses: verbatim if any claim is verbatim.
             return MATCH if any(not is_harmonized(c) for c in mine) else HARMONIZED

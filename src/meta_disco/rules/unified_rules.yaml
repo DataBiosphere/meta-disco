@@ -1197,16 +1197,15 @@ validators:
 
 reference_contig_lengths:
   # All 22 autosomes + X + Y for each assembly.
-  # Every chromosome has a unique length per assembly (min diff 41Kbp),
+  # Every chromosome has a unique length per assembly (min diff 16,408 bp,
+  # GRCh38 against GRCh37 on chr16),
   # so even a single-contig VCF can be definitively classified.
   #
   # Each row is one NCBI assembly, at the accession cited in
   # validators/contig_lengths.py. The CHM13 row is T2T-CHM13v2.0 (#473); it spans
   # the earlier releases because matching allows 1000 bp, and v1.0 differs from it
   # by at most 657 bp (chr3). Which release a file is comes from reference_builds
-  # below, not from this row. Until #473 the row held v1.0's chr1-chr3 beside
-  # v1.1/v2.0's chrX and v2.0's chrY, which is why three lengths disagreed with
-  # NCBI (#466).
+  # below, not from this row.
   GRCh38:
     chr1: 248956422
     chr2: 242193529
