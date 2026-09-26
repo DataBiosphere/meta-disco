@@ -169,13 +169,15 @@ not for being unanchored.
 
 ## Signal Tracks (.bigwig, .bw, .bedGraph)
 
-**data_type**: `signal`
+**data_type**: `annotations.coverage` ← `Signal.Unique[Multiple].strand±.bw`, STAR's signal output converted to bigWig (#543)
 
-**data_modality**:
-- `transcriptomic.bulk` ← filename (RNA, transcriptome, coverage)
+**data_modality**: `transcriptomic.bulk`, and **assay_type** `RNA-seq`, from the same
+name: STAR is an RNA-seq aligner, as `star_filename` has it for STAR's BAMs.
 
-**Coverage**: Filename-dependent only. No header inspection available. The surviving
-RNA pattern is unanchored and matches inside a gene symbol; #471 owns that.
+**Coverage**: Filename-dependent only. No header inspection available. Any other bigWig
+or bedGraph (the HPRC `*.5mC.bigwig` methylation tracks among them) has no `data_type`,
+`data_modality` or `assay_type`; only a reference named in the filename is still claimed.
+A bare `rna` in a name no longer says transcriptomic.
 
 ---
 

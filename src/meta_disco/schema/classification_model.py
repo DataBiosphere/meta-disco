@@ -137,10 +137,9 @@ class DataTypeEnum(str, Enum):
     annotations = "annotations"
     annotationsFULL_STOPcoverage = "annotations.coverage"
     """
-    Mean read depth per genome window, measured from an alignment (e.g. a mosdepth `regions.bed.gz`). No `meaning`: EDAM has no data term for coverage or read depth, only the process (operation_3230).
+    Read depth along the genome, measured from an alignment: per base or per window, raw or normalized (e.g. a mosdepth `regions.bed.gz`, or a STAR `Signal.Unique.strand+.bw`). No `meaning`: EDAM has no data term for coverage or read depth, only the process (operation_3230).
     """
     peaks = "peaks"
-    signal = "signal"
     raw_signal = "raw_signal"
     array_signal = "array_signal"
     images = "images"
