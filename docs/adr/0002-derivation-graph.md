@@ -292,8 +292,10 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
 - `DerivationEdge` gains:
   - Provenance, as a claim carries it, so two edges of one source kind stay distinguishable
     (decision 6): `source_type` (the existing slot, range `source_type_enum`); for an edge evidence
-    states, the existing `source` slot (`ClaimSource`: source, dataset, table, column); for one inference
-    reads, `rule_id`, naming the rule and header field or filename convention it came from. Which kind
+    states, the existing `source` slot (`ClaimSource`: name, dataset, table, column) **and** a `rule_id`
+    naming the mapping that turned that column or activity into a verb, as an external claim carries both
+    today; for one inference reads, `rule_id` alone, naming the rule and header field or filename
+    convention it came from. Which kind
     `anvil_activity` is — it is neither the submitter tables nor `anvil_file` — is #356's.
   - `parent_key`: the parent's record key per `SOURCE_RECORD_KEYS`, set only when the parent resolves to
     a record of the child's dataset; its presence is what `parent_scope` means, so `parent_scope` is not a
@@ -329,6 +331,9 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
 - What each step carries (decision 8), and each verb's cardinality (decision 5), are declared once in
   data — on the `relation_enum` values or in a rules file — and read by code and a drift test;
   `INHERITED_FIELDS` becomes a reader of the `index_of` entry rather than a second copy.
+- An inherited claim (decision 8) carries `inherited_from`: a list, one entry per contributing parent, of
+  `{relation, parent_key, value | status | state}` — so the parents a declaration is credited to, and the
+  values a mixed one stands for, are on the record rather than re-joined from the parents'.
 - Mixed is a new `claim_state_enum` value, `mixed`: a claim with no value and no status, and the one state
   that takes part in resolution, as 4.9 says. Alone or beside another mixed declaration it leaves the slot
   `not_classified`; against a value or `not_applicable` from any other declaration — the child's own, or
