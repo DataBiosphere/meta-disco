@@ -49,12 +49,13 @@ A sample or donor is `{id, namespace, source_type}`, plus its dataset where the 
   which constant each place is, is #357's.
 
 **Two identifiers name the same sample or donor only when namespace and id both match** — and, for
-`dataset_local`, the dataset too. Equal identifiers say nothing about whether a sample identifier and a
-donor identifier are one person; that is what a `donor_of` edge states (#361). That is what makes the search across datasets work:
-`coriell:HG03016` is in ANVIL_1000G_high_coverage_2019, ANVIL_T2T, ANVIL_T2T_CHRY and AnVIL_HPRC_R2, and
-an exact match finds all four. It is also what keeps two datasets that both call someone `S1` apart: a
-`dataset_local` identifier carries its dataset, which is part of its identity, so it never matches across
-datasets.
+`dataset_local`, the dataset too. That is what makes the search across datasets work: `coriell:HG03016`
+is in ANVIL_1000G_high_coverage_2019, ANVIL_T2T, ANVIL_T2T_CHRY and AnVIL_HPRC_R2, and an exact match finds
+all four. It is also what keeps two datasets that both call someone `S1` apart: a `dataset_local`
+identifier carries its dataset, which is part of its identity, so it never matches across datasets.
+Equal identifiers say nothing about whether a sample identifier and a donor identifier are one person;
+that is what a `donor_of` edge states (#361). **Identifiers are the one thing that crosses datasets;
+file edges never do** (decision 2).
 
 **Mapping between namespaces is out of scope here** and stays with #361: one person as
 `coriell:HG03016` in one dataset and `sra_sample:SRS…` in another needs a registry crosswalk (IGSR,
@@ -66,19 +67,19 @@ table would be empty scaffolding. Revisit if #337's manifest route populates the
 
 ### 2. Parent scope: `internal` and `external`
 
-- **`internal`** — the parent is one file we hold, in any dataset, and the edge carries its record key
-  (`pipeline.SOURCE_RECORD_KEYS`). A bare file name resolves only within the child's dataset, as today's
-  filename joins do; a parent in another dataset resolves only by a reference that identifies one file
-  corpus-wide (a `file_id`, a DRS URI, an exact storage path) or a declared mapping. So HPRC's parental
-  Illumina CRAMs in ANVIL_1000G_high_coverage_2019 are internal once the sheets' S3 paths resolve to
-  them; by name alone, as the re-measure matched them, they are external.
+- **`internal`** — the parent is one file we hold **in the child's own dataset**, and the edge carries its
+  record key (`pipeline.SOURCE_RECORD_KEYS`). A file parent resolves only within the child's dataset,
+  whatever form the source names it in, as today's filename joins do.
 - **`external`** — a source names the parent (`NA21127.merged.bam` in a `@PG` line, or a `file_id` or DRS
-  URI in a table) but it does not resolve to one file we hold: it was never deposited, or the name is
-  shared by more than one (#438).
+  URI in a table) but it does not resolve to one file of the child's dataset: it was never deposited, the
+  name is shared by more than one (#438), or it is in another dataset. HPRC's parental Illumina CRAMs in
+  ANVIL_1000G_high_coverage_2019 are external to an AnVIL_HPRC_R2 assembly, and so pass it nothing
+  (decision 8). The two files still meet through their sample identifier (decision 1).
 
-The parent as the source wrote it is always kept, resolved or not: `parent_file` for a name,
+The parent as the source wrote it is always kept, resolved or not: `parent_file` for a name (which means
+a name within the child's dataset),
 `parent_ref` for a `file_id` or DRS URI. `parent_key` is set only when that reference resolves to a record
-in the run.
+of the child's dataset.
 
 `parent_scope` is **not stored** on the record: it is whether `parent_key` is set, and a stored copy
 could disagree with it. `edges.jsonl` works it out, so a consumer can filter on it. An edge whose parent
@@ -279,7 +280,7 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
     reads, `rule_id`, naming the rule and header field or filename convention it came from. Which kind
     `anvil_activity` is — it is neither the submitter tables nor `anvil_file` — is #356's.
   - `parent_key`: the parent's record key per `SOURCE_RECORD_KEYS`, set only when the parent resolves to
-    a record in the run; its presence is what `parent_scope` means, so `parent_scope` is not a slot
+    a record of the child's dataset; its presence is what `parent_scope` means, so `parent_scope` is not a slot
     (decisions 2, #371).
   - `parent_ref`: the parent as a source wrote it when that is a `file_id` or DRS URI, kept whether or not
     it resolves (decision 2); a name stays in `parent_file`.
@@ -329,7 +330,7 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   so sorting ~700K records by edge would break reconcile's one-file-at-a-time streaming. I think two
   passes fit instead: settle every record's own slots and keep only the carried dimensions per record key,
   resolve inheritance over that small map by a memoized walk that refuses a cycle, then write the files in
-  their current order. Deciding `internal` for an evidence-stated parent needs the run's record keys; the
+  their current order. Deciding `internal` for an evidence-stated parent needs each dataset's record keys and names; the
   pass reconcile's join already makes over the records can collect them. Not designed here.
 - **A parent in `conflict`.** 4.4–4.5 reconcile declarations, and a conflict declares no value. Whether a
   parent's conflict reaches the child as a conflict (what the index producer does today) or as nothing is
