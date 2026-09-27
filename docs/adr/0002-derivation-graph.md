@@ -85,7 +85,8 @@ table would be empty scaffolding. Revisit if #337's manifest route populates the
   identifier for that reason.
 
 The parent as the source wrote it is always kept, resolved or not: `parent_file` for a name (looked up
-only within the child's dataset), `parent_ref` for a `file_id` or DRS URI. `parent_key` is set only when that reference resolves to a record
+only within the child's dataset), `parent_ref` for anything else a source gives — a `file_id`, a DRS URI, an S3 or filesystem path.
+`parent_key` is set only when that reference resolves to a record
 of the child's dataset.
 
 `parent_scope` is **not stored** on the record: it is whether `parent_key` is set, and a stored copy
@@ -298,7 +299,8 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
     a record of the child's dataset; its presence is what `parent_scope` means, so `parent_scope` is not a
     slot (decisions 2, #371). Named for the key rather than `parent_file_id` because HPRC's key is not a
     `file_id`.
-  - `parent_ref`: the parent as a source wrote it when that is a `file_id` or DRS URI, kept whether or not
+  - `parent_ref`: the parent as a source wrote it when that is not a bare name — a `file_id`, a DRS URI,
+    an S3 or filesystem path — kept whether or not
     it resolves (decision 2); a name stays in `parent_file`.
   - A constraint: exactly one parent form per edge — `parent_id`, or a file parent (`parent_file` or
     `parent_ref`, with `parent_key` where it resolves) — and the form the relation takes (an identifier
