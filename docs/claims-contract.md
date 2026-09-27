@@ -252,9 +252,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     give none, and the dimension is **mixed**, which is not a conflict. Which step carries which dimension
     is ADR-0002's table; `data_type` is never carried. A parent passes on a value or `not_applicable`
     (which 4.6 then weighs); a parent that is `not_classified` or mixed passes nothing; what a parent in
-    `conflict` passes is #413's. The declaration is a claim like any other (1.1,
-    3.2), naming the step it crossed as its rule. It is the only way a slot is filled from another file's
-    answer, and nothing fills one slot from another slot's answer within a file.
+    `conflict` passes is #413's. Sources that name different parents for a verb with one parent are an
+    edge conflict, across which nothing is inherited until it is settled. The declaration is a claim
+    like any other (1.1, 3.2), naming the step it crossed as its rule. It is the only way a slot is filled
+    from another file's answer, and nothing fills one slot from another slot's answer within a file.
 
 ## 5. Review
 

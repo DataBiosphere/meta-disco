@@ -121,6 +121,15 @@ Only a verb a source can detect is minted (June doc 8d). The existing five stay:
 
 `sample_of`, `donor_of` and `child_of` have an identifier as their parent, not a file (decision 1).
 
+**Each verb has a cardinality.** A child has **one** parent across `index_of`, `checksum_of`,
+`summarizes`, `lifted_over_from`, `aligned_to`, `sample_of` and `donor_of`, and **many** across
+`called_from`, `merged_from`, `aligned_from`, `assembled_from`, `child_of` and `derived_from`. Sources
+that name the same parent for a one-parent verb are one parent with two sources. Sources that name
+different parents for it are an **edge conflict**: a `.tbi` whose filename match says `a.vcf.gz` and whose
+`anvil_activity` says `b.vcf.gz` has one of them wrong. An edge conflict is listed for review, and nothing
+is inherited across that verb until it is settled. For a many-parent verb, the parents every source
+names are pooled into one set.
+
 ### 6. Sources, and where edges live
 
 Five sources name file parents, the Context table's: submitter tables (same row or id join), `anvil_activity`,
@@ -162,7 +171,8 @@ declaration credited to the parent that reconciles with the child's own; contrac
 VCF takes `ILLUMINA`, and a VCF whose filename says `hifi` beside that CRAM is a `conflict` for a curator:
 a mislabelled file or a wrong edge, which must not be settled silently.
 
-**Parents that differ are mixed, not a conflict.** A child's parents are settled among themselves first:
+**Parents that differ are mixed, not a conflict.** A child's parents across one verb — the pooled set of a
+many-parent verb (decision 5) — are settled among themselves first:
 parents that agree (4.4's sense, `is_a` nesting included) give the child one inherited declaration,
 naming how many parents and which; parents that differ give it none, and the dimension is **mixed**. A
 1000G joint call over NovaSeq 6000 and HiSeq X CRAMs has no single `instrument_model`, and an HPRC assembly
@@ -265,19 +275,25 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
 - `relation_enum` gains `aligned_from`, `aligned_to`, `called_from`, `merged_from`, `assembled_from`,
   `sample_of`, `donor_of`, `child_of` (decision 5); its description drops `merged_from` from the
   held-back list.
-- What each step carries (decision 8) is declared once in data — on the `relation_enum` values or in a
-  rules file — and read by code and a drift test; `INHERITED_FIELDS` becomes a reader of the `index_of`
+- Evidence cannot state an edge yet: an `EvidenceRow` carries one classification slot and a `raw_value`,
+  with no room for a relation or a parent. The shape of relationship evidence, and the per-dataset
+  lineage map that fills it, are not designed here; #356 designs them with the first evidence-stated
+  edge (`anvil_activity`).
+- What each step carries (decision 8), and each verb's cardinality (decision 5), are declared once in
+  data — on the `relation_enum` values or in a rules file — and read by code and a drift test; `INHERITED_FIELDS` becomes a reader of the `index_of`
   entry rather than a second copy.
 - `credited_to_enum` and `reconcile.SLOT_CATEGORIES` gain a category for a slot filled by inheritance,
   and the conflict kinds one for a child against its parent, so the reconcile report counts neither as a
-  source (contract 6.10). The report also needs a way to list a mixed dimension with its parents' values.
+  source (contract 6.10). The report also needs a way to list a mixed dimension with its parents' values,
+  and an edge conflict with the parents each source named.
 - An `edges.jsonl` row is its own class, not a `DerivationEdge`: its child is a record key or an
   `EntityIdentifier`, because `donor_of` and `child_of` have no record to sit on (decision 6).
 - `parent_kind_enum` gains `reference` and `assembly` if #358 and #360 need them; decided there.
 
 ## Open
 
-- **Which stage builds edges from evidence.** Decision 6 recommends reconcile; #356 confirms or overturns it.
+- **Which stage builds edges from evidence, and from what input.** Decision 6 recommends reconcile, and
+  no evidence shape carries an edge yet (schema changes, above). #356 designs both.
 - **Inheritance needs the parent settled first.** Parents and children are in different producer files
   (the CRAM in one, its VCF in another) and chains are deeper than one step (FASTQ → CRAM → VCF → `.tbi`),
   so sorting ~700K records by edge would break reconcile's one-file-at-a-time streaming. I think two
