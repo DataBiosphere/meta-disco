@@ -35,7 +35,7 @@ companion file.") The open question (#109) is what our five dimensions should ev
 *mean* for them.
 
 > **Superseded by ADR-0002** (decision 8): points (1) and (3). A companion inherits its parent's lineage dimensions
-> across its edge, as a declaration that reconciles (contract 4.9). Point (2) stands; (4) is superseded as 7a is.
+> across an `internal` edge (nothing crosses an `external` one), as a declaration that reconciles (contract 4.9). Point (2) stands; (4) is superseded as 7a is.
 
 The decision recorded here is fourfold: **(1)** separate a file's *identity* from
 its *origin* and store the origin as a link to the parent rather than copied-in
@@ -421,8 +421,8 @@ That framing drops straight into the provenance model of #90 (authority =
 
 ## 7. Why `reference_assembly` is the odd one out
 
-> **Superseded by ADR-0002**** (decision 8), in part: the opening's "the other contextual fields are
-> `not_applicable`. That is **correct**" no longer holds for a companion, which inherits them.
+> **Superseded by ADR-0002** (decision 8), in part: the opening's "the other contextual fields are
+> `not_applicable`. That is correct" no longer holds for a companion, which inherits them.
 
 The post-#106 state leaves `reference_assembly` open while the other contextual
 fields are `not_applicable`. That is **correct** — it just was never explained.
@@ -588,7 +588,7 @@ parent_kind                    ∈ { alignment, variants, reads, sequence, inter
 
 ### 8c. Two content classes, and why we factor instead of subtype
 
-> **Superseded by ADR-0002**** (decision 8), in part: "descriptive ⇒ `data_modality / assay_type / platform`
+> **Superseded by ADR-0002** (decision 8), in part: "descriptive ⇒ `data_modality / assay_type / platform`
 > are `not_applicable`" no longer holds; a companion inherits them. The factoring itself stands.
 
 The corrected model puts **all** content types in one field, `data_type`, but

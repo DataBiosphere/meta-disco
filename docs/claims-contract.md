@@ -257,9 +257,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
       value goes without one — or `not_applicable` (which 4.6 then weighs);
     - parents that differ, or any parent that is itself mixed, declare the state **mixed**: no value, no
       status, and not a conflict. It is the one claim state that takes part in resolution, and only here:
-      alone it leaves the slot `not_classified`; against a value the child declares, the slot is
-      `conflict`, since one value contradicts a lineage that has none; against the child's `not_applicable`
-      it is a conflict too, as the values it stands for would be (4.6);
+      alone, or beside another mixed declaration, it leaves the slot `not_classified`, marked mixed; against
+      a value from any other declaration — the child's own, or another verb's inherited one — the slot is
+      `conflict`, since one value contradicts a lineage that has none; against `not_applicable` from any
+      other declaration it is a conflict too, as the values it stands for would be (4.6);
     - a parent that is `not_classified` passes nothing; what a parent in `conflict` passes is #413's.
 
     Which step carries which dimension is ADR-0002's table; `data_type` is never carried. Sources that

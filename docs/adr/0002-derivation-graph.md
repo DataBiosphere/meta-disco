@@ -204,7 +204,8 @@ HPRC assembly built from HiFi, ONT and Hi-C reads no single `platform`: nobody i
 says nothing the slot stays `not_classified`, marked mixed, with nothing for a curator to answer; the report
 lists the parents' values. But a joint call whose filename says `NovaSeq 6000` claims one value for a
 lineage that has none, so the child declaring a value against mixed is a conflict, as is the child
-declaring `not_applicable` against it, and the child contradicting an inherited value.
+declaring `not_applicable` against it, and the child contradicting an inherited value. A second carrying
+verb's value against mixed is a conflict the same way; two mixed declarations stay mixed (contract 4.9).
 
 **What a parent passes on.** A value, or `not_applicable`, which the child's own evidence then meets as
 4.6 says: a `.fai` stays `not_applicable` for `platform` beside its reference FASTA, as it is today. A
@@ -305,8 +306,8 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
     parent, which decision 2 rules out.
   - `parent_id`: an `EntityIdentifier`, the alternative to a file parent for `sample_of`, `donor_of`,
     `child_of` (decisions 1, 5).
-  - `source_assembly`: range `reference_assembly_enum`, optionally with a `build` of range
-    `ReferenceBuild`, on `lifted_over_from` only — the assembly the coordinates came from; the
+  - `source_assembly`: an inlined class `{value: reference_assembly_enum, build: ReferenceBuild}` (build
+    optional), as `ReferenceAssemblyClassification` pairs the two today, on `lifted_over_from` only — the assembly the coordinates came from; the
     record's `reference_assembly` stays the current one (the comment on #355, measured 178
     Picard-lifted dbSNP files in ANVIL_T2T).
 - An inherited `reference_assembly` claim carries a `ReferenceBuild` with `base` and `version` only, and
@@ -327,8 +328,9 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   data — on the `relation_enum` values or in a rules file — and read by code and a drift test;
   `INHERITED_FIELDS` becomes a reader of the `index_of` entry rather than a second copy.
 - Mixed is a new `claim_state_enum` value, `mixed`: a claim with no value and no status, and the one state
-  that takes part in resolution, as 4.9 says. The slot it leaves alone is `not_classified`; against a value
-  or `not_applicable` the child declares, the slot is `conflict`.
+  that takes part in resolution, as 4.9 says. Alone or beside another mixed declaration it leaves the slot
+  `not_classified`; against a value or `not_applicable` from any other declaration — the child's own, or
+  another verb's inherited one — the slot is `conflict`.
 - `credited_to_enum` and `reconcile.SLOT_CATEGORIES` gain a category for a slot filled by inheritance,
   and the conflict kinds one for a child against its parent, so the reconcile report counts neither as a
   source (contract 6.10). The report also needs a way to list a mixed dimension with its parents' values,
