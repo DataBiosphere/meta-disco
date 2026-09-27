@@ -48,8 +48,8 @@ A sample or donor is `{id, namespace, source_type}`, plus its dataset where the 
   `sra_sample` (`SRS…`/`ERS…`), `biosample` (`SAMN…`/`SAMEA…`), `dataset_local`. The list is #357's to
   settle against the corpus.
 - `source_type` is where we read it, from `source_type_enum`, with the exact place (`@RG SM`, a VCF
-  sample column, a table and column) as provenance beside it, the way a claim records it (`source` or
-  `rule_id`, schema changes below);
+  sample column, a table and column) as provenance beside it, the way a claim records it (`source`
+  and `rule_id` for evidence, `rule_id` alone for inference, schema changes below);
   which constant each place is, is #357's.
 
 **Two identifiers name the same sample or donor only when namespace and id both match** — and, for
@@ -161,7 +161,8 @@ An edge whose child is a file is stored on that file's record as `derived_from: 
 `donor_of` and `child_of` have an identifier as their child, which has no record, so they live only in a
 flat `edges.jsonl` written once per run: child (a record key or an identifier), relation, parent
 (`parent_key` where it resolves, and `parent_file` or `parent_ref` as the source wrote it, or an
-identifier), provenance (`source_type`, plus `source` or `rule_id`, as on the edge), and `parent_scope`,
+identifier), provenance (`source_type`, plus `source` and `rule_id` for evidence or `rule_id` alone for inference,
+as on the edge), and `parent_scope`,
 worked out. Its file-child rows are built
 from the records, not a second source of truth, so the graph can be queried without loading every
 record.
@@ -320,7 +321,8 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   written.
 - New class `EntityIdentifier`: `id`, `namespace` (`identifier_namespace_enum`), `dataset` (set exactly
   when the namespace is `dataset_local`, and part of its identity), and the same provenance as
-  `DerivationEdge` — `source_type`, plus `source` or `rule_id` (decision 1).
+  `DerivationEdge` — `source_type`, plus `source` and `rule_id` for evidence or `rule_id` alone for inference
+  (decision 1).
 - `relation_enum` gains `aligned_from`, `aligned_to`, `called_from`, `merged_from`, `assembled_from`,
   `sample_of`, `donor_of`, `child_of` (decision 5); its description drops `merged_from` from the
   held-back list.
@@ -345,7 +347,7 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
 - An `edges.jsonl` row is its own class, not a `DerivationEdge`: its child is a record key or an
   `EntityIdentifier`, because `donor_of` and `child_of` have no record to sit on; its parent carries the
   same fields as `DerivationEdge`'s — `parent_key`, `parent_file`, `parent_ref`, or `parent_id` — and its
-  provenance `source_type` plus `source` or `rule_id`, with `parent_scope` worked out (decision 6).
+  provenance `source_type` plus `source` and `rule_id` for evidence or `rule_id` alone for inference, with `parent_scope` worked out (decision 6).
 - `parent_kind_enum` gains `reference` and `assembly` if #358 and #360 need them; decided there.
 
 ## Open

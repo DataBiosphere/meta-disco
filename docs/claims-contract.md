@@ -264,7 +264,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     - if the parents with an answer agree but any parent across the verb is `not_classified`, the verb
       passes nothing for that dimension, since the unclassified one cannot be known to agree; parents
       already known to differ, or a mixed parent, give mixed whatever the rest are; what a parent in
-      `conflict` passes is #413's.
+      `conflict` passes, and so what its verb gives, is #413's.
 
     Which step carries which dimension is ADR-0002's table; `data_type` is never carried. Sources that
     name different parents for a verb with one parent are an edge conflict, across which nothing is
