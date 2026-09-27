@@ -64,11 +64,11 @@ Contract 2.7 sorts columns into file links, metadata values and foreign keys. A
 dimensions. A table with **one** file-link column is a file table: its name describes the
 file, so its name tokens map. A table with **several** is an entity table (one row per
 sample, one column per file): its column names describe the files and map, and its
-name maps for a slot only where the fact is one the files it maps share, and not for one
+name maps for a slot only on the columns whose files all share the fact, and not for one
 the row's files differ on (an entity table holding an assembly and its alignments takes
 no `data_type` from `assembly` in its name). A reference build named in the table name
-speaks for the row's outputs — its alignments, calls and stats — and not for its input
-reads, which carry no reference: ANVIL_T2T_CHRY lists the same FASTQs in its
+is shared by the row's outputs — its alignments, calls and stats — and not by its
+unaligned input reads, which carry no reference: ANVIL_T2T_CHRY lists the same FASTQs in its
 ``SGDP_CHM13v2_sample`` and ``SGDP_GRCh38_sample`` tables, so their read columns take
 no reference from either name (#555).
 """

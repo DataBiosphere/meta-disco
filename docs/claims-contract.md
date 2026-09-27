@@ -471,7 +471,8 @@ A line leaves this section when the assertion above it is enforced, not when it 
   inference calls `not_applicable` beside a declared assembly (558, `ANVIL_T2T_CHRY`), published values no
   authored row reads yet (1,048, the ENCORE and IGVF datasets), and inference's own conflicts carried through
   (138). The numbers are on the PR. #555 found the 558 FASTQs' assembly was never declared: the slot map
-  gave the SGDP read columns their table's name, and those four entries are gone.
+  gave the SGDP read columns the reference build named in their table's name, and those four entries are
+  gone.
 - ~~Whether input kind 2 (AnVIL harmonized fields) is read today at all.~~ **Answered twice** — #424 no,
   #472/#497 yes (maintainer, 2026-09-21); 4.1 carries the reasoning. The number was never reused.
 - What a sentinel raw value (`""`, null, `unspecified`, `NA`) produces. Currently: an ordinary rule, yielding a state to be decided.
