@@ -470,7 +470,8 @@ A line leaves this section when the assertion above it is enforced, not when it 
   inference calls `alignments` where the submitter says `unaligned reads` (1,539, `AnVIL_HPRC_R2`), FASTQs
   inference calls `not_applicable` beside a declared assembly (558, `ANVIL_T2T_CHRY`), published values no
   authored row reads yet (1,048, the ENCORE and IGVF datasets), and inference's own conflicts carried through
-  (138). The numbers are on the PR.
+  (138). The numbers are on the PR. #555 found the 558 FASTQs' assembly was never declared: the slot map
+  gave the SGDP read columns their table's name, and those four entries are gone.
 - ~~Whether input kind 2 (AnVIL harmonized fields) is read today at all.~~ **Answered twice** — #424 no,
   #472/#497 yes (maintainer, 2026-09-21); 4.1 carries the reasoning. The number was never reused.
 - What a sentinel raw value (`""`, null, `unspecified`, `NA`) produces. Currently: an ordinary rule, yielding a state to be decided.
@@ -490,4 +491,5 @@ A line leaves this section when the assertion above it is enforced, not when it 
 - What the two artifacts are called. `*_classifications.json` means inference today and the name should be corrected rather than inherited. This is #271's scope — it already covers naming drift in `output/`, and it says it can land independently of the rest of #268.
 - ~~How many files carry a source-declared value for a slot inference calls `not_applicable`.~~ **Measured by
   #432:** 564 slots — 558 FASTQs in `ANVIL_T2T_CHRY` with a declared `GRCh38`, and 6 `assay_type` slots in
-  `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open`. Small enough that 4.6 stands.
+  `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open`. Small enough that 4.6 stands. Since #555 it is the 6 alone: the
+  558 were a slot-map routing error, not a declaration.

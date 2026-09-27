@@ -375,15 +375,13 @@ class TestProvenance:
         text = (
             "catalog: anvil15\ndatasets:\n  D:\n    SGDP_CHM13v2_sample:\n"
             "      cram:\n        reference_assembly:\n          - {table_name: CHM13v2}\n"
-            "      read_1_fastq:\n        reference_assembly:\n          - {table_name: CHM13v2}\n"
-            "        data_type:\n          - {column_name: fastq}\n"
+            "      read_1_fastq:\n        data_type:\n          - {column_name: fastq}\n"
         )
         result = ae.import_dataset(
             slot_map(tmp_path, text), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
         )
         rows = rows_of(result.tables[0].path)
         assert ("reference_assembly", drs(1), "CHM13v2", None) in rows
-        assert ("reference_assembly", drs(2), "CHM13v2", None) in rows
         assert ("data_type", drs(2), "fastq", "read_1_fastq") in rows
 
     def test_the_envelope_names_both_sides_of_the_join(self, tmp_path):
