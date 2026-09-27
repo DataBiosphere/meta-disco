@@ -74,7 +74,11 @@ table would be empty scaffolding. Revisit if #337's manifest route populates the
   URI in a table) but it does not resolve to one file of the child's dataset: it was never deposited, the
   name is shared by more than one (#438), or it is in another dataset. HPRC's parental Illumina CRAMs in
   ANVIL_1000G_high_coverage_2019 are external to an AnVIL_HPRC_R2 assembly, and so pass it nothing
-  (decision 8). The two files still meet through their sample identifier (decision 1).
+  (decision 8). The two files still meet through their sample identifier (decision 1). This exclusion is
+  deliberate: a dataset is the unit a file's lineage is stated and reviewed in, and a file edge across
+  datasets would let one dataset's answer flow into another's records. The one cross-dataset file link
+  the re-measure found (HPRC assemblies ← parental CRAMs in 1000G and T2T) is left to the sample
+  identifier for that reason.
 
 The parent as the source wrote it is always kept, resolved or not: `parent_file` for a name (which means
 a name within the child's dataset),
@@ -158,7 +162,8 @@ the ones evidence states.
 An edge whose child is a file is stored on that file's record as `derived_from: [DerivationEdge]`.
 `donor_of` and `child_of` have an identifier as their child, which has no record, so they live only in a
 flat `edges.jsonl` written once per run: child (a record key or an identifier), relation, parent
-(`parent_key`, `parent_file` or an identifier), source, `parent_scope`. Its file-child rows are built
+(`parent_key` where it resolves, and `parent_file` or `parent_ref` as the source wrote it, or an
+identifier), source, `parent_scope`. Its file-child rows are built
 from the records, not a second source of truth, so the graph can be queried without loading every
 record.
 
@@ -323,7 +328,8 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   source (contract 6.10). The report also needs a way to list a mixed dimension with its parents' values,
   and an edge conflict with the parents each source named.
 - An `edges.jsonl` row is its own class, not a `DerivationEdge`: its child is a record key or an
-  `EntityIdentifier`, because `donor_of` and `child_of` have no record to sit on (decision 6).
+  `EntityIdentifier`, because `donor_of` and `child_of` have no record to sit on; its parent carries the
+  same fields as `DerivationEdge`'s — `parent_key`, `parent_file`, `parent_ref`, or `parent_id` (decision 6).
 - `parent_kind_enum` gains `reference` and `assembly` if #358 and #360 need them; decided there.
 
 ## Open
