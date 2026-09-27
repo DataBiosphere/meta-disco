@@ -250,7 +250,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     a dimension the step carries are settled among themselves first: parents that agree (4.4) give the
     child one declaration, credited to them, and 4.2–4.6 apply to it as to inputs 1–4; parents that differ
     give none, and the dimension is **mixed**, which is not a conflict. Which step carries which dimension
-    is ADR-0002's table; `data_type` is never carried. The declaration is a claim like any other (1.1,
+    is ADR-0002's table; `data_type` is never carried. A parent passes on a value or `not_applicable`
+    (which 4.6 then weighs); a parent that is `not_classified` or mixed passes nothing; what a parent in
+    `conflict` passes is #413's. The declaration is a claim like any other (1.1,
     3.2), naming the step it crossed as its rule. It is the only way a slot is filled from another file's
     answer, and nothing fills one slot from another slot's answer within a file.
 

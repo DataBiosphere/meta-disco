@@ -111,7 +111,7 @@ Only a verb a source can detect is minted (June doc 8d). The existing five stay:
 | new verb | child ← parent | detected from |
 |---|---|---|
 | `aligned_from` | alignment ← reads | submitter same-row, `@PG`, `anvil_activity` (ENCORE `Alignment: STAR`) |
-| `aligned_to` | alignment → reference | `@PG` reference argument, `@SQ UR` |
+| `aligned_to` | alignment ← the reference it was aligned to | `@PG` reference argument, `@SQ UR` |
 | `called_from` | variants ← alignments or gVCFs | VCF caller command lines, submitter same-row (1000G `cram` → `gvcf`) |
 | `merged_from` | merged file ← shards | headers and filenames (T2T chromosome VCF ← window VCFs); the held-back verb of the June doc's 8d, now detectable |
 | `assembled_from` | assembly ← reads | HPRC assembly sample sheets |
@@ -123,10 +123,11 @@ Only a verb a source can detect is minted (June doc 8d). The existing five stay:
 
 ### 6. Sources, and where edges live
 
-Five sources name parents, the Context table's: submitter tables (same row or id join), `anvil_activity`,
+Five sources name file parents, the Context table's: submitter tables (same row or id join), `anvil_activity`,
 header command lines, HPRC's assembly sheets, and filename convention for companion files. Every edge
 records which one stated it, and an edge two sources state is two edges that agree — a consistency
-check (#362) reads them.
+check (#362) reads them. Identifier parents come from the sources decision 5 lists for `sample_of`,
+`donor_of` and `child_of`, registries among them.
 
 Submitter tables and `anvil_activity` are source evidence, which inference never reads (contract 1.2,
 6.1). So **I recommend edges be built at reconcile**, the stage that reads both evidence and inference:
@@ -169,6 +170,12 @@ built from HiFi, ONT and Hi-C reads no single `platform`: nobody is wrong, so th
 curator to answer. A mixed dimension leaves the child's own declarations to settle the slot alone, and
 where the child has none it stays `not_classified`; the report lists the parents' values. Only the child
 contradicting its inherited value is a conflict.
+
+**What a parent passes on.** A value, or `not_applicable`, which the child's own evidence then meets as
+4.6 says: a `.fai` stays `not_applicable` for `platform` beside its reference FASTA, as it is today. A
+parent that is `not_classified` or mixed has no answer and passes nothing, so a mixed CRAM leaves its VCF
+to the VCF's own evidence. One parent with a value and another `not_applicable` differ, so the
+dimension is mixed. What a parent in `conflict` passes is open (below).
 
 **What each step carries.** The dimensions split by whether the step keeps them. `data_type` never
 carries: a VCF is not an alignment.

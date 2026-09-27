@@ -487,8 +487,8 @@ fails for them — there is nothing in the file to read.
 
 ### 7b. `not_applicable` vs "open" — a real distinction
 
-> **Superseded by ADR-0002** (decision 8), in part: a companion's `data_modality`, `assay_type` and `platform` —
-> an index's, a checksum's — are inherited, not `not_applicable`. The distinction between `not_applicable` and open stands.
+> **Superseded by ADR-0002** (decision 8), in part: a companion's `data_modality`, `assay_type`, `platform` and
+> `instrument_model` — an index's, a checksum's — are inherited, not `not_applicable`. The distinction between `not_applicable` and open stands.
 
 `not_applicable` is a strong claim: *this field has no meaning for this file.*
 That is true for `assay_type` on a `.bai` — an index has no assay, full stop.
