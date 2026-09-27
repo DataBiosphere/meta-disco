@@ -44,7 +44,8 @@ A sample or donor is `{id, namespace, source_type}`, plus its dataset where the 
   `sra_sample` (`SRS…`/`ERS…`), `biosample` (`SAMN…`/`SAMEA…`), `dataset_local`. The list is #357's to
   settle against the corpus.
 - `source_type` is where we read it, from `source_type_enum`, with the exact place (`@RG SM`, a VCF
-  sample column, a table and column) as provenance beside it, the way evidence records its column;
+  sample column, a table and column) as provenance beside it, the way a claim records it (`source` or
+  `rule_id`, schema changes below);
   which constant each place is, is #357's.
 
 **Two identifiers name the same individual only when namespace and id both match** — and, for
@@ -122,8 +123,9 @@ Only a verb a source can detect is minted (June doc 8d). The existing five stay:
 `sample_of`, `donor_of` and `child_of` have an identifier as their parent, not a file (decision 1).
 
 **Each verb has a cardinality.** A child has **one** parent across `index_of`, `checksum_of`,
-`summarizes`, `lifted_over_from`, `aligned_to`, `sample_of` and `donor_of`, and **many** across
-`called_from`, `merged_from`, `aligned_from`, `assembled_from`, `child_of` and `derived_from`. Sources
+`summarizes`, `lifted_over_from`, `aligned_to` and `donor_of`, and **many** across `called_from`,
+`merged_from`, `aligned_from`, `assembled_from`, `sample_of` (a joint VCF names every sample in it),
+`child_of` and `derived_from`. Sources
 that name the same parent for a one-parent verb are one parent with two sources. Sources that name
 different parents for it are an **edge conflict**: a `.tbi` whose filename match says `a.vcf.gz` and whose
 `anvil_activity` says `b.vcf.gz` has one of them wrong. An edge conflict is listed for review, and nothing
@@ -254,10 +256,11 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
 
 - `derived_from`: multivalued, `inlined_as_list` (decision 3).
 - `DerivationEdge` gains:
-  - `source_type`: the existing slot (range `source_type_enum`), not a new `source` — that slot name is
-    taken, with range `ClaimSource` — with the table, column or header line as provenance beside it,
-    as evidence records its column (decision 6). Which kind `anvil_activity` is — it is neither the
-    submitter tables nor `anvil_file` — is #356's.
+  - Provenance, as a claim carries it, so two edges of one source kind stay distinguishable
+    (decision 6): `source_type` (the existing slot, range `source_type_enum`); for an edge evidence
+    states, the existing `source` slot (`ClaimSource`: source, dataset, table, column); for one inference
+    reads, `rule_id`, naming the rule and header field or filename convention it came from. Which kind
+    `anvil_activity` is — it is neither the submitter tables nor `anvil_file` — is #356's.
   - `parent_key`: the parent's record key per `SOURCE_RECORD_KEYS`; its presence is what `parent_scope`
     means, so `parent_scope` is not a slot (decisions 2, #371). Named for the key rather than
     `parent_file_id` because HPRC's key is not a `file_id`.
@@ -270,8 +273,8 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
 - `parent_md5sum` stays while the index producer emits it, and is retired by #371 once `parent_key` is
   written.
 - New class `EntityIdentifier`: `id`, `namespace` (`identifier_namespace_enum`), `dataset` (set exactly
-  when the namespace is `dataset_local`, and part of its identity), and `source_type` with the place it
-  was read as provenance beside it, as on `DerivationEdge` (decision 1).
+  when the namespace is `dataset_local`, and part of its identity), and the same provenance as
+  `DerivationEdge` — `source_type`, plus `source` or `rule_id` (decision 1).
 - `relation_enum` gains `aligned_from`, `aligned_to`, `called_from`, `merged_from`, `assembled_from`,
   `sample_of`, `donor_of`, `child_of` (decision 5); its description drops `merged_from` from the
   held-back list.
