@@ -213,10 +213,13 @@ carries: a VCF is not an alignment.
 | `assembled_from` | yes | yes | yes | yes | **no** — an assembly is its own reference |
 | `aligned_to`, `derived_from`, `sample_of`, `donor_of`, `child_of` | no | no | no | no | no |
 
-- Carrying `reference_assembly` carries its `build` with it, as the index producer does today (#340): a
-  child must not describe its reference less precisely than its parent. The slot reconciles on its value
-  (4.4). Parents that agree on the value but carry different builds give a declaration with the value
-  and no build, until how builds reconcile is decided (Open).
+- Carrying `reference_assembly` carries the build's identity — `ReferenceBuild.base` and `version` —
+  so a child describes its reference as precisely as its parents agree on it. The build's observations
+  (`chr1_m5`, `chry_m5`, `name`, `name_source`) are readings of the parent's own header and are not
+  copied: the inherited declaration is credited to the parent (4.9), which is where they stay. The slot
+  reconciles on its value (4.4). Parents that agree on the value but differ in build identity give the
+  value and no build, until how builds reconcile is decided (Open). (Today's index producer copies the
+  whole build; that path is #413's.)
 - `aligned_to` points at a reference, not at the data the child came from. `derived_from` is the verb
   for "related, step unknown", so nothing is known to carry. `sample_of`, `donor_of` and `child_of`
   have an identifier as parent, which has no dimensions.
@@ -291,6 +294,8 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
     `parent_file_id` because HPRC's key is not a `file_id`.
   - `parent_id`: an `EntityIdentifier`, the alternative to a file parent for `sample_of`, `donor_of`,
     `child_of` (decisions 1, 5).
+  - An inherited `reference_assembly` carries a `ReferenceBuild` with `base` and `version` only, its claim
+    naming the parent it came from (decision 8); the header observations stay on the parent's record.
   - `source_assembly`: range `reference_assembly_enum`, optionally with a `build` of range
     `ReferenceBuild`, on `lifted_over_from` only — the assembly the coordinates came from; the
     record's `reference_assembly` stays the current one (the comment on #355, measured 178
