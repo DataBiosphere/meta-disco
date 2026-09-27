@@ -118,8 +118,8 @@ Every authored translation rule, by slot and most files first: the source values
 
 | files | published | submitter | external | rule | scope | matches | declares | reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 263,153 | 0 | 263,153 | 0 | reference_assembly.chm13v2 | `any` | `'CHM13v2'` | reference_assembly: T2T-CHM13v2.0 | The submitter's name for NCBI's T2T-CHM13v2.0, in the ANVIL_T2T_CHRY table names; `v2` names the release (#473). |
-| 48,613 | 0 | 48,613 | 0 | reference_assembly.grch38 | `any` | `'grch38' · 'hg38'` | reference_assembly: GRCh38 | Column-name spans naming the GRCh38 assembly; hg38 is UCSC's name for the same assembly. |
+| 262,595 | 0 | 262,595 | 0 | reference_assembly.chm13v2 | `any` | `'CHM13v2'` | reference_assembly: T2T-CHM13v2.0 | The submitter's name for NCBI's T2T-CHM13v2.0, in the ANVIL_T2T_CHRY table names; `v2` names the release (#473). |
+| 48,055 | 0 | 48,055 | 0 | reference_assembly.grch38 | `any` | `'grch38' · 'hg38'` | reference_assembly: GRCh38 | Column-name spans naming the GRCh38 assembly; hg38 is UCSC's name for the same assembly. |
 | 8,952 | 4,476 | 4,476 | 0 | reference_assembly.grch38_gencode40 | `any` | `'GRCh38 + Gencode40'` | reference_assembly: GRCh38 | GRCh38 with a GENCODE annotation release. The annotation is not part of the assembly and does not imply a patch, so the assembly is GRCh38 (#473). |
 | 3,002 | 0 | 3,002 | 0 | reference_assembly.unaligned | `any` | `'unaligned'` | reference_assembly: not_applicable | The source's word for a file with no reference; the slot does not apply. |
 | 816 | 0 | 816 | 0 | reference_assembly.chm13 | `any` | `'chm13'` | reference_assembly: CHM13 | Names CHM13 and no release, so it is the release-unknown term (#473). |
