@@ -211,7 +211,8 @@ carries: a VCF is not an alignment.
 
 - Carrying `reference_assembly` carries its `build` with it, as the index producer does today (#340): a
   child must not describe its reference less precisely than its parent. The slot reconciles on its value
-  (4.4); how two differing builds under one value reconcile is open (below).
+  (4.4). Parents that agree on the value but carry different builds give a declaration with the value
+  and no build, until how builds reconcile is decided (Open).
 - `aligned_to` points at a reference, not at the data the child came from. `derived_from` is the verb
   for "related, step unknown", so nothing is known to carry. `sample_of`, `donor_of` and `child_of`
   have an identifier as parent, which has no dimensions.
