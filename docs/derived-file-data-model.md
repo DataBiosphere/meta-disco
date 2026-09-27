@@ -1,7 +1,7 @@
 # Design: Data Model for Derived Files
 
 **Date:** 2026-06-25
-**Status:** Proposed (decision record for [#109](https://github.com/DataBiosphere/meta-disco/issues/109))
+**Status:** Proposed (decision record for [#109](https://github.com/DataBiosphere/meta-disco/issues/109)); extended, and superseded in part, by [ADR-0002](adr/0002-derivation-graph.md) (#355), whose "What this supersedes" lists the sections, each marked below
 **Related:** [#90](https://github.com/DataBiosphere/meta-disco/issues/90) (provenance), [#88](https://github.com/DataBiosphere/meta-disco/issues/88) (conflict surfacing), [#16](https://github.com/DataBiosphere/meta-disco/issues/16) (DuckDB output)
 
 ---
@@ -33,6 +33,9 @@ This document is about that second group — descriptive-content files. (We keep
 "derived file" as shorthand because it's familiar, but read it as "descriptive
 companion file.") The open question (#109) is what our five dimensions should even
 *mean* for them.
+
+> **Superseded by ADR-0002** (decision 8): points (1) and (3). A companion inherits its parent's lineage dimensions
+> across its edge, as a declaration that reconciles (contract 4.9). Point (2) stands; (4) is superseded as 7a is.
 
 The decision recorded here is fourfold: **(1)** separate a file's *identity* from
 its *origin* and store the origin as a link to the parent rather than copied-in
@@ -159,6 +162,9 @@ turns out to be useful for search (Section 6).
 
 ### 4b. The grounding — best-effort, may be absent
 
+> **Superseded by ADR-0002** (decision 2): the grounding is the parent's record key, not its md5, and an edge that names
+> no parent is not written.
+
 The grounding is the pointer to the *specific* parent file. We get it by
 filename convention, scoped to the same dataset — again, something
 `classify_index_files.py` already does in `get_parent_candidates()`:
@@ -226,6 +232,10 @@ the "conflict" becomes structured provenance instead of an error.
 ---
 
 ## 5. How the link is represented and followed
+
+> **Superseded by ADR-0002** (decision 8): the parent's values are copied onto the child, as an inherited declaration
+> credited to the parent, not only followed at query time. 5c's concern survives in what is never carried:
+> `data_type`, and `reference_assembly` across a step that changes it.
 
 ### 5a. Representation — one pointer, not copied values
 
@@ -371,6 +381,9 @@ distinction.
 
 ## 6. What the link buys discovery — three levels
 
+> **Superseded by ADR-0002** (decisions 2, 8): Levels 1 and 2 rest on edges that name no parent, which are no longer
+> written; a companion's own `data_type` still gives Level 1. Level 3's values are on the record itself.
+
 The link's type-level facts (`relation` + `parent_kind`) and its grounding pay off
 at three increasing levels of precision. The first two need only the type — no
 parent file resolved at all.
@@ -452,6 +465,9 @@ own content — not merely part of its history.
 
 ### 7a. The resolution procedure for `reference_assembly`
 
+> **Superseded by ADR-0002** (decision 8): neither source is tried first. The file's own reading and the inherited value
+> are both declarations: agreeing they classify, contradicting they conflict.
+
 Because it can sometimes be read from the file itself, try the most reliable
 source first:
 
@@ -469,6 +485,9 @@ The other three contextual fields skip step 1 entirely, because step 1 always
 fails for them — there is nothing in the file to read.
 
 ### 7b. `not_applicable` vs "open" — a real distinction
+
+> **Superseded by ADR-0002** (decision 8), in part: an index's `data_modality`, `assay_type` and `platform` are
+> inherited, not `not_applicable`. The distinction between `not_applicable` and open stands.
 
 `not_applicable` is a strong claim: *this field has no meaning for this file.*
 That is true for `assay_type` on a `.bai` — an index has no assay, full stop.
@@ -616,6 +635,8 @@ that is follow-up, not part of this decision.)
 
 ### 8d. Typed relations on the edge — and which we can actually detect
 
+> **Superseded by ADR-0002** (decision 5): `merged_from` is minted, with the verbs the ADR adds.
+
 The edge's `relation` verb (Section 4) is the strongly-typed link. The discipline
 that keeps it from becoming aspirational fiction is our own *accuracy over
 coverage* principle: **only mint a relation we can actually detect, and provide a
@@ -737,6 +758,9 @@ roadmap starts to cash in on generation.
 
 ## 9. Summary of the data-model assumptions
 
+> **Superseded by ADR-0002** (decisions 2, 8): items 4 and 5 (md5 grounding, edges naming no parent), 7 and 8, and item 3's
+> `not_applicable` for an index.
+
 1. **The axis is content, not derivation.** What separates these files is whether
    their content is *biological* (the bytes are the signal) or *descriptive* (the
    bytes are about another file). Derivation isn't the criterion — an assembly is
@@ -808,7 +832,8 @@ roadmap starts to cash in on generation.
 - **Sentinel modeling.** Whether `not_applicable` / `not_classified` become a
   separate `classification_status` field rather than values inside every enum —
   intersects #56 (confidence removal) and #88 (conflict surfacing).
-- **What ships to the Explorer.** Clean records + links, or a materialized
+- **What ships to the Explorer.** *Answered by ADR-0002 decision 8: inherited values are on the record.*
+  Clean records + links, or a materialized
   inherited-view table — a product decision with the downstream consumer.
 - **Relation detection.** `index_of` / `checksum_of` are already detectable;
   `summarizes` needs a stats-file signal; `lifted_over_from` needs filename
