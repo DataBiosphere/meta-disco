@@ -67,8 +67,11 @@ table would be empty scaffolding. Revisit if #337's manifest route populates the
 ### 2. Parent scope: `internal` and `external`
 
 - **`internal`** — the parent is one file we hold, in any dataset, and the edge carries its record key
-  (`pipeline.SOURCE_RECORD_KEYS`). HPRC's parental Illumina CRAMs in ANVIL_1000G_high_coverage_2019 are
-  internal though they are in another dataset.
+  (`pipeline.SOURCE_RECORD_KEYS`). A bare file name resolves only within the child's dataset, as today's
+  filename joins do; a parent in another dataset resolves only by a reference that identifies one file
+  corpus-wide (a `file_id`, a DRS URI, an exact storage path) or a declared mapping. So HPRC's parental
+  Illumina CRAMs in ANVIL_1000G_high_coverage_2019 are internal once the sheets' S3 paths resolve to
+  them; by name alone, as the re-measure matched them, they are external.
 - **`external`** — a source names the parent (`NA21127.merged.bam` in a `@PG` line, or a `file_id` or DRS
   URI in a table) but it does not resolve to one file we hold: it was never deposited, or the name is
   shared by more than one (#438).

@@ -251,8 +251,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     one declaration, credited to them, to which 4.2–4.6 apply as to inputs 1–4 — so a child with two
     carrying verbs (`called_from` and `merged_from`) has two declarations, which reconcile with each other
     as any two do:
-    - parents that agree (4.4) declare their value, `build` included for `reference_assembly`, or
-      `not_applicable` (which 4.6 then weighs);
+    - parents that agree (4.4) declare their value — with its `build` for `reference_assembly`, unless
+      their builds differ, when the value goes without one — or `not_applicable` (which 4.6 then weighs);
     - parents that differ, or any parent that is itself mixed, declare the state **mixed**: no value, no
       status, and not a conflict. It is the one claim state that takes part in resolution, and only here:
       alone it leaves the slot `not_classified`; against a value the child declares, the slot is
