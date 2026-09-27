@@ -388,8 +388,8 @@ distinction.
 ## 6. What the link buys discovery — three levels
 
 > **Superseded by ADR-0002** (decisions 2, 8), in part: Levels 1 and 2 no longer apply to an edge that names no
-> parent, because none is written; they still hold for an edge whose named parent is not held (`external`), which
-> carries its `parent_kind`. Level 3's values are on the record itself.
+> parent, because none is written; they still hold for an edge whose named parent does not resolve to one file of the
+> child's dataset (`external`), which carries its `parent_kind`. Level 3's values are on the record itself.
 
 The link's type-level facts (`relation` + `parent_kind`) and its grounding pay off
 at three increasing levels of precision. The first two need only the type — no
@@ -420,6 +420,9 @@ That framing drops straight into the provenance model of #90 (authority =
 ---
 
 ## 7. Why `reference_assembly` is the odd one out
+
+> **Superseded by ADR-0002**** (decision 8), in part: the opening's "the other contextual fields are
+> `not_applicable`. That is **correct**" no longer holds for a companion, which inherits them.
 
 The post-#106 state leaves `reference_assembly` open while the other contextual
 fields are `not_applicable`. That is **correct** — it just was never explained.
@@ -584,6 +587,9 @@ parent_kind                    ∈ { alignment, variants, reads, sequence, inter
 ```
 
 ### 8c. Two content classes, and why we factor instead of subtype
+
+> **Superseded by ADR-0002**** (decision 8), in part: "descriptive ⇒ `data_modality / assay_type / platform`
+> are `not_applicable`" no longer holds; a companion inherits them. The factoring itself stands.
 
 The corrected model puts **all** content types in one field, `data_type`, but
 recognizes they fall into two **classes**:
@@ -808,16 +814,18 @@ roadmap starts to cash in on generation.
 
 - **The link already exists.** `classify_index_files.py` already writes
   `parent_md5sum` + `parent_file` per index record (lines 309–310). The refactor
-  doesn't *add* the link — it stops the materialization that sits next to it.
+  doesn't *add* the link — it stops the materialization that sits next to it. *Superseded by ADR-0002
+  decision 8: the materialization stays, as an inherited declaration.*
 - **Materialization is real and localized.** Parent values are copied at lines
   214–218 and re-wrapped as per-field `classifications` with an
   `inherited_from_parent` evidence entry at lines 311–316.
-  That's the exact code this design changes.
+  That's the exact code this design changes. *Superseded by ADR-0002 decision 8, as above.*
 - **No in-repo search layer.** Discovery lives in the external Explorer/TDR.
   In-repo consumers are the report generators, which already index everything by
   `md5sum` and can follow links trivially (Section 5c). So "compute at query
   time" needs no new infrastructure *for the reports*; the open part is purely
-  what we hand the Explorer.
+  what we hand the Explorer. *Superseded by ADR-0002 decision 8: values are inherited onto the record, not
+  computed at query time.*
 - **The content-type vocabulary largely pre-exists.** `extension_map` already
   assigns `index / checksum / log_file / archive` (Section 8a) — these become
   descriptive `data_type` values. We promote, not invent.

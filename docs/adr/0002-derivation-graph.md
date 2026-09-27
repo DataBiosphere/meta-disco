@@ -34,6 +34,10 @@ headers (13,125 of 16,427), VCF sample columns on 99.9% of VCF headers (203,823 
 
 ## Decisions
 
+**We do not link files across datasets.** Every file edge joins two files of one dataset. A parent a
+source names in another dataset is kept as the source wrote it and never resolved, looked up or
+inherited from (decision 2). Only sample and donor identifiers cross datasets (decision 1).
+
 ### 1. Samples and donors are identifiers, not records
 
 A sample or donor is `{id, namespace, source_type}`, plus its dataset where the namespace is
@@ -72,17 +76,16 @@ table would be empty scaffolding. Revisit if #337's manifest route populates the
   whatever form the source names it in, as today's filename joins do.
 - **`external`** — a source names the parent (`NA21127.merged.bam` in a `@PG` line, or a `file_id` or DRS
   URI in a table) but it does not resolve to one file of the child's dataset: it was never deposited, the
-  name is shared by more than one (#438), or it is in another dataset. HPRC's parental Illumina CRAMs in
-  ANVIL_1000G_high_coverage_2019 are external to an AnVIL_HPRC_R2 assembly, and so pass it nothing
-  (decision 8). The two files still meet through their sample identifier (decision 1). This exclusion is
-  deliberate: a dataset is the unit a file's lineage is stated and reviewed in, and a file edge across
+  name is shared by more than one (#438), or it is in another dataset — which is never resolved, even
+  when we hold the file there. HPRC's parental Illumina CRAMs in ANVIL_1000G_high_coverage_2019 are
+  external to an AnVIL_HPRC_R2 assembly, and so pass it nothing (contract 4.9). The two files still meet
+  through their sample identifier (decision 1). This exclusion is deliberate: a dataset is the unit a file's lineage is stated and reviewed in, and a file edge across
   datasets would let one dataset's answer flow into another's records. The one cross-dataset file link
   the re-measure found (HPRC assemblies ← parental CRAMs in 1000G and T2T) is left to the sample
   identifier for that reason.
 
-The parent as the source wrote it is always kept, resolved or not: `parent_file` for a name (which means
-a name within the child's dataset),
-`parent_ref` for a `file_id` or DRS URI. `parent_key` is set only when that reference resolves to a record
+The parent as the source wrote it is always kept, resolved or not: `parent_file` for a name (looked up
+only within the child's dataset), `parent_ref` for a `file_id` or DRS URI. `parent_key` is set only when that reference resolves to a record
 of the child's dataset.
 
 `parent_scope` is **not stored** on the record: it is whether `parent_key` is set, and a stored copy
@@ -103,7 +106,7 @@ A CRAM derives from two FASTQs; a joint-called VCF from many gVCFs. `derived_fro
 edge per parent per source that states it, so a parent two sources name is two edges (decision 6).
 
 The reference a file was aligned to is recorded **both** ways: the `reference_assembly` dimension is the
-answer, and an `aligned_to` edge — to the reference FASTA where we hold it, otherwise external — is
+answer, and an `aligned_to` edge — to the reference FASTA where the child's dataset holds it, otherwise external — is
 where the answer came from. The edge never decides the dimension; it is evidence a consistency check
 (#362) can compare with it.
 
@@ -149,7 +152,8 @@ names are pooled into one set, each source's parents still their own edges (deci
 ### 6. Sources, and where edges live
 
 Five sources name file parents, the Context table's: submitter tables (same row or id join), `anvil_activity`,
-header command lines, HPRC's assembly sheets, and filename convention for companion files. Every edge
+header command lines, HPRC's assembly sheets, and filename convention (companion files, and T2T's window
+VCFs for `merged_from`). Every edge
 records which one stated it, and an edge two sources state is two edges that agree — a consistency
 check (#362) reads them. Identifier parents come from the sources decision 5 lists for `sample_of`,
 `donor_of` and `child_of`, registries among them.
@@ -163,7 +167,8 @@ An edge whose child is a file is stored on that file's record as `derived_from: 
 `donor_of` and `child_of` have an identifier as their child, which has no record, so they live only in a
 flat `edges.jsonl` written once per run: child (a record key or an identifier), relation, parent
 (`parent_key` where it resolves, and `parent_file` or `parent_ref` as the source wrote it, or an
-identifier), source, `parent_scope`. Its file-child rows are built
+identifier), provenance (`source_type`, plus `source` or `rule_id`, as on the edge), and `parent_scope`,
+worked out. Its file-child rows are built
 from the records, not a second source of truth, so the graph can be queried without loading every
 record.
 
@@ -199,7 +204,7 @@ HPRC assembly built from HiFi, ONT and Hi-C reads no single `platform`: nobody i
 says nothing the slot stays `not_classified`, marked mixed, with nothing for a curator to answer; the report
 lists the parents' values. But a joint call whose filename says `NovaSeq 6000` claims one value for a
 lineage that has none, so the child declaring a value against mixed is a conflict, as is the child
-contradicting an inherited value.
+declaring `not_applicable` against it, and the child contradicting an inherited value.
 
 **What a parent passes on.** A value, or `not_applicable`, which the child's own evidence then meets as
 4.6 says: a `.fai` stays `not_applicable` for `platform` beside its reference FASTA, as it is today. A
@@ -259,13 +264,14 @@ shrinks what the engine's same-tier `not_applicable` exception protects (#511).
 
 ## What this supersedes
 
-In `docs/derived-file-data-model.md`, each section below carries a marker pointing here.
+In `docs/derived-file-data-model.md`, each section below carries a marker pointing here (§10's is inline,
+on the bullets concerned).
 
 | June doc | what it said | now |
 |---|---|---|
-| §1 point (3); §3's `not_applicable` for a `.bai`; §7b; §9 item 3 | a companion's lineage dimensions are `not_applicable`, reached only through the link | inherited across the edge (decision 8) |
+| §1 point (3); §3's `not_applicable` for a `.bai`; §7's opening; §7b; §8c's "descriptive ⇒ `not_applicable`"; §9 item 3 | a companion's lineage dimensions are `not_applicable`, reached only through the link | inherited across the edge (decision 8) |
 | §4a's edge with no parent; §4b; §6 Levels 1–2; §9 items 4 (its `parent_md5sum`), 5 | grounding by md5; an edge may name no parent | grounding by record key; no parent named, no edge (decision 2) |
-| §1 point (1); §3's "not values copied onto this file"; §5a–5c; §9 item 7 | store a pointer, never a copy; follow at query time | copy, as a declaration that reconciles (decision 8, contract 4.9) |
+| §1 point (1); §3's "not values copied onto this file"; §5a–5c; §6 Level 3; §9 item 7; §10 "Confirmed" on materialization and query time | store a pointer, never a copy; follow at query time | copy, as a declaration that reconciles (decision 8, contract 4.9) |
 | §1 point (4); §7a; §9 item 8 | read the reference from the file first, inherit second | both are declarations; contradiction is a conflict (decision 8) |
 | §8d | `merged_from` held back | minted (decisions 4, 5) |
 | §10 "What ships to the Explorer" | open | inherited values are on the record (decision 8) |
@@ -273,7 +279,7 @@ In `docs/derived-file-data-model.md`, each section below carries a marker pointi
 What stands: identity and origin are separate questions (§3's split, though not where it stores
 origin) — an inherited value is credited to the parent, so the record still says which values are the
 file's own — `data_type` names a companion's own
-content type (§1 point 2, §8c), the verb is not redundant with `data_type` (§4c), and process instances
+content type (§1 point 2, §8c's factoring), the verb is not redundant with `data_type` (§4c), and process instances
 stay out of scope (§4b's process type vs instance, decision 7).
 
 ## Schema changes this implies
@@ -288,23 +294,23 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
     reads, `rule_id`, naming the rule and header field or filename convention it came from. Which kind
     `anvil_activity` is — it is neither the submitter tables nor `anvil_file` — is #356's.
   - `parent_key`: the parent's record key per `SOURCE_RECORD_KEYS`, set only when the parent resolves to
-    a record of the child's dataset; its presence is what `parent_scope` means, so `parent_scope` is not a slot
-    (decisions 2, #371).
+    a record of the child's dataset; its presence is what `parent_scope` means, so `parent_scope` is not a
+    slot (decisions 2, #371). Named for the key rather than `parent_file_id` because HPRC's key is not a
+    `file_id`.
   - `parent_ref`: the parent as a source wrote it when that is a `file_id` or DRS URI, kept whether or not
     it resolves (decision 2); a name stays in `parent_file`.
   - A constraint: exactly one parent form per edge — `parent_id`, or a file parent (`parent_file` or
     `parent_ref`, with `parent_key` where it resolves) — and the form the relation takes (an identifier
     for `sample_of`, `donor_of`, `child_of`; a file otherwise). Today's schema accepts an edge with no
-    parent, which decision 2 rules out. Named for the key rather than
-    `parent_file_id` because HPRC's key is not a `file_id`.
+    parent, which decision 2 rules out.
   - `parent_id`: an `EntityIdentifier`, the alternative to a file parent for `sample_of`, `donor_of`,
     `child_of` (decisions 1, 5).
-  - An inherited `reference_assembly` carries a `ReferenceBuild` with `base` and `version` only, its claim
-    naming the parent it came from (decision 8); the header observations stay on the parent's record.
   - `source_assembly`: range `reference_assembly_enum`, optionally with a `build` of range
     `ReferenceBuild`, on `lifted_over_from` only — the assembly the coordinates came from; the
     record's `reference_assembly` stays the current one (the comment on #355, measured 178
     Picard-lifted dbSNP files in ANVIL_T2T).
+- An inherited `reference_assembly` claim carries a `ReferenceBuild` with `base` and `version` only, and
+  names the parent it came from (decision 8); the header observations stay on the parent's record.
 - `parent_md5sum` stays while the index producer emits it, and is retired by #371 once `parent_key` is
   written.
 - New class `EntityIdentifier`: `id`, `namespace` (`identifier_namespace_enum`), `dataset` (set exactly
@@ -318,18 +324,19 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   lineage map that fills it, are not designed here; #356 designs them with the first evidence-stated
   edge (`anvil_activity`).
 - What each step carries (decision 8), and each verb's cardinality (decision 5), are declared once in
-  data — on the `relation_enum` values or in a rules file — and read by code and a drift test; `INHERITED_FIELDS` becomes a reader of the `index_of`
-  entry rather than a second copy.
+  data — on the `relation_enum` values or in a rules file — and read by code and a drift test;
+  `INHERITED_FIELDS` becomes a reader of the `index_of` entry rather than a second copy.
 - Mixed is a new `claim_state_enum` value, `mixed`: a claim with no value and no status, and the one state
   that takes part in resolution, as 4.9 says. The slot it leaves alone is `not_classified`; against a value
-  the child declares, the slot is `conflict`.
+  or `not_applicable` the child declares, the slot is `conflict`.
 - `credited_to_enum` and `reconcile.SLOT_CATEGORIES` gain a category for a slot filled by inheritance,
   and the conflict kinds one for a child against its parent, so the reconcile report counts neither as a
   source (contract 6.10). The report also needs a way to list a mixed dimension with its parents' values,
   and an edge conflict with the parents each source named.
 - An `edges.jsonl` row is its own class, not a `DerivationEdge`: its child is a record key or an
   `EntityIdentifier`, because `donor_of` and `child_of` have no record to sit on; its parent carries the
-  same fields as `DerivationEdge`'s — `parent_key`, `parent_file`, `parent_ref`, or `parent_id` (decision 6).
+  same fields as `DerivationEdge`'s — `parent_key`, `parent_file`, `parent_ref`, or `parent_id` — and its
+  provenance `source_type` plus `source` or `rule_id`, with `parent_scope` worked out (decision 6).
 - `parent_kind_enum` gains `reference` and `assembly` if #358 and #360 need them; decided there.
 
 ## Open
@@ -353,10 +360,11 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
 - **Two builds under one `reference_assembly` value.** A `ReferenceBuild` is an object whose `version` is
   free text, so 4.4's value agreement does not say whether two GRCh38 builds with different patches
   conflict, or how their details merge. Until that is defined, an inherited build rides along as
-  detail and the slot reconciles on its value alone.
+  detail where the parents agree on it, is dropped where they do not (decision 8), and the slot
+  reconciles on its value alone.
 - **HPRC's sheets name working outputs, not released assemblies.** Their outputs are `/private/groups/...`
   paths; tying one to a released `*_hprc_r2_v1.0.1.fa.gz` by sample and haplotype assumes the release came
   from that run. Until that is established, an `assembled_from` edge's child is only an output that resolves
   to a held file, and the released assemblies have no such edge.
-- **`external` covers two cases** — never deposited, and ambiguous by name. If a consumer needs them apart,
+- **`external` covers three cases** — never deposited, ambiguous by name, and in another dataset. If a consumer needs them apart,
   a reason field on the edge would do it.
