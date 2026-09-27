@@ -832,9 +832,8 @@ roadmap starts to cash in on generation.
 - **Sentinel modeling.** Whether `not_applicable` / `not_classified` become a
   separate `classification_status` field rather than values inside every enum —
   intersects #56 (confidence removal) and #88 (conflict surfacing).
-- **What ships to the Explorer.** *Answered by ADR-0002 decision 8: inherited values are on the record.*
-  Clean records + links, or a materialized
-  inherited-view table — a product decision with the downstream consumer.
+- **What ships to the Explorer.** *Answered by ADR-0002 decision 8: inherited values are on the record,
+  so neither a links-only record nor a separate materialized inherited-view table is needed.*
 - **Relation detection.** `index_of` / `checksum_of` are already detectable;
   `summarizes` needs a stats-file signal; `lifted_over_from` needs filename
   heuristics (and overlaps the #88 conflict cases). Each detector is new work and

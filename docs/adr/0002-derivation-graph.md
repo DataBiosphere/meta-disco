@@ -45,10 +45,12 @@ A sample or donor is `{id, namespace, source}`, not an entity record of its own.
   sample column, a table and column) as provenance beside it, the way evidence records its column;
   which constant each place is, is #357's.
 
-**Two identifiers name the same individual only when namespace and id both match.** That is what makes
-the search across datasets work: `coriell:HG03016` is in ANVIL_1000G_high_coverage_2019, ANVIL_T2T,
-ANVIL_T2T_CHRY and AnVIL_HPRC_R2, and an exact match finds all four. It is also what keeps two datasets
-that both call someone `S1` apart: `dataset_local` never matches across datasets.
+**Two identifiers name the same individual only when namespace and id both match** — and, for
+`dataset_local`, the dataset too. That is what makes the search across datasets work:
+`coriell:HG03016` is in ANVIL_1000G_high_coverage_2019, ANVIL_T2T, ANVIL_T2T_CHRY and AnVIL_HPRC_R2, and
+an exact match finds all four. It is also what keeps two datasets that both call someone `S1` apart: a
+`dataset_local` identifier carries its dataset, which is part of its identity, so it never matches across
+datasets.
 
 **Mapping between namespaces is out of scope here** and stays with #361: one person as
 `coriell:HG03016` in one dataset and `sra_sample:SRS…` in another needs a registry crosswalk (IGSR,
@@ -119,8 +121,8 @@ Only a verb a source can detect is minted (June doc 8d). The existing five stay:
 
 ### 6. Sources, and where edges live
 
-Four sources name parents: submitter tables, `anvil_activity`, header command lines, and HPRC's assembly
-sheets, with filename convention for companion files. Every edge records which one stated it, and an edge
+Five sources name parents, the five rows of the Context table: submitter tables, `anvil_activity`,
+header command lines, HPRC's assembly sheets, and filename convention for companion files. Every edge records which one stated it, and an edge
 two sources state is two edges that agree — a consistency check (#362) reads them.
 
 Submitter tables and `anvil_activity` are source evidence, which inference never reads (contract 1.2,
@@ -128,10 +130,12 @@ Submitter tables and `anvil_activity` are source evidence, which inference never
 inference keeps writing the edges it reads itself (filename convention, header lines), and reconcile adds
 the ones evidence states.
 
-Edges are stored on the record as `derived_from: [DerivationEdge]`. A flat `edges.jsonl` — child key,
-relation, `parent_key` or `parent_file` or parent identifier, source, `parent_scope` — is written once per run,
-built from the records rather than a second source of truth, so the graph can be queried without
-loading every record.
+An edge whose child is a file is stored on that file's record as `derived_from: [DerivationEdge]`.
+`donor_of` and `child_of` have an identifier as their child, which has no record, so they live only in a
+flat `edges.jsonl` written once per run: child (a record key or an identifier), relation, parent
+(`parent_key`, `parent_file` or an identifier), source, `parent_scope`. Its file-child rows are built
+from the records, not a second source of truth, so the graph can be queried without loading every
+record.
 
 For companion files, `anvil_activity` states the parent by `file_id` and the filename match is the second
 source: the two agreed on all 209,668 index files matched today.
@@ -245,8 +249,9 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
     Picard-lifted dbSNP files in ANVIL_T2T).
 - `parent_md5sum` stays while the index producer emits it, and is retired by #371 once `parent_key` is
   written.
-- New class `EntityIdentifier`: `id`, `namespace` (`identifier_namespace_enum`), `source_type`
-  (decision 1).
+- New class `EntityIdentifier`: `id`, `namespace` (`identifier_namespace_enum`), `dataset` (set exactly
+  when the namespace is `dataset_local`, and part of its identity), and `source_type` with the place it
+  was read as provenance beside it, as on `DerivationEdge` (decision 1).
 - `relation_enum` gains `aligned_from`, `aligned_to`, `called_from`, `merged_from`, `assembled_from`,
   `sample_of`, `donor_of`, `child_of` (decision 5); its description drops `merged_from` from the
   held-back list.
