@@ -29,7 +29,8 @@ re-measure found three sources beyond headers, and they are where most lineage i
 | HPRC assembly sample sheets (`hprc_intermediate_assembly`) | reads → assembly, per input file | 194 of 234 R2 assembly samples; 5,029 of 5,711 inputs match one file by name |
 | filename convention | index ← parent, checksum ← parent | 93.3% and 99.6% |
 
-Sample identity is the densest signal of all: `@RG SM` on 80% of BAMs, VCF sample columns on 99.9% of VCFs.
+Sample identity is the densest signal of all, measured over the cached headers: `@RG SM` on 80% of BAM
+headers (13,125 of 16,427), VCF sample columns on 99.9% of VCF headers (203,823 of 204,102).
 
 ## Decisions
 
@@ -83,8 +84,8 @@ a parent.**
 
 ### 3. An edge can have several parents
 
-A CRAM derives from two FASTQs; a joint-called VCF from many gVCFs. `derived_from` becomes a list, one
-edge per parent, each with its own source and parent scope.
+A CRAM derives from two FASTQs; a joint-called VCF from many gVCFs. `derived_from` becomes a list with one
+edge per parent per source that states it, so a parent two sources name is two edges (decision 6).
 
 The reference a file was aligned to is recorded **both** ways: the `reference_assembly` dimension is the
 answer, and an `aligned_to` edge — to the reference FASTA where we hold it, otherwise external — is
@@ -221,7 +222,7 @@ In `docs/derived-file-data-model.md`, each section below carries a marker pointi
 | §1 point (3); §7b; §9 item 3 | a companion's lineage dimensions are `not_applicable`, reached only through the link | inherited across the edge (decision 8) |
 | §4b; §6 Levels 1–2; §9 items 4 (its `parent_md5sum`), 5 | grounding by md5; an edge may name no parent | grounding by record key; no parent named, no edge (decision 2) |
 | §1 point (1); §5a–5c; §9 item 7 | store a pointer, never a copy; follow at query time | copy, as a declaration that reconciles (decision 8, contract 4.9) |
-| §7a; §9 item 8 | read the reference from the file first, inherit second | both are declarations; contradiction is a conflict (decision 8) |
+| §1 point (4); §7a; §9 item 8 | read the reference from the file first, inherit second | both are declarations; contradiction is a conflict (decision 8) |
 | §8d | `merged_from` held back | minted (decisions 4, 5) |
 | §10 "What ships to the Explorer" | open | inherited values are on the record (decision 8) |
 

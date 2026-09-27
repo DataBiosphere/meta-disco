@@ -108,7 +108,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 ## 3. Claims
 
 3.1 A claim is a rule's declaration about a slot, derived from source evidence (2.1), from inference's own
-    signals, or from a curator's decision. It declares a **value** or a **status**.
+    signals, from a parent's resolved answer across a derivation edge (4.9), or from a curator's decision.
+    It declares a **value** or a **status**.
 
 3.2 Every claim names the rule that made it — including an identity mapping. There is no implicit copy.
 

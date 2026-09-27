@@ -381,8 +381,9 @@ distinction.
 
 ## 6. What the link buys discovery — three levels
 
-> **Superseded by ADR-0002** (decisions 2, 8): Levels 1 and 2 rest on edges that name no parent, which are no longer
-> written; a companion's own `data_type` still gives Level 1. Level 3's values are on the record itself.
+> **Superseded by ADR-0002** (decisions 2, 8), in part: Levels 1 and 2 no longer apply to an edge that names no
+> parent, because none is written; they still hold for an edge whose named parent is not held (`external`), which
+> carries its `parent_kind`. Level 3's values are on the record itself.
 
 The link's type-level facts (`relation` + `parent_kind`) and its grounding pay off
 at three increasing levels of precision. The first two need only the type — no
