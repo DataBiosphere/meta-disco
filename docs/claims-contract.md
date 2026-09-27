@@ -207,8 +207,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 4.2 Inputs 1, 2, 3 and 4 are equal. Being ours confers no rank; being external confers no rank; being
     what the repository publishes confers no rank. (Kind 5 is deliberately outside this list, because
     a curator does not compete with the others — 4.7 has a curator *answer* a conflict rather than
-    produce one, and 4.5 keeps conflict production to these four, and to the inherited declaration 4.9
-    treats as one of them.)
+    produce one, and 4.5 keeps conflict production to these four — 4.9 adds the inherited declaration.)
 
 4.3 Resolution has two stages. Inference resolves its own competing claims by tier, as it does today.
     Every declaration that survives — inference's, and each source's — then reconciles by agreement.
@@ -262,8 +261,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
       a value from any other declaration — the child's own, or another verb's inherited one — the slot is
       `conflict`, since one value contradicts a lineage that has none; against `not_applicable` from any
       other declaration it is a conflict too, as the values it stands for would be (4.6);
-    - if any parent across the verb is `not_classified`, the verb passes nothing for that dimension,
-      since the others cannot be known to agree; what a parent in `conflict` passes is #413's.
+    - if the parents with an answer agree but any parent across the verb is `not_classified`, the verb
+      passes nothing for that dimension, since the unclassified one cannot be known to agree; parents
+      already known to differ, or a mixed parent, give mixed whatever the rest are; what a parent in
+      `conflict` passes is #413's.
 
     Which step carries which dimension is ADR-0002's table; `data_type` is never carried. Sources that
     name different parents for a verb with one parent are an edge conflict, across which nothing is
@@ -325,9 +326,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 6.6 A run with no inputs but inference — no source evidence and no curator rules — produces a reconciled
     record that concludes exactly what its inference record concluded, plus what inheritance carries across
     the edges inference wrote (4.9): the same value or status on every slot no inherited declaration
-    reaches, from the same claims. It is not the same record: it hands inference's conclusions back unchanged
-    and adds its reconciliation (6.10) — here, that no source declared anything and that each slot resolved
-    to inference's answer. Sameness here is of what was concluded, not of the record or its bytes.
+    reaches, from the same claims. It is not the same record: it hands those conclusions back unchanged
+    and adds its reconciliation (6.10) — here, that no source declared anything and that each slot no
+    inherited declaration reaches resolved to inference's answer. Sameness here is of what was concluded, not of the record or its bytes.
 
 6.7 Reading sources is the reconcile stage's join, not a stage of its own (#432, which absorbed #402), and
     its measurement is a line of reconcile's report: per source and dataset, evidence offered, matched,

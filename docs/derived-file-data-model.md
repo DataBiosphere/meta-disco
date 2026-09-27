@@ -168,8 +168,8 @@ turns out to be useful for search (Section 6).
 
 ### 4b. The grounding — best-effort, may be absent
 
-> **Superseded by ADR-0002** (decision 2): the grounding is the parent's record key, not its md5, and an edge that names
-> no parent is not written.
+> **Superseded by ADR-0002** (decision 2), in part: the grounding is the parent's record key, not its md5, and an edge
+> that names no parent is not written. The process type vs instance subsection below stands (decision 7).
 
 The grounding is the pointer to the *specific* parent file. We get it by
 filename convention, scoped to the same dataset — again, something
@@ -387,9 +387,9 @@ distinction.
 
 ## 6. What the link buys discovery — three levels
 
-> **Superseded by ADR-0002** (decisions 2, 8): Levels 1 and 2 do not apply. An edge that names no parent is not
-> written, and an `external` edge is never resolved or inherited from, so co-selection and filtering follow only
-> `internal` edges. Level 3's values are on the record itself.
+> **Superseded by ADR-0002** (decisions 2, 8), in part: Levels 1 and 2 apply only across `internal` edges. Their
+> type-only form is gone — an edge that names no parent is not written — and an `external` edge is never resolved or
+> inherited from. Level 3's values are on the record itself.
 
 The link's type-level facts (`relation` + `parent_kind`) and its grounding pay off
 at three increasing levels of precision. The first two need only the type — no

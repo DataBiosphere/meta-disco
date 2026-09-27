@@ -3,7 +3,7 @@
 - **Status:** Proposed (2026-09-26)
 - **Decision record for:** [#355](https://github.com/DataBiosphere/meta-disco/issues/355), part of epic [#363](https://github.com/DataBiosphere/meta-disco/issues/363)
 - **Extends, and supersedes in part:** `docs/derived-file-data-model.md` (#109), which settled the edge for companion files only; see [What this supersedes](#what-this-supersedes)
-- **Contract:** adds 4.9 to `docs/claims-contract.md` (inheritance), with its entry under "What is not true yet"
+- **Contract:** adds 4.9 to `docs/claims-contract.md` (inheritance) and its entry under "What is not true yet"; amends 2.8, 3.1, 4.1, 4.2 and 6.6 to match
 - **Related:** #356 (companion edges), #357 (sample identity), #358 (alignment ← reads), #359 (variants ← alignments), #360 (assemblies), #361 (sample ← donor), #362 (consistency and coverage), #371 (the edge carries the parent's record key), #413 (index inheritance and contract 1.1), #438 (ambiguous index parents)
 
 ## Context
@@ -35,7 +35,7 @@ headers (13,125 of 16,427), VCF sample columns on 99.9% of VCF headers (203,823 
 ## Decisions
 
 **A file's lineage lives inside its dataset.** A parent is looked for only in the child's own dataset,
-and a parent not found there is missing (decision 2). Only sample and donor identifiers cross datasets
+and a parent not found there is `external` (decision 2). Only sample and donor identifiers cross datasets
 (decision 1).
 
 ### 1. Samples and donors are identifiers, not records
@@ -80,7 +80,7 @@ table would be empty scaffolding. Revisit if #337's manifest route populates the
 
 The parent as the source wrote it is always kept, resolved or not: `parent_file` for a name (looked up
 only within the child's dataset), `parent_ref` for anything else a source gives — a `file_id`, a DRS URI, an S3 or filesystem path.
-`parent_key` is set only when that reference resolves to a record of the child's dataset.
+`parent_key` is set only when the parent, however named, resolves to a record of the child's dataset.
 
 `parent_scope` is **not stored** on the record: it is whether `parent_key` is set, and a stored copy
 could disagree with it. `edges.jsonl` works it out, so a consumer can filter on it. An edge whose parent
@@ -198,14 +198,16 @@ HPRC assembly built from HiFi, ONT and Hi-C reads no single `platform`: nobody i
 says nothing the slot stays `not_classified`, marked mixed, with nothing for a curator to answer; the report
 lists the parents' values. But a joint call whose filename says `NovaSeq 6000` claims one value for a
 lineage that has none, so the child declaring a value against mixed is a conflict, as is the child
-declaring `not_applicable` against it, and the child contradicting an inherited value. A second carrying
-verb's value against mixed is a conflict the same way; two mixed declarations stay mixed (contract 4.9).
+declaring `not_applicable` against it. A second carrying verb's value or `not_applicable` against mixed is
+a conflict the same way; two mixed declarations stay mixed (contract 4.9). Separately, the child
+contradicting a value its parents agree on is a conflict.
 
 **What a parent passes on.** A value, or `not_applicable`, which the child's own evidence then meets as
 4.6 says: a `.fai` stays `not_applicable` for `platform` beside its reference FASTA, as it is today. A
-parent that is `not_classified` has no answer, and because the others cannot then be known to be
-unanimous, the whole verb passes nothing for that dimension: a joint VCF over one `ILLUMINA` CRAM and one
-unclassified CRAM inherits no `platform`. A parent that is mixed passes mixed: a
+parent that is `not_classified` has no answer, and where the parents that have one agree, the others
+cannot then be known to be unanimous, so the whole verb passes nothing for that dimension: a joint VCF over
+one `ILLUMINA` CRAM and one unclassified CRAM inherits no `platform`. Where the parents are already known to
+differ, or one is mixed, the verb gives mixed whatever the unclassified ones are. A parent that is mixed passes mixed: a
 CRAM merged from NovaSeq and HiSeq reads makes its VCF mixed too. One parent with a value and another
 `not_applicable` differ, so the dimension is mixed. What a parent in `conflict` passes is open (below).
 
@@ -311,7 +313,8 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   `dbSNP.build_154.GRCh38.*`) whether or not a parent file is named. The slot's value stays the current
   assembly (the comment on #355; 178 Picard-lifted dbSNP files in ANVIL_T2T). A `lifted_over_from` edge is
   written only where a parent is named.
-- An inherited `reference_assembly` claim carries a `ReferenceBuild` with `base` and `version` only, and
+- An inherited `reference_assembly` claim carries a `ReferenceBuild` with `base` and `version` only, where
+  the parents agree on them, and none where they differ, and
   names the parent it came from (decision 8); the header observations stay on the parent's record.
 - `parent_md5sum` stays while the index producer emits it, and is retired by #371 once `parent_key` is
   written.
