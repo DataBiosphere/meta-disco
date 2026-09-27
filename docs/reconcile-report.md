@@ -22,20 +22,20 @@ The last two columns are extra counts laid over those, not part of the sum:
 | data_modality | 0 | 0 | 0 | 16,658 | 549,467 | 0 | 0 | 414 | 6,341 | 20,944 | 114,264 | 566,125 | 5,920 |
 | data_type | 0 | 0 | 464 | 9,272 | 678,903 | 0 | 2 | 0 | 0 | 0 | 19,447 | 688,639 | 3,230 |
 | platform | 0 | 0 | 9,830 | 10,597 | 43,666 | 0 | 0 | 0 | 0 | 23,209 | 620,786 | 64,093 | 6,863 |
-| reference_assembly | 0 | 4,476 | 46,798 | 263,942 | 256,638 | 9 | 558 | 0 | 220 | 63,117 | 72,330 | 567,378 | 131,825 |
+| reference_assembly | 0 | 4,476 | 46,798 | 263,942 | 256,638 | 9 | 0 | 0 | 220 | 63,675 | 72,330 | 567,378 | 131,825 |
 | assay_type | 0 | 0 | 12,420 | 0 | 6,918 | 0 | 6 | 0 | 0 | 23,203 | 665,541 | 19,338 | 12,420 |
 | instrument_model | 0 | 0 | 19,102 | 520 | 137 | 0 | 0 | 0 | 0 | 23,209 | 665,120 | 19,759 | 18,939 |
 
 ## Conflict rate
 
-**989 of 4,248,528 slots (0.023%)** are a conflict across the run.
+**431 of 4,248,528 slots (0.010%)** are a conflict across the run.
 
 | dimension | conflicts | rate | inference agreed with a source |
 | --- | ---: | ---: | ---: |
 | data_modality | 414 | 0.058% | 10,738 |
 | data_type | 2 | 0.000% | 6,506 |
 | platform | 0 | 0.000% | 13,564 |
-| reference_assembly | 567 | 0.080% | 187,117 |
+| reference_assembly | 9 | 0.001% | 187,117 |
 | assay_type | 6 | 0.001% | 0 |
 | instrument_model | 0 | 0.000% | 683 |
 
@@ -45,7 +45,6 @@ Each distinct set of values the inputs declared on a conflicted slot (contract 5
 
 | dataset | dimension | kind | files | competing values |
 | --- | --- | --- | --- | --- |
-| `ANVIL_T2T_CHRY` | reference_assembly | conflict (sources) | 558 | `inference: not_applicable; repository_metadata: GRCh38, T2T-CHM13v2.0` |
 | `AnVIL_IGVF_Mouse_R1` | data_modality | conflict (published) | 412 | `inference: transcriptomic.single_cell; published_value (unreviewed): ["single-nucleus RNA sequencing assay"]` |
 | `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` | assay_type | conflict (sources) | 6 | `inference: not_applicable; repository_metadata: WGS` |
 | `ANVIL_T2T` | reference_assembly | conflict (inference) | 4 | `inference: CHM13, GRCh38` |
@@ -125,14 +124,14 @@ What each dataset holds, per dimension: every file counted once, under its recon
 | `ANVIL_HPRC` | · | 90 | 1,711 | 125 | 190 | · | · | · | 2 | 3 | 11,591 | 9,473 | 23,185 | 9.1% | 59.1% |
 | `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` | 24 | · | 26 | 2 | · | · | · | · | 12 | · | 12,430 | 40 | 12,534 | 0.5% | 99.6% |
 | `ANVIL_T2T` | · | 223,287 | 2,508 | 6,535 | · | 118 | 48 | 35 | · | 5 | 6,404 | 50,264 | 289,204 | 80.4% | 82.6% |
-| `ANVIL_T2T_CHRY` | 262,595 | · | 46,809 | 12 | · | · | · | · | · | 559 | · | 4 | 309,979 | 99.8% | 99.8% |
+| `ANVIL_T2T_CHRY` | 262,595 | · | 46,809 | 12 | · | · | · | · | · | 1 | 558 | 4 | 309,979 | 99.8% | 99.9% |
 | `ANVIL_nhp_dGTEx_V1` | · | · | · | · | · | · | · | · | · | · | · | 3,591 | 3,591 | 0.0% | 0.0% |
 | `AnVIL_ENCORE_293T` | · | · | 1,544 | · | · | · | · | · | · | · | 448 | · | 1,992 | 77.5% | 100% |
 | `AnVIL_ENCORE_RS293` | · | · | 2,932 | · | · | · | · | · | · | · | 820 | · | 3,752 | 78.1% | 100% |
 | `AnVIL_HPRC_R2` | 926 | · | 1,595 | 469 | · | · | · | · | · | · | 10,036 | 3,245 | 16,271 | 18.3% | 80.0% |
 | `AnVIL_IGVF_Mouse_R1` | · | · | · | · | · | · | · | · | · | · | 3,970 | 2,816 | 6,786 | 0.0% | 58.5% |
 | `AnVIL_MAGE` | · | · | 1,574 | · | · | · | · | · | · | · | 1,558 | 153 | 3,285 | 47.9% | 95.3% |
-| **(every dataset)** | 263,545 | 223,377 | 77,384 | 7,143 | 190 | 118 | 48 | 35 | 14 | 567 | 63,117 | 72,550 | 708,088 | 80.7% | 89.6% |
+| **(every dataset)** | 263,545 | 223,377 | 77,384 | 7,143 | 190 | 118 | 48 | 35 | 14 | 9 | 63,675 | 72,550 | 708,088 | 80.7% | 89.7% |
 
 ### assay_type
 
@@ -179,19 +178,22 @@ Against `20260926_112348` (708,088 files; the same translation table). Each cell
 | data_modality | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | data_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | platform | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | -558 | 0 | 0 | +558 | 0 | 0 | 0 |
 | assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | instrument_model | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 ### Values that moved, by dataset
 
-No dataset's count of any value moved.
+| dataset | dimension | value | before | after | change |
+| --- | --- | --- | --- | --- | --- |
+| `ANVIL_T2T_CHRY` | reference_assembly | `conflict` | 559 | 1 | -558 |
+| `ANVIL_T2T_CHRY` | reference_assembly | `not_applicable` | 0 | 558 | +558 |
 
 ## The join, per evidence file
 
 Whether each value from the source tables found its file in this run. A value that found no file, or more than one, is not used.
 
-**All 437,112 values in the 46 evidence files joined their file;** none unmatched or ambiguous.
+**All 435,996 values in the 46 evidence files joined their file;** none unmatched or ambiguous.
 
 <details markdown="1">
 <summary>Evidence files read (46)</summary>
@@ -214,9 +216,9 @@ Whether each value from the source tables found its file in this run. A value th
 | `repository_metadata` | `ANVIL_T2T_CHRY` | `PAR_interval_CHM13v2` | `drs_uri` | 62,316 | 62,316 | 0 | 0 |
 | `repository_metadata` | `ANVIL_T2T_CHRY` | `PAR_interval_GRCh38` | `drs_uri` | 30,864 | 30,864 | 0 | 0 |
 | `repository_metadata` | `ANVIL_T2T_CHRY` | `SGDP_CHM13v2_chromosome` | `drs_uri` | 168 | 168 | 0 | 0 |
-| `repository_metadata` | `ANVIL_T2T_CHRY` | `SGDP_CHM13v2_sample` | `drs_uri` | 16,324 | 16,324 | 0 | 0 |
+| `repository_metadata` | `ANVIL_T2T_CHRY` | `SGDP_CHM13v2_sample` | `drs_uri` | 15,766 | 15,766 | 0 | 0 |
 | `repository_metadata` | `ANVIL_T2T_CHRY` | `SGDP_GRCh38_chromosome` | `drs_uri` | 168 | 168 | 0 | 0 |
-| `repository_metadata` | `ANVIL_T2T_CHRY` | `SGDP_GRCh38_sample` | `drs_uri` | 16,324 | 16,324 | 0 | 0 |
+| `repository_metadata` | `ANVIL_T2T_CHRY` | `SGDP_GRCh38_sample` | `drs_uri` | 15,766 | 15,766 | 0 | 0 |
 | `repository_metadata` | `AnVIL_ENCORE_293T` | `file` | `drs_uri` | 1,544 | 1,544 | 0 | 0 |
 | `repository_metadata` | `AnVIL_ENCORE_RS293` | `file` | `drs_uri` | 2,932 | 2,932 | 0 | 0 |
 | `repository_metadata` | `AnVIL_HPRC_R2` | `alignments_v2` | `drs_uri` | 24 | 24 | 0 | 0 |
@@ -339,13 +341,12 @@ Whether each value from the source tables found its file in this run. A value th
 | data_modality | 0 | 0 | 0 | 0 | 267,630 | 0 | 0 | 0 | 0 | 0 | 42,349 | 267,630 | 0 |
 | data_type | 0 | 0 | 0 | 0 | 309,965 | 0 | 0 | 0 | 0 | 0 | 14 | 309,965 | 0 |
 | platform | 0 | 0 | 0 | 0 | 7,520 | 0 | 0 | 0 | 0 | 12 | 302,447 | 7,520 | 0 |
-| reference_assembly | 0 | 0 | 46,798 | 262,595 | 23 | 1 | 558 | 0 | 0 | 0 | 4 | 309,416 | 127,983 |
+| reference_assembly | 0 | 0 | 46,798 | 262,595 | 23 | 1 | 0 | 0 | 0 | 558 | 4 | 309,416 | 127,983 |
 | assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 12 | 309,967 | 0 | 0 |
 | instrument_model | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 12 | 309,967 | 0 | 0 |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
-| reference_assembly | conflict (sources) | 558 | `inference: not_applicable; repository_metadata: GRCh38, T2T-CHM13v2.0` |
 | reference_assembly | conflict (inference) | 1 | `inference: CHM13, GRCh38` |
 
 ### `ANVIL_nhp_dGTEx_V1`

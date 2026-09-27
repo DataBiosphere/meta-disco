@@ -266,8 +266,6 @@ datasets:
       mosdepth_regions_dist: *t2t_chry_sgdp_chm13v2_sample
       mosdepth_regions_index: *t2t_chry_sgdp_chm13v2_sample
       mosdepth_summary: *t2t_chry_sgdp_chm13v2_sample
-      read_1_fastq: *t2t_chry_sgdp_chm13v2_sample
-      read_2_fastq: *t2t_chry_sgdp_chm13v2_sample
       xx_x_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
       xx_x_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
       xy_x_nonpar_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
@@ -341,8 +339,6 @@ datasets:
       mosdepth_regions_dist: *t2t_chry_sgdp_grch38_sample
       mosdepth_regions_index: *t2t_chry_sgdp_grch38_sample
       mosdepth_summary: *t2t_chry_sgdp_grch38_sample
-      read_1_fastq: *t2t_chry_sgdp_grch38_sample
-      read_2_fastq: *t2t_chry_sgdp_grch38_sample
       xx_x_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
       xx_x_hcvcf_index: *t2t_chry_sgdp_grch38_sample
       xy_x_nonpar_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
