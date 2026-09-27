@@ -77,6 +77,9 @@ resolution also corrects `data_type`, which *shouldn't* be `not_applicable` — 
 
 ## 3. Core assumption: identity and origin are two different questions
 
+> **Superseded by ADR-0002** (decision 8), in part: the two questions stay separate, but a companion's lineage
+> dimensions are inherited onto its record, credited to the parent, not left `not_applicable` beside a link.
+
 The mistake is treating it as one question with one answer. There are two
 questions, they have different answers, and they should be stored in different
 places:
@@ -116,6 +119,9 @@ carries facts about the *relationship*: the **verb** (`relation`), what kind of
 thing it attaches to (`parent_kind`), and which specific file (the grounding).
 
 ### 4a. The edge's type — a verb plus a parent kind
+
+> **Superseded by ADR-0002** (decision 2), in part: an edge is written only where a source names a parent.
+> The file's own type is still always available, from its `data_type` and extension.
 
 Two facts about the relationship can be read without resolving the parent file:
 

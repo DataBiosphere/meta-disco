@@ -48,8 +48,9 @@ A sample or donor is `{id, namespace, source_type}`, plus its dataset where the 
   `rule_id`, schema changes below);
   which constant each place is, is #357's.
 
-**Two identifiers name the same individual only when namespace and id both match** — and, for
-`dataset_local`, the dataset too. That is what makes the search across datasets work:
+**Two identifiers name the same sample or donor only when namespace and id both match** — and, for
+`dataset_local`, the dataset too. Equal identifiers say nothing about whether a sample identifier and a
+donor identifier are one person; that is what a `donor_of` edge states (#361). That is what makes the search across datasets work:
 `coriell:HG03016` is in ANVIL_1000G_high_coverage_2019, ANVIL_T2T, ANVIL_T2T_CHRY and AnVIL_HPRC_R2, and
 an exact match finds all four. It is also what keeps two datasets that both call someone `S1` apart: a
 `dataset_local` identifier carries its dataset, which is part of its identity, so it never matches across
@@ -157,9 +158,10 @@ source: the two agreed on all 209,668 index files matched today.
 
 ### 7. Specific process runs stay out of scope
 
-An edge records the **kind** of step — "aligned by `bwa mem`" from a `@PG` line (#341) — and links file to
-file. It never records a particular run (a job id, a date, the exact parameters) as an object files link
-to. The June doc made this call; it stands.
+An edge records the relation between two files (`aligned_from`), not a process. The `@PG` line that
+shows a BAM was made by `bwa mem` is evidence for the edge; recording the tool as a fact of its own is
+#341's, and undecided. No edge records a particular run (a job id, a date, the exact parameters) as an
+object files link to. The June doc made this call; it stands.
 
 ### 8. Inheritance: what a child takes from its parent
 
@@ -238,15 +240,16 @@ In `docs/derived-file-data-model.md`, each section below carries a marker pointi
 
 | June doc | what it said | now |
 |---|---|---|
-| §1 point (3); §7b; §9 item 3 | a companion's lineage dimensions are `not_applicable`, reached only through the link | inherited across the edge (decision 8) |
-| §4b; §6 Levels 1–2; §9 items 4 (its `parent_md5sum`), 5 | grounding by md5; an edge may name no parent | grounding by record key; no parent named, no edge (decision 2) |
-| §1 point (1); §5a–5c; §9 item 7 | store a pointer, never a copy; follow at query time | copy, as a declaration that reconciles (decision 8, contract 4.9) |
+| §1 point (3); §3's `not_applicable` for a `.bai`; §7b; §9 item 3 | a companion's lineage dimensions are `not_applicable`, reached only through the link | inherited across the edge (decision 8) |
+| §4a's edge with no parent; §4b; §6 Levels 1–2; §9 items 4 (its `parent_md5sum`), 5 | grounding by md5; an edge may name no parent | grounding by record key; no parent named, no edge (decision 2) |
+| §1 point (1); §3's "not values copied onto this file"; §5a–5c; §9 item 7 | store a pointer, never a copy; follow at query time | copy, as a declaration that reconciles (decision 8, contract 4.9) |
 | §1 point (4); §7a; §9 item 8 | read the reference from the file first, inherit second | both are declarations; contradiction is a conflict (decision 8) |
 | §8d | `merged_from` held back | minted (decisions 4, 5) |
 | §10 "What ships to the Explorer" | open | inherited values are on the record (decision 8) |
 
-What stands: identity and origin are separate questions (§3) — an inherited value is credited to the
-parent, so the record still says which values are the file's own — `data_type` names a companion's own
+What stands: identity and origin are separate questions (§3's split, though not where it stores
+origin) — an inherited value is credited to the parent, so the record still says which values are the
+file's own — `data_type` names a companion's own
 content type (§1 point 2, §8c), the verb is not redundant with `data_type` (§4c), and process instances
 stay out of scope (§4b's process type vs instance, decision 7).
 
