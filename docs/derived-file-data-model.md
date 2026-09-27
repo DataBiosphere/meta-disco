@@ -387,9 +387,9 @@ distinction.
 
 ## 6. What the link buys discovery — three levels
 
-> **Superseded by ADR-0002** (decisions 2, 8), in part: Levels 1 and 2 no longer apply to an edge that names no
-> parent, because none is written; they still hold for an edge whose named parent does not resolve to one file of the
-> child's dataset (`external`), which carries its `parent_kind`. Level 3's values are on the record itself.
+> **Superseded by ADR-0002** (decisions 2, 8): Levels 1 and 2 do not apply. An edge that names no parent is not
+> written, and an `external` edge is never resolved or inherited from, so co-selection and filtering follow only
+> `internal` edges. Level 3's values are on the record itself.
 
 The link's type-level facts (`relation` + `parent_kind`) and its grounding pay off
 at three increasing levels of precision. The first two need only the type — no
