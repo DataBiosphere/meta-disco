@@ -81,7 +81,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
       entity.
 
 2.8 A slot's value comes from a metadata value. A file link's name states a role, which belongs
-    to the derivation graph.
+    to the derivation graph (ADR-0002).
     Such a name is *also* slot evidence, and the map declares which span of it speaks to which slot
     (#369). Measured on files inference can read it is an agreeing input, which 4.4 records; where
     inference has a content ceiling, or a source's tables carry no metadata values at all — the T2T
@@ -108,7 +108,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 ## 3. Claims
 
 3.1 A claim is a rule's declaration about a slot, derived from source evidence (2.1), from inference's own
-    signals, or from a curator's decision. It declares a **value** or a **status**.
+    signals, from a parent's resolved answer across a derivation edge (4.9), or from a curator's decision.
+    It declares a **value** or a **status** — or, across an edge only, the state `mixed` (4.9).
 
 3.2 Every claim names the rule that made it — including an identity mapping. There is no implicit copy.
 
@@ -185,7 +186,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     4. external repository (HPRC Data Explorer, ENA, IGSR)
     5. curator
 
-    Inherited results (`SOURCE_DERIVATION_INHERITANCE`) are not a sixth kind. What they are is #413.
+    Inherited results (`SOURCE_DERIVATION_INHERITANCE`) are not a sixth kind: they are a parent's resolved
+    answer carried across a derivation edge (4.9). How today's one instance meets 1.1 is #413.
 
     **Kind 2 was retired by #424 and reinstated by #472 and #497.** The retirement argued that a
     target's current state is not an input to producing it. It is an input once the circularity it
@@ -205,7 +207,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 4.2 Inputs 1, 2, 3 and 4 are equal. Being ours confers no rank; being external confers no rank; being
     what the repository publishes confers no rank. (Kind 5 is deliberately outside this list, because
     a curator does not compete with the others — 4.7 has a curator *answer* a conflict rather than
-    produce one, and 4.5 keeps conflict production to these four.)
+    produce one, and 4.5 keeps conflict production to these four — 4.9 adds the inherited declaration.)
 
 4.3 Resolution has two stages. Inference resolves its own competing claims by tier, as it does today.
     Every declaration that survives — inference's, and each source's — then reconciles by agreement.
@@ -242,6 +244,33 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     a direct column does not beat an implied one, which would be a tier ladder only inference has (4.3).
     A wrong implication is fixed by editing its row. Every claim records its column and raw value, not
     only the rule that made it, so the two can be told apart in the record.
+
+4.9 **A child inherits across a derivation edge** (ADR-0002, #355) — an `internal` one, which joins two
+    files of one dataset. A parent is looked for only in the child's dataset; one missing there is
+    `external`, and nothing is inherited across it. For each verb that carries a dimension,
+    the child's parents across that verb settle their resolved answers among themselves and give the child
+    one declaration, credited to them, to which 4.2–4.6 apply as to inputs 1–4 — so a child with two
+    carrying verbs (`called_from` and `merged_from`) has two declarations, which reconcile with each other
+    as any two do:
+    - parents that agree (4.4) declare their value — for `reference_assembly` with its build's identity
+      (base and version, not the parent's header observations), unless that differs among them, when the
+      value goes without one — or `not_applicable` (which 4.6 then weighs);
+    - parents that differ, or any parent that is itself mixed, declare the state **mixed**: no value, no
+      status, and not a conflict. It is the one claim state that takes part in resolution, and only here:
+      alone, or beside another mixed declaration, it leaves the slot `not_classified`, marked mixed; against
+      a value from any other declaration — the child's own, or another verb's inherited one — the slot is
+      `conflict`, since one value contradicts a lineage that has none; against `not_applicable` from any
+      other declaration it is a conflict too, as the values it stands for would be (4.6);
+    - if the parents with an answer agree but any parent across the verb is `not_classified`, the verb
+      passes nothing for that dimension, since the unclassified one cannot be known to agree; parents
+      already known to differ, or a mixed parent, give mixed whatever the rest are; what a parent in
+      `conflict` passes, and so what its verb gives, is #413's.
+
+    Which step carries which dimension is ADR-0002's table; `data_type` is never carried. Sources that
+    name different parents for a verb with one parent are an edge conflict, across which nothing is
+    inherited until it is settled. The declaration is a claim like any other (1.1, 3.2), naming the step it
+    crossed as its rule. It is the only way a slot is filled from another file's answer, and nothing fills
+    one slot from another slot's answer within a file.
 
 ## 5. Review
 
@@ -295,10 +324,11 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 6.5 Both artifacts validate against the same schema. A reconciled record is a classification record like any other.
 
 6.6 A run with no inputs but inference — no source evidence and no curator rules — produces a reconciled
-    record that concludes exactly what its inference record concluded: the same value or status on every
-    slot, from the same claims. It is not the same record: it hands inference's conclusions back unchanged
-    and adds its reconciliation (6.10) — here, that no source declared anything and that each slot resolved
-    to inference's answer. Sameness here is of what was concluded, not of the record or its bytes.
+    record that concludes exactly what its inference record concluded, plus what inheritance carries across
+    the edges inference wrote (4.9): the same value or status on every slot no inherited declaration
+    reaches, from the same claims. It is not the same record: it hands those conclusions back unchanged
+    and adds its reconciliation (6.10) — here, that no source declared anything and that each slot no
+    inherited declaration reaches resolved to inference's answer. Sameness here is of what was concluded, not of the record or its bytes.
 
 6.7 Reading sources is the reconcile stage's join, not a stage of its own (#432, which absorbed #402), and
     its measurement is a line of reconcile's report: per source and dataset, evidence offered, matched,
@@ -412,7 +442,13 @@ importer's half is built — 7.12 is enforced (below), and the published importe
 (7.1, today through the verbatim manifest, 7.12) and transcribes verbatim (7.3, #497, #421) — and what 7.1,
 7.2, 7.10 and 7.13 say about claims, comparison and delivery is the reconcile stage's (#432), which is built. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. A declared term is checked against its slot's vocabulary when the translation table loads (`value_map`, #414) — on authored rows, per 3.11; no runtime constructor checks it. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in each place below:
 
-- **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
+- **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move. 4.9 is now that clause for what an inherited value declares; how the index path builds it is still #413's.
+- **4.9 is not built** (ADR-0002). Its one instance is the index producer's, built as the 1.1 entry above
+  describes, and its declined index files carry an `index_of` edge naming no parent, which ADR-0002
+  rejects; no other step's edge is emitted (#363). The `checksum_file` rule still stamps the dimensions
+  `checksum_of` carries `not_applicable`, which 4.6 would turn into a conflict once 4.9 is built.
+  6.6's inheritance clause is true vacuously until then; when 4.9 is built, the `--no-evidence` help in
+  `reconcile.main` ("concludes what inference did") changes with it.
 - **The slot maps and their importer exist for AnVIL only** (#369, #497): `slot_map` loads
   `sources/anvil_slot_map.yaml` (kind 3) and `sources/anvil_published_slot_map.yaml` (kind 2),
   `anvil_evidence` writes generations of evidence files under `data/source_evidence/anvil/` and
