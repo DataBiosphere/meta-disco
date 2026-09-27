@@ -3,7 +3,7 @@
 - **Status:** Proposed (2026-09-26)
 - **Decision record for:** [#355](https://github.com/DataBiosphere/meta-disco/issues/355), part of epic [#363](https://github.com/DataBiosphere/meta-disco/issues/363)
 - **Extends, and supersedes in part:** `docs/derived-file-data-model.md` (#109), which settled the edge for companion files only; see [What this supersedes](#what-this-supersedes)
-- **Contract:** adds 4.9 to `docs/claims-contract.md` (inheritance)
+- **Contract:** adds 4.9 to `docs/claims-contract.md` (inheritance), with its entry under "What is not true yet"
 - **Related:** #356 (companion edges), #357 (sample identity), #358 (alignment ← reads), #359 (variants ← alignments), #360 (assemblies), #361 (sample ← donor), #362 (consistency and coverage), #371 (the edge carries the parent's record key), #413 (index inheritance and contract 1.1), #438 (ambiguous index parents)
 
 ## Context
@@ -35,13 +35,14 @@ Sample identity is the densest signal of all: `@RG SM` on 80% of BAMs, VCF sampl
 
 ### 1. Samples and donors are identifiers, not records
 
-A sample or donor is `{id, namespace, source}`, not an entity record of its own.
+A sample or donor is `{id, namespace, source_type}`, plus its dataset where the namespace is
+`dataset_local`, not an entity record of its own.
 
 - `id` is the string as written: `HG03016`, `SRS006902`.
 - `namespace` is the authority that issued it — for example `coriell` (1000G/HPRC `HG…`/`NA…`),
   `sra_sample` (`SRS…`/`ERS…`), `biosample` (`SAMN…`/`SAMEA…`), `dataset_local`. The list is #357's to
   settle against the corpus.
-- `source` is where we read it. It reuses `source_type_enum`, with the exact place (`@RG SM`, a VCF
+- `source_type` is where we read it, from `source_type_enum`, with the exact place (`@RG SM`, a VCF
   sample column, a table and column) as provenance beside it, the way evidence records its column;
   which constant each place is, is #357's.
 
@@ -121,9 +122,10 @@ Only a verb a source can detect is minted (June doc 8d). The existing five stay:
 
 ### 6. Sources, and where edges live
 
-Five sources name parents, the five rows of the Context table: submitter tables, `anvil_activity`,
-header command lines, HPRC's assembly sheets, and filename convention for companion files. Every edge records which one stated it, and an edge
-two sources state is two edges that agree — a consistency check (#362) reads them.
+Five sources name parents, the Context table's: submitter tables (same row or id join), `anvil_activity`,
+header command lines, HPRC's assembly sheets, and filename convention for companion files. Every edge
+records which one stated it, and an edge two sources state is two edges that agree — a consistency
+check (#362) reads them.
 
 Submitter tables and `anvil_activity` are source evidence, which inference never reads (contract 1.2,
 6.1). So **I recommend edges be built at reconcile**, the stage that reads both evidence and inference:
@@ -216,9 +218,9 @@ In `docs/derived-file-data-model.md`, each section below carries a marker pointi
 
 | June doc | what it said | now |
 |---|---|---|
-| §1 points (1), (3); §7b; §9 item 3 | a companion's lineage dimensions are `not_applicable`, reached only through the link | inherited across the edge (decision 8) |
+| §1 point (3); §7b; §9 item 3 | a companion's lineage dimensions are `not_applicable`, reached only through the link | inherited across the edge (decision 8) |
 | §4b; §6 Levels 1–2; §9 items 4 (its `parent_md5sum`), 5 | grounding by md5; an edge may name no parent | grounding by record key; no parent named, no edge (decision 2) |
-| §5a–5c; §9 item 7 | store a pointer, never a copy; follow at query time | copy, as a declaration that reconciles (decision 8, contract 4.9) |
+| §1 point (1); §5a–5c; §9 item 7 | store a pointer, never a copy; follow at query time | copy, as a declaration that reconciles (decision 8, contract 4.9) |
 | §7a; §9 item 8 | read the reference from the file first, inherit second | both are declarations; contradiction is a conflict (decision 8) |
 | §8d | `merged_from` held back | minted (decisions 4, 5) |
 | §10 "What ships to the Explorer" | open | inherited values are on the record (decision 8) |
@@ -259,9 +261,10 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   rules file — and read by code and a drift test; `INHERITED_FIELDS` becomes a reader of the `index_of`
   entry rather than a second copy.
 - `credited_to_enum` and `reconcile.SLOT_CATEGORIES` gain a category for a slot filled by inheritance,
-  and the conflict kinds one for a child against its parent, so the reconcile report does not count
-  them as a source filling a slot or a source disagreement (contract 6.10), and a way to report a
-  mixed dimension with its parents' values.
+  and the conflict kinds one for a child against its parent, so the reconcile report counts neither as a
+  source (contract 6.10). The report also needs a way to list a mixed dimension with its parents' values.
+- An `edges.jsonl` row is its own class, not a `DerivationEdge`: its child is a record key or an
+  `EntityIdentifier`, because `donor_of` and `child_of` have no record to sit on (decision 6).
 - `parent_kind_enum` gains `reference` and `assembly` if #358 and #360 need them; decided there.
 
 ## Open

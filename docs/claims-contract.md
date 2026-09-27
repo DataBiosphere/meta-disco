@@ -206,7 +206,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 4.2 Inputs 1, 2, 3 and 4 are equal. Being ours confers no rank; being external confers no rank; being
     what the repository publishes confers no rank. (Kind 5 is deliberately outside this list, because
     a curator does not compete with the others — 4.7 has a curator *answer* a conflict rather than
-    produce one, and 4.5 keeps conflict production to these four.)
+    produce one, and 4.5 keeps conflict production to these four, and to the inherited declaration 4.9
+    treats as one of them.)
 
 4.3 Resolution has two stages. Inference resolves its own competing claims by tier, as it does today.
     Every declaration that survives — inference's, and each source's — then reconciles by agreement.
@@ -248,8 +249,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     a dimension the step carries are settled among themselves first: parents that agree (4.4) give the
     child one declaration, credited to them, and 4.2–4.6 apply to it as to inputs 1–4; parents that differ
     give none, and the dimension is **mixed**, which is not a conflict. Which step carries which dimension
-    is ADR-0002's table; `data_type` is never carried. It is the only way a slot is filled from another
-    file's answer, and nothing fills one slot from another slot's answer within a file.
+    is ADR-0002's table; `data_type` is never carried. The declaration is a claim like any other (1.1,
+    3.2), naming the step it crossed as its rule. It is the only way a slot is filled from another file's
+    answer, and nothing fills one slot from another slot's answer within a file.
 
 ## 5. Review
 
@@ -420,7 +422,7 @@ importer's half is built — 7.12 is enforced (below), and the published importe
 (7.1, today through the verbatim manifest, 7.12) and transcribes verbatim (7.3, #497, #421) — and what 7.1,
 7.2, 7.10 and 7.13 say about claims, comparison and delivery is the reconcile stage's (#432), which is built. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. A declared term is checked against its slot's vocabulary when the translation table loads (`value_map`, #414) — on authored rows, per 3.11; no runtime constructor checks it. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in each place below:
 
-- **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move.
+- **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move. 4.9 is now that clause for what an inherited value declares; how the index path builds it is still #413's.
 - **4.9 is not built** (ADR-0002). Its one instance is the index producer's, built as the 1.1 entry above
   describes, and its declined index files carry an `index_of` edge naming no parent, which ADR-0002
   rejects; no other step's edge is emitted (#363). The `checksum_file` rule still stamps the dimensions

@@ -486,8 +486,8 @@ fails for them — there is nothing in the file to read.
 
 ### 7b. `not_applicable` vs "open" — a real distinction
 
-> **Superseded by ADR-0002** (decision 8), in part: an index's `data_modality`, `assay_type` and `platform` are
-> inherited, not `not_applicable`. The distinction between `not_applicable` and open stands.
+> **Superseded by ADR-0002** (decision 8), in part: a companion's `data_modality`, `assay_type` and `platform` —
+> an index's, a checksum's — are inherited, not `not_applicable`. The distinction between `not_applicable` and open stands.
 
 `not_applicable` is a strong claim: *this field has no meaning for this file.*
 That is true for `assay_type` on a `.bai` — an index has no assay, full stop.
@@ -759,7 +759,7 @@ roadmap starts to cash in on generation.
 ## 9. Summary of the data-model assumptions
 
 > **Superseded by ADR-0002** (decisions 2, 8): items 4 and 5 (md5 grounding, edges naming no parent), 7 and 8, and item 3's
-> `not_applicable` for an index.
+> `not_applicable` for a companion.
 
 1. **The axis is content, not derivation.** What separates these files is whether
    their content is *biological* (the bytes are the signal) or *descriptive* (the
