@@ -247,8 +247,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     only the rule that made it, so the two can be told apart in the record.
 
 4.9 **A child inherits across a derivation edge** (ADR-0002, #355) — an `internal` one, which joins two
-    files of one dataset; nothing is resolved or inherited across an `external` edge, and a parent in
-    another dataset is always `external`. For each verb that carries a dimension,
+    files of one dataset. A parent is looked for only in the child's dataset; one missing there is
+    `external`, and nothing is inherited across it. For each verb that carries a dimension,
     the child's parents across that verb settle their resolved answers among themselves and give the child
     one declaration, credited to them, to which 4.2–4.6 apply as to inputs 1–4 — so a child with two
     carrying verbs (`called_from` and `merged_from`) has two declarations, which reconcile with each other
@@ -262,7 +262,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
       a value from any other declaration — the child's own, or another verb's inherited one — the slot is
       `conflict`, since one value contradicts a lineage that has none; against `not_applicable` from any
       other declaration it is a conflict too, as the values it stands for would be (4.6);
-    - a parent that is `not_classified` passes nothing; what a parent in `conflict` passes is #413's.
+    - if any parent across the verb is `not_classified`, the verb passes nothing for that dimension,
+      since the others cannot be known to agree; what a parent in `conflict` passes is #413's.
 
     Which step carries which dimension is ADR-0002's table; `data_type` is never carried. Sources that
     name different parents for a verb with one parent are an edge conflict, across which nothing is
@@ -322,8 +323,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 6.5 Both artifacts validate against the same schema. A reconciled record is a classification record like any other.
 
 6.6 A run with no inputs but inference — no source evidence and no curator rules — produces a reconciled
-    record that concludes exactly what its inference record concluded: the same value or status on every
-    slot, from the same claims. It is not the same record: it hands inference's conclusions back unchanged
+    record that concludes exactly what its inference record concluded, plus what inheritance carries across
+    the edges inference wrote (4.9): the same value or status on every slot no inherited declaration
+    reaches, from the same claims. It is not the same record: it hands inference's conclusions back unchanged
     and adds its reconciliation (6.10) — here, that no source declared anything and that each slot resolved
     to inference's answer. Sameness here is of what was concluded, not of the record or its bytes.
 
@@ -444,6 +446,8 @@ importer's half is built — 7.12 is enforced (below), and the published importe
   describes, and its declined index files carry an `index_of` edge naming no parent, which ADR-0002
   rejects; no other step's edge is emitted (#363). The `checksum_file` rule still stamps the dimensions
   `checksum_of` carries `not_applicable`, which 4.6 would turn into a conflict once 4.9 is built.
+  6.6's inheritance clause is true vacuously until then; when 4.9 is built, the `--no-evidence` help in
+  `reconcile.main` ("concludes what inference did") changes with it.
 - **The slot maps and their importer exist for AnVIL only** (#369, #497): `slot_map` loads
   `sources/anvil_slot_map.yaml` (kind 3) and `sources/anvil_published_slot_map.yaml` (kind 2),
   `anvil_evidence` writes generations of evidence files under `data/source_evidence/anvil/` and

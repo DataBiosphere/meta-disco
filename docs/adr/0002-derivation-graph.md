@@ -34,9 +34,9 @@ headers (13,125 of 16,427), VCF sample columns on 99.9% of VCF headers (203,823 
 
 ## Decisions
 
-**We do not link files across datasets.** Only an `internal` edge joins two held files, and both are in
-one dataset. A parent a source names in another dataset is kept as the source wrote it and never resolved, looked up or
-inherited from (decision 2). Only sample and donor identifiers cross datasets (decision 1).
+**A file's lineage lives inside its dataset.** A parent is looked for only in the child's own dataset,
+and a parent not found there is missing (decision 2). Only sample and donor identifiers cross datasets
+(decision 1).
 
 ### 1. Samples and donors are identifiers, not records
 
@@ -75,19 +75,12 @@ table would be empty scaffolding. Revisit if #337's manifest route populates the
   record key (`pipeline.SOURCE_RECORD_KEYS`). A file parent resolves only within the child's dataset,
   whatever form the source names it in, as today's filename joins do.
 - **`external`** — a source names the parent (`NA21127.merged.bam` in a `@PG` line, or a `file_id` or DRS
-  URI in a table) but it does not resolve to one file of the child's dataset: it was never deposited, the
-  name is shared by more than one (#438), or it is in another dataset — which is never resolved, even
-  when we hold the file there. HPRC's parental Illumina CRAMs in ANVIL_1000G_high_coverage_2019 are
-  external to an AnVIL_HPRC_R2 assembly, and so pass it nothing (contract 4.9). The two files still meet
-  through their sample identifier (decision 1). This exclusion is deliberate: a dataset is the unit a file's lineage is stated and reviewed in, and a file edge across
-  datasets would let one dataset's answer flow into another's records. The one cross-dataset file link
-  the re-measure found (HPRC assemblies ← parental CRAMs in 1000G and T2T) is left to the sample
-  identifier for that reason.
+  URI in a table) but it is missing from the child's dataset: it was never deposited, or the name is
+  shared by more than one file (#438). An `external` parent passes nothing (contract 4.9).
 
 The parent as the source wrote it is always kept, resolved or not: `parent_file` for a name (looked up
 only within the child's dataset), `parent_ref` for anything else a source gives — a `file_id`, a DRS URI, an S3 or filesystem path.
-`parent_key` is set only when that reference resolves to a record
-of the child's dataset.
+`parent_key` is set only when that reference resolves to a record of the child's dataset.
 
 `parent_scope` is **not stored** on the record: it is whether `parent_key` is set, and a stored copy
 could disagree with it. `edges.jsonl` works it out, so a consumer can filter on it. An edge whose parent
@@ -210,7 +203,9 @@ verb's value against mixed is a conflict the same way; two mixed declarations st
 
 **What a parent passes on.** A value, or `not_applicable`, which the child's own evidence then meets as
 4.6 says: a `.fai` stays `not_applicable` for `platform` beside its reference FASTA, as it is today. A
-parent that is `not_classified` has no answer and passes nothing. A parent that is mixed passes mixed: a
+parent that is `not_classified` has no answer, and because the others cannot then be known to be
+unanimous, the whole verb passes nothing for that dimension: a joint VCF over one `ILLUMINA` CRAM and one
+unclassified CRAM inherits no `platform`. A parent that is mixed passes mixed: a
 CRAM merged from NovaSeq and HiSeq reads makes its VCF mixed too. One parent with a value and another
 `not_applicable` differ, so the dimension is mixed. What a parent in `conflict` passes is open (below).
 
@@ -310,10 +305,12 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
     parent, which decision 2 rules out.
   - `parent_id`: an `EntityIdentifier`, the alternative to a file parent for `sample_of`, `donor_of`,
     `child_of` (decisions 1, 5).
-  - `source_assembly`: an inlined class `{value: reference_assembly_enum, build: ReferenceBuild}` (build
-    optional), as `ReferenceAssemblyClassification` pairs the two today, on `lifted_over_from` only — the assembly the coordinates came from; the
-    record's `reference_assembly` stays the current one (the comment on #355, measured 178
-    Picard-lifted dbSNP files in ANVIL_T2T).
+- `source_assembly` on the record's `reference_assembly` slot, beside `build`, not on the edge: an inlined
+  `{value: reference_assembly_enum, build: ReferenceBuild}` (build optional) naming the assembly a lifted
+  file's coordinates came from, read from its header (`##liftOverChain`) or name (`GRCh38` in
+  `dbSNP.build_154.GRCh38.*`) whether or not a parent file is named. The slot's value stays the current
+  assembly (the comment on #355; 178 Picard-lifted dbSNP files in ANVIL_T2T). A `lifted_over_from` edge is
+  written only where a parent is named.
 - An inherited `reference_assembly` claim carries a `ReferenceBuild` with `base` and `version` only, and
   names the parent it came from (decision 8); the header observations stay on the parent's record.
 - `parent_md5sum` stays while the index producer emits it, and is retired by #371 once `parent_key` is
@@ -375,5 +372,5 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   paths; tying one to a released `*_hprc_r2_v1.0.1.fa.gz` by sample and haplotype assumes the release came
   from that run. Until that is established, an `assembled_from` edge's child is only an output that resolves
   to a held file, and the released assemblies have no such edge.
-- **`external` covers three cases** — never deposited, ambiguous by name, and in another dataset. If a consumer needs them apart,
+- **`external` covers two cases** — never deposited, and ambiguous by name. If a consumer needs them apart,
   a reason field on the edge would do it.
