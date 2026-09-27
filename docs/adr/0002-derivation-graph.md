@@ -181,7 +181,8 @@ VCF takes `ILLUMINA`, and a VCF whose filename says `hifi` beside that CRAM is a
 a mislabelled file or a wrong edge, which must not be settled silently.
 
 **Parents that differ are mixed, not a conflict.** A child's parents across one verb — the pooled set of a
-many-parent verb (decision 5) — are settled among themselves first:
+many-parent verb (decision 5) — are settled among themselves first, one declaration per verb; a child
+with two carrying verbs has two, which reconcile with each other as any two declarations do:
 parents that agree (4.4's sense, `is_a` nesting included) give the child one inherited declaration,
 naming how many parents and which; parents that differ give it a **mixed** declaration, which carries no
 value. A 1000G joint call over NovaSeq 6000 and HiSeq X CRAMs has no single `instrument_model`, and an

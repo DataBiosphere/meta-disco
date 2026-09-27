@@ -246,9 +246,11 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     A wrong implication is fixed by editing its row. Every claim records its column and raw value, not
     only the rule that made it, so the two can be told apart in the record.
 
-4.9 **A child inherits across a derivation edge** (ADR-0002, #355). A child's parents' resolved answers for
-    a dimension the step carries are settled among themselves first, and give the child one declaration,
-    credited to them, to which 4.2–4.6 apply as to inputs 1–4:
+4.9 **A child inherits across a derivation edge** (ADR-0002, #355). For each verb that carries a dimension,
+    the child's parents across that verb settle their resolved answers among themselves and give the child
+    one declaration, credited to them, to which 4.2–4.6 apply as to inputs 1–4 — so a child with two
+    carrying verbs (`called_from` and `merged_from`) has two declarations, which reconcile with each other
+    as any two do:
     - parents that agree (4.4) declare their value, `build` included for `reference_assembly`, or
       `not_applicable` (which 4.6 then weighs);
     - parents that differ, or any parent that is itself mixed, declare the state **mixed**: no value, no
