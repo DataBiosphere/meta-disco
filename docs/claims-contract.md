@@ -109,7 +109,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 3.1 A claim is a rule's declaration about a slot, derived from source evidence (2.1), from inference's own
     signals, from a parent's resolved answer across a derivation edge (4.9), or from a curator's decision.
-    It declares a **value** or a **status**.
+    It declares a **value** or a **status** — or, across an edge only, the state `mixed` (4.9).
 
 3.2 Every claim names the rule that made it — including an identity mapping. There is no implicit copy.
 
@@ -251,9 +251,11 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     credited to them, to which 4.2–4.6 apply as to inputs 1–4:
     - parents that agree (4.4) declare their value, `build` included for `reference_assembly`, or
       `not_applicable` (which 4.6 then weighs);
-    - parents that differ, or any parent that is itself mixed, declare **mixed**: no value, and not a
-      conflict. Alone, mixed leaves the slot `not_classified`; against a value the child declares, it is a
-      conflict, since one value contradicts a lineage that has none;
+    - parents that differ, or any parent that is itself mixed, declare the state **mixed**: no value, no
+      status, and not a conflict. It is the one claim state that takes part in resolution, and only here:
+      alone it leaves the slot `not_classified`; against a value the child declares, the slot is
+      `conflict`, since one value contradicts a lineage that has none; against the child's `not_applicable`
+      it is a conflict too, as the values it stands for would be (4.6);
     - a parent that is `not_classified` passes nothing; what a parent in `conflict` passes is #413's.
 
     Which step carries which dimension is ADR-0002's table; `data_type` is never carried. Sources that

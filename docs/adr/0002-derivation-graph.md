@@ -121,7 +121,7 @@ Only a verb a source can detect is minted (June doc 8d). The existing five stay:
 | `aligned_to` | alignment ← the reference it was aligned to | `@PG` reference argument, `@SQ UR` |
 | `called_from` | variants ← alignments or gVCFs | VCF caller command lines, submitter same-row (1000G `cram` → `gvcf`) |
 | `merged_from` | merged file ← shards | headers and filenames (T2T chromosome VCF ← window VCFs); the held-back verb of the June doc's 8d, now detectable |
-| `assembled_from` | assembly ← reads | HPRC assembly sample sheets |
+| `assembled_from` | assembly ← reads | HPRC assembly sample sheets, where the output resolves to a held assembly (Open) |
 | `sample_of` | file ← sample id | `@RG SM`, VCF sample columns, filename accession, submitter tables (#357) |
 | `donor_of` | sample id ← donor id | submitter tables, registries (#361) |
 | `child_of` | donor id ← donor id | HPRC `sample.maternal_id`/`paternal_id`, 1000G pedigree (#361) |
@@ -209,8 +209,8 @@ carries: a VCF is not an alignment.
 | `aligned_to`, `derived_from`, `sample_of`, `donor_of`, `child_of` | no | no | no | no | no |
 
 - Carrying `reference_assembly` carries its `build` with it, as the index producer does today (#340): a
-  child must not describe its reference less precisely than its parent. Two builds reconcile as two
-  values do (4.4), nesting included.
+  child must not describe its reference less precisely than its parent. The slot reconciles on its value
+  (4.4); how two differing builds under one value reconcile is open (below).
 - `aligned_to` points at a reference, not at the data the child came from. `derived_from` is the verb
   for "related, step unknown", so nothing is known to carry. `sample_of`, `donor_of` and `child_of`
   have an identifier as parent, which has no dimensions.
@@ -304,6 +304,9 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
 - What each step carries (decision 8), and each verb's cardinality (decision 5), are declared once in
   data — on the `relation_enum` values or in a rules file — and read by code and a drift test; `INHERITED_FIELDS` becomes a reader of the `index_of`
   entry rather than a second copy.
+- Mixed is a new `claim_state_enum` value, `mixed`: a claim with no value and no status, and the one state
+  that takes part in resolution, as 4.9 says. The slot it leaves alone is `not_classified`; against a value
+  the child declares, the slot is `conflict`.
 - `credited_to_enum` and `reconcile.SLOT_CATEGORIES` gain a category for a slot filled by inheritance,
   and the conflict kinds one for a child against its parent, so the reconcile report counts neither as a
   source (contract 6.10). The report also needs a way to list a mixed dimension with its parents' values,
@@ -330,5 +333,13 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   submitter table naming `{B}` pool to `{A, B}`, which could hide a wrong edge; but sources are often
   partial (a header lists a subset), so differing sets are not a conflict. The consistency check (#362)
   flags a verb whose sources' sets do not overlap.
+- **Two builds under one `reference_assembly` value.** A `ReferenceBuild` is an object whose `version` is
+  free text, so 4.4's value agreement does not say whether two GRCh38 builds with different patches
+  conflict, or how their details merge. Until that is defined, an inherited build rides along as
+  detail and the slot reconciles on its value alone.
+- **HPRC's sheets name working outputs, not released assemblies.** Their outputs are `/private/groups/...`
+  paths; tying one to a released `*_hprc_r2_v1.0.1.fa.gz` by sample and haplotype assumes the release came
+  from that run. Until that is established, an `assembled_from` edge's child is only an output that resolves
+  to a held file, and the released assemblies have no such edge.
 - **`external` covers two cases** — never deposited, and ambiguous by name. If a consumer needs them apart,
   a reason field on the edge would do it.
