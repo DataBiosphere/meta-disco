@@ -34,8 +34,8 @@ headers (13,125 of 16,427), VCF sample columns on 99.9% of VCF headers (203,823 
 
 ## Decisions
 
-**We do not link files across datasets.** Every file edge joins two files of one dataset. A parent a
-source names in another dataset is kept as the source wrote it and never resolved, looked up or
+**We do not link files across datasets.** Only an `internal` edge joins two held files, and both are in
+one dataset. A parent a source names in another dataset is kept as the source wrote it and never resolved, looked up or
 inherited from (decision 2). Only sample and donor identifiers cross datasets (decision 1).
 
 ### 1. Samples and donors are identifiers, not records

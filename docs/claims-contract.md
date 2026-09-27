@@ -246,8 +246,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     A wrong implication is fixed by editing its row. Every claim records its column and raw value, not
     only the rule that made it, so the two can be told apart in the record.
 
-4.9 **A child inherits across a derivation edge** (ADR-0002, #355). A file edge joins two files of one
-    dataset; nothing is resolved or inherited across datasets. For each verb that carries a dimension,
+4.9 **A child inherits across a derivation edge** (ADR-0002, #355) — an `internal` one, which joins two
+    files of one dataset; nothing is resolved or inherited across an `external` edge, and a parent in
+    another dataset is always `external`. For each verb that carries a dimension,
     the child's parents across that verb settle their resolved answers among themselves and give the child
     one declaration, credited to them, to which 4.2–4.6 apply as to inputs 1–4 — so a child with two
     carrying verbs (`called_from` and `merged_from`) has two declarations, which reconcile with each other
