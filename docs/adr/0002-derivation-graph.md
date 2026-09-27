@@ -69,8 +69,13 @@ table would be empty scaffolding. Revisit if #337's manifest route populates the
 - **`internal`** — the parent is one file we hold, in any dataset, and the edge carries its record key
   (`pipeline.SOURCE_RECORD_KEYS`). HPRC's parental Illumina CRAMs in ANVIL_1000G_high_coverage_2019 are
   internal though they are in another dataset.
-- **`external`** — a source names the parent (`NA21127.merged.bam` in a `@PG` line) but it does not
-  resolve to one file we hold: it was never deposited, or the name is shared by more than one (#438).
+- **`external`** — a source names the parent (`NA21127.merged.bam` in a `@PG` line, or a `file_id` or DRS
+  URI in a table) but it does not resolve to one file we hold: it was never deposited, or the name is
+  shared by more than one (#438).
+
+The parent as the source wrote it is always kept, resolved or not: `parent_file` for a name,
+`parent_ref` for a `file_id` or DRS URI. `parent_key` is set only when that reference resolves to a record
+in the run.
 
 `parent_scope` is **not stored** on the record: it is whether `parent_key` is set, and a stored copy
 could disagree with it. `edges.jsonl` works it out, so a consumer can filter on it. An edge whose parent
@@ -131,7 +136,7 @@ that name the same parent for a one-parent verb are one parent with two sources.
 different parents for it are an **edge conflict**: a `.tbi` whose filename match says `a.vcf.gz` and whose
 `anvil_activity` says `b.vcf.gz` has one of them wrong. An edge conflict is listed for review, and nothing
 is inherited across that verb until it is settled. For a many-parent verb, the parents every source
-names are pooled into one set.
+names are pooled into one set, each source's parents still their own edges (decision 6).
 
 ### 6. Sources, and where edges live
 
@@ -178,18 +183,19 @@ a mislabelled file or a wrong edge, which must not be settled silently.
 **Parents that differ are mixed, not a conflict.** A child's parents across one verb — the pooled set of a
 many-parent verb (decision 5) — are settled among themselves first:
 parents that agree (4.4's sense, `is_a` nesting included) give the child one inherited declaration,
-naming how many parents and which; parents that differ give it none, and the dimension is **mixed**. A
-1000G joint call over NovaSeq 6000 and HiSeq X CRAMs has no single `instrument_model`, and an HPRC assembly
-built from HiFi, ONT and Hi-C reads no single `platform`: nobody is wrong, so there is nothing for a
-curator to answer. A mixed dimension leaves the child's own declarations to settle the slot alone, and
-where the child has none it stays `not_classified`; the report lists the parents' values. Only the child
-contradicting its inherited value is a conflict.
+naming how many parents and which; parents that differ give it a **mixed** declaration, which carries no
+value. A 1000G joint call over NovaSeq 6000 and HiSeq X CRAMs has no single `instrument_model`, and an
+HPRC assembly built from HiFi, ONT and Hi-C reads no single `platform`: nobody is wrong, so where the child
+says nothing the slot stays `not_classified`, marked mixed, with nothing for a curator to answer; the report
+lists the parents' values. But a joint call whose filename says `NovaSeq 6000` claims one value for a
+lineage that has none, so the child declaring a value against mixed is a conflict, as is the child
+contradicting an inherited value.
 
 **What a parent passes on.** A value, or `not_applicable`, which the child's own evidence then meets as
 4.6 says: a `.fai` stays `not_applicable` for `platform` beside its reference FASTA, as it is today. A
-parent that is `not_classified` or mixed has no answer and passes nothing, so a mixed CRAM leaves its VCF
-to the VCF's own evidence. One parent with a value and another `not_applicable` differ, so the
-dimension is mixed. What a parent in `conflict` passes is open (below).
+parent that is `not_classified` has no answer and passes nothing. A parent that is mixed passes mixed: a
+CRAM merged from NovaSeq and HiSeq reads makes its VCF mixed too. One parent with a value and another
+`not_applicable` differ, so the dimension is mixed. What a parent in `conflict` passes is open (below).
 
 **What each step carries.** The dimensions split by whether the step keeps them. `data_type` never
 carries: a VCF is not an alignment.
@@ -202,6 +208,9 @@ carries: a VCF is not an alignment.
 | `assembled_from` | yes | yes | yes | yes | **no** — an assembly is its own reference |
 | `aligned_to`, `derived_from`, `sample_of`, `donor_of`, `child_of` | no | no | no | no | no |
 
+- Carrying `reference_assembly` carries its `build` with it, as the index producer does today (#340): a
+  child must not describe its reference less precisely than its parent. Two builds reconcile as two
+  values do (4.4), nesting included.
 - `aligned_to` points at a reference, not at the data the child came from. `derived_from` is the verb
   for "related, step unknown", so nothing is known to carry. `sample_of`, `donor_of` and `child_of`
   have an identifier as parent, which has no dimensions.
@@ -264,8 +273,15 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
     states, the existing `source` slot (`ClaimSource`: source, dataset, table, column); for one inference
     reads, `rule_id`, naming the rule and header field or filename convention it came from. Which kind
     `anvil_activity` is — it is neither the submitter tables nor `anvil_file` — is #356's.
-  - `parent_key`: the parent's record key per `SOURCE_RECORD_KEYS`; its presence is what `parent_scope`
-    means, so `parent_scope` is not a slot (decisions 2, #371). Named for the key rather than
+  - `parent_key`: the parent's record key per `SOURCE_RECORD_KEYS`, set only when the parent resolves to
+    a record in the run; its presence is what `parent_scope` means, so `parent_scope` is not a slot
+    (decisions 2, #371).
+  - `parent_ref`: the parent as a source wrote it when that is a `file_id` or DRS URI, kept whether or not
+    it resolves (decision 2); a name stays in `parent_file`.
+  - A constraint: exactly one parent form per edge — `parent_id`, or a file parent (`parent_file` or
+    `parent_ref`, with `parent_key` where it resolves) — and the form the relation takes (an identifier
+    for `sample_of`, `donor_of`, `child_of`; a file otherwise). Today's schema accepts an edge with no
+    parent, which decision 2 rules out. Named for the key rather than
     `parent_file_id` because HPRC's key is not a `file_id`.
   - `parent_id`: an `EntityIdentifier`, the alternative to a file parent for `sample_of`, `donor_of`,
     `child_of` (decisions 1, 5).
@@ -310,5 +326,9 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
 - **A parent in `conflict`.** 4.4–4.5 reconcile declarations, and a conflict declares no value. Whether a
   parent's conflict reaches the child as a conflict (what the index producer does today) or as nothing is
   #413's to decide.
+- **Sources that name different parent sets for a many-parent verb.** A caller header naming `{A}` and a
+  submitter table naming `{B}` pool to `{A, B}`, which could hide a wrong edge; but sources are often
+  partial (a header lists a subset), so differing sets are not a conflict. The consistency check (#362)
+  flags a verb whose sources' sets do not overlap.
 - **`external` covers two cases** — never deposited, and ambiguous by name. If a consumer needs them apart,
   a reason field on the edge would do it.

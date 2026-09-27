@@ -246,16 +246,21 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     A wrong implication is fixed by editing its row. Every claim records its column and raw value, not
     only the rule that made it, so the two can be told apart in the record.
 
-4.9 **A child inherits across a derivation edge** (ADR-0002, #355). A child's parents' resolved values for
-    a dimension the step carries are settled among themselves first: parents that agree (4.4) give the
-    child one declaration, credited to them, and 4.2–4.6 apply to it as to inputs 1–4; parents that differ
-    give none, and the dimension is **mixed**, which is not a conflict. Which step carries which dimension
-    is ADR-0002's table; `data_type` is never carried. A parent passes on a value or `not_applicable`
-    (which 4.6 then weighs); a parent that is `not_classified` or mixed passes nothing; what a parent in
-    `conflict` passes is #413's. Sources that name different parents for a verb with one parent are an
-    edge conflict, across which nothing is inherited until it is settled. The declaration is a claim
-    like any other (1.1, 3.2), naming the step it crossed as its rule. It is the only way a slot is filled
-    from another file's answer, and nothing fills one slot from another slot's answer within a file.
+4.9 **A child inherits across a derivation edge** (ADR-0002, #355). A child's parents' resolved answers for
+    a dimension the step carries are settled among themselves first, and give the child one declaration,
+    credited to them, to which 4.2–4.6 apply as to inputs 1–4:
+    - parents that agree (4.4) declare their value, `build` included for `reference_assembly`, or
+      `not_applicable` (which 4.6 then weighs);
+    - parents that differ, or any parent that is itself mixed, declare **mixed**: no value, and not a
+      conflict. Alone, mixed leaves the slot `not_classified`; against a value the child declares, it is a
+      conflict, since one value contradicts a lineage that has none;
+    - a parent that is `not_classified` passes nothing; what a parent in `conflict` passes is #413's.
+
+    Which step carries which dimension is ADR-0002's table; `data_type` is never carried. Sources that
+    name different parents for a verb with one parent are an edge conflict, across which nothing is
+    inherited until it is settled. The declaration is a claim like any other (1.1, 3.2), naming the step it
+    crossed as its rule. It is the only way a slot is filled from another file's answer, and nothing fills
+    one slot from another slot's answer within a file.
 
 ## 5. Review
 
