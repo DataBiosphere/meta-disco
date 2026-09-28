@@ -670,3 +670,27 @@ def _regenerate_fixtures():
 
 if __name__ == "__main__":
     _regenerate_fixtures()
+
+
+def test_every_rule_id_in_the_output_is_declared(output, standalone_output):
+    """Every ``rule_id`` the golden output of the eleven producers carries is declared (#572).
+
+    Declared means a YAML rule, or a rule or marker in ``code_rules``. This is the output
+    half of the check that ``test_code_rules`` makes on the source: it catches an id
+    however the code built it (a variable, a helper, a constant of any name), but only
+    for the ids these golden inputs make a producer emit. The reconciled fixture is left
+    out, because its translation row is the test's own.
+    """
+    from meta_disco import code_rules
+    from meta_disco.rule_loader import get_unified_rules
+
+    declared = {rule.id for rule in get_unified_rules().rules}
+    declared |= {d.id for d in (*code_rules.CODE_RULES, *code_rules.MARKERS)}
+    emitted = set()
+    for payload in (*output.values(), *standalone_output.values()):
+        for record in payload["classifications"]:
+            for slot in record["classifications"].values():
+                if isinstance(slot, dict):
+                    emitted.update(e["rule_id"] for e in slot.get("evidence") or [] if e.get("rule_id"))
+    assert emitted, "no rule ids found: the walk is broken, not the output"
+    assert emitted - declared == set(), "declare these in unified_rules.yaml or meta_disco.code_rules"

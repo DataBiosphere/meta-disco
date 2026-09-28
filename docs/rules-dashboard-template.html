@@ -17,7 +17,8 @@
     td.zero { background: #fff8c5; }
     code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
     pre { background: #f6f8fa; padding: 8px; margin: 4px 0; white-space: pre-wrap; }
-    th.sort { cursor: pointer; }
+    button.sort { font: inherit; font-weight: 600; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+    button.sort:focus-visible { outline: 2px solid #0969da; outline-offset: 2px; }
     td.rule { min-width: 280px; max-width: 460px; }
     td.why { min-width: 240px; max-width: 420px; }
     .lbl { color: #656d76; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
@@ -104,15 +105,16 @@
         (!kind || r.kind === kind) && (!basis || r.basis === basis) && (!never || !r.files) &&
         (!q || [r.id, r.dataset, r.rationale, r.condition, r.effect, Object.keys(r.datasets).join(" ")].join(" ").toLowerCase().includes(q)));
       if (sortKey) rows = [...rows].sort((a, b) => (a[sortKey] > b[sortKey] ? 1 : a[sortKey] < b[sortKey] ? -1 : 0) * sortDir);
-      const head = "<tr>" + COLS.map(([name, key]) => key ? `<th class="sort" data-key="${key}">${name}</th>` : `<th>${name}</th>`).join("") + "</tr>";
+      // A sortable heading is a button, so it can be reached and pressed from the keyboard.
+      const head = "<tr>" + COLS.map(([name, key]) => key ? `<th><button type="button" class="sort" data-key="${key}">${name}</button></th>` : `<th>${name}</th>`).join("") + "</tr>";
       const body = rows.map(r => "<tr>" +
         COLS.map(([name, , cell, num]) => `<td class="${num ? "num" : ""}${num && !r.files ? " zero" : ""}${name === "rule" ? " rule" : ""}${name === "rationale" ? " why" : ""}">${cell(r)}</td>`).join("") +
         "</tr>").join("");
       const table = document.getElementById("rules");
       table.innerHTML = head + body;
       document.getElementById("count").textContent = `${rows.length} of ${DATA.rules.length} rules`;
-      table.querySelectorAll("th.sort").forEach(th => th.onclick = () => {
-        const key = th.dataset.key;
+      table.querySelectorAll("button.sort").forEach(button => button.onclick = () => {
+        const key = button.dataset.key;
         sortDir = sortKey === key ? -sortDir : (["files", "won"].includes(key) ? -1 : 1);
         sortKey = key;
         render();

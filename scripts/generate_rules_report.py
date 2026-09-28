@@ -510,7 +510,7 @@ def render_markdown(data: dict) -> str:
     )
     lines += ["", "## Translation rows", ""]
     lines += md_table(
-        ["mapping", "reason", "dataset", "seeded", "files", "won", "answers by source"],
+        ["mapping", "reason", "dataset", "seeded", "files", "won", "datasets", "answers by source"],
         [
             [
                 md_code(r["id"]),
@@ -519,6 +519,7 @@ def render_markdown(data: dict) -> str:
                 "yes" if r["seeded"] else "",
                 _n(r["files"]),
                 _n(r["won"]),
+                _where(r["datasets"]),
                 "; ".join(f"{k} {v:,}" for k, v in r["source_types"].items()),
             ]
             for r in maps
