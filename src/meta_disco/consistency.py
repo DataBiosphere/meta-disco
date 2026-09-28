@@ -14,13 +14,15 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import cache
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from meta_disco.models import CLASSIFIED, _entry_value, _field_entry, status_for_value
+from meta_disco import schema_vocab
+from meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED, _entry_value, _field_entry, status_for_value
 from meta_disco.output_utils import find_latest_run, iter_records
 
 
@@ -52,8 +54,10 @@ def default_consistency_rules_resource():
 # accepts a bare string (exact-value shorthand). Kept in lockstep with the branches
 # in _matches / _violates, so a matcher the evaluator can't interpret is rejected at
 # load time rather than silently ignored.
-_WHEN_MATCHERS = {"prefix": str, "value_in": list, "status": str}
-_REQUIRE_MATCHERS = {"value_in": list, "value_not_in": list, "status_not": str, "status": str}
+_WHEN_MATCHERS = {"under": str, "value_in": list, "status": str}
+_REQUIRE_MATCHERS = {"value_in": list, "value_not_in": list, "not_under": str, "status_not": str, "status": str}
+# Matchers naming a term of the field's `is_a` hierarchy; the term's subtree is built at load.
+_HIERARCHY_MATCHERS = {"under", "not_under"}
 
 
 def _check_matcher(rule_id: str, clause: str, field: str, matcher, allowed: dict, allow_str: bool) -> None:
@@ -71,6 +75,28 @@ def _check_matcher(rule_id: str, clause: str, field: str, matcher, allowed: dict
         )
     if not isinstance(value, allowed[key]):
         raise ValueError(f"consistency rule {rule_id!r}: {clause}.{field}.{key} must be {allowed[key].__name__}")
+    if key in _HIERARCHY_MATCHERS:
+        if field not in CLASSIFICATION_FIELDS:
+            raise ValueError(f"consistency rule {rule_id!r}: {clause}.{field} is not a classification dimension")
+        try:  # a term outside the vocabulary, or a broken is_a chain, fails here rather than at check time
+            _subtree(field, value)
+        except ValueError as err:
+            raise ValueError(f"consistency rule {rule_id!r}: {clause}.{field}.{key}: {err}") from err
+
+
+@cache
+def _subtree(field: str, term: str) -> frozenset[str]:
+    """``term`` and every ``field`` term below it in the schema's ``is_a`` hierarchy (#563).
+
+    Raises ValueError, from ``schema_vocab``, for a term outside the vocabulary or a
+    broken ``is_a`` chain anywhere in the field's enum, so a schema defect fails rather
+    than turning a rule off. A value outside the vocabulary is in no subtree.
+    """
+    if not schema_vocab.value_in_vocabulary(field, term):
+        raise ValueError(f"{term!r} is not a {field} term")
+    return frozenset(
+        v for v in schema_vocab.dimension_values(field) if v == term or term in schema_vocab.value_ancestors(field, v)
+    )
 
 
 def load_rules(resource=None) -> list[dict]:
@@ -78,8 +104,10 @@ def load_rules(resource=None) -> list[dict]:
     package resource).
 
     Raises ``ValueError`` on a malformed file — an unrecognized shape, a missing/
-    duplicate ``id``, a non-mapping ``when``/``require``, or a matcher whose key/type
-    the evaluator can't interpret — so an authoring typo fails loudly instead of
+    duplicate ``id``, a non-mapping ``when``/``require``, a matcher whose key/type
+    the evaluator can't interpret, or an ``under``/``not_under`` naming something that
+    is not a term of a classification dimension, or a term whose enum has a broken
+    ``is_a`` chain — so an authoring typo fails loudly instead of
     silently disabling a check (a false negative, the worst failure mode for a QA
     linter).
     """
@@ -130,12 +158,12 @@ def _dim(record: Mapping[str, Any], name: str) -> tuple[str | None, str, list]:
     return value, status, evidence
 
 
-def _matches(value: str | None, status: str, matcher) -> bool:
+def _matches(field: str, value: str | None, status: str, matcher) -> bool:
     """Whether a field's (value, status) satisfies a ``when`` matcher."""
     if isinstance(matcher, str):
         return status == CLASSIFIED and value == matcher
-    if "prefix" in matcher:
-        return status == CLASSIFIED and isinstance(value, str) and value.startswith(matcher["prefix"])
+    if "under" in matcher:
+        return status == CLASSIFIED and value in _subtree(field, matcher["under"])
     if "value_in" in matcher:
         return status == CLASSIFIED and value in matcher["value_in"]
     if "status" in matcher:
@@ -143,12 +171,14 @@ def _matches(value: str | None, status: str, matcher) -> bool:
     return False
 
 
-def _violates(value: str | None, status: str, matcher: dict) -> bool:
+def _violates(field: str, value: str | None, status: str, matcher: dict) -> bool:
     """Whether a field's (value, status) UNsatisfies a ``require`` matcher."""
     if "value_in" in matcher:
         return status == CLASSIFIED and value not in matcher["value_in"]
     if "value_not_in" in matcher:
         return status == CLASSIFIED and value in matcher["value_not_in"]
+    if "not_under" in matcher:
+        return status == CLASSIFIED and value in _subtree(field, matcher["not_under"])
     if "status_not" in matcher:
         return status == matcher["status_not"]
     if "status" in matcher:
@@ -162,7 +192,7 @@ def rule_activation(record: Mapping[str, Any], rule: dict) -> dict | None:
     activated = {}
     for fieldname, matcher in (rule.get("when") or {}).items():
         value, status, _ = _dim(record, fieldname)
-        if not _matches(value, status, matcher):
+        if not _matches(fieldname, value, status, matcher):
             return None
         activated[fieldname] = value if status == CLASSIFIED else f"<{status}>"
     return activated
@@ -177,7 +207,7 @@ def _check_active(record: Mapping[str, Any], rule: dict, activated: dict) -> lis
     violations: list[Violation] = []
     for req_field, matcher in (rule.get("require") or {}).items():
         value, status, evidence = _dim(record, req_field)
-        if not _violates(value, status, matcher):
+        if not _violates(req_field, value, status, matcher):
             continue
         first = evidence[0] if evidence else {}
         evidence_ref = (first.get("rule_id") or first.get("marker")) if isinstance(first, dict) else None

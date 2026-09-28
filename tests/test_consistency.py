@@ -72,6 +72,8 @@ def test_rules_file_loads_and_is_nonempty():
         "rules:\n  - {id: a, when: {m: {value_ni: [x]}}, require: {}}\n",  # unknown when matcher (typo)
         "rules:\n  - {id: a, when: {}, require: {f: {value_in: nope}}}\n",  # value_in not a list
         "rules:\n  - {id: a, when: {f: null}, require: {}}\n",  # matcher not str/mapping
+        "rules:\n  - {id: a, when: {data_modality: {under: imaging.histology}}, require: {}}\n",  # not a term
+        "rules:\n  - {id: a, when: {}, require: {data_modality: {not_under: nonsense}}}\n",  # not a term
     ],
 )
 def test_load_rules_rejects_malformed(tmp_path, yaml_text):
@@ -79,6 +81,22 @@ def test_load_rules_rejects_malformed(tmp_path, yaml_text):
     bad.write_text(yaml_text)
     with pytest.raises(ValueError):
         load_rules(bad)
+
+
+def test_under_matches_a_term_and_every_term_below_it():
+    # the transcriptomic check fires on the parent and on a child it never names (#563)
+    for modality in ("transcriptomic", "transcriptomic.spatial"):
+        assert "assay_for_transcriptomic" in _rule_ids(_rec(data_modality=_c(modality), assay_type=_c("WGS")))
+    assert "assay_for_transcriptomic" not in _rule_ids(_rec(data_modality=_c("genomic"), assay_type=_c("WGS")))
+
+
+def test_not_under_flags_every_term_below_the_one_it_names():
+    for modality in ("imaging", "imaging.medical_imaging.mri"):
+        rec = _rec(data_modality=_c(modality), platform=_c("ILLUMINA"))
+        assert "sequencing_platform_excludes_imaging" in _rule_ids(rec)
+    assert "sequencing_platform_excludes_imaging" not in _rule_ids(
+        _rec(data_modality=_c("genomic"), platform=_c("ILLUMINA"))
+    )
 
 
 def test_clean_genomic_wgs_has_no_violations():
