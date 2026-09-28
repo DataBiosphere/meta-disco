@@ -325,3 +325,10 @@ def test_a_rule_written_with_an_alias_is_shown_expanded(tmp_path):
     }
     # The anchor's own rule shows its text as written: nothing in it is borrowed.
     assert rows["bam_ext"]["expanded"] == [] and "&bams" in rows["bam_ext"]["condition"]
+
+
+def test_a_rule_named_like_a_marker_is_refused(tmp_path):
+    rules, value_map = rule_files(tmp_path)
+    rules.write_text(RULES.replace("id: never_fires", f"id: {code_rules.FETCH_FAILED.id}"))
+    with pytest.raises(grr.ReportError, match="declared twice"):
+        grr.build(rules, value_map, [], Path("run"))

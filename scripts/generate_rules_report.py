@@ -415,12 +415,13 @@ def build(rules_path: Path | None, value_map_path: Path | None, records, run_dir
     if set(PLACEHOLDER_MARKERS) != marker_values():
         raise ReportError(f"the schema's markers {sorted(marker_values())} are not the ones worded here")
     rules = yaml_rules(rules_path) + code_rule_rows() + mapping_rows(value_map_path)
-    ids = [r["id"] for r in rules]
-    duplicates = sorted(i for i, c in Counter(ids).items() if c > 1)
-    if duplicates:
-        raise ReportError(f"rule ids declared twice: {duplicates}")
     markers = [{"id": m.id, "written_as": "rule_id", "meaning": m.meaning} for m in code_rules.MARKERS]
     markers += [{"id": k, "written_as": "marker", "meaning": v} for k, v in PLACEHOLDER_MARKERS.items()]
+    # A marker's id among them too: a rule named `fetch_failed` would take the marker's counts.
+    ids = [r["id"] for r in rules]
+    duplicates = sorted(i for i, c in Counter([*ids, *(m["id"] for m in markers)]).items() if c > 1)
+    if duplicates:
+        raise ReportError(f"ids declared twice: {duplicates}")
     n, stats = tally(
         records,
         rule_ids={r["id"] for r in rules if r["kind"] != KIND_MAPPING},
