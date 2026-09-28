@@ -1251,3 +1251,26 @@ def test_a_group_whose_evidence_was_read_but_is_all_reviewed_says_so(tmp_path, e
     rendered = render_queue(found.queue, evidence_root, None, None, found.source_types)
     assert section(rendered, "External").strip().endswith("No unreviewed values.")
     assert "## External" not in render_queue(found.queue, evidence_root)
+
+
+@pytest.mark.parametrize("slot", ["assay_type", "data_modality"])
+def test_the_bundled_single_nucleus_rows_declare_the_assay_from_either_source(slot):
+    """IGVF's three assay values, from `file.assay_titles` and the published `data_modality` (#533)."""
+    table = load_value_map()
+
+    def declares(raw):
+        row = table.select(slot, raw, "anvil", "AnVIL_IGVF_Mouse_R1")
+        assert row is not None and row.authored, raw
+        return row.declares
+
+    assert declares('["single-nucleus RNA sequencing assay"]') == {
+        "assay_type": "snRNA-seq",
+        "data_modality": "transcriptomic",
+    }
+    assert declares('["single-nucleus ATAC-seq"]') == {
+        "assay_type": "snATAC-seq",
+        "data_modality": "epigenomic.chromatin_accessibility",
+    }
+    # the SHARE-seq pair labels every file of its analysis set, each holding one half: no modality
+    pair = '["single-nucleus RNA sequencing assay", "single-nucleus ATAC-seq"]'
+    assert declares(pair) == {"assay_type": "SHARE-seq"}
