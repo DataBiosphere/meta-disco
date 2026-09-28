@@ -14,9 +14,10 @@ HPRC_PLATFORM_MAP = {
     "ILLUMINA": "ILLUMINA",
 }
 
+# librarySource names the molecule sequenced. GENOMIC is no modality truth: SRA files WGS,
+# bisulfite, ATAC, ChIP and Hi-C alike under it (#563). TRANSCRIPTOMIC (RNA) is.
 HPRC_LIBRARY_SOURCE_MAP = {
-    "GENOMIC": "genomic",
-    "TRANSCRIPTOMIC": "transcriptomic.bulk",
+    "TRANSCRIPTOMIC": "transcriptomic",
 }
 
 HPRC_LIBRARY_STRATEGY_MAP = {

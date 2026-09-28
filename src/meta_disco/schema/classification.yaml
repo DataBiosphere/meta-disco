@@ -24,6 +24,7 @@ prefixes:
   anvil: https://github.com/DataBiosphere/meta-disco/schema/
   EFO: http://www.ebi.ac.uk/efo/EFO_
   EDAM: http://edamontology.org/
+  MODAL: "https://datamodel.terra.bio/BioCoreTerms#"
   insdc.gca: "https://identifiers.org/insdc.gca:"
 default_prefix: anvil
 default_range: string
@@ -907,16 +908,99 @@ slots:
 enums:
 
   data_modality_enum:
-    description: The biological signal a file carries. Dotted values are hierarchical.
+    description: >-
+      The biological signal a file carries: "the biological nature of the information
+      gathered as the result of an Activity, independent of the technology or methods
+      used to produce the information", in the words of AnVIL's Findability Subset
+      (FSS), whose recommended values for its `data_modality` field are the Broad's
+      MODAL ontology (github.com/broadinstitute/modal) term for term (#563). This enum
+      is that tree: each value spells its MODAL term as a dotted path, `is_a` names its
+      parent, and `meaning` is its MODAL id. The dotted value stands in for FSS's
+      wording ("DNA methylation" for `epigenomic.methylation`) until labels are added.
+      Single-cell versus bulk is not a modality here, since it is a property of the
+      experiment: `assay_type` is where it belongs, and until its single-cell terms
+      exist (#533) no dimension records it. A record holds one term, the most specific
+      its evidence supports, which may be a parent: nothing emits a `genomic` child
+      yet, so a WGS library is `genomic`. A consumer that filters on a parent walks
+      `is_a`.
     permissible_values:
       genomic:
-        # meaning: <OBI/EDAM CURIE>   # LinkML supports ontology mapping here
-      "transcriptomic.bulk":
-      "transcriptomic.single_cell":
+        meaning: MODAL:0000010
+      "genomic.assembly":
+        is_a: genomic
+        meaning: MODAL:0000011
+      "genomic.exome":
+        is_a: genomic
+        meaning: MODAL:0000012
+      "genomic.genotyping":
+        is_a: genomic
+        meaning: MODAL:0000013
+      "genomic.whole_genome":
+        is_a: genomic
+        meaning: MODAL:0000014
+      transcriptomic:
+        meaning: MODAL:0000026
+      "transcriptomic.spatial":
+        is_a: transcriptomic
+        meaning: MODAL:0000027
+      "transcriptomic.nontargeted":
+        is_a: transcriptomic
+        meaning: MODAL:0000028
+      "transcriptomic.targeted":
+        is_a: transcriptomic
+        meaning: MODAL:0000029
+      epigenomic:
+        meaning: MODAL:0000002
+      "epigenomic.3d_contact_maps":
+        is_a: epigenomic
+        meaning: MODAL:0000003
+      "epigenomic.dna_binding":
+        is_a: epigenomic
+        meaning: MODAL:0000004
+      "epigenomic.dna_binding.histone_modification":
+        is_a: epigenomic.dna_binding
+        meaning: MODAL:0000005
+      "epigenomic.dna_binding.transcription_factor":
+        is_a: epigenomic.dna_binding
+        meaning: MODAL:0000006
       "epigenomic.chromatin_accessibility":
-      "epigenomic.histone_modification":
+        is_a: epigenomic
+        meaning: MODAL:0000007
       "epigenomic.methylation":
-      "imaging.histology":
+        is_a: epigenomic
+        meaning: MODAL:0000008
+      "epigenomic.rna_binding":
+        is_a: epigenomic
+        meaning: MODAL:0000009
+      imaging:
+        meaning: MODAL:0000015
+      "imaging.electrophysiology":
+        is_a: imaging
+        meaning: MODAL:0000016
+      "imaging.medical_imaging":
+        is_a: imaging
+        meaning: MODAL:0000017
+      "imaging.medical_imaging.ct_scan":
+        is_a: imaging.medical_imaging
+        meaning: MODAL:0000018
+      "imaging.medical_imaging.electrocardiogram":
+        is_a: imaging.medical_imaging
+        meaning: MODAL:0000019
+      "imaging.medical_imaging.mri":
+        is_a: imaging.medical_imaging
+        meaning: MODAL:0000020
+      "imaging.medical_imaging.x_ray":
+        is_a: imaging.medical_imaging
+        meaning: MODAL:0000021
+      "imaging.microscopy":
+        is_a: imaging
+        meaning: MODAL:0000022
+      metabolomic:
+        meaning: MODAL:0000023
+      microbiome:
+        meaning: MODAL:0000024
+      proteomic:
+        meaning: MODAL:0000025
 
   data_type_enum:
     description: >-

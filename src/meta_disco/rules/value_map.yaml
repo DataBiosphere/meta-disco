@@ -5,9 +5,10 @@ rows:
   # --- assay_type -----------------------------------------------------------------
   - id: "assay_type.hi_c"
     match: {slot: assay_type, value: "Hi-C", alternates: ["hic"]}
-    declares: {data_modality: genomic}
+    declares: {data_modality: epigenomic.3d_contact_maps}
     reason: >-
-      Hi-C is chromatin-conformation sequencing of genomic DNA, so the modality is genomic.
+      Hi-C measures chromatin contacts, which MODAL's `3D contact maps` names (#563); the
+      modality is the information measured, not the use HPRC puts it to (scaffolding).
       The vocabulary has no assay term for it yet (#399), so nothing is declared for assay_type.
       `hic` is the table-name span of the same data.
     seeded_from: ["anvil/anvil15/ANVIL_HPRC/20260920T175642Z", "anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
@@ -20,13 +21,28 @@ rows:
     reason: Whole-genome sequencing, spelled as our term; a WGS library is genomic DNA.
     seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
   # --- data_modality --------------------------------------------------------------
-  - id: "data_modality.genomic"
+  - id: "data_modality.genomic_hprc_r2"
     match: {slot: data_modality, value: "GENOMIC"}
-    declares: {data_modality: genomic}
+    scope: {source: anvil, dataset: AnVIL_HPRC_R2}
+    declares: {}
     reason: >-
-      SRA's library_source value for genomic DNA, spelled as our term. Identity by ruling, not by
-      spelling; if a bisulfite or ATAC library ever arrives under it, narrow this row rather than rank it.
+      The `library_source` column's SRA value. It names the molecule sequenced, not the
+      information measured: SRA files WGS, bisulfite, ATAC, ChIP and Hi-C alike under GENOMIC,
+      because each sequences DNA, so it is no evidence of a MODAL modality (#563). Hi-C arrived
+      under it here (the `hic` table). Scoped to the datasets whose library_source columns carry
+      it: elsewhere the value selects no row, and so enters the review queue rather than being
+      declined unreviewed. Measured on run 20260927_225823:
+      none of the 5,619 files it reached here depended on it alone for data_modality.
     seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_modality.genomic_1000g_high_coverage"
+    match: {slot: data_modality, value: "GENOMIC"}
+    scope: {source: anvil, dataset: ANVIL_1000G_high_coverage_2019}
+    declares: {}
+    reason: >-
+      The `sample` table's `library_source` column, the same SRA value as
+      `data_modality.genomic_hprc_r2`, for the same reason. Measured on run 20260927_225823:
+      none of the 9,603 files it reached depended on it alone for data_modality.
+    seeded_from: ["anvil/anvil15/ANVIL_1000G_high_coverage_2019/20260920T175642Z"]
   - id: "data_modality.methylation"
     match: {slot: data_modality, value: "methylation"}
     declares: {data_modality: epigenomic.methylation}

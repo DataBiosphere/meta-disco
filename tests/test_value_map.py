@@ -1001,7 +1001,16 @@ def test_the_bundled_table_covers_hprc_and_leaves_the_named_values_seeded():
     assert table.by_id("reference_assembly.unaligned").declares == {"reference_assembly": NOT_APPLICABLE}
     assert table.by_id("data_type.bam").authored and table.by_id("data_type.bam").declares == {}
     assert table.by_id("assay_type.wgs").declares == {"assay_type": "WGS", "data_modality": "genomic"}
-    assert all(row.scope is None for row in table.rows)
+    # the table's only scoped rows: SRA's library_source GENOMIC, declared nothing where it occurs (#563)
+    scoped = {row.id: row for row in table.rows if row.scope is not None}
+    assert {rid: row.scope for rid, row in scoped.items()} == {
+        "data_modality.genomic_hprc_r2": Scope("anvil", "AnVIL_HPRC_R2"),
+        "data_modality.genomic_1000g_high_coverage": Scope("anvil", "ANVIL_1000G_high_coverage_2019"),
+    }
+    assert all(row.authored and row.declares == {} for row in scoped.values())
+    assert table.select("data_modality", "GENOMIC", "anvil", "AnVIL_HPRC_R2") is scoped["data_modality.genomic_hprc_r2"]
+    # in any other dataset the value selects no row, so it enters the review queue
+    assert table.select("data_modality", "GENOMIC", "anvil", "AnVIL_MAGE") is None
 
 
 def test_the_bundled_instrument_rows_declare_the_model_beside_the_platform():

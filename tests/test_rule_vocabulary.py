@@ -523,7 +523,7 @@ def test_accession_check_catches_an_unanchored_token(tmp_path):
             "tier": 2,
             "scope": "filename",
             "when": {"extensions": [".fastq"], "filename_pattern": pattern},
-            "then": {"data_modality": "transcriptomic.single_cell"},
+            "then": {"data_modality": "transcriptomic"},
         }
 
     names = ("IGVFFI1310XKZG.fastq.gz",)
@@ -927,7 +927,7 @@ def test_loader_accepts_known_keys(tmp_path):
             "tier": 2,
             "scope": "filename",
             "when": {"extensions": [".bam"], "filename_pattern": "rnaseq"},
-            "then": {"data_modality": "transcriptomic.bulk", "data_type": "alignments"},
+            "then": {"data_modality": "transcriptomic", "data_type": "alignments"},
         },
     )
     loaded = RuleLoader(path).load()

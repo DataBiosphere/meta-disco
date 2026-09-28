@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pytest
 import validate_ena_accessions as ena
 import yaml
 
@@ -19,6 +20,26 @@ class TestStrategyMap:
     def test_expected_strategies_present(self):
         for strategy in ("WGS", "WXS", "RNA-Seq"):
             assert strategy in ENA_LIBRARY_STRATEGY_MAP
+
+
+class TestExpectedModality:
+    """What ENA's metadata says about modality, if anything (#563)."""
+
+    @pytest.mark.parametrize("strategy", ["WGS", "WXS", "WGA"])
+    def test_a_genome_or_exome_strategy_says_genomic(self, strategy):
+        assert ena.expected_modality_from_ena("GENOMIC", strategy) == "genomic"
+
+    @pytest.mark.parametrize("strategy", ["Hi-C", "Bisulfite-Seq", "ATAC-seq", "ChIP-Seq", None])
+    def test_a_genomic_source_alone_says_nothing(self, strategy):
+        # GENOMIC names the molecule, which Hi-C, bisulfite, ATAC and ChIP libraries share
+        assert ena.expected_modality_from_ena("GENOMIC", strategy) is None
+
+    @pytest.mark.parametrize(("source", "strategy"), [("TRANSCRIPTOMIC", None), (None, "RNA-Seq"), (None, "FL-cDNA")])
+    def test_an_rna_source_or_strategy_says_transcriptomic(self, source, strategy):
+        assert ena.expected_modality_from_ena(source, strategy) == "transcriptomic"
+
+    def test_no_metadata_says_nothing(self):
+        assert ena.expected_modality_from_ena(None, None) is None
 
 
 class TestExtractAccession:

@@ -72,6 +72,8 @@ def test_rules_file_loads_and_is_nonempty():
         "rules:\n  - {id: a, when: {m: {value_ni: [x]}}, require: {}}\n",  # unknown when matcher (typo)
         "rules:\n  - {id: a, when: {}, require: {f: {value_in: nope}}}\n",  # value_in not a list
         "rules:\n  - {id: a, when: {f: null}, require: {}}\n",  # matcher not str/mapping
+        "rules:\n  - {id: a, when: {data_modality: {under: imaging.histology}}, require: {}}\n",  # not a term
+        "rules:\n  - {id: a, when: {}, require: {data_modality: {not_under: nonsense}}}\n",  # not a term
     ],
 )
 def test_load_rules_rejects_malformed(tmp_path, yaml_text):
@@ -79,6 +81,51 @@ def test_load_rules_rejects_malformed(tmp_path, yaml_text):
     bad.write_text(yaml_text)
     with pytest.raises(ValueError):
         load_rules(bad)
+
+
+def test_load_rules_rejects_a_hierarchy_matcher_over_a_broken_is_a_chain(tmp_path, monkeypatch):
+    # a schema defect must fail at load, not quietly turn the rule off (#563)
+    from meta_disco import consistency, schema_vocab
+
+    def broken(field, value):
+        # only the matched leaf's own chain is broken, which an early exit on it would miss
+        if value == "epigenomic.methylation":
+            raise ValueError(f"{field} term {value!r} has a broken is_a chain")
+        return real(field, value)
+
+    real = schema_vocab.value_ancestors
+
+    monkeypatch.setattr(schema_vocab, "value_ancestors", broken)
+    consistency._subtree.cache_clear()
+    rules = tmp_path / "rules.yaml"
+    rules.write_text("rules:\n  - {id: a, when: {data_modality: {under: epigenomic.methylation}}, require: {}}\n")
+    try:
+        with pytest.raises(ValueError, match="broken is_a chain"):
+            load_rules(rules)
+    finally:
+        consistency._subtree.cache_clear()
+
+
+def test_under_matches_a_term_and_every_term_below_it():
+    # the transcriptomic check fires on the parent and on a child it never names (#563)
+    for modality in ("transcriptomic", "transcriptomic.spatial"):
+        assert "assay_for_transcriptomic" in _rule_ids(_rec(data_modality=_c(modality), assay_type=_c("WGS")))
+    assert "assay_for_transcriptomic" not in _rule_ids(_rec(data_modality=_c("genomic"), assay_type=_c("WGS")))
+
+
+def test_a_malformed_value_is_under_nothing_rather_than_an_error():
+    # a list where a term belongs is outside every subtree; the schema gate reports it
+    rec = _rec(data_modality=(["transcriptomic"], "classified"), platform=_c("ILLUMINA"), assay_type=_c("WGS"))
+    assert {"assay_for_transcriptomic", "sequencing_platform_excludes_imaging"}.isdisjoint(_rule_ids(rec))
+
+
+def test_not_under_flags_every_term_below_the_one_it_names():
+    for modality in ("imaging", "imaging.medical_imaging.mri"):
+        rec = _rec(data_modality=_c(modality), platform=_c("ILLUMINA"))
+        assert "sequencing_platform_excludes_imaging" in _rule_ids(rec)
+    assert "sequencing_platform_excludes_imaging" not in _rule_ids(
+        _rec(data_modality=_c("genomic"), platform=_c("ILLUMINA"))
+    )
 
 
 def test_clean_genomic_wgs_has_no_violations():
@@ -93,7 +140,7 @@ def test_genomic_with_unclassified_assay_is_not_flagged():
 
 
 def test_transcriptomic_with_wgs_assay_flags_assay_rule():
-    rec = _rec(data_modality=_c("transcriptomic.bulk"), assay_type=_c("WGS"))
+    rec = _rec(data_modality=_c("transcriptomic"), assay_type=_c("WGS"))
     ids = _rule_ids(rec)
     assert "assay_for_transcriptomic" in ids
     [v] = [x for x in check_record(rec, RULES) if x.rule_id == "assay_for_transcriptomic"]
@@ -103,7 +150,7 @@ def test_transcriptomic_with_wgs_assay_flags_assay_rule():
 
 def test_histology_with_sequencing_fields_flags_imaging_and_platform_rules():
     rec = _rec(
-        data_modality=_c("imaging.histology"),
+        data_modality=_c("imaging.microscopy"),
         data_type=_c("images"),
         assay_type=_c("Histology"),
         platform=_c("ILLUMINA"),
@@ -111,12 +158,12 @@ def test_histology_with_sequencing_fields_flags_imaging_and_platform_rules():
     )
     ids = _rule_ids(rec)
     assert "imaging_exclusive" in ids  # platform must not be classified
-    assert "sequencing_platform_excludes_histology" in ids  # sequencing platform vs histology
+    assert "sequencing_platform_excludes_imaging" in ids  # sequencing platform vs imaging
 
 
 def test_clean_histology_has_no_violations():
     rec = _rec(
-        data_modality=_c("imaging.histology"),
+        data_modality=_c("imaging.microscopy"),
         data_type=_c("images"),
         assay_type=_c("Histology"),
         platform=NA,
@@ -139,7 +186,7 @@ def test_checksum_classified_genomic_flags_auxiliary_inert():
     [
         (
             "imaging_exclusive",
-            {"data_modality": _c("imaging.histology"), "data_type": _c("images"), "assay_type": _c("Histology")},
+            {"data_modality": _c("imaging.microscopy"), "data_type": _c("images"), "assay_type": _c("Histology")},
         ),
         ("auxiliary_inert", {"data_type": _c("checksum")}),
     ],
@@ -166,7 +213,7 @@ def test_incoherent_entry_does_not_crash():
 def test_malformed_evidence_does_not_crash():
     # A record whose offending field carries a non-list `evidence` must still be
     # flagged (with no evidence ref), not abort the run.
-    rec = _rec(data_modality=_c("transcriptomic.bulk"), assay_type=_c("WGS"))
+    rec = _rec(data_modality=_c("transcriptomic"), assay_type=_c("WGS"))
     rec["classifications"]["assay_type"]["evidence"] = "oops-not-a-list"
     [viol] = [v for v in check_record(rec, RULES) if v.rule_id == "assay_for_transcriptomic"]
     assert viol.evidence is None
@@ -182,7 +229,7 @@ def test_render_report_clean_and_vacuous():
 
 
 def test_render_report_lists_violations():
-    rec = _rec(md5="deadbeef01", name="x.bam", data_modality=_c("transcriptomic.bulk"), assay_type=_c("WGS"))
+    rec = _rec(md5="deadbeef01", name="x.bam", data_modality=_c("transcriptomic"), assay_type=_c("WGS"))
     violations = check_record(rec, RULES)
     md = render_report(Path("r"), 1, violations, Counter({"assay_for_transcriptomic": 1}), RULES)
     assert "**Total violations: 1**" in md

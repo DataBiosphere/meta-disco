@@ -851,7 +851,7 @@ def classify_from_fasta_header(
             tier=CONTENT_TIER,
             source_type=SOURCE_CONTIG_DETECTION,
             reason=f"Found {len(transcript_contigs)} transcript IDs (e.g., {transcript_contigs[0]})",
-            value="transcriptomic.bulk",
+            value="transcriptomic",
         )
         result.add_claim(
             "data_type",

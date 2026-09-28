@@ -188,7 +188,7 @@ class TestBamE2E:
         )
         assert result is not None
         assert_output_format(result)
-        assert get_val(result, "data_modality") == "transcriptomic.bulk"
+        assert get_val(result, "data_modality") == "transcriptomic"
         assert get_val(result, "data_type") == "alignments"
         assert get_val(result, "assay_type") == "RNA-seq"
 
@@ -207,7 +207,7 @@ class TestBamE2E:
         )
         assert result is not None
         assert_output_format(result)
-        assert get_val(result, "data_modality") == "transcriptomic.bulk"
+        assert get_val(result, "data_modality") == "transcriptomic"
         assert get_val(result, "assay_type") == "RNA-seq"
 
 
@@ -334,7 +334,7 @@ class TestRuleEngineE2E:
             pytest.param(
                 "GTEX-18A6Q-1126.svs",
                 {
-                    "data_modality": "imaging.histology",
+                    "data_modality": "imaging.microscopy",
                     "platform": NOT_APPLICABLE,
                     "reference_assembly": NOT_APPLICABLE,
                 },
@@ -363,19 +363,17 @@ class TestRuleEngineE2E:
             # IsoSeq flnc BAM should be transcriptomic, not genomic.
             pytest.param(
                 "HG00097.lymph.m84203_240914_042802_s4.flnc.bam",
-                {"data_modality": "transcriptomic.bulk"},
+                {"data_modality": "transcriptomic"},
                 id="flnc BAM is transcriptomic",
             ),
             # `.flnc.` — full-length non-chimeric IsoSeq reads — in the filename is transcriptomic.
-            pytest.param(
-                "sample.flnc.bam", {"data_modality": "transcriptomic.bulk"}, id="IsoSeq BAM is transcriptomic"
-            ),
+            pytest.param("sample.flnc.bam", {"data_modality": "transcriptomic"}, id="IsoSeq BAM is transcriptomic"),
             # BAM without header or platform signals should not get genomic modality.
             pytest.param("sample.reads.bam", {"data_modality": NOT_CLASSIFIED}, id="plain BAM has no modality"),
             # A Salmon quant.sf is a single-sample transcript abundance table (#157).
             pytest.param(
                 "NUFIP1-BGRSLV04-28_quant.sf",
-                {"data_modality": "transcriptomic.bulk", "data_type": "quantification", "assay_type": "RNA-seq"},
+                {"data_modality": "transcriptomic", "data_type": "quantification", "assay_type": "RNA-seq"},
                 id="Salmon quant.sf is transcriptomic quantification",
             ),
             # Only a token-boundary `quant.sf` is treated as Salmon output; any other `.sf`
@@ -864,7 +862,7 @@ class TestDerivedFileTierPrecedence:
         """SVS histology image should stay not_applicable for reference_assembly."""
         result = engine.classify_extended(FileInfo.from_filename("hg38.sample.svs"))
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
-        assert result.data_modality == "imaging.histology"
+        assert result.data_modality == "imaging.microscopy"
 
     def test_png_ignores_filename_reference(self):
         """PNG plot with reference in filename should stay not_applicable."""
@@ -941,7 +939,7 @@ class TestDerivedFileTierPrecedence:
             engine.classify_extended(FileInfo.from_filename(filename)),
             {
                 "data_type": "annotations.coverage",
-                "data_modality": "transcriptomic.bulk",
+                "data_modality": "transcriptomic",
                 "assay_type": "RNA-seq",
                 "reference_assembly": NOT_CLASSIFIED,
                 "platform": NOT_CLASSIFIED,

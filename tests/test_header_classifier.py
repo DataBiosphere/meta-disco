@@ -618,7 +618,7 @@ class TestBamCramClassification:
         header = """@HD\tVN:1.6
 @PG\tID:STAR\tPN:STAR\tVN:2.7.9a"""
         result = classify_from_header(header)
-        assert val(result, "data_modality") == "transcriptomic.bulk"
+        assert val(result, "data_modality") == "transcriptomic"
 
     def test_bwa_aligner_genomic(self):
         """Detect genomic from BWA aligner."""
@@ -694,7 +694,7 @@ class TestBamCramClassification:
         fix the classifier synthesized `sample.bam` and dropped the name."""
         header = "@HD\tVN:1.6"
         result = classify_from_header(header, name=FileName.parse("sample.flnc.bam"))
-        assert val(result, "data_modality") == "transcriptomic.bulk"
+        assert val(result, "data_modality") == "transcriptomic"
 
     def test_real_filename_recovers_pacbio_platform(self):
         """A hifi filename recovers platform even when the header names none —
@@ -709,7 +709,7 @@ class TestBamCramClassification:
         header = """@HD\tVN:1.6
 @PG\tID:STAR\tPN:STAR\tVN:2.7.9a"""
         result = classify_from_header(header, name=FileName.parse("sample.bam"))
-        assert val(result, "data_modality") == "transcriptomic.bulk"
+        assert val(result, "data_modality") == "transcriptomic"
 
 
 class TestAlignedOrUnaligned:

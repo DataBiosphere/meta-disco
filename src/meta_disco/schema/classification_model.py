@@ -95,6 +95,8 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
                            'prefix_reference': 'http://edamontology.org/'},
                   'EFO': {'prefix_prefix': 'EFO',
                           'prefix_reference': 'http://www.ebi.ac.uk/efo/EFO_'},
+                  'MODAL': {'prefix_prefix': 'MODAL',
+                            'prefix_reference': 'https://datamodel.terra.bio/BioCoreTerms#'},
                   'anvil': {'prefix_prefix': 'anvil',
                             'prefix_reference': 'https://github.com/DataBiosphere/meta-disco/schema/'},
                   'insdc.gca': {'prefix_prefix': 'insdc.gca',
@@ -106,15 +108,36 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
 
 class DataModalityEnum(str, Enum):
     """
-    The biological signal a file carries. Dotted values are hierarchical.
+    The biological signal a file carries: "the biological nature of the information gathered as the result of an Activity, independent of the technology or methods used to produce the information", in the words of AnVIL's Findability Subset (FSS), whose recommended values for its `data_modality` field are the Broad's MODAL ontology (github.com/broadinstitute/modal) term for term (#563). This enum is that tree: each value spells its MODAL term as a dotted path, `is_a` names its parent, and `meaning` is its MODAL id. The dotted value stands in for FSS's wording ("DNA methylation" for `epigenomic.methylation`) until labels are added. Single-cell versus bulk is not a modality here, since it is a property of the experiment: `assay_type` is where it belongs, and until its single-cell terms exist (#533) no dimension records it. A record holds one term, the most specific its evidence supports, which may be a parent: nothing emits a `genomic` child yet, so a WGS library is `genomic`. A consumer that filters on a parent walks `is_a`.
     """
     genomic = "genomic"
-    transcriptomicFULL_STOPbulk = "transcriptomic.bulk"
-    transcriptomicFULL_STOPsingle_cell = "transcriptomic.single_cell"
+    genomicFULL_STOPassembly = "genomic.assembly"
+    genomicFULL_STOPexome = "genomic.exome"
+    genomicFULL_STOPgenotyping = "genomic.genotyping"
+    genomicFULL_STOPwhole_genome = "genomic.whole_genome"
+    transcriptomic = "transcriptomic"
+    transcriptomicFULL_STOPspatial = "transcriptomic.spatial"
+    transcriptomicFULL_STOPnontargeted = "transcriptomic.nontargeted"
+    transcriptomicFULL_STOPtargeted = "transcriptomic.targeted"
+    epigenomic = "epigenomic"
+    epigenomicFULL_STOP3d_contact_maps = "epigenomic.3d_contact_maps"
+    epigenomicFULL_STOPdna_binding = "epigenomic.dna_binding"
+    epigenomicFULL_STOPdna_bindingFULL_STOPhistone_modification = "epigenomic.dna_binding.histone_modification"
+    epigenomicFULL_STOPdna_bindingFULL_STOPtranscription_factor = "epigenomic.dna_binding.transcription_factor"
     epigenomicFULL_STOPchromatin_accessibility = "epigenomic.chromatin_accessibility"
-    epigenomicFULL_STOPhistone_modification = "epigenomic.histone_modification"
     epigenomicFULL_STOPmethylation = "epigenomic.methylation"
-    imagingFULL_STOPhistology = "imaging.histology"
+    epigenomicFULL_STOPrna_binding = "epigenomic.rna_binding"
+    imaging = "imaging"
+    imagingFULL_STOPelectrophysiology = "imaging.electrophysiology"
+    imagingFULL_STOPmedical_imaging = "imaging.medical_imaging"
+    imagingFULL_STOPmedical_imagingFULL_STOPct_scan = "imaging.medical_imaging.ct_scan"
+    imagingFULL_STOPmedical_imagingFULL_STOPelectrocardiogram = "imaging.medical_imaging.electrocardiogram"
+    imagingFULL_STOPmedical_imagingFULL_STOPmri = "imaging.medical_imaging.mri"
+    imagingFULL_STOPmedical_imagingFULL_STOPx_ray = "imaging.medical_imaging.x_ray"
+    imagingFULL_STOPmicroscopy = "imaging.microscopy"
+    metabolomic = "metabolomic"
+    microbiome = "microbiome"
+    proteomic = "proteomic"
 
 
 class DataTypeEnum(str, Enum):

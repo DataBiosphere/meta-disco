@@ -42,8 +42,8 @@
 #
 # KEY CONCEPTS
 # ------------
-# - data_modality: What biological data type (genomic, transcriptomic.bulk,
-#   epigenomic.methylation, imaging.histology, etc.)
+# - data_modality: What biological signal (genomic, transcriptomic,
+#   epigenomic.methylation, imaging.microscopy, etc.; the MODAL tree, #563)
 #
 # - data_type: File content type (alignments, variants, reads, peaks, annotations.coverage, etc.)
 #
@@ -140,7 +140,7 @@
 # EFFECT TYPES (in 'then')
 # ------------------------
 # Classification fields:
-# - data_modality: set data modality (genomic, transcriptomic.bulk, etc.)
+# - data_modality: set data modality (genomic, transcriptomic, etc.)
 # - data_type: set data type (alignments, variants, reads, peaks, etc.)
 # - reference_assembly: set reference (GRCh38, GRCh37, CHM13)
 # - assay_type: set assay type (WGS, WES, RNA-seq, ATAC-seq, etc.)
@@ -311,9 +311,9 @@ rules:
     when:
       extensions: [".h5ad", ".loom", ".mtx"]
     then:
-      data_modality: transcriptomic.single_cell
+      data_modality: transcriptomic
       data_type: expression_matrix
-    rationale: "Single-cell matrix format indicates scRNA-seq"
+    rationale: "Single-cell matrix format indicates transcriptomic data; that it is single-cell is an assay fact (#563, #533)"
 
   # ---------------------------------------------------------------------------
   # Histology images (SVS)
@@ -324,7 +324,7 @@ rules:
     when:
       extensions: [".svs"]
     then:
-      data_modality: imaging.histology
+      data_modality: imaging.microscopy
       data_type: images
       assay_type: Histology
       status:
@@ -451,7 +451,7 @@ rules:
       extensions: [".bam", ".cram"]
       filename_pattern: "(?i)\\.flnc\\."
     then:
-      data_modality: transcriptomic.bulk
+      data_modality: transcriptomic
     rationale: "Filename contains IsoSeq indicator (flnc = full-length non-chimeric transcript reads)"
 
   - id: hifi_filename
@@ -471,7 +471,7 @@ rules:
       extensions: [".bam", ".cram", ".sam"]
       filename_pattern: "(?i)Aligned\\.sortedByCoord|_STAR_|\\.star\\."
     then:
-      data_modality: transcriptomic.bulk
+      data_modality: transcriptomic
       assay_type: RNA-seq
     rationale: "STAR aligner output indicates RNA-seq"
 
@@ -627,7 +627,7 @@ rules:
       extensions: [".bed"]
       filename_pattern: "(?i)(^|[._-])(TMM|counts)|leafcutter|\\.TSS\\."
     then:
-      data_modality: transcriptomic.bulk
+      data_modality: transcriptomic
       data_type: annotations
       assay_type: RNA-seq
     rationale: "BED file contains gene expression quantification or splicing data"
@@ -669,7 +669,7 @@ rules:
       extensions: [".bw", ".bigwig"]
       filename_pattern: "[._-]Signal\\.Unique(Multiple)?\\.strand[+-]\\."
     then:
-      data_modality: transcriptomic.bulk
+      data_modality: transcriptomic
       data_type: annotations.coverage
       assay_type: RNA-seq
     rationale: "A `Signal.Unique[Multiple].strand±` bigWig: STAR's per-base read depth, and STAR is an RNA-seq aligner"
@@ -716,7 +716,7 @@ rules:
       extensions: [".txt", ".tsv", ".csv"]
       filename_pattern: "(?i)expression|tpm\\.txt|fpkm\\.txt"
     then:
-      data_modality: transcriptomic.bulk
+      data_modality: transcriptomic
       data_type: expression_matrix
     # No bare `counts.txt`: a count says nothing about what is counted, so a gene-count
     # table is left unclassified too. ANVIL_T2T's chrN.<population>.counts.txt are
@@ -730,7 +730,7 @@ rules:
       extensions: [".sf"]
       filename_pattern: "(?i)(^|[._])quant\\.sf$"
     then:
-      data_modality: transcriptomic.bulk
+      data_modality: transcriptomic
       data_type: quantification
       assay_type: RNA-seq
     rationale: "Salmon/Sailfish transcript-level quantification (quant.sf)"
@@ -843,7 +843,7 @@ rules:
       header_field: "PN"
       header_pattern: "STAR"
     then:
-      data_modality: transcriptomic.bulk
+      data_modality: transcriptomic
       assay_type: RNA-seq
     rationale: "STAR (Spliced Transcripts Alignment to a Reference) is the most widely used RNA-seq aligner. Presence strongly indicates RNA-seq data"
 
