@@ -90,7 +90,7 @@ reference_assembly
 The experimental method, in terms borrowed from EFO, each with its EFO id as `meaning` in the schema (#533). Declared only by rules that see evidence of the assay (`star_filename`, `program_star`, `star_signal_coverage`, `salmon_quant`, `bed_expression`, `idat_methylation`, `image_svs_histology`, `sc_matrix_default`, and a tar through its inner format), each of which also declares the modality its assay implies. Nothing infers an assay from another rule's answer (#88), and nothing infers `WGS` or `WES` (#430); those, and the single-nucleus terms, arrive from source evidence through the translation table.
 
 ```
-assay_type                       # an is_a tree; a record holds the most specific term its evidence supports
+assay_type                       # the terms nest by is_a; a record holds the most specific its evidence supports
 ├── WGS                          # EFO:0003744 whole genome shotgun sequencing
 ├── WES                          # EFO:0005396
 ├── RNA-seq                      # EFO:0008896
@@ -104,8 +104,8 @@ assay_type                       # an is_a tree; a record holds the most specifi
 ├── Bisulfite-seq                # EFO:0003753
 ├── Methylation array            # EFO:0002759
 ├── Histology                    # OBI:0600020, as EFO imports it
-├── not_applicable               # Non-sequencing data (images, annotations)
-└── not_classified               # Could not be determined from file alone
+├── not_applicable               # a status, not a term (value null): non-sequencing data (images, annotations)
+└── not_classified               # a status, not a term (value null): could not be determined from file alone
 ```
 
 ### Initial State (Before Classification)
