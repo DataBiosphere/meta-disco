@@ -130,6 +130,7 @@ KEY = [
         "(parent_file, for an index), or a submitter's value (mapping).",
     ),
     ("Files", "how many files the rule gave an answer for."),
+    ("Claims", "how many answers it gave: one rule can answer several fields of one file."),
     (
         "Won",
         "how many of those files ended up with the rule's answer, or a more specific form of it (a rule saying "
@@ -492,7 +493,7 @@ def render_markdown(data: dict) -> str:
     )
     lines += ["", "## Rules", ""]
     lines += md_table(
-        ["rule", "kind", "basis", "tier", "rationale", "dataset", "files", "won", "datasets"],
+        ["rule", "kind", "basis", "tier", "rationale", "dataset", "files", "claims", "won", "datasets"],
         [
             [
                 md_code(r["id"]),
@@ -502,6 +503,7 @@ def render_markdown(data: dict) -> str:
                 r["rationale"],
                 r["dataset"],
                 _n(r["files"]),
+                _n(r["claims"]),
                 _n(r["won"]),
                 _where(r["datasets"]),
             ]
@@ -510,7 +512,7 @@ def render_markdown(data: dict) -> str:
     )
     lines += ["", "## Translation rows", ""]
     lines += md_table(
-        ["mapping", "reason", "dataset", "seeded", "files", "won", "datasets", "answers by source"],
+        ["mapping", "reason", "dataset", "seeded", "files", "claims", "won", "datasets", "answers by source"],
         [
             [
                 md_code(r["id"]),
@@ -518,6 +520,7 @@ def render_markdown(data: dict) -> str:
                 r["dataset"],
                 "yes" if r["seeded"] else "",
                 _n(r["files"]),
+                _n(r["claims"]),
                 _n(r["won"]),
                 _where(r["datasets"]),
                 "; ".join(f"{k} {v:,}" for k, v in r["source_types"].items()),

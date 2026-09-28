@@ -85,11 +85,12 @@
       `<div class="lbl">${LABELS[r.kind][0]}</div><pre>${esc(r.condition)}</pre>` +
       `<div class="lbl">${LABELS[r.kind][1]}</div><pre>${esc(r.effect)}</pre>`;
     const COLS = [
-      ["id", "id", r => `<code>${esc(r.id)}</code><div class="sub">${esc(r.kind)} &middot; ${esc(r.basis)}${r.tier ? ` &middot; tier ${esc(r.tier)}` : ""}</div>`],
+      ["id", "id", r => `<code>${esc(r.id)}</code><div class="sub">${esc(r.kind)} &middot; ${esc(r.basis)}${r.tier ? ` &middot; tier ${esc(r.tier)}` : ""}</div><div class="sub"><code>${esc(r.defined_in)}</code></div>`],
       ["rule", null, rule],
       ["rationale", null, r => r.rationale ? esc(r.rationale) : '<span class="sub">seeded: declares nothing</span>'],
       ["dataset", "dataset", r => esc(r.dataset)],
       ["files", "files", r => fmt(r.files), true],
+      ["claims", "claims", r => fmt(r.claims), true],
       ["won", "won", r => fmt(r.won), true],
       ["datasets", null, r => where(r.datasets) +
         (Object.keys(r.source_types).length ? `<div class="sub">answers by source: ${where(r.source_types)}</div>` : "")],
@@ -115,7 +116,7 @@
       document.getElementById("count").textContent = `${rows.length} of ${DATA.rules.length} rules`;
       table.querySelectorAll("button.sort").forEach(button => button.onclick = () => {
         const key = button.dataset.key;
-        sortDir = sortKey === key ? -sortDir : (["files", "won"].includes(key) ? -1 : 1);
+        sortDir = sortKey === key ? -sortDir : (["files", "claims", "won"].includes(key) ? -1 : 1);
         sortKey = key;
         render();
       });

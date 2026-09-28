@@ -1,9 +1,10 @@
 """The rules and markers written in Python, declared once (#572).
 
 A YAML rule is declared in ``rules/unified_rules.yaml``, with its ``when``, ``then`` and
-``rationale``. The rules here make a claim from code instead, because what they read is
-file content a ``when`` cannot express (contig lengths, BED coordinates, tar members)
-or, for the index producer, another file's answer. Before #572 each one's id was a
+``rationale``. The rules here make a claim from code instead. Most read file content a ``when``
+cannot express (contig lengths, BED coordinates, tar members). The index producer's two
+are in code because that producer builds its records itself: ``index_by_extension``
+reads the extension, and ``inherited_from_parent`` copies another file's answer. Before #572 each one's id was a
 string literal at its call site, so nothing listed them. Now every call site names its
 rule through a constant here (``code_rules.VCF_CONTIG_LENGTH.id``), and
 ``tests/test_code_rules.py`` fails on a rule id written as a string literal elsewhere in
