@@ -70,7 +70,7 @@ Every authored translation rule, by slot and most files first: the source values
 
 | files | published | submitter | external | rule | scope | matches | declares | reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 15,222 | 0 | 15,222 | 0 | data_modality.genomic | `any` | `'GENOMIC'` | data_modality: genomic | SRA's library_source value for genomic DNA, spelled as our term. Identity by ruling, not by spelling; if a bisulfite or ATAC library ever arrives under it, narrow this row rather than rank it. |
+| 15,222 | 0 | 15,222 | 0 | data_modality.genomic | `any` | `'GENOMIC'` | nothing (reviewed, no claim) | SRA's library_source names the molecule sequenced, not the information measured: SRA files WGS, bisulfite, ATAC, ChIP and Hi-C libraries alike under GENOMIC, because each sequences DNA. So it is no evidence of a MODAL modality (#563). Hi-C arrived under it (AnVIL_HPRC_R2 `hic`), as this row's earlier reason foresaw. Measured on run 20260927_225823: none of the 15,222 files it reached depended on it alone for data_modality. |
 | 462 | 0 | 462 | 0 | data_modality.methylation | `any` | `'methylation'` | data_modality: epigenomic.methylation | The `ont_methylation` table-name span; its files are bigwig methylation tracks. |
 
 ### data_type
@@ -132,4 +132,4 @@ Every authored translation rule, by slot and most files first: the source values
 | files | published | submitter | external | rule | scope | matches | declares | reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 12,426 | 0 | 12,426 | 0 | assay_type.wgs | `any` | `'WGS'` | assay_type: WGS; data_modality: genomic | Whole-genome sequencing, spelled as our term; a WGS library is genomic DNA. |
-| 3,770 | 0 | 3,770 | 0 | assay_type.hi_c | `any` | `'Hi-C' · 'hic'` | data_modality: genomic | Hi-C is chromatin-conformation sequencing of genomic DNA, so the modality is genomic. The vocabulary has no assay term for it yet (#399), so nothing is declared for assay_type. `hic` is the table-name span of the same data. |
+| 3,770 | 0 | 3,770 | 0 | assay_type.hi_c | `any` | `'Hi-C' · 'hic'` | data_modality: epigenomic.3d_contact_maps | Hi-C measures chromatin contacts, which MODAL's `3D contact maps` names (#563); the modality is the information measured, not the use HPRC puts it to (scaffolding). The vocabulary has no assay term for it yet (#399), so nothing is declared for assay_type. `hic` is the table-name span of the same data. |

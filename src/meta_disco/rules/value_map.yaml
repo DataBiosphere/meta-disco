@@ -5,9 +5,10 @@ rows:
   # --- assay_type -----------------------------------------------------------------
   - id: "assay_type.hi_c"
     match: {slot: assay_type, value: "Hi-C", alternates: ["hic"]}
-    declares: {data_modality: genomic}
+    declares: {data_modality: epigenomic.3d_contact_maps}
     reason: >-
-      Hi-C is chromatin-conformation sequencing of genomic DNA, so the modality is genomic.
+      Hi-C measures chromatin contacts, which MODAL's `3D contact maps` names (#563); the
+      modality is the information measured, not the use HPRC puts it to (scaffolding).
       The vocabulary has no assay term for it yet (#399), so nothing is declared for assay_type.
       `hic` is the table-name span of the same data.
     seeded_from: ["anvil/anvil15/ANVIL_HPRC/20260920T175642Z", "anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
@@ -22,10 +23,13 @@ rows:
   # --- data_modality --------------------------------------------------------------
   - id: "data_modality.genomic"
     match: {slot: data_modality, value: "GENOMIC"}
-    declares: {data_modality: genomic}
+    declares: {}
     reason: >-
-      SRA's library_source value for genomic DNA, spelled as our term. Identity by ruling, not by
-      spelling; if a bisulfite or ATAC library ever arrives under it, narrow this row rather than rank it.
+      SRA's library_source names the molecule sequenced, not the information measured: SRA files
+      WGS, bisulfite, ATAC, ChIP and Hi-C libraries alike under GENOMIC, because each sequences DNA.
+      So it is no evidence of a MODAL modality (#563). Hi-C arrived under it (AnVIL_HPRC_R2 `hic`),
+      as this row's earlier reason foresaw. Measured on run 20260927_225823: none of the 15,222 files
+      it reached depended on it alone for data_modality.
     seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
   - id: "data_modality.methylation"
     match: {slot: data_modality, value: "methylation"}
