@@ -94,9 +94,9 @@ def _subtree(field: str, term: str) -> frozenset[str]:
     """
     if not schema_vocab.value_in_vocabulary(field, term):
         raise ValueError(f"{term!r} is not a {field} term")
-    return frozenset(
-        v for v in schema_vocab.dimension_values(field) if v == term or term in schema_vocab.value_ancestors(field, v)
-    )
+    # every term's chain is walked, the matched term's included, so any broken chain raises here
+    ancestors = {v: schema_vocab.value_ancestors(field, v) for v in schema_vocab.dimension_values(field)}
+    return frozenset(v for v, up in ancestors.items() if v == term or term in up)
 
 
 def load_rules(resource=None) -> list[dict]:
