@@ -16,7 +16,7 @@ HPRC_PLATFORM_MAP = {
 
 HPRC_LIBRARY_SOURCE_MAP = {
     "GENOMIC": "genomic",
-    "TRANSCRIPTOMIC": "transcriptomic.bulk",
+    "TRANSCRIPTOMIC": "transcriptomic",
 }
 
 HPRC_LIBRARY_STRATEGY_MAP = {

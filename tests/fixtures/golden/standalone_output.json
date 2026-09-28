@@ -128,11 +128,11 @@
                 "rule_id": "image_svs_histology",
                 "source_type": "filename_rule",
                 "tier": 2,
-                "value": "imaging.histology"
+                "value": "imaging.microscopy"
               }
             ],
             "status": "classified",
-            "value": "imaging.histology"
+            "value": "imaging.microscopy"
           },
           "data_type": {
             "evidence": [
@@ -238,11 +238,11 @@
                 "reason": "Inherited from parent file: sample.flnc.bam",
                 "rule_id": "inherited_from_parent",
                 "source_type": "derivation_inheritance",
-                "value": "transcriptomic.bulk"
+                "value": "transcriptomic"
               }
             ],
             "status": "classified",
-            "value": "transcriptomic.bulk"
+            "value": "transcriptomic"
           },
           "data_type": {
             "evidence": [

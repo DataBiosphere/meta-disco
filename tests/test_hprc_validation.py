@@ -30,7 +30,7 @@ class TestLibrarySourceMap:
         assert HPRC_LIBRARY_SOURCE_MAP["GENOMIC"] == "genomic"
 
     def test_transcriptomic(self):
-        assert HPRC_LIBRARY_SOURCE_MAP["TRANSCRIPTOMIC"] == "transcriptomic.bulk"
+        assert HPRC_LIBRARY_SOURCE_MAP["TRANSCRIPTOMIC"] == "transcriptomic"
 
 
 class TestLibraryStrategyMap:

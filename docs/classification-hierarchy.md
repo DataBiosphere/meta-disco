@@ -25,7 +25,7 @@ file_format (extension)
 
 **data_modality**:
 - `genomic` ← header @RG DS basecall model (`dna_`), header @PG PN (bwa, minimap2)
-- `transcriptomic.bulk` ← filename (`.flnc.` IsoSeq reads, STAR output), header @PG PN (STAR)
+- `transcriptomic` ← filename (`.flnc.` IsoSeq reads, STAR output), header @PG PN (STAR)
 
 **assay_type**:
 - `RNA-seq` ← STAR in @PG (`program_star` declares it). No rule infers it from the modality: that read another rule's answer, and was removed (#88)
@@ -93,7 +93,7 @@ file_format (extension)
 
 **data_modality**:
 - `genomic` ← filename (assembly keywords, haplotype keywords), contig names (assembler patterns)
-- `transcriptomic.bulk` ← contig names (ENST*, NM_*, NR_*)
+- `transcriptomic` ← contig names (ENST*, NM_*, NR_*)
 
 **assay_type**: `not_applicable`
 
@@ -153,7 +153,7 @@ not for being unanchored.
 
 **data_modality**:
 - `genomic` ← assembly QC patterns (haplotype, flagger, switch errors)
-- `transcriptomic.bulk` ← filename (`TMM` or `counts` as a delimited token, leafcutter, `.TSS.`)
+- `transcriptomic` ← filename (`TMM` or `counts` as a delimited token, leafcutter, `.TSS.`)
 - `epigenomic.methylation` ← filename (modbam2bed, or CpG as a delimited token)
 - open ← mosdepth `.regions.bed.gz` (`annotations.coverage`): the alignment's modality, which the name does not show (#541)
 
@@ -171,7 +171,7 @@ not for being unanchored.
 
 **data_type**: `annotations.coverage` ← `Signal.Unique[Multiple].strand±.bw`, STAR's signal output converted to bigWig (#543)
 
-**data_modality**: `transcriptomic.bulk`, and **assay_type** `RNA-seq`, from the same
+**data_modality**: `transcriptomic`, and **assay_type** `RNA-seq`, from the same
 name: STAR is an RNA-seq aligner, as `star_filename` has it for STAR's BAMs.
 
 **Coverage**: Filename-dependent only. No header inspection available. Any other bigWig
@@ -186,7 +186,7 @@ A bare `rna` in a name no longer says transcriptomic.
 **data_type**: `expression_matrix`
 
 **data_modality**:
-- `transcriptomic.single_cell` ← extension default
+- `transcriptomic` ← extension default (single-cell is an assay fact, #563)
 
 **Coverage**: Good defaults from extension.
 
@@ -210,7 +210,7 @@ A bare `rna` in a name no longer says transcriptomic.
 |--------|-----------|---------------|-------|
 | .pgen/.pvar/.psam | genotypes | genomic | PLINK files |
 | .idat | array_signal | epigenomic.methylation | Illumina methylation arrays |
-| .svs | images | imaging.histology | Whole-slide histology |
+| .svs | images | imaging.microscopy | Whole-slide histology |
 | .png/.jpg/.jpeg/.tiff/.tif | images | not_applicable | Derived plots/QC |
 | .bai/.crai/.tbi/.csi/.pbi/.fai/.gzi/.idx | index | _(inherited from parent)_ | Index files — `data_type` is the file's own kind, the rest describe the data it points into (#437) |
 | .md5 | checksum | not_applicable | Checksums |

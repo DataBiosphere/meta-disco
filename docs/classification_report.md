@@ -115,7 +115,7 @@ The source AnVIL metadata contained **758,658 files** but with minimal semantic 
 | ------ | ----- | --------------------- |
 | .vcf.gz | 204,384 | Header inspection (contig lengths, caller) |
 | .tbi/.csi/.crai/.bai/.pbi | 224,037 | Inherited from parent file |
-| .svs | 25,708 | Extension → imaging.histology |
+| .svs | 25,708 | Extension → imaging.microscopy |
 | .fastq.gz | 16,255 | Read name parsing (platform detection) |
 | .bed | 13,660 | Filename patterns + dataset context |
 | .fast5 | 12,394 | Extension → genomic (raw ONT signal) |
@@ -296,29 +296,25 @@ These files are excluded from classification as they are primarily:
 
 ### 1.1 Data Modality Hierarchy
 
-The classification system maps files to a hierarchical data modality ontology based on the [Experimental Factor Ontology (EFO)](https://www.ebi.ac.uk/efo/):
+`data_modality` takes AnVIL's recommended vocabulary: the Findability Subset's list, which is the
+Broad's [MODAL ontology](https://github.com/broadinstitute/modal) term for term (#563). Each term is a
+dotted path with its MODAL id in the schema; single-cell versus bulk is an assay fact, carried by
+`assay_type`, not a modality.
 
 ```
 data_modality
-├── genomic
-│   ├── genomic.whole_genome         # WGS data
-│   ├── genomic.whole_exome          # WES/exome capture
-│   ├── genomic.targeted             # Targeted panels
-│   ├── genomic.germline_variants    # Germline variant calls
-│   ├── genomic.somatic_variants     # Tumor/somatic variants
-│   ├── genomic.structural_variants  # SVs (deletions, inversions, etc.)
-│   └── genomic.copy_number_variants # CNV calls
-├── transcriptomic
-│   ├── transcriptomic.bulk          # Bulk RNA-seq
-│   ├── transcriptomic.single_cell   # scRNA-seq
-│   └── transcriptomic.long_read     # PacBio IsoSeq, ONT RNA
-├── epigenomic
-│   ├── epigenomic.methylation       # Bisulfite-seq, arrays
-│   ├── epigenomic.chromatin_accessibility  # ATAC-seq
-│   └── epigenomic.histone_modification     # ChIP-seq
-└── imaging                          # Histology, microscopy
-    └── imaging.histology            # Whole-slide tissue images
+├── genomic               .assembly · .exome · .genotyping · .whole_genome
+├── transcriptomic        .nontargeted · .targeted · .spatial
+├── epigenomic            .methylation · .chromatin_accessibility · .3d_contact_maps · .rna_binding
+│                         .dna_binding (.histone_modification · .transcription_factor)
+├── imaging               .microscopy · .electrophysiology
+│                         .medical_imaging (.ct_scan · .electrocardiogram · .mri · .x_ray)
+├── metabolomic
+├── microbiome
+└── proteomic
 ```
+
+The rules emit `genomic`, `transcriptomic`, `epigenomic.methylation` and `imaging.microscopy` today.
 
 ### 1.2 Reference Assembly Values
 
@@ -392,7 +388,7 @@ Match regular expressions against filenames to infer modality or reference.
 
 | Rule                        | Pattern                  | Classification               |
 | --------------------------- | ------------------------ | ---------------------------- |
-| `isoseq_filename`           | `(?i)\.flnc\.`           | data_modality transcriptomic.bulk |
+| `isoseq_filename`           | `(?i)\.flnc\.`           | data_modality transcriptomic |
 | `filename_ref_grch38`       | `(?i)(hg38\|grch38\|…)`   | reference_assembly GRCh38, only on a file kind that holds coordinates on a reference (#523) |
 | `hifi_filename`             | `(?i)(^\|[._-])hifi\|_pb_` | platform PACBIO — the chemistry, not a modality or assay (#430) |
 
@@ -485,7 +481,7 @@ size does not distinguish the two. The engine still accepts `file_size_min_gb` /
 
 | Signal                    | Modality            | Rule               |
 | ------------------------- | ------------------- | ------------------ |
-| `PN:STAR`                 | transcriptomic.bulk | `program_star`     |
+| `PN:STAR`                 | transcriptomic      | `program_star`     |
 | `PN:bwa`                  | genomic             | `program_bwa`      |
 | `PN:minimap2`             | genomic             | `program_minimap2` |
 | `DS:basecall_model=…dna_` | genomic             | `ont_basecall_dna` |
@@ -708,7 +704,7 @@ Image files are classified by extension using domain-specific rules.
 
 | Extension | Count  | Data Modality      | Confidence | Source Dataset        |
 | --------- | ------ | ------------------ | ---------- | --------------------- |
-| `.svs`    | 25,708 | imaging.histology  | 95%        | GTEx (tissue slides)  |
+| `.svs`    | 25,708 | imaging.microscopy | 95%        | GTEx (tissue slides)  |
 | `.png`    | 8,049  | N/A                | 90%        | HPRC (QC/assembly plots) |
 
 **Classification approach**: Extension-based rules only.

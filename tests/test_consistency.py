@@ -93,7 +93,7 @@ def test_genomic_with_unclassified_assay_is_not_flagged():
 
 
 def test_transcriptomic_with_wgs_assay_flags_assay_rule():
-    rec = _rec(data_modality=_c("transcriptomic.bulk"), assay_type=_c("WGS"))
+    rec = _rec(data_modality=_c("transcriptomic"), assay_type=_c("WGS"))
     ids = _rule_ids(rec)
     assert "assay_for_transcriptomic" in ids
     [v] = [x for x in check_record(rec, RULES) if x.rule_id == "assay_for_transcriptomic"]
@@ -103,7 +103,7 @@ def test_transcriptomic_with_wgs_assay_flags_assay_rule():
 
 def test_histology_with_sequencing_fields_flags_imaging_and_platform_rules():
     rec = _rec(
-        data_modality=_c("imaging.histology"),
+        data_modality=_c("imaging.microscopy"),
         data_type=_c("images"),
         assay_type=_c("Histology"),
         platform=_c("ILLUMINA"),
@@ -111,12 +111,12 @@ def test_histology_with_sequencing_fields_flags_imaging_and_platform_rules():
     )
     ids = _rule_ids(rec)
     assert "imaging_exclusive" in ids  # platform must not be classified
-    assert "sequencing_platform_excludes_histology" in ids  # sequencing platform vs histology
+    assert "sequencing_platform_excludes_imaging" in ids  # sequencing platform vs imaging
 
 
 def test_clean_histology_has_no_violations():
     rec = _rec(
-        data_modality=_c("imaging.histology"),
+        data_modality=_c("imaging.microscopy"),
         data_type=_c("images"),
         assay_type=_c("Histology"),
         platform=NA,
@@ -139,7 +139,7 @@ def test_checksum_classified_genomic_flags_auxiliary_inert():
     [
         (
             "imaging_exclusive",
-            {"data_modality": _c("imaging.histology"), "data_type": _c("images"), "assay_type": _c("Histology")},
+            {"data_modality": _c("imaging.microscopy"), "data_type": _c("images"), "assay_type": _c("Histology")},
         ),
         ("auxiliary_inert", {"data_type": _c("checksum")}),
     ],
@@ -166,7 +166,7 @@ def test_incoherent_entry_does_not_crash():
 def test_malformed_evidence_does_not_crash():
     # A record whose offending field carries a non-list `evidence` must still be
     # flagged (with no evidence ref), not abort the run.
-    rec = _rec(data_modality=_c("transcriptomic.bulk"), assay_type=_c("WGS"))
+    rec = _rec(data_modality=_c("transcriptomic"), assay_type=_c("WGS"))
     rec["classifications"]["assay_type"]["evidence"] = "oops-not-a-list"
     [viol] = [v for v in check_record(rec, RULES) if v.rule_id == "assay_for_transcriptomic"]
     assert viol.evidence is None
@@ -182,7 +182,7 @@ def test_render_report_clean_and_vacuous():
 
 
 def test_render_report_lists_violations():
-    rec = _rec(md5="deadbeef01", name="x.bam", data_modality=_c("transcriptomic.bulk"), assay_type=_c("WGS"))
+    rec = _rec(md5="deadbeef01", name="x.bam", data_modality=_c("transcriptomic"), assay_type=_c("WGS"))
     violations = check_record(rec, RULES)
     md = render_report(Path("r"), 1, violations, Counter({"assay_for_transcriptomic": 1}), RULES)
     assert "**Total violations: 1**" in md

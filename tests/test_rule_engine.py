@@ -53,7 +53,7 @@ class TestRuleMatching:
             pytest.param("sample.chm13.cram", {"reference_assembly": "CHM13"}, id="chm13 in the name sets CHM13"),
             pytest.param(
                 "sample.Aligned.sortedByCoord.out.bam",
-                {"data_modality": "transcriptomic.bulk"},
+                {"data_modality": "transcriptomic"},
                 id="STAR aligner output pattern indicates RNA-seq",
             ),
         ],
@@ -65,7 +65,7 @@ class TestRuleMatching:
         """A filename indicator settles modality even at a size the heuristics would
         otherwise speak to — the tier-2 name rule is not displaced by file size."""
         result = engine.classify(FileInfo.from_filename("sample.flnc.bam", file_size=60_000_000_000))
-        assert result.data_modality == "transcriptomic.bulk"
+        assert result.data_modality == "transcriptomic"
 
 
 class TestVariantFiles:
@@ -819,9 +819,9 @@ class TestSpecialFileTypes:
             pytest.param("sample.pgen", "genomic", id="PLINK .pgen is genomic"),
             pytest.param("sample.pvar", "genomic", id="PLINK .pvar is genomic"),
             pytest.param("sample.psam", "genomic", id="PLINK .psam is genomic"),
-            pytest.param("sample.h5ad", "transcriptomic.single_cell", id="single-cell matrix"),
+            pytest.param("sample.h5ad", "transcriptomic", id="single-cell matrix"),
             pytest.param("sample.idat", "epigenomic.methylation", id="IDAT is methylation"),
-            pytest.param("GTEX-18A6Q-1126.svs", "imaging.histology", id="SVS is histology"),
+            pytest.param("GTEX-18A6Q-1126.svs", "imaging.microscopy", id="SVS is histology"),
         ],
     )
     def test_a_special_extension_sets_the_modality(self, engine, filename, modality):
@@ -944,12 +944,12 @@ class TestTextFiles:
             ),
             pytest.param(
                 "expression.counts.csv",
-                {"data_modality": "transcriptomic.bulk", "data_type": "expression_matrix"},
+                {"data_modality": "transcriptomic", "data_type": "expression_matrix"},
                 id="expression file is transcriptomic",
             ),
             pytest.param(
                 "sample.tpm.txt",
-                {"data_modality": "transcriptomic.bulk", "data_type": "expression_matrix"},
+                {"data_modality": "transcriptomic", "data_type": "expression_matrix"},
                 id="TPM table is transcriptomic",
             ),
             # The content is a chromosome/bin/count table; see `text_expression` (#485).
@@ -978,7 +978,7 @@ class TestIntegration:
                 id="hifi BAM names the platform only",
             ),
             pytest.param("NA19189.chr2.hc.vcf.gz", {"data_modality": "genomic"}, id="VCF with chromosome in the name"),
-            pytest.param("GTEX-18A6Q-1126.svs", {"data_modality": "imaging.histology"}, id="GTEx histology image"),
+            pytest.param("GTEX-18A6Q-1126.svs", {"data_modality": "imaging.microscopy"}, id="GTEx histology image"),
             pytest.param("HG02558.final.cram.md5", {"data_modality": NOT_APPLICABLE}, id="CRAM MD5 is not_applicable"),
             pytest.param("sample.xyz", {"data_modality": NOT_CLASSIFIED}, id="unknown extension is not classified"),
         ],
@@ -1235,7 +1235,7 @@ class TestEvaluateClaims:
             [
                 {"rule_id": "r1", "value": "genomic", "tier": 1},
                 {"rule_id": "r2", "value": "genomic", "tier": 3},
-                {"rule_id": "r3", "value": "transcriptomic.bulk", "tier": 3},
+                {"rule_id": "r3", "value": "transcriptomic", "tier": 3},
             ]
         )
         assert result.status == CONFLICT
@@ -1585,7 +1585,7 @@ class TestSentinelValues:
     def test_images_get_not_applicable_for_genomic_fields(self, engine):
         """Image files should get not_applicable for platform and reference."""
         result = engine.classify_extended(FileInfo.from_filename("sample.svs"))
-        assert result.data_modality == "imaging.histology"
+        assert result.data_modality == "imaging.microscopy"
         assert result.status_of("platform") == NOT_APPLICABLE
         assert result.status_of("reference_assembly") == NOT_APPLICABLE
 

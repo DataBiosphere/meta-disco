@@ -21,11 +21,11 @@
                 "rule_id": "isoseq_filename",
                 "source_type": "filename_rule",
                 "tier": 2,
-                "value": "transcriptomic.bulk"
+                "value": "transcriptomic"
               }
             ],
             "status": "classified",
-            "value": "transcriptomic.bulk"
+            "value": "transcriptomic"
           },
           "data_type": {
             "evidence": [

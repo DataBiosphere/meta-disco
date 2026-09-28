@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-09-26 12:03:21**
+Classification run: **2026-09-27 22:58:23**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,088** files.
@@ -85,8 +85,7 @@ Processed **708,088** files.
 | `genomic` | 553,024 | 78.1% | .vcf (201,645)<br>.tbi (155,705)<br>(none) (124,470)<br>.csi (34,141)<br>.cram (10,555)<br>.crai (9,621)<br>.psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854)<br>.g.vcf (2,504)<br>.bed (1,715)<br>.bam (1,688)<br>.fa (936)<br>.fai (464)<br>.gzi (464)<br>.gfa (326)<br>.bai (188)<br>.fasta (24)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
 | `not_classified` | 126,525 | 17.9% | .txt (42,477)<br>.fastq (21,270)<br>.tbi (13,814)<br>.fast5 (12,509)<br>(none) (10,071)<br>.bed (9,768)<br>.csi (7,045)<br>.bam (2,757)<br>.gff3 (1,565)<br>.bai (1,089)<br>.chain (926)<br>.tsv (923)<br>.crai (696)<br>.bigwig (462)<br>.sizes (458)<br>.paf (297)<br>.sam (192)<br>.cram (68)<br>.vcf (23)<br>.csv (18)<br>.fasta (14)<br>.fai (13)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.fa (4)<br>.fna (2)<br>.gzi (2)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
 | `not_applicable` | 20,944 | 3.0% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074) |
-| `transcriptomic.bulk` | 6,993 | 1.0% | .bw (2,536)<br>.bam (2,329)<br>.bai (1,465)<br>.sf (634)<br>.bed (12)<br>.tbi (12)<br>.csv (3)<br>.txt (2) |
-| `transcriptomic.single_cell` | 414 | 0.1% | .h5ad (350)<br>(none) (64) |
+| `transcriptomic` | 7,407 | 1.0% | .bw (2,536)<br>.bam (2,329)<br>.bai (1,465)<br>.sf (634)<br>.h5ad (350)<br>(none) (64)<br>.bed (12)<br>.tbi (12)<br>.csv (3)<br>.txt (2) |
 | `epigenomic.methylation` | 188 | 0.0% | .idat (160)<br>.bed (28) |
 
 ---

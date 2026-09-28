@@ -1,11 +1,11 @@
 # Validation Report
 
 Comparing meta-disco rule engine classifications against external ground truth.
-Classification run: **2026-09-26 12:13:12**
+Classification run: **2026-09-27 23:09:29**
 
 | Source | Files Matched | Dimensions | Agree | Discrepancies |
 |---|---:|---:|---:|---:|
-| HPRC | 6,048 | 4 | 8,371 | 2 |
+| HPRC | 6,048 | 4 | 8,368 | 2 |
 
 ---
 
@@ -28,14 +28,14 @@ HPRC's open-access datasets currently populate the following genomic metadata di
 ### Data Modality Validation
 
 - **5,848** files available from HPRC with ground truth Data Modality
-- **1,154** files comparable (both source and rule engine have values)
-- **4,694** files not classified by rule engine
-- **1,154** inferred data modality values match HPRC
+- **1,152** files comparable (both source and rule engine have values)
+- **4,696** files not classified by rule engine
+- **1,152** inferred data modality values match HPRC
 - **0** discrepancies
 - **100.0%** accuracy
 
-Of the 5,848 files on HPRC with ground truth data modality, we inferred data modality values for 1,154 files. 4,694 files remain unclassifiable by the rule engine.
-Of the 1,154 inferred data modality values, 1,154 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in data modality between meta-disco and HPRC.
+Of the 5,848 files on HPRC with ground truth data modality, we inferred data modality values for 1,152 files. 4,696 files remain unclassifiable by the rule engine.
+Of the 1,152 inferred data modality values, 1,152 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in data modality between meta-disco and HPRC.
 
 ### Data Type Validation
 
@@ -51,14 +51,14 @@ HPRC does not currently provide ground truth for data type.
 ### Platform Validation
 
 - **6,048** files available from HPRC with ground truth Platform
-- **6,046** files comparable (both source and rule engine have values)
-- **2** files not classified by rule engine
-- **6,046** inferred platform values match HPRC
+- **6,045** files comparable (both source and rule engine have values)
+- **3** files not classified by rule engine
+- **6,045** inferred platform values match HPRC
 - **0** discrepancies
 - **100.0%** accuracy
 
-Of the 6,048 files on HPRC with ground truth platform, we inferred platform values for 6,046 files. 2 files remain unclassifiable by the rule engine.
-Of the 6,046 inferred platform values, 6,046 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in platform between meta-disco and HPRC.
+Of the 6,048 files on HPRC with ground truth platform, we inferred platform values for 6,045 files. 3 files remain unclassifiable by the rule engine.
+Of the 6,045 inferred platform values, 6,045 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in platform between meta-disco and HPRC.
 
 ### Reference Assembly Validation
 

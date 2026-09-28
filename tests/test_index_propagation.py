@@ -548,11 +548,11 @@ class TestLoadClassifications:
         output = run_index_producer(
             tmp_path,
             [_file("sample.bam", ".bam", "2" * 32, "e1"), _file("sample.bam.bai", ".bai", "1" * 32, "e2")],
-            [_classified_record("2" * 32, "GRCh38", data_modality="transcriptomic.bulk", assay_type="RNA-seq")],
+            [_classified_record("2" * 32, "GRCh38", data_modality="transcriptomic", assay_type="RNA-seq")],
         )
         assert len(output["classifications"]) == 1
         cls = output["classifications"][0]["classifications"]
-        assert field_value(cls, "data_modality") == "transcriptomic.bulk"
+        assert field_value(cls, "data_modality") == "transcriptomic"
         assert field_value(cls, "platform") == "ILLUMINA"
         assert field_value(cls, "assay_type") == "RNA-seq"
 

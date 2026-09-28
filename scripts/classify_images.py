@@ -3,7 +3,7 @@
 
 Takes what `PRODUCERS["images"]` claims, and uses rules from the bundled
 unified_rules.yaml (package data of meta_disco.rules):
-- .svs -> imaging.histology (Aperio whole-slide images)
+- .svs -> imaging.microscopy (Aperio whole-slide images)
 - the rest -> derived visualizations (QC plots), data_type images only
 """
 

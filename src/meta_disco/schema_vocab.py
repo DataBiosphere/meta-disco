@@ -116,8 +116,9 @@ def value_ancestors(field: str, value: str) -> tuple[str, ...]:
     """The terms above ``value`` in its dimension's ``is_a`` hierarchy, nearest first.
 
     Empty for a term with no parent, which is every term of an enum that declares no
-    ``is_a``. ``reference_assembly_enum`` is the one that does (#473): a hybrid's
-    ancestors are its T2T release and then ``CHM13``. Raises ValueError for a value
+    ``is_a``. ``reference_assembly_enum`` (#473) and ``data_modality_enum`` (#563)
+    do: a hybrid's ancestors are its T2T release and then ``CHM13``, and
+    ``epigenomic.methylation``'s is ``epigenomic``. Raises ValueError for a value
     outside the dimension's vocabulary or an ``is_a`` chain that names a missing
     term or loops, and the same errors as ``dimension_values`` for an unrecognized
     field or a missing enum.

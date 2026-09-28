@@ -28,7 +28,7 @@ rules:
   # --- 1. modality <-> assay family -------------------------------------------
   - id: assay_for_transcriptomic
     description: A transcriptomic file's assay, if classified, must be RNA-seq.
-    when: {data_modality: {prefix: "transcriptomic."}}
+    when: {data_modality: {prefix: "transcriptomic"}}
     require: {assay_type: {value_in: ["RNA-seq"]}}
 
   - id: assay_for_genomic
@@ -43,7 +43,7 @@ rules:
 
   - id: assay_for_histone_modification
     description: A histone-modification file's assay, if classified, must be ChIP-seq.
-    when: {data_modality: "epigenomic.histone_modification"}
+    when: {data_modality: "epigenomic.dna_binding.histone_modification"}
     require: {assay_type: {value_in: ["ChIP-seq"]}}
 
   - id: assay_for_methylation
@@ -54,11 +54,12 @@ rules:
   # --- 3. imaging exclusivity -------------------------------------------------
   - id: imaging_exclusive
     description: >-
-      A histology image carries no sequencing signal: when classified, data_type
-      must be images and assay_type must be Histology; platform, instrument_model
-      and reference_assembly must not be classified at all (a histology file with
+      A microscopy image carries no sequencing signal: when classified, data_type
+      must be images and assay_type must be Histology, the one microscopy assay in
+      today's vocabulary (widen it as others arrive); platform, instrument_model
+      and reference_assembly must not be classified at all (a slide image with
       platform=ILLUMINA or reference=GRCh38 is unmistakably wrong).
-    when: {data_modality: "imaging.histology"}
+    when: {data_modality: "imaging.microscopy"}
     require:
       data_type: {value_in: ["images"]}
       assay_type: {value_in: ["Histology"]}
@@ -67,18 +68,28 @@ rules:
       reference_assembly: {status_not: "classified"}
 
   # --- 5. platform <-> modality family ----------------------------------------
-  # Conservative form: a sequencing platform must not sit on a histology modality.
-  # This is the "platform implies a sequencing modality" invariant operationalized
-  # against today's enum, where imaging.histology is the ONLY non-sequencing
-  # modality — so "not histology" == "is sequencing" here. Deliberately not an
-  # allow-list of sequencing modalities: that would false-positive if the enum
-  # later gains a new sequencing modality (accuracy over coverage — no false
-  # positives). It cross-checks, from the platform side, the same contradiction
-  # imaging_exclusive catches from the modality side.
-  - id: sequencing_platform_excludes_histology
-    description: A sequencing platform must not sit on a histology modality.
+  # Conservative form: a sequencing platform must not sit on an imaging modality.
+  # The enum's other non-sequencing families (proteomic, metabolomic) are left out:
+  # nothing classifies them today, and a proteomics dataset can carry sequencing
+  # files. Deliberately a deny-list of the imaging terms, not an allow-list of
+  # sequencing modalities: that would false-positive if the enum later gains a new
+  # sequencing modality (accuracy over coverage — no false positives). It
+  # cross-checks, from the platform side, the contradiction imaging_exclusive
+  # catches from the modality side for microscopy.
+  - id: sequencing_platform_excludes_imaging
+    description: A sequencing platform must not sit on an imaging modality.
     when: {platform: {value_in: ["ILLUMINA", "PACBIO", "ONT", "MGI", "ELEMENT", "ULTIMA"]}}
-    require: {data_modality: {value_not_in: ["imaging.histology"]}}
+    require:
+      data_modality:
+        value_not_in:
+          - imaging
+          - imaging.electrophysiology
+          - imaging.medical_imaging
+          - imaging.medical_imaging.ct_scan
+          - imaging.medical_imaging.electrocardiogram
+          - imaging.medical_imaging.mri
+          - imaging.medical_imaging.x_ray
+          - imaging.microscopy
 
   # --- 6. auxiliary-type inertness (checksum/log; index deferred to #312) ------
   - id: auxiliary_inert
