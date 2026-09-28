@@ -163,7 +163,7 @@ def _matches(field: str, value: str | None, status: str, matcher) -> bool:
     if isinstance(matcher, str):
         return status == CLASSIFIED and value == matcher
     if "under" in matcher:
-        return status == CLASSIFIED and value in _subtree(field, matcher["under"])
+        return status == CLASSIFIED and isinstance(value, str) and value in _subtree(field, matcher["under"])
     if "value_in" in matcher:
         return status == CLASSIFIED and value in matcher["value_in"]
     if "status" in matcher:
@@ -178,7 +178,7 @@ def _violates(field: str, value: str | None, status: str, matcher: dict) -> bool
     if "value_not_in" in matcher:
         return status == CLASSIFIED and value in matcher["value_not_in"]
     if "not_under" in matcher:
-        return status == CLASSIFIED and value in _subtree(field, matcher["not_under"])
+        return status == CLASSIFIED and isinstance(value, str) and value in _subtree(field, matcher["not_under"])
     if "status_not" in matcher:
         return status == matcher["status_not"]
     if "status" in matcher:

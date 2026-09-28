@@ -108,6 +108,12 @@ def test_under_matches_a_term_and_every_term_below_it():
     assert "assay_for_transcriptomic" not in _rule_ids(_rec(data_modality=_c("genomic"), assay_type=_c("WGS")))
 
 
+def test_a_malformed_value_is_under_nothing_rather_than_an_error():
+    # a list where a term belongs is outside every subtree; the schema gate reports it
+    rec = _rec(data_modality=(["transcriptomic"], "classified"), platform=_c("ILLUMINA"), assay_type=_c("WGS"))
+    assert {"assay_for_transcriptomic", "sequencing_platform_excludes_imaging"}.isdisjoint(_rule_ids(rec))
+
+
 def test_not_under_flags_every_term_below_the_one_it_names():
     for modality in ("imaging", "imaging.medical_imaging.mri"):
         rec = _rec(data_modality=_c(modality), platform=_c("ILLUMINA"))

@@ -300,8 +300,8 @@ These files are excluded from classification as they are primarily:
 
 `data_modality` takes AnVIL's recommended vocabulary: the Findability Subset's list, which is the
 Broad's [MODAL ontology](https://github.com/broadinstitute/modal) term for term (#563). Each term is a
-dotted path with its MODAL id in the schema; single-cell versus bulk is an assay fact, carried by
-`assay_type`, not a modality.
+dotted path with its MODAL id in the schema. Single-cell versus bulk is an assay fact, not a modality:
+`assay_type` is where it belongs, and until its single-cell terms exist (#533) no dimension records it.
 
 ```
 data_modality
