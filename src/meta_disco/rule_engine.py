@@ -602,9 +602,8 @@ class ExtendedClassificationResult:
         synthetic resolution markers (the ``not_classified`` placeholder and
         conflict markers) carry no ``rule_id`` and are skipped — they are not
         rules. The content classifiers in ``header_classifier`` do contribute
-        their own IDs for signals no YAML rule expresses — ``contig_length_detection``,
-        ``vcf_contig_length``, the ``fasta_*`` and
-        ``bed_*`` IDs, ``rgfa_stable_rank_reference``, ``fetch_failed``.
+        their own IDs for signals no YAML rule expresses; those, and the
+        ``fetch_failed`` marker, are declared in ``code_rules`` (#572).
 
         So a caller must not assume an ID here names a rule in the ``rules`` list of
         unified_rules.yaml.

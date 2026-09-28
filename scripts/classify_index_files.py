@@ -38,6 +38,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+from meta_disco import code_rules
 from meta_disco.deployments import PROD
 from meta_disco.file_name import EXTENSION_MAP, FileName
 from meta_disco.models import (
@@ -69,8 +70,8 @@ from meta_disco.records import OutputRecord, RunMetadata, coerce_identity, ident
 # Why an index file took no parent. Written into each `unmatched_files` entry and
 # read back by this module's diagnostics and its tests, so it is named rather than
 # spelled three times.
-NO_MATCHING_PARENT = "no_matching_parent_in_dataset"
-AMBIGUOUS_PARENT = "ambiguous_parent_in_dataset"
+NO_MATCHING_PARENT = code_rules.NO_MATCHING_PARENT.id
+AMBIGUOUS_PARENT = code_rules.AMBIGUOUS_PARENT.id
 
 # Routes through the shared predicate — see meta_disco.producers, which declares this
 # producer's extensions as the keys of `INDEX_TO_PARENT`, so what it routes on and what
@@ -280,7 +281,7 @@ def index_data_type_entry(index_ext: str) -> dict:
         status=CLASSIFIED,
         evidence=[
             {
-                "rule_id": "index_by_extension",
+                "rule_id": code_rules.INDEX_BY_EXTENSION.id,
                 "reason": f"{index_ext} identifies an index file",
                 "value": INDEX_DATA_TYPE,
                 "source_type": SOURCE_FILENAME_RULE,
@@ -307,8 +308,8 @@ def declined_record(record: dict, index_ext: str, reason: str) -> dict:
     an index file has exactly one claim per dimension and never reaches
     ``evaluate_claims``, so there is no tier to carry. Folding both in belongs to #413.
     Its ``rule_id`` values name no rule in ``unified_rules.yaml``, as
-    ``inherited_from_parent`` already does not; nothing validates emitted rule ids
-    against that file.
+    ``inherited_from_parent`` already does not: they are markers declared in
+    ``code_rules`` (#572), which ``tests/test_code_rules.py`` holds this producer to.
 
     Writing this record is what keeps such a file out of the catch-all producer. When
     #438 added it, that mattered because the catch-all's rule then stamped four
@@ -690,7 +691,7 @@ def propagate_to_index_files(
         if field_val and field_val not in _sentinels:
             return [
                 {
-                    "rule_id": "inherited_from_parent",
+                    "rule_id": code_rules.INHERITED_FROM_PARENT.id,
                     "reason": f"Inherited from parent file: {parent}",
                     "value": field_val,
                     "source_type": SOURCE_DERIVATION_INHERITANCE,
@@ -710,7 +711,7 @@ def propagate_to_index_files(
             reason = f"Parent file {parent} had no value for {field_name}"
         return [
             {
-                "rule_id": "inherited_from_parent",
+                "rule_id": code_rules.INHERITED_FROM_PARENT.id,
                 "reason": reason,
                 "status": status,
                 "source_type": SOURCE_DERIVATION_INHERITANCE,

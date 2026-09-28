@@ -73,6 +73,11 @@ make classify-bam        # or classify-vcf / classify-fastq / classify-fasta / c
 make reconcile
 make reconcile-report
 
+# Every rule that classifies a file (the YAML rules, the rules written in Python and
+# the translation rows), each with its basis and how often it fired in a reconciled
+# run (RUN_DIR=, default the latest), to docs/rules-report.md + docs/rules-dashboard.html (#572)
+make rules-report
+
 # What a run could not classify, and why: excluded (no checksum), contract
 # violations, unreadable content (issue #376)
 make unprocessable-report
@@ -152,6 +157,11 @@ evidence}` entry — plus the controlled vocabulary:
   - `CONTENT_TIER` (4, in `rule_engine.py`) is for claims derived from reading file
     bytes. Give any content-read claim `tier=CONTENT_TIER`, never a hard-coded
     number (#226). Tiers 1–3 are the rule tiers declared in `unified_rules.yaml`.
+  - **A rule written in Python is declared once, in `code_rules.CODE_RULES`** (#572),
+    with what it reads, what it sets and its rationale; a marker that carries a
+    `rule_id` is in `code_rules.MARKERS`. A call site names it through its constant
+    (`rule_id=code_rules.VCF_CONTIG_LENGTH.id`), never a string: `test_code_rules`
+    fails on a `rule_id` literal anywhere else in `src/` or `scripts/`.
   - Evidence files under `data/source_evidence/<source>/` are NDJSON, written and
     read through `source_evidence.write_evidence_file` / `iter_evidence` and never
     with a whole-file `json.load` — the corpus is millions of records (#374). An

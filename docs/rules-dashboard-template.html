@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AnVIL Rules</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; max-width: 1400px; margin: 0 auto; padding: 20px; background: #fff; color: #24292f; }
+    h1 { border-bottom: 1px solid #d0d7de; padding-bottom: 8px; }
+    h2 { margin-top: 36px; border-bottom: 1px solid #d0d7de; padding-bottom: 6px; }
+    .note { color: #656d76; font-size: 14px; max-width: 900px; }
+    .scroll { overflow-x: auto; }
+    table { border-collapse: collapse; margin: 10px 0; font-size: 13px; width: 100%; }
+    th, td { border: 1px solid #d0d7de; padding: 5px 9px; vertical-align: top; }
+    th { background: #f6f8fa; text-align: left; user-select: none; white-space: nowrap; }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    td.zero { background: #fff8c5; }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+    pre { background: #f6f8fa; padding: 8px; margin: 4px 0; white-space: pre-wrap; }
+    th.sort { cursor: pointer; }
+    td.rule { min-width: 280px; max-width: 460px; }
+    td.why { min-width: 240px; max-width: 420px; }
+    .lbl { color: #656d76; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
+    .sub { color: #656d76; font-size: 12px; margin-top: 2px; }
+    .controls { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; font-size: 14px; }
+    select, input { font-size: 14px; padding: 4px 8px; }
+  </style>
+</head>
+<body>
+  <nav style="font-size: 14px; margin-bottom: 12px; color: #656d76;">
+    <a href="coverage-dashboard.html" style="color: #0969da; text-decoration: none;">Coverage Report</a>
+    &middot;
+    <a href="validation-dashboard.html" style="color: #0969da; text-decoration: none;">Validation Report</a>
+    &middot;
+    <a href="reconcile-dashboard.html" style="color: #0969da; text-decoration: none;">Reconciliation Report</a>
+    &middot;
+    <a href="review-queue.html" style="color: #0969da; text-decoration: none;">Review Queue</a>
+    &middot;
+    <strong style="color: #24292f;">Rules Report</strong>
+  </nav>
+  <h1>AnVIL Rules Report</h1>
+  <p class="note">Every rule meta-disco uses to describe a file, such as "a .bam file holds alignments" or "a CRAM whose chromosome lengths match GRCh38 is aligned to GRCh38". Each row shows what the rule looks at, what it concludes and why, and how often it applied the last time meta-disco classified every AnVIL file.</p>
+  <p class="note" id="provenance"></p>
+  <ul class="note">
+    <li><strong>Kind</strong>: where the rule is written: <em>yaml</em>, the rules file; <em>code</em>, in Python, for checks a rules file cannot express, such as comparing chromosome lengths; <em>mapping</em>, a translation from a value a submitter wrote ("Revio") to our term ("PACBIO").</li>
+    <li><strong>Basis</strong>: what the rule looks at: the file's extension, its name, the dataset it belongs to, its contents (headers, chromosome names and lengths, what a tar archive holds), the answer for the file it was made from (parent_file, for an index), or a submitter's value (mapping).</li>
+    <li><strong>Files</strong>: how many files the rule gave an answer for.</li>
+    <li><strong>Won</strong>: how many of those files ended up with the rule's answer. It can be lower when a stronger rule, or the submitter's metadata, gave a different answer. For our own rules, this compares with the answer meta-disco worked out on its own, before the submitter's metadata; for a mapping, with the file's final answer.</li>
+    <li><strong>Highlighted</strong>: a rule that gave no answer for any file this time.</li>
+  </ul>
+
+  <div class="controls">
+    <label>Kind: <select id="kind"><option value="">all</option></select></label>
+    <label>Basis: <select id="basis"><option value="">all</option></select></label>
+    <label><input type="checkbox" id="never"> only rules that gave no answer</label>
+    <label>Search: <input id="search" placeholder="rule name, dataset, text"></label>
+    <span id="count" class="note"></span>
+  </div>
+  <div class="scroll"><table id="rules"></table></div>
+
+  <h2>Markers</h2>
+  <p class="note">Not rules. Each is a reason a field of a file was left without an answer.</p>
+  <div class="scroll"><table id="markers"></table></div>
+
+  <h2>Rule names with no rule behind them</h2>
+  <p class="note">The counts name these rules, but the rule files in this version of meta-disco do not contain them. That happens when a rule was renamed or removed after the files were classified, or when a change still under review added it. There is nothing to show for them but the count. Once the files are classified again with the current rules, this list is empty.</p>
+  <div id="undeclared"></div>
+
+  <script>
+    const DATA = RULES_DATA_PLACEHOLDER;
+    const LABELS = {yaml: ["When", "Then"], code: ["Reads", "Sets"], mapping: ["Match", "Declares"]};
+    const fmt = n => n.toLocaleString();
+    const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+    const where = d => Object.entries(d).map(([k, v]) => `${esc(k || "(no dataset title)")} ${fmt(v)}`).join("<br>");
+
+    document.getElementById("provenance").textContent =
+      `${DATA.rules.length} rules. Counts from classifying ${fmt(DATA.records)} files` +
+      (DATA.run_date ? ` on ${DATA.run_date}` : "") + ` (output folder ${DATA.run}).`;
+
+    for (const [id, key] of [["kind", "kind"], ["basis", "basis"]]) {
+      const sel = document.getElementById(id);
+      for (const v of [...new Set(DATA.rules.map(r => r[key]))].sort()) sel.add(new Option(v, v));
+    }
+
+    const rule = r =>
+      `<div class="lbl">${LABELS[r.kind][0]}</div><pre>${esc(r.condition)}</pre>` +
+      `<div class="lbl">${LABELS[r.kind][1]}</div><pre>${esc(r.effect)}</pre>`;
+    const COLS = [
+      ["id", "id", r => `<code>${esc(r.id)}</code><div class="sub">${esc(r.kind)} &middot; ${esc(r.basis)}${r.tier ? ` &middot; tier ${esc(r.tier)}` : ""}</div>`],
+      ["rule", null, rule],
+      ["rationale", null, r => r.rationale ? esc(r.rationale) : '<span class="sub">seeded: declares nothing</span>'],
+      ["dataset", "dataset", r => esc(r.dataset)],
+      ["files", "files", r => fmt(r.files), true],
+      ["won", "won", r => fmt(r.won), true],
+      ["datasets", "files", r => where(r.datasets) +
+        (Object.keys(r.source_types).length ? `<div class="sub">answers by source: ${where(r.source_types)}</div>` : "")],
+    ];
+    let sortKey = null, sortDir = 1;
+
+    function render() {
+      const kind = document.getElementById("kind").value;
+      const basis = document.getElementById("basis").value;
+      const never = document.getElementById("never").checked;
+      const q = document.getElementById("search").value.toLowerCase();
+      let rows = DATA.rules.filter(r =>
+        (!kind || r.kind === kind) && (!basis || r.basis === basis) && (!never || !r.files) &&
+        (!q || [r.id, r.dataset, r.rationale, r.condition, r.effect, Object.keys(r.datasets).join(" ")].join(" ").toLowerCase().includes(q)));
+      if (sortKey) rows = [...rows].sort((a, b) => (a[sortKey] > b[sortKey] ? 1 : a[sortKey] < b[sortKey] ? -1 : 0) * sortDir);
+      const head = "<tr>" + COLS.map(([name, key]) => key ? `<th class="sort" data-key="${key}">${name}</th>` : `<th>${name}</th>`).join("") + "</tr>";
+      const body = rows.map(r => "<tr>" +
+        COLS.map(([name, , cell, num]) => `<td class="${num ? "num" : ""}${num && !r.files ? " zero" : ""}${name === "rule" ? " rule" : ""}${name === "rationale" ? " why" : ""}">${cell(r)}</td>`).join("") +
+        "</tr>").join("");
+      const table = document.getElementById("rules");
+      table.innerHTML = head + body;
+      document.getElementById("count").textContent = `${rows.length} of ${DATA.rules.length} rules`;
+      table.querySelectorAll("th.sort").forEach(th => th.onclick = () => {
+        const key = th.dataset.key;
+        sortDir = sortKey === key ? -sortDir : (["files", "won"].includes(key) ? -1 : 1);
+        sortKey = key;
+        render();
+      });
+    }
+    for (const id of ["kind", "basis", "never", "search"]) document.getElementById(id).oninput = render;
+    render();
+
+    document.getElementById("markers").innerHTML =
+      "<tr><th>id</th><th>written as</th><th>files</th><th>meaning</th></tr>" +
+      DATA.markers.map(m => `<tr><td><code>${esc(m.id)}</code></td><td>${esc(m.written_as)}</td>` +
+        `<td class="num">${fmt(m.files)}</td><td>${esc(m.meaning)}</td></tr>`).join("");
+
+    document.getElementById("undeclared").innerHTML = DATA.undeclared.length
+      ? "<table><tr><th>id</th><th>files</th><th>claims</th></tr>" + DATA.undeclared.map(u =>
+          `<tr><td><code>${esc(u.id)}</code></td><td class="num">${fmt(u.files)}</td><td class="num">${fmt(u.claims)}</td></tr>`).join("") + "</table>"
+      : '<p class="note">None: every rule the counts name is in the rule files.</p>';
+  </script>
+</body>
+</html>

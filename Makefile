@@ -1,4 +1,4 @@
-.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published seed-value-map review-queue corpus-diff reconcile reconcile-report all-reports download-hprc validate-hprc clean help
+.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published seed-value-map review-queue corpus-diff reconcile reconcile-report rules-report all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -38,6 +38,7 @@ help:
 	@echo "  make corpus-diff        Compare two corpus generations (snapshots by md5, runs by label; ARGS=--artifact ...)"
 	@echo "  make reconcile          Reconcile a stored run with source evidence into <run>/reconciled/ (RUN_DIR=, DEPLOYMENT=)"
 	@echo "  make reconcile-report   Render a reconciled run's report to docs/reconcile-report.md + dashboard (RUN_DIR=, PREVIOUS=)"
+	@echo "  make rules-report       List every rule, its basis and how often it fired in a reconciled run (RUN_DIR=)"
 	@echo "  make all-reports        Generate every report (hprc, coverage, validation, consistency, unprocessable, reconcile, review queue)"
 	@echo ""
 	@echo "  make download-hprc      Download HPRC catalogs for validation"
@@ -289,7 +290,14 @@ reconcile:
 reconcile-report:
 	uv run python scripts/generate_reconcile_report.py $(if $(RUN_DIR),--run-dir $(RUN_DIR)) $(if $(PREVIOUS),--previous $(PREVIOUS))
 
-all-reports: validate-hprc coverage-report validation-report consistency-report unprocessable-report reconcile-report review-queue
+# List every rule that classifies a file (#572): the YAML rules, the rules written in
+# Python (code_rules.CODE_RULES) and the translation rows, each with its basis and how
+# often it fired in a reconciled run, to docs/rules-report.md + docs/rules-dashboard.html.
+# RUN_DIR defaults to the latest run, which must have been reconciled (`make reconcile`).
+rules-report:
+	uv run python scripts/generate_rules_report.py $(if $(RUN_DIR),--run-dir $(RUN_DIR))
+
+all-reports: validate-hprc coverage-report validation-report consistency-report unprocessable-report reconcile-report review-queue rules-report
 
 download-hprc:
 	uv run python scripts/download_hprc_catalogs.py

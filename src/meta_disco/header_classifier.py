@@ -13,6 +13,7 @@ from dataclasses import dataclass, fields, replace
 from functools import cache
 from typing import TYPE_CHECKING
 
+from . import code_rules
 from .evidence import BedSignals, SegmentTag
 from .file_name import FileName
 from .models import (
@@ -254,7 +255,7 @@ def classify_from_header(
     # one (CHM13's releases and hybrids), and the family otherwise (#473) — one
     # claim, so the two readings of one header never compete at the same tier.
     if contig_ref:
-        _add_contig_claim(result, "contig_length_detection", contig_ref, contig_matches, identity)
+        _add_contig_claim(result, code_rules.CONTIG_LENGTH_DETECTION.id, contig_ref, contig_matches, identity)
         # No modality claim follows from the contigs: DNA and RNA reads aligned to
         # one genome share its @SQ dictionary, so "aligned to a genome" does not say
         # which the reads are. The "genomic" guess this used to make is removed (#88).
@@ -332,7 +333,7 @@ def classify_from_vcf_header(
     # re-resolves from the full list (#226/#227). The value is the build's term
     # where it resolved inside the family and has one (#473), as on the BAM path.
     if contig_ref:
-        _add_contig_claim(result, "vcf_contig_length", contig_ref, contig_matches, identity)
+        _add_contig_claim(result, code_rules.VCF_CONTIG_LENGTH.id, contig_ref, contig_matches, identity)
 
     _record_reference_build(result, identity)
 
@@ -465,7 +466,7 @@ _ASSEMBLER_PATTERN = re.compile(
 _TRANSCRIPT_PATTERN = re.compile(r"^(ENST\d|NM_\d|NR_\d|XM_\d|rna-)", re.IGNORECASE)
 
 
-FETCH_FAILED_RULE_ID = "fetch_failed"
+FETCH_FAILED_RULE_ID = code_rules.FETCH_FAILED.id
 
 
 def classify_without_content(reason: str) -> dict:
@@ -559,7 +560,7 @@ def classify_from_gfa_segment_tags(
         # make_claim for the derive-from-claims and required-tier invariants.)
         result.add_claim(
             "data_type",
-            rule_id="rgfa_stable_rank_reference",
+            rule_id=code_rules.RGFA_STABLE_RANK_REFERENCE.id,
             tier=CONTENT_TIER,
             source_type=SOURCE_CONTIG_DETECTION,
             reason=(
@@ -750,7 +751,7 @@ def classify_from_tar_members(
                 # names, which are not contig declarations (#392).
                 result.add_claim(
                     fld,
-                    rule_id="tar_inner_format",
+                    rule_id=code_rules.TAR_INNER_FORMAT.id,
                     tier=CONTENT_TIER,
                     source_type=SOURCE_CONTENT_READ,
                     reason=reason,
@@ -853,7 +854,7 @@ def classify_from_fasta_header(
     if transcript_contigs and len(transcript_contigs) > len(ref_matches):
         result.add_claim(
             "data_modality",
-            rule_id="fasta_transcript_contigs",
+            rule_id=code_rules.FASTA_TRANSCRIPT_CONTIGS.id,
             tier=CONTENT_TIER,
             source_type=SOURCE_CONTIG_DETECTION,
             reason=f"Found {len(transcript_contigs)} transcript IDs (e.g., {transcript_contigs[0]})",
@@ -861,7 +862,7 @@ def classify_from_fasta_header(
         )
         result.add_claim(
             "data_type",
-            rule_id="fasta_transcript_contigs",
+            rule_id=code_rules.FASTA_TRANSCRIPT_CONTIGS.id,
             tier=CONTENT_TIER,
             source_type=SOURCE_CONTIG_DETECTION,
             reason="Transcript sequences in FASTA",
@@ -896,7 +897,7 @@ def classify_from_fasta_header(
             if best_ref:
                 result.add_claim(
                     "reference_assembly",
-                    rule_id="fasta_reference_contigs",
+                    rule_id=code_rules.FASTA_REFERENCE_CONTIGS.id,
                     tier=CONTENT_TIER,
                     source_type=SOURCE_CONTIG_DETECTION,
                     reason=ref_reason,
@@ -905,7 +906,7 @@ def classify_from_fasta_header(
             else:
                 result.add_claim(
                     "reference_assembly",
-                    rule_id="fasta_reference_contigs",
+                    rule_id=code_rules.FASTA_REFERENCE_CONTIGS.id,
                     tier=CONTENT_TIER,
                     source_type=SOURCE_CONTIG_DETECTION,
                     reason=ref_reason,
@@ -913,7 +914,7 @@ def classify_from_fasta_header(
                 )
             result.add_claim(
                 "data_modality",
-                rule_id="fasta_reference_contigs",
+                rule_id=code_rules.FASTA_REFERENCE_CONTIGS.id,
                 tier=CONTENT_TIER,
                 source_type=SOURCE_CONTIG_DETECTION,
                 reason="Contig names match known reference genome",
@@ -921,7 +922,7 @@ def classify_from_fasta_header(
             )
             result.add_claim(
                 "data_type",
-                rule_id="fasta_reference_contigs",
+                rule_id=code_rules.FASTA_REFERENCE_CONTIGS.id,
                 tier=CONTENT_TIER,
                 source_type=SOURCE_CONTIG_DETECTION,
                 reason="FASTA contains reference genome sequences",
@@ -934,7 +935,7 @@ def classify_from_fasta_header(
         sample = assembler_contigs[0]
         result.add_claim(
             "data_modality",
-            rule_id="fasta_assembler_contigs",
+            rule_id=code_rules.FASTA_ASSEMBLER_CONTIGS.id,
             tier=CONTENT_TIER,
             source_type=SOURCE_CONTIG_DETECTION,
             reason=f"Found {len(assembler_contigs)} assembler-named contigs (e.g., {sample})",
@@ -942,7 +943,7 @@ def classify_from_fasta_header(
         )
         result.add_claim(
             "data_type",
-            rule_id="fasta_assembler_contigs",
+            rule_id=code_rules.FASTA_ASSEMBLER_CONTIGS.id,
             tier=CONTENT_TIER,
             source_type=SOURCE_CONTIG_DETECTION,
             reason="Contig names indicate assembler output",
@@ -950,7 +951,7 @@ def classify_from_fasta_header(
         )
         result.add_claim(
             "reference_assembly",
-            rule_id="fasta_assembler_contigs",
+            rule_id=code_rules.FASTA_ASSEMBLER_CONTIGS.id,
             tier=CONTENT_TIER,
             source_type=SOURCE_CONTIG_DETECTION,
             reason="De novo assembly — no reference genome applicable",
@@ -962,7 +963,7 @@ def classify_from_fasta_header(
     if num_contigs > 50 and not ref_matches:
         result.add_claim(
             "data_modality",
-            rule_id="fasta_many_contigs",
+            rule_id=code_rules.FASTA_MANY_CONTIGS.id,
             tier=CONTENT_TIER,
             source_type=SOURCE_CONTIG_DETECTION,
             reason=f"Large number of contigs ({num_contigs}) with non-standard names suggests de novo assembly",
@@ -970,7 +971,7 @@ def classify_from_fasta_header(
         )
         result.add_claim(
             "data_type",
-            rule_id="fasta_many_contigs",
+            rule_id=code_rules.FASTA_MANY_CONTIGS.id,
             tier=CONTENT_TIER,
             source_type=SOURCE_CONTIG_DETECTION,
             reason="High contig count suggests assembly",
@@ -978,7 +979,7 @@ def classify_from_fasta_header(
         )
         result.add_claim(
             "reference_assembly",
-            rule_id="fasta_many_contigs",
+            rule_id=code_rules.FASTA_MANY_CONTIGS.id,
             tier=CONTENT_TIER,
             source_type=SOURCE_CONTIG_DETECTION,
             reason="De novo assembly — no reference genome applicable",
@@ -1127,7 +1128,7 @@ def classify_from_bed_signals(
             # another claim first (#88), and resolution settles it against them.
             result.add_claim(
                 "reference_assembly",
-                rule_id="bed_coordinate_reference",
+                rule_id=code_rules.BED_COORDINATE_REFERENCE.id,
                 tier=CONTENT_TIER,
                 source_type=SOURCE_CONTIG_DETECTION,
                 reason=coord_rationale,
@@ -1136,7 +1137,7 @@ def classify_from_bed_signals(
         elif "Non-standard chromosome" in coord_rationale:
             result.add_claim(
                 "reference_assembly",
-                rule_id="bed_nonstandard_contigs",
+                rule_id=code_rules.BED_NONSTANDARD_CONTIGS.id,
                 tier=CONTENT_TIER,
                 source_type=SOURCE_CONTIG_DETECTION,
                 reason=coord_rationale,
