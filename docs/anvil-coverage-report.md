@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-09-27 22:58:23**
+Classification run: **2026-09-28 01:32:15**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,088** files.
@@ -26,7 +26,7 @@ Processed **708,088** files.
 | **Data Type** | 685,411 (96.8%) | 22,677 (3.2%) | 0 (0.0%) |
 | **Platform** | 80,439 (11.4%) | 627,649 (88.6%) | 0 (0.0%) |
 | **Reference Assembly** | 503,704 (71.1%) | 204,375 (28.9%) | 9 (0.0%) |
-| **Assay Type** | 30,127 (4.3%) | 677,961 (95.7%) | 0 (0.0%) |
+| **Assay Type** | 30,541 (4.3%) | 677,547 (95.7%) | 0 (0.0%) |
 | **Instrument Model** | 24,029 (3.4%) | 684,059 (96.6%) | 0 (0.0%) |
 
 ---
@@ -285,8 +285,8 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 30,127 | 4.3% |
-| **Not classified** | 677,961 | 95.7% |
+| **Classified** | 30,541 | 4.3% |
+| **Not classified** | 677,547 | 95.7% |
 | **Conflict** | 0 | 0.0% |
 
 ### What's not classified?
@@ -295,7 +295,7 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 |---|---:|---|
 | .vcf | 201,668 | No rule determined a value for assay_type |
 | .tbi | 169,519 | Parent file had no value for assay_type |
-| (none) | 134,605 | No rule determined a value for assay_type |
+| (none) | 134,541 | No rule determined a value for assay_type |
 | .txt | 42,479 | No rule determined a value for assay_type |
 | .csi | 41,186 | Parent file had no value for assay_type |
 | .fastq | 21,270 | No rule determined a value for assay_type |
@@ -314,7 +314,6 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | .tsv | 923 | No rule determined a value for assay_type |
 | .bigwig | 462 | No rule determined a value for assay_type |
 | .sizes | 458 | No rule determined a value for assay_type |
-| .h5ad | 350 | No rule determined a value for assay_type |
 | .paf | 297 | No rule determined a value for assay_type |
 | .sam | 192 | No rule determined a value for assay_type |
 | .csv | 21 | No rule determined a value for assay_type |
@@ -332,9 +331,10 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 
 | Assay Type | count | % | extensions |
 |---|---:|---:|---|
-| `not_classified` | 677,961 | 95.7% | .vcf (201,668)<br>.tbi (169,519)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.bed (11,511)<br>.cram (10,623)<br>.crai (10,317)<br>.bam (4,675)<br>.psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.bai (1,277)<br>.chain (926)<br>.tsv (923)<br>.bigwig (462)<br>.sizes (458)<br>.h5ad (350)<br>.paf (297)<br>.sam (192)<br>.csv (21)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
+| `not_classified` | 677,547 | 95.7% | .vcf (201,668)<br>.tbi (169,519)<br>(none) (134,541)<br>.txt (42,479)<br>.csi (41,186)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.bed (11,511)<br>.cram (10,623)<br>.crai (10,317)<br>.bam (4,675)<br>.psam (2,854)<br>.pgen (2,854)<br>.pvar (2,854)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.bai (1,277)<br>.chain (926)<br>.tsv (923)<br>.bigwig (462)<br>.sizes (458)<br>.paf (297)<br>.sam (192)<br>.csv (21)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
 | `not_applicable` | 23,209 | 3.3% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.fa (940)<br>.fai (477)<br>.gzi (466)<br>.gfa (326)<br>.fasta (38)<br>.xg (8)<br>.gbwt (6)<br>.fna (2)<br>.gbz (2) |
 | `RNA-seq` | 6,758 | 1.0% | .bw (2,536)<br>.bam (2,099)<br>.bai (1,465)<br>.sf (634)<br>.bed (12)<br>.tbi (12) |
+| `sc/snRNA-seq` | 414 | 0.1% | .h5ad (350)<br>(none) (64) |
 | `Methylation array` | 160 | 0.0% | .idat (160) |
 
 **Note**: Like platform, assay type is inherently unknowable for most derived formats. It is determined only by a rule that sees evidence of the assay: a STAR `@PG` line, filename patterns (STAR, Salmon, expression BED), and extension where the format implies it (`.idat` is a methylation array, `.svs` histology). Nothing infers it from the modality (#88), reads file size, or infers WGS from a long-read platform (#430). The high not-classified rate is expected.
