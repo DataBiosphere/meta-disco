@@ -67,9 +67,8 @@ from meta_disco.pipeline import (
 from meta_disco.producers import INDEX_TO_PARENT, PRODUCERS
 from meta_disco.records import OutputRecord, RunMetadata, coerce_identity, identity_from
 
-# Why an index file took no parent. Written into each `unmatched_files` entry and
-# read back by this module's diagnostics and its tests, so it is named rather than
-# spelled three times.
+# Why an index file took no parent, as the markers `code_rules` declares. Written into
+# each `unmatched_files` entry and read back by this module's diagnostics and its tests.
 NO_MATCHING_PARENT = code_rules.NO_MATCHING_PARENT.id
 AMBIGUOUS_PARENT = code_rules.AMBIGUOUS_PARENT.id
 

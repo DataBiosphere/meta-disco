@@ -6,8 +6,11 @@ file content a ``when`` cannot express (contig lengths, BED coordinates, tar mem
 or, for the index producer, another file's answer. Before #572 each one's id was a
 string literal at its call site, so nothing listed them. Now every call site names its
 rule through a constant here (``code_rules.VCF_CONTIG_LENGTH.id``), and
-``tests/test_code_rules.py`` fails on a ``rule_id`` string literal anywhere else in
-``src/`` or ``scripts/``. So a new code rule cannot reach the output undeclared.
+``tests/test_code_rules.py`` fails on a rule id written as a string literal elsewhere in
+``src/`` or ``scripts/``: as a ``rule_id=`` keyword, as the ``rule_id`` of an evidence
+dict, or as a ``*_RULE_ID`` module constant. An id reaching a call site some other way
+(a constant named otherwise, say) is not caught by that test, which is a check on the
+source and not on the output.
 
 A **marker** carries a ``rule_id`` and names no rule. It records why a slot has no
 value: the file could not be read, the input record broke the contract, or an index

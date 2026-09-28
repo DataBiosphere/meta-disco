@@ -161,7 +161,8 @@ evidence}` entry — plus the controlled vocabulary:
     with what it reads, what it sets and its rationale; a marker that carries a
     `rule_id` is in `code_rules.MARKERS`. A call site names it through its constant
     (`rule_id=code_rules.VCF_CONTIG_LENGTH.id`), never a string: `test_code_rules`
-    fails on a `rule_id` literal anywhere else in `src/` or `scripts/`.
+    fails on a rule id written as a string literal (a `rule_id=` keyword, an evidence
+    dict's `rule_id`, or a `*_RULE_ID` constant) anywhere else in `src/` or `scripts/`.
   - Evidence files under `data/source_evidence/<source>/` are NDJSON, written and
     read through `source_evidence.write_evidence_file` / `iter_evidence` and never
     with a whole-file `json.load` — the corpus is millions of records (#374). An

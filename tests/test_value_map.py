@@ -831,7 +831,7 @@ def test_ac26_nothing_but_reconcile_imports_the_table():
     The reconcile stage is the table's one reader in a run (#432), and it writes its own artifact, never
     inference's; the review-queue report (#524) and the rules report (#572) read it too, and each writes only its
     two report files."""
-    sources = [*Path("src/meta_disco").rglob("*.py"), *Path("scripts").glob("*.py")]
+    sources = [*Path("src/meta_disco").rglob("*.py"), *Path("scripts").rglob("*.py")]
     importers = sorted(str(p) for p in sources if p.name != "value_map.py" and "value_map" in imported_segments(p))
     assert importers == [
         "scripts/generate_review_queue.py",

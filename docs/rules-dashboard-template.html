@@ -39,15 +39,9 @@
     <strong style="color: #24292f;">Rules Report</strong>
   </nav>
   <h1>AnVIL Rules Report</h1>
-  <p class="note">Every rule meta-disco uses to describe a file, such as "a .bam file holds alignments" or "a CRAM whose chromosome lengths match GRCh38 is aligned to GRCh38". Each row shows what the rule looks at, what it concludes and why, and how often it applied the last time meta-disco classified every AnVIL file.</p>
+  <p class="note" id="intro"></p>
   <p class="note" id="provenance"></p>
-  <ul class="note">
-    <li><strong>Kind</strong>: where the rule is written: <em>yaml</em>, the rules file; <em>code</em>, in Python, for checks a rules file cannot express, such as comparing chromosome lengths; <em>mapping</em>, a translation from a value a submitter wrote ("Revio") to our term ("PACBIO").</li>
-    <li><strong>Basis</strong>: what the rule looks at: the file's extension, its name, the dataset it belongs to, its contents (headers, chromosome names and lengths, what a tar archive holds), the answer for the file it was made from (parent_file, for an index), or a submitter's value (mapping).</li>
-    <li><strong>Files</strong>: how many files the rule gave an answer for.</li>
-    <li><strong>Won</strong>: how many of those files ended up with the rule's answer. It can be lower when a stronger rule, or the submitter's metadata, gave a different answer. For our own rules, this compares with the answer meta-disco worked out on its own, before the submitter's metadata; for a mapping, with the file's final answer.</li>
-    <li><strong>Highlighted</strong>: a rule that gave no answer for any file this time.</li>
-  </ul>
+  <ul class="note" id="key"></ul>
 
   <div class="controls">
     <label>Kind: <select id="kind"><option value="">all</option></select></label>
@@ -59,23 +53,26 @@
   <div class="scroll"><table id="rules"></table></div>
 
   <h2>Markers</h2>
-  <p class="note">Not rules. Each is a reason a field of a file was left without an answer.</p>
+  <p class="note" id="markers-note"></p>
   <div class="scroll"><table id="markers"></table></div>
 
-  <h2>Rule names with no rule behind them</h2>
-  <p class="note">The counts name these rules, but the rule files in this version of meta-disco do not contain them. That happens when a rule was renamed or removed after the files were classified, or when a change still under review added it. There is nothing to show for them but the count. Once the files are classified again with the current rules, this list is empty.</p>
+  <h2 id="undeclared-head"></h2>
+  <p class="note" id="undeclared-note"></p>
   <div id="undeclared"></div>
 
   <script>
     const DATA = RULES_DATA_PLACEHOLDER;
-    const LABELS = {yaml: ["When", "Then"], code: ["Reads", "Sets"], mapping: ["Match", "Declares"]};
+    const LABELS = DATA.labels, TEXT = DATA.text;
     const fmt = n => n.toLocaleString();
     const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
     const where = d => Object.entries(d).map(([k, v]) => `${esc(k || "(no dataset title)")} ${fmt(v)}`).join("<br>");
 
-    document.getElementById("provenance").textContent =
-      `${DATA.rules.length} rules. Counts from classifying ${fmt(DATA.records)} files` +
-      (DATA.run_date ? ` on ${DATA.run_date}` : "") + ` (output folder ${DATA.run}).`;
+    document.getElementById("intro").textContent = TEXT.intro;
+    document.getElementById("provenance").textContent = DATA.provenance;
+    document.getElementById("key").innerHTML = TEXT.key.map(([k, v]) => `<li><strong>${esc(k)}</strong>: ${esc(v)}</li>`).join("");
+    document.getElementById("markers-note").textContent = TEXT.markers_note;
+    document.getElementById("undeclared-head").textContent = TEXT.undeclared_head;
+    document.getElementById("undeclared-note").textContent = TEXT.undeclared_note;
 
     for (const [id, key] of [["kind", "kind"], ["basis", "basis"]]) {
       const sel = document.getElementById(id);
@@ -83,6 +80,7 @@
     }
 
     const rule = r =>
+      (r.expanded.length ? `<div class="sub">written with ${r.expanded.map(a => `<code>*${esc(a)}</code>`).join(", ")}, shown expanded</div>` : "") +
       `<div class="lbl">${LABELS[r.kind][0]}</div><pre>${esc(r.condition)}</pre>` +
       `<div class="lbl">${LABELS[r.kind][1]}</div><pre>${esc(r.effect)}</pre>`;
     const COLS = [
@@ -92,7 +90,7 @@
       ["dataset", "dataset", r => esc(r.dataset)],
       ["files", "files", r => fmt(r.files), true],
       ["won", "won", r => fmt(r.won), true],
-      ["datasets", "files", r => where(r.datasets) +
+      ["datasets", null, r => where(r.datasets) +
         (Object.keys(r.source_types).length ? `<div class="sub">answers by source: ${where(r.source_types)}</div>` : "")],
     ];
     let sortKey = null, sortDir = 1;
@@ -131,7 +129,7 @@
     document.getElementById("undeclared").innerHTML = DATA.undeclared.length
       ? "<table><tr><th>id</th><th>files</th><th>claims</th></tr>" + DATA.undeclared.map(u =>
           `<tr><td><code>${esc(u.id)}</code></td><td class="num">${fmt(u.files)}</td><td class="num">${fmt(u.claims)}</td></tr>`).join("") + "</table>"
-      : '<p class="note">None: every rule the counts name is in the rule files.</p>';
+      : `<p class="note">${esc(TEXT.none_note)}</p>`;
   </script>
 </body>
 </html>

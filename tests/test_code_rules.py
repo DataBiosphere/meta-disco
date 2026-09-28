@@ -5,21 +5,23 @@ from pathlib import Path
 
 import pytest
 
-from meta_disco import code_rules
+from meta_disco import code_rules, models
 from meta_disco.models import CLASSIFICATION_FIELDS, SOURCE_TYPES
 from meta_disco.rule_loader import get_unified_rules
 
 DECLARED = (*code_rules.CODE_RULES, *code_rules.MARKERS)
-SOURCES = [*Path("src/meta_disco").rglob("*.py"), *Path("scripts").glob("*.py")]
+SOURCES = [*Path("src/meta_disco").rglob("*.py"), *Path("scripts").rglob("*.py")]
 
 
 def literal_rule_ids(source: str) -> list[tuple[int, str]]:
     """Every rule id written as a string where a claim or marker is built.
 
-    Two spellings: ``rule_id="x"`` passed to a call, and ``"rule_id": "x"`` in a dict
-    that also carries a ``reason``, which every evidence entry does. A dict without
-    one is not an evidence entry (``source_evidence._RETIRED_LINE_KEYS`` maps the
-    key to why it is refused). An f-string counts as a literal too.
+    Three spellings: ``rule_id="x"`` passed to a call; ``"rule_id": "x"`` in a dict that
+    also carries a ``reason``, which every evidence entry does (a dict without one is
+    not an evidence entry: ``source_evidence._RETIRED_LINE_KEYS`` maps the key to why it
+    is refused); and a module constant named ``*_RULE_ID`` assigned a string, the form
+    ``FETCH_FAILED_RULE_ID`` and ``VALIDATION_RULE_ID`` took before #572. An f-string
+    counts as a literal too.
     """
     found = []
 
@@ -29,6 +31,9 @@ def literal_rule_ids(source: str) -> list[tuple[int, str]]:
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.keyword) and node.arg == "rule_id" and is_text(node.value):
             found.append((node.value.lineno, ast.unparse(node.value)))
+        elif isinstance(node, ast.Assign) and is_text(node.value):
+            if any(isinstance(t, ast.Name) and t.id.endswith("RULE_ID") for t in node.targets):
+                found.append((node.value.lineno, ast.unparse(node.value)))
         elif isinstance(node, ast.Dict):
             keys = {k.value: v for k, v in zip(node.keys, node.values, strict=True) if isinstance(k, ast.Constant)}
             if "reason" in keys and "rule_id" in keys and is_text(keys["rule_id"]):
@@ -52,6 +57,7 @@ def test_no_rule_id_is_written_as_a_literal_outside_code_rules():
         'make_claim(rule_id="new_rule", reason="r")',
         'result.add_claim("data_type", rule_id=f"rule_{n}", tier=4)',
         '{"rule_id": "new_rule", "reason": "r", "value": "v"}',
+        'NEW_RULE_ID = "platform.new"',
     ],
 )
 def test_the_search_finds_each_spelling(snippet):
@@ -107,14 +113,21 @@ def _rule_constant(node) -> str | None:
     return None
 
 
-def claimed_fields(source: str) -> dict[str, set[str]]:
-    """The fields each code rule's ``add_claim`` calls in ``source`` set, keyed by its constant's name.
+def _written(call: ast.Call, name: str) -> str | None:
+    """The source text of one keyword argument of a call, or None if it is not passed."""
+    return next((ast.unparse(k.value) for k in call.keywords if k.arg == name), None)
 
-    Three shapes, all of which ``header_classifier`` uses. A literal field with the rule's
-    constant (``add_claim("data_type", rule_id=code_rules.X.id)``). A helper that takes the
-    rule id as a parameter and claims a literal field with it (``_add_contig_claim``), whose
-    calls name the rule. And a helper that claims each of its keyword arguments under one
-    rule (``_claim_content``), whose calls name the fields. Any other shape fails, so this
+
+def claimed_fields(source: str) -> dict[str, dict[str, set[str]]]:
+    """What each code rule's ``add_claim`` calls in ``source`` write, keyed by its constant's name.
+
+    For each rule: the ``fields`` it claims, and the ``source_type`` and ``tier`` arguments
+    as written (``SOURCE_CONTIG_DETECTION``, ``CONTENT_TIER``). Three call shapes, all of
+    which ``header_classifier`` uses. A literal field with the rule's constant
+    (``add_claim("data_type", rule_id=code_rules.X.id)``). A helper that takes the rule id
+    as a parameter and claims a literal field with it (``_add_contig_claim``), whose calls
+    name the rule. And a helper that claims each of its keyword arguments under one rule
+    (``_claim_content``), whose calls name the fields. Any other shape fails, so this
     reader cannot silently miss a claim.
     """
     tree = ast.parse(source)
@@ -127,7 +140,17 @@ def claimed_fields(source: str) -> dict[str, set[str]]:
             if node is not f:
                 enclosing[node] = f
     calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)]
-    fields: dict[str, set[str]] = {}
+    found: dict[str, dict[str, set[str]]] = {}
+
+    def record(rule: str, fields, call: ast.Call) -> None:
+        entry = found.setdefault(rule, {"fields": set(), "source_types": set(), "tiers": set()})
+        entry["fields"].update(fields)
+        entry["source_types"].add(_written(call, "source_type") or "")
+        entry["tiers"].add(_written(call, "tier") or "")
+
+    def callers(helper: str):
+        return [c for c in calls if isinstance(c.func, ast.Name) and c.func.id == helper]
+
     for call in calls:
         if not (isinstance(call.func, ast.Attribute) and call.func.attr == "add_claim"):
             continue
@@ -136,31 +159,48 @@ def claimed_fields(source: str) -> dict[str, set[str]]:
         rule = _rule_constant(rule_kw)
         helper = enclosing[call].name
         if rule and isinstance(field, ast.Constant):
-            fields.setdefault(rule, set()).add(str(field.value))
+            record(rule, {str(field.value)}, call)
         elif rule and isinstance(field, ast.Name):
-            for c in calls:
-                if isinstance(c.func, ast.Name) and c.func.id == helper:
-                    fields.setdefault(rule, set()).update(k.arg for k in c.keywords if k.arg)
+            for c in callers(helper):
+                record(rule, {k.arg for k in c.keywords if k.arg}, call)
         elif isinstance(rule_kw, ast.Name) and isinstance(field, ast.Constant):
-            for c in calls:
-                if isinstance(c.func, ast.Name) and c.func.id == helper:
-                    for arg in c.args:
-                        if name := _rule_constant(arg):
-                            fields.setdefault(name, set()).add(str(field.value))
+            for c in callers(helper):
+                for arg in c.args:
+                    if name := _rule_constant(arg):
+                        record(name, {str(field.value)}, call)
         else:
             raise AssertionError(f"line {call.lineno}: an add_claim shape claimed_fields does not read")
-    return fields
+    return found
 
 
-def test_a_header_classifier_rule_sets_exactly_the_fields_its_claims_set():
+def _declared(rules):
     names = {obj: name for name, obj in vars(code_rules).items() if isinstance(obj, code_rules.CodeRule)}
+    source_type_names = {getattr(models, n): n for n in dir(models) if n.startswith("SOURCE_")}
+    return {names[r]: (r, source_type_names[r.source_type]) for r in rules}
+
+
+def test_a_header_classifier_rule_declares_what_its_claims_write():
     read = claimed_fields(Path(code_rules.HEADER_CLASSIFIER).read_text(encoding="utf-8"))
-    declared = {names[r]: set(r.sets) for r in code_rules.CODE_RULES if r.module == code_rules.HEADER_CLASSIFIER}
-    assert read == declared
+    declared = _declared(r for r in code_rules.CODE_RULES if r.module == code_rules.HEADER_CLASSIFIER)
+    assert set(read) == set(declared)
+    for name, (rule, source_type) in declared.items():
+        assert read[name]["fields"] == set(rule.sets), name
+        assert read[name]["source_types"] == {source_type}, name
+        # The report gives a content rule CONTENT_TIER; this is what makes that true.
+        assert read[name]["tiers"] == {"CONTENT_TIER"}, name
 
 
-def test_the_index_producer_rules_set_what_the_producer_writes():
+def test_the_index_producer_rules_declare_what_the_producer_writes():
     import classify_index_files as cif
 
     assert code_rules.INHERITED_FROM_PARENT.sets == cif.INHERITED_FIELDS
     assert code_rules.INDEX_BY_EXTENSION.sets == (cif.DATA_TYPE,)
+    # Its evidence is built as dicts, not through add_claim: read each one's source_type.
+    written: dict[str, set[str]] = {}
+    for node in ast.walk(ast.parse(Path(code_rules.INDEX_PRODUCER).read_text(encoding="utf-8"))):
+        if isinstance(node, ast.Dict):
+            keys = {k.value: v for k, v in zip(node.keys, node.values, strict=True) if isinstance(k, ast.Constant)}
+            if (name := _rule_constant(keys.get("rule_id"))) and "source_type" in keys:
+                written.setdefault(name, set()).add(ast.unparse(keys["source_type"]))
+    declared = _declared([code_rules.INHERITED_FROM_PARENT, code_rules.INDEX_BY_EXTENSION])
+    assert written == {name: {source_type} for name, (_, source_type) in declared.items()}
