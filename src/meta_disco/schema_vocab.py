@@ -131,9 +131,9 @@ def value_ancestors(field: str, value: str) -> tuple[str, ...]:
     term or loops, and the same errors as ``dimension_values`` for an unrecognized
     field or a missing enum.
     """
+    parent = _term_spec(field, value).get("is_a")  # validates the field and value first
     values = _load_schema_enums()[DIMENSION_ENUMS[field]]
     ancestors: list[str] = []
-    parent = _term_spec(field, value).get("is_a")
     while parent is not None:
         if parent not in values or parent in ancestors or parent == value:
             raise ValueError(f"{field} term {value!r} has a broken is_a chain at {parent!r}")

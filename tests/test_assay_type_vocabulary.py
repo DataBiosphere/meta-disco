@@ -7,6 +7,8 @@ each value to its id and to its parent, so a term cannot be added, dropped,
 re-parented or given another term's id without a test failing.
 """
 
+import pytest
+
 from meta_disco import schema_vocab
 
 # Each value, the id of the term it borrows (None for a term of our own), and its parent.
@@ -44,3 +46,11 @@ def test_a_single_nucleus_term_nests_with_the_generic_single_cell_term():
     assert schema_vocab.most_specific("assay_type", {"sc/snRNA-seq", "snRNA-seq"}) == "snRNA-seq"
     assert schema_vocab.most_specific("assay_type", {"RNA-seq", "SHARE-seq"}) == "SHARE-seq"
     assert schema_vocab.most_specific("assay_type", {"snRNA-seq", "snATAC-seq"}) is None
+
+
+@pytest.mark.parametrize("read", [schema_vocab.value_ancestors, schema_vocab.value_meaning])
+def test_an_unknown_dimension_or_term_is_a_value_error(read):
+    with pytest.raises(ValueError):
+        read("assay_types", "snRNA-seq")
+    with pytest.raises(ValueError):
+        read("assay_type", "scRNA-seq")
