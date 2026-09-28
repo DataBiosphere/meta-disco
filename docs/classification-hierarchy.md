@@ -42,7 +42,7 @@ file_format (extension)
 - `CHM13` ← filename (chm13, t2t, hs1), contig lengths (definitive)
 - `not_applicable` ← no @SQ lines (unaligned)
 
-**Coverage**: Best covered format. Four dimensions are determinable from headers; `assay_type` only where the aligner is STAR or the modality is transcriptomic. The `@SQ` name-pattern reference rules, the file-size assay rules and the long-read WGS inference were removed in #430 — the first fired on nothing, the others on nothing that meant anything.
+**Coverage**: Best covered format. Four dimensions are determinable from headers; `assay_type` only where STAR is named, in the filename or in `@PG`. The `@SQ` name-pattern reference rules, the file-size assay rules and the long-read WGS inference were removed in #430 — the first fired on nothing, the others on nothing that meant anything.
 
 ---
 

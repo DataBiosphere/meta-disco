@@ -87,7 +87,7 @@ reference_assembly
 
 #### assay_type
 
-The experimental method, in terms borrowed from EFO (#533). Each term records its ontology id as `meaning` in the schema: EFO's, except `Histology`'s, which is OBI's `histological assay` as EFO imports it, and `snATAC-seq`, our own term, which records none. Declared only by rules that see evidence of the assay (`star_filename`, `program_star`, `star_signal_coverage`, `salmon_quant`, `bed_expression`, `idat_methylation`, `image_svs_histology`, `sc_matrix_default`, and a tar through its inner format), each of which also declares the modality its assay implies. Nothing infers an assay from another rule's answer (#88), and nothing infers `WGS` or `WES` (#430). `WGS` and the single-nucleus terms arrive from source evidence through the translation table; no row declares `WES` yet, so today nothing produces it.
+The experimental method, in terms borrowed from EFO (#533). Each term records its ontology id as `meaning` in the schema: EFO's, except `Histology`'s, which is OBI's `histological assay` as EFO imports it, and `snATAC-seq`, our own term, which records none. Declared only by rules that see evidence of the assay (`star_filename`, `program_star`, `star_signal_coverage`, `salmon_quant`, `bed_expression`, `idat_methylation`, `image_svs_histology`, `sc_matrix_default`, and a tar through its inner format), each of which also declares the modality its assay implies. Nothing infers an assay from another rule's answer (#88), and nothing infers `WGS` or `WES` (#430). `WGS`, `snRNA-seq`, `snATAC-seq` and `SHARE-seq` arrive only from source evidence, through the translation table; no row declares `WES` yet, so today nothing produces it.
 
 ```
 assay_type                       # the terms nest by is_a; a record holds the most specific its evidence supports
@@ -245,7 +245,7 @@ Multiple evidence entries indicate multiple rules matched. Review files with con
 
 ### Classification Results
 
-**Coverage of all AnVIL files (758,658 total):**
+**Coverage of all AnVIL files (758,658 total), from an earlier catalog (anvil14) and before tars were classified from their members (#255):**
 
 | Category                          | Count   | % of Total | Status |
 | --------------------------------- | ------- | ---------- | ------ |
