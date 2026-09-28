@@ -96,7 +96,7 @@ assay_type                       # the terms nest by is_a; a record holds the mo
 ├── RNA-seq                      # EFO:0008896
 │   └── sc/snRNA-seq             # EFO:0920118; what a single-cell matrix format says
 │       ├── snRNA-seq            # EFO:0009809
-│       └── SHARE-seq            # EFO:0022962 (EFO's other parent, scATAC-seq, is not expressed; #567)
+│       └── SHARE-seq            # EFO:0022962; EFO's parents are scRNA-seq and scATAC-seq, and only the first's side is expressed (#567)
 ├── ATAC-seq                     # EFO:0007045
 │   └── sc/snATAC-seq            # EFO:0920117
 │       └── snATAC-seq           # our own term; EFO has no single-nucleus ATAC-seq

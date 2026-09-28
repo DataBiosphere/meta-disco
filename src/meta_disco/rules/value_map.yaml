@@ -21,8 +21,8 @@ rows:
     reason: >-
       IGVF's `file.assay_titles`.
       Single-nucleus ATAC-seq: our own term, under EFO's sc/snATAC-seq, which has no
-      single-nucleus child (#533). ATAC-seq measures open chromatin. Here the value is on the
-      reads (FASTQ) and seqspec files of the ATAC half of a SHARE-seq experiment.
+      single-nucleus child (#533). ATAC-seq measures open chromatin. In AnVIL_IGVF_Mouse_R1 the
+      value is on the reads (FASTQ) and seqspec files of the ATAC half of a SHARE-seq experiment.
     seeded_from: ["anvil/anvil15/AnVIL_IGVF_Mouse_R1/20260922T042252Z"]
   - id: "assay_type.single_nucleus_atac_seq+single_nucleus_rna_sequencing_assay"
     match: {slot: assay_type, value: ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"]}
@@ -85,8 +85,8 @@ rows:
     reason: >-
       AnVIL's published `anvil_file.data_modality`, which carries IGVF's assay titles.
       Single-nucleus ATAC-seq: our own term, under EFO's sc/snATAC-seq, which has no
-      single-nucleus child (#533). ATAC-seq measures open chromatin. Here the value is on the
-      reads (FASTQ) and seqspec files of the ATAC half of a SHARE-seq experiment.
+      single-nucleus child (#533). ATAC-seq measures open chromatin. In AnVIL_IGVF_Mouse_R1 the
+      value is on the reads (FASTQ) and seqspec files of the ATAC half of a SHARE-seq experiment.
     seeded_from: ["anvil_published/anvil15/AnVIL_IGVF_Mouse_R1/20260922T052718Z"]
   - id: "data_modality.single_nucleus_atac_seq+single_nucleus_rna_sequencing_assay"
     match: {slot: data_modality, value: ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"]}
