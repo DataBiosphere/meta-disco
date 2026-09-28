@@ -8,6 +8,7 @@ generation layout, so the seeder and queue read them the way they read a real ge
 
 import ast
 import re
+from collections import defaultdict
 from pathlib import Path
 
 import generate_review_queue as grq
@@ -1253,24 +1254,19 @@ def test_a_group_whose_evidence_was_read_but_is_all_reviewed_says_so(tmp_path, e
     assert "## External" not in render_queue(found.queue, evidence_root)
 
 
-@pytest.mark.parametrize("slot", ["assay_type", "data_modality"])
-def test_the_bundled_single_nucleus_rows_declare_the_assay_from_either_source(slot):
-    """IGVF's three assay values, from `file.assay_titles` and the published `data_modality` (#533)."""
-    table = load_value_map()
+def test_bundled_rows_reading_one_value_in_two_slots_declare_the_same():
+    """One source value reaching two slots means one thing, so its rows must agree (#533).
 
-    def declares(raw):
-        row = table.select(slot, raw, "anvil", "AnVIL_IGVF_Mouse_R1")
-        assert row is not None and row.authored, raw
-        return row.declares
-
-    assert declares('["single-nucleus RNA sequencing assay"]') == {
-        "assay_type": "snRNA-seq",
-        "data_modality": "transcriptomic",
-    }
-    assert declares('["single-nucleus ATAC-seq"]') == {
-        "assay_type": "snATAC-seq",
-        "data_modality": "epigenomic.chromatin_accessibility",
-    }
-    # the SHARE-seq pair labels every file of its analysis set, each holding one half: no modality
-    pair = '["single-nucleus RNA sequencing assay", "single-nucleus ATAC-seq"]'
-    assert declares(pair) == {"assay_type": "SHARE-seq"}
+    IGVF's assay titles arrive as the submitter's `assay_titles` (the assay_type slot) and
+    as AnVIL's published `data_modality`. Rows edited apart would turn the two sources'
+    identical words into a reconcile conflict on every file carrying them.
+    """
+    by_value = defaultdict(list)
+    for row in load_value_map().rows:
+        if row.authored:
+            for key in row.keys:
+                by_value[key, row.scope].append(row)
+    shared = [rows for rows in by_value.values() if len({row.slot for row in rows}) > 1]
+    assert shared, "no value is authored in two slots; this test would pass vacuously"
+    for rows in shared:
+        assert len({tuple(sorted(row.declares.items())) for row in rows}) == 1, [row.id for row in rows]
