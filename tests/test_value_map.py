@@ -1002,13 +1002,21 @@ def test_the_bundled_table_covers_hprc_and_leaves_the_named_values_seeded():
     assert table.by_id("reference_assembly.unaligned").declares == {"reference_assembly": NOT_APPLICABLE}
     assert table.by_id("data_type.bam").authored and table.by_id("data_type.bam").declares == {}
     assert table.by_id("assay_type.wgs").declares == {"assay_type": "WGS", "data_modality": "genomic"}
-    # the table's only scoped rows: SRA's library_source GENOMIC, declared nothing where it occurs (#563)
+    # the table's scoped rows: SRA's library_source GENOMIC, declared nothing where it occurs (#563), and
+    # the SHARE-seq pair, whose protocol only IGVF's analysis sets name (#533)
     scoped = {row.id: row for row in table.rows if row.scope is not None}
+    share_seq = "single_nucleus_atac_seq+single_nucleus_rna_sequencing_assay"
     assert {rid: row.scope for rid, row in scoped.items()} == {
         "data_modality.genomic_hprc_r2": Scope("anvil", "AnVIL_HPRC_R2"),
         "data_modality.genomic_1000g_high_coverage": Scope("anvil", "ANVIL_1000G_high_coverage_2019"),
+        f"assay_type.{share_seq}": Scope("anvil", "AnVIL_IGVF_Mouse_R1"),
+        f"data_modality.{share_seq}": Scope("anvil", "AnVIL_IGVF_Mouse_R1"),
     }
-    assert all(row.authored and row.declares == {} for row in scoped.values())
+    assert all(row.authored for row in scoped.values())
+    assert all(row.declares == {} for rid, row in scoped.items() if ".genomic_" in rid)
+    pair = '["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"]'
+    assert table.select("assay_type", pair, "anvil", "AnVIL_IGVF_Mouse_R1") is scoped[f"assay_type.{share_seq}"]
+    assert table.select("assay_type", pair, "anvil", "AnVIL_MAGE") is None
     assert table.select("data_modality", "GENOMIC", "anvil", "AnVIL_HPRC_R2") is scoped["data_modality.genomic_hprc_r2"]
     # in any other dataset the value selects no row, so it enters the review queue
     assert table.select("data_modality", "GENOMIC", "anvil", "AnVIL_MAGE") is None
