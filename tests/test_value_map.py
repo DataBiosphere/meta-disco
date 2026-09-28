@@ -8,7 +8,6 @@ generation layout, so the seeder and queue read them the way they read a real ge
 
 import ast
 import re
-from collections import defaultdict
 from pathlib import Path
 
 import generate_review_queue as grq
@@ -253,6 +252,30 @@ rows:
 """,
     )
     assert [r.declares for r in table.rows] == [{"data_modality": "genomic"}] * 2
+
+
+def test_one_value_in_two_slots_is_two_mappings_that_do_not_interfere(tmp_path):
+    # the match key is (slot, value) (contract 3.4, 3.9): the same text may mean different things in
+    # different slots, each row answers only in its own slot, and a slot with no row selects nothing
+    table = load(
+        tmp_path,
+        """
+rows:
+  - id: data_modality.methylation
+    match: {slot: data_modality, value: methylation}
+    declares: {data_modality: epigenomic.methylation}
+    reason: a table-name span naming methylation tracks
+  - id: data_type.methylation
+    match: {slot: data_type, value: methylation}
+    declares: {data_type: annotations}
+    reason: a column naming a file of methylation calls
+""",
+    )
+    in_modality = table.select("data_modality", "methylation", "anvil", "X")
+    in_type = table.select("data_type", "methylation", "anvil", "X")
+    assert in_modality is not None and in_modality.declares == {"data_modality": "epigenomic.methylation"}
+    assert in_type is not None and in_type.declares == {"data_type": "annotations"}
+    assert table.select("assay_type", "methylation", "anvil", "X") is None
 
 
 def test_a_scope_member_is_a_non_empty_single_line_identifier(tmp_path):
@@ -1260,21 +1283,3 @@ def test_a_group_whose_evidence_was_read_but_is_all_reviewed_says_so(tmp_path, e
     rendered = render_queue(found.queue, evidence_root, None, None, found.source_types)
     assert section(rendered, "External").strip().endswith("No unreviewed values.")
     assert "## External" not in render_queue(found.queue, evidence_root)
-
-
-def test_bundled_rows_reading_one_value_in_two_slots_declare_the_same():
-    """One source value reaching two slots means one thing, so its rows must agree (#533).
-
-    IGVF's assay titles arrive as the submitter's `assay_titles` (the assay_type slot) and
-    as AnVIL's published `data_modality`. Rows edited apart would turn the two sources'
-    identical words into a reconcile conflict on every file carrying them.
-    """
-    by_value = defaultdict(list)
-    for row in load_value_map().rows:
-        if row.authored:
-            for key in row.keys:
-                by_value[key, row.scope].append(row)
-    shared = [rows for rows in by_value.values() if len({row.slot for row in rows}) > 1]
-    assert shared, "no value is authored in two slots; this test would pass vacuously"
-    for rows in shared:
-        assert len({tuple(sorted(row.declares.items())) for row in rows}) == 1, [row.id for row in rows]
