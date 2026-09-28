@@ -75,6 +75,7 @@ rules:
   # `imaging` or anything under it in the schema's `is_a` tree (#563). The enum's
   # other non-sequencing families (proteomic, metabolomic) are left out: nothing
   # classifies them today, and a proteomics dataset can carry sequencing files.
+  # microbiome is a sequencing modality (16S, shotgun metagenomics) and is not denied.
   # Deliberately a deny of the imaging subtree, not an allow-list of sequencing
   # modalities: that would false-positive if the enum later gains a new sequencing
   # modality (accuracy over coverage — no false positives). It cross-checks, from

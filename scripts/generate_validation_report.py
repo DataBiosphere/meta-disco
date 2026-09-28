@@ -16,7 +16,7 @@ script-local, carried no row ids, and were validated against no vocabulary, so t
 are not the translation table #414 specifies. That table now exists (`value_map.yaml`); whether
 these five have a row there is `make review-queue`'s to say. Recorded as the seed they were:
 
-    single-nucleus RNA sequencing assay -> transcriptomic.single_cell
+    single-nucleus RNA sequencing assay -> transcriptomic.single_cell  (retired by #563; now transcriptomic)
     single-nucleus ATAC-seq            -> epigenomic.chromatin_accessibility
     GRCh38 + Gencode40                 -> GRCh38
     GRCh38 / GRCh37 / CHM13            -> identity

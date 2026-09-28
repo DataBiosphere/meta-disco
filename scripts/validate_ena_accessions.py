@@ -240,15 +240,16 @@ def validate_against_ena(
         our_platform, platform_status = our_field(rec, "platform")
         verdict("platform", our_platform.upper(), platform_status, ena_platform, {"ena": ena_platform})
 
-        # No default: when ENA declares neither source nor strategy there is
-        # no evidence to compare against, so modality scores unknown rather
-        # than being force-compared to a guessed "genomic".
-        if not ena_source and not ena_strategy:
-            expected_modality = None
-        elif ena_source == "TRANSCRIPTOMIC" or ena_strategy in ["RNA-Seq", "FL-cDNA"]:
+        # No default: modality scores unknown unless ENA states it. A GENOMIC
+        # library_source names the molecule, not the modality: ENA files WGS,
+        # bisulfite, ATAC, ChIP and Hi-C alike under it (#563), so only a
+        # whole-genome or exome strategy says genomic.
+        if ena_source == "TRANSCRIPTOMIC" or ena_strategy in ["RNA-Seq", "FL-cDNA"]:
             expected_modality = "transcriptomic"
-        else:
+        elif ena_strategy in ["WGS", "WXS", "WGA"]:
             expected_modality = "genomic"
+        else:
+            expected_modality = None
         our_modality, modality_status = our_field(rec, "data_modality")
         verdict(
             "modality",
