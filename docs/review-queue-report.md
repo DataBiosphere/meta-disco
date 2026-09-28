@@ -1,6 +1,6 @@
 # Review queue
 
-Source values the slot map routed to a slot but that no authored translation rule reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per source, dataset, table and column it was found in; "rule it would use" names the seeded rule that matches it, or — where none does. 15 listed, from evidence under data/source_evidence.
+Source values the slot map routed to a slot but that no authored translation rule reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per source, dataset, table and column it was found in; "rule it would use" names the seeded rule that matches it, or — where none does. 23 listed, from evidence under data/source_evidence.
 
 ## Published: the catalog's published columns
 
@@ -23,12 +23,20 @@ Source values the slot map routed to a slot but that no authored translation rul
 | files | raw value | source | dataset | table | column | rule it would use |
 | --- | --- | --- | --- | --- | --- | --- |
 | 8,562 | `'plink'` | `anvil` | `ANVIL_1000G_PRIMED_data_model` | `plink_file_wide` |  | — |
+| 3,959 | `'reads'` | `anvil` | `AnVIL_IGVF_Mouse_R1` | `file` | `content_type` | — |
+| 1,949 | `'seqspec'` | `anvil` | `AnVIL_IGVF_Mouse_R1` | `file` | `content_type` | — |
 | 462 | `'alignments'` | `anvil` | `AnVIL_HPRC_R2` | `alignments_winnowmap` |  | data_type.alignments |
 | 462 | `'chains'` | `anvil` | `AnVIL_HPRC_R2` | `chains_to_chm13_mc` |  | data_type.chains |
 | 462 | `'chains'` | `anvil` | `AnVIL_HPRC_R2` | `chains_to_grch38_mc` |  | data_type.chains |
 | 462 | `'gaps'` | `anvil` | `AnVIL_HPRC_R2` | `gaps` |  | data_type.gaps |
 | 462 | `'sequences'` | `anvil` | `AnVIL_HPRC_R2` | `t2t_sequences` |  | data_type.sequences |
+| 25 | `'barcode to sample mapping'` | `anvil` | `AnVIL_IGVF_Mouse_R1` | `file` | `content_type` | — |
 | 12 | `'alignments'` | `anvil` | `AnVIL_HPRC_R2` | `alignments_v2` |  | data_type.alignments |
+| 11 | `'Nanopore reads'` | `anvil` | `AnVIL_IGVF_Mouse_R1` | `file` | `content_type` | — |
+| 4 | `'barcode onlist'` | `anvil` | `AnVIL_IGVF_Mouse_R1` | `file` | `content_type` | — |
+| 4 | `'index'` | `anvil` | `AnVIL_IGVF_Mouse_R1` | `file` | `content_type` | — |
+| 2 | `'alignments'` | `anvil` | `AnVIL_IGVF_Mouse_R1` | `file` | `content_type` | data_type.alignments |
+| 2 | `'barcode replacement'` | `anvil` | `AnVIL_IGVF_Mouse_R1` | `file` | `content_type` | — |
 
 ### platform
 
@@ -74,13 +82,17 @@ Every authored translation rule, by slot and most files first: the source values
 | 1,018 | 0 | 1,018 | 0 | data_type.repeat_masker | `any` | `'repeat_masker'` | data_type: annotations | RepeatMasker repeat annotations of an assembly (BED and .out). |
 | 881 | 0 | 881 | 0 | data_type.annotation | `any` | `'annotation'` | data_type: annotations | The `assembly_annotation` table-name span; its files are feature annotations of an assembly. |
 | 641 | 0 | 641 | 0 | data_type.unaligned_reads_with_5mc_mods | `any` | `'unaligned reads with 5mC mods'` | data_type: reads | Reads carrying base-modification calls; the modification tags do not change the data type. |
+| 516 | 0 | 516 | 0 | data_type.sparse_gene_count_matrix | `anvil / AnVIL_IGVF_Mouse_R1` | `'sparse gene count matrix'` | data_type: expression_matrix; data_modality: transcriptomic | IGVF's `file.content_type`. A cell-by-gene count matrix, as IGVF's `summary` on these files says. In AnVIL_IGVF_Mouse_R1 each is RNA: the files titled with snRNA-seq alone, and the two of the SHARE-seq pair (#570), which IGVF derives from the same reads as that experiment's kallisto RNA output. Scoped to this dataset: a gene matrix alone does not say RNA, since one can hold ATAC gene-activity scores. |
 | 466 | 0 | 466 | 0 | data_type.assembly | `any` | `'assembly'` | data_type: assembly | The `assembly` table-name span; its files are the de-novo assemblies (.fa.gz). |
 | 462 | 0 | 462 | 0 | data_type.censat | `any` | `'censat'` | data_type: annotations | Centromeric satellite annotation tracks (BED) of an assembly. |
 | 462 | 0 | 462 | 0 | data_type.censat_centromeres | `any` | `'censat_centromeres'` | data_type: annotations | Centromere annotation tracks (BED) of an assembly. |
 | 462 | 0 | 462 | 0 | data_type.liftoff | `any` | `'liftoff'` | data_type: annotations | Gene annotations lifted onto an assembly with Liftoff (GFF3). |
 | 462 | 0 | 462 | 0 | data_type.segdups | `any` | `'segdups'` | data_type: annotations | Segmental duplication tracks (BED) of an assembly. |
+| 304 | 0 | 304 | 0 | data_type.kallisto_single_cell_rnaseq_output | `anvil / AnVIL_IGVF_Mouse_R1` | `'kallisto single cell RNAseq output'` | data_modality: transcriptomic | IGVF's `file.content_type`. kallisto \| bustools single-cell RNA-seq quantification, as IGVF names it, so RNA. Most of these files are titled snRNA-seq alone, which already says transcriptomic; on the two of the SHARE-seq pair it is what says which half the file holds (#570). Scoped to this dataset, the one whose vocabulary it is. No data_type: the tar holds kallisto's BUS output, neither a features × samples matrix nor one sample's abundance table. |
 | 288 | 0 | 288 | 0 | data_type.unaligned_reads_with_5mcg_5hmcg_mods | `any` | `'unaligned reads with 5mCG_5hmCG mods'` | data_type: reads | Reads carrying base-modification calls; the modification tags do not change the data type. |
 | 230 | 0 | 230 | 0 | data_type.bam | `any` | `'bam'` | nothing (reviewed, no claim) | A file format, not a data type: the kinnex table's data_type column holds what its filetype column should. Ruled to mean nothing here rather than left queued. |
+| 8 | 0 | 8 | 0 | data_type.transcript_quantifications | `anvil / AnVIL_IGVF_Mouse_R1` | `'transcript quantifications'` | data_type: quantification; data_modality: transcriptomic | IGVF's `file.content_type`. Per-transcript abundances quantify RNA. Scoped to this dataset, the one whose vocabulary it is. |
+| 2 | 0 | 2 | 0 | data_type.fragments | `anvil / AnVIL_IGVF_Mouse_R1` | `'fragments'` | data_modality: epigenomic.chromatin_accessibility | IGVF's `file.content_type`. A fragment file: one line per transposase-cut fragment, with its cell barcode. In AnVIL_IGVF_Mouse_R1 the two such files are the ATAC half of a SHARE-seq experiment, whose assay_titles pair declares no modality (#570), and ATAC-seq measures open chromatin. Scoped to this dataset: the word names a file layout, which other chromatin assays (CUT&Tag for one) write too, so elsewhere it does not say accessibility. |
 
 ### platform
 
