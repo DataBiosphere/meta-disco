@@ -19,7 +19,8 @@ The classifier populates six metadata fields:
 
 #### data_modality
 
-The biological signal domain—**what was measured** (independent of protocol/file format).
+The biological signal domain—**what was measured** (independent of protocol/file format). The main
+terms are below; the full vocabulary, AnVIL's FSS / MODAL tree, is in section 1.1.
 
 ```
 data_modality
@@ -28,9 +29,10 @@ data_modality
 ├── epigenomic                   # DNA/chromatin modifications
 │   ├── methylation              # DNA methylation state
 │   ├── chromatin_accessibility  # ATAC-seq, DNase-seq
-│   └── histone_modification     # ChIP-seq for histones
+│   └── dna_binding
+│       └── histone_modification # ChIP-seq for histones
 ├── imaging                      # Visual/spatial data
-│   └── histology                # Tissue slides
+│   └── microscopy               # Tissue slides
 ├── not_applicable               # Derived artifacts (QC plots, indexes, checksums)
 └── not_classified               # Could not be determined from available signals
 ```

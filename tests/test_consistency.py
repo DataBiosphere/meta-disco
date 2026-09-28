@@ -83,6 +83,24 @@ def test_load_rules_rejects_malformed(tmp_path, yaml_text):
         load_rules(bad)
 
 
+def test_load_rules_rejects_a_hierarchy_matcher_over_a_broken_is_a_chain(tmp_path, monkeypatch):
+    # a schema defect must fail at load, not quietly turn the rule off (#563)
+    from meta_disco import consistency, schema_vocab
+
+    def broken(field, value):
+        raise ValueError(f"{field} term {value!r} has a broken is_a chain")
+
+    monkeypatch.setattr(schema_vocab, "value_ancestors", broken)
+    consistency._subtree.cache_clear()
+    rules = tmp_path / "rules.yaml"
+    rules.write_text("rules:\n  - {id: a, when: {data_modality: {under: genomic}}, require: {}}\n")
+    try:
+        with pytest.raises(ValueError, match="broken is_a chain"):
+            load_rules(rules)
+    finally:
+        consistency._subtree.cache_clear()
+
+
 def test_under_matches_a_term_and_every_term_below_it():
     # the transcriptomic check fires on the parent and on a child it never names (#563)
     for modality in ("transcriptomic", "transcriptomic.spatial"):

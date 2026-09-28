@@ -918,7 +918,8 @@ enums:
       parent, and `meaning` is its MODAL id. The dotted value stands in for FSS's
       wording ("DNA methylation" for `epigenomic.methylation`) until labels are added.
       Single-cell versus bulk is not a modality here, since it is a property of the
-      experiment: `assay_type` carries it. A record holds its most specific term;
+      experiment: `assay_type` is where it belongs, and until its single-cell terms
+      exist (#533) no dimension records it. A record holds its most specific term;
       a consumer that filters on a parent walks `is_a`.
     permissible_values:
       genomic:
