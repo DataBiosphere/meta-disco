@@ -188,6 +188,12 @@ A bare `rna` in a name no longer says transcriptomic.
 **data_modality**:
 - `transcriptomic` ← extension default (single-cell is an assay fact, #563)
 
+**assay_type**:
+- `sc/snRNA-seq` ← extension default (#533): EFO's parent of single-cell and single-nucleus
+  RNA-seq, since the format says one of the two but not which. A source's `snRNA-seq` or
+  `SHARE-seq` nests below it, so at reconcile the more specific term is the answer. A tar whose
+  dominant members are these formats takes the same three values.
+
 **Coverage**: Good defaults from extension.
 
 ---
