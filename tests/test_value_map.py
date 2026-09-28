@@ -1025,8 +1025,8 @@ def test_the_bundled_table_covers_hprc_and_leaves_the_named_values_seeded():
     assert table.by_id("reference_assembly.unaligned").declares == {"reference_assembly": NOT_APPLICABLE}
     assert table.by_id("data_type.bam").authored and table.by_id("data_type.bam").declares == {}
     assert table.by_id("assay_type.wgs").declares == {"assay_type": "WGS", "data_modality": "genomic"}
-    # scoped rows the checks below select through: SRA's library_source GENOMIC, declared nothing where it
-    # occurs (#563), and the SHARE-seq pair, whose protocol only IGVF's analysis sets name (#533)
+    # the scoped rows this test pins: SRA's library_source GENOMIC, declared nothing where it occurs (#563),
+    # and the SHARE-seq pair, whose protocol only IGVF's analysis sets name (#533)
     scoped = {row.id: row for row in table.rows if row.scope is not None}
     share_seq = "single_nucleus_atac_seq+single_nucleus_rna_sequencing_assay"
     assert {rid: scoped[rid].scope for rid in scoped if ".genomic_" in rid or share_seq in rid} == {
