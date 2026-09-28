@@ -114,7 +114,7 @@ BASIS_PRECEDENCE = (
 INTRO = (
     'Every rule meta-disco uses to describe a file, such as "a .bam file holds alignments" or "a CRAM whose '
     'chromosome lengths match GRCh38 is aligned to GRCh38". Each row shows what the rule looks at, what it '
-    "concludes and why, and how often it applied the last time meta-disco classified every AnVIL file."
+    "concludes and why, and how often it applied in the classification named below."
 )
 KEY = [
     (
