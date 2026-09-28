@@ -26,8 +26,9 @@ class TestPlatformMap:
 
 
 class TestLibrarySourceMap:
-    def test_genomic(self):
-        assert HPRC_LIBRARY_SOURCE_MAP["GENOMIC"] == "genomic"
+    def test_genomic_is_no_modality_truth(self):
+        # GENOMIC names the molecule, and SRA files WGS, bisulfite, ATAC and Hi-C under it (#563)
+        assert "GENOMIC" not in HPRC_LIBRARY_SOURCE_MAP
 
     def test_transcriptomic(self):
         assert HPRC_LIBRARY_SOURCE_MAP["TRANSCRIPTOMIC"] == "transcriptomic"

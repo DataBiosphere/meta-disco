@@ -1001,7 +1001,11 @@ def test_the_bundled_table_covers_hprc_and_leaves_the_named_values_seeded():
     assert table.by_id("reference_assembly.unaligned").declares == {"reference_assembly": NOT_APPLICABLE}
     assert table.by_id("data_type.bam").authored and table.by_id("data_type.bam").declares == {}
     assert table.by_id("assay_type.wgs").declares == {"assay_type": "WGS", "data_modality": "genomic"}
-    assert all(row.scope is None for row in table.rows)
+    # the table's only scoped rows: SRA's library_source GENOMIC, declared nothing where it occurs (#563)
+    assert {row.id for row in table.rows if row.scope is not None} == {
+        "data_modality.genomic_hprc_r2",
+        "data_modality.genomic_1000g_high_coverage",
+    }
 
 
 def test_the_bundled_instrument_rows_declare_the_model_beside_the_platform():

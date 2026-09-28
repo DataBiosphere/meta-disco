@@ -9,7 +9,7 @@ entry_id: "entry-2"
 dataset_title: "Example AnVIL dataset"
 classifications:
   data_modality:
-    value: "proteomic"          # ❌ not in data_modality_enum
+    value: "not_a_modality"     # ❌ not in data_modality_enum
     status: "classified"
     evidence: []
   data_type:

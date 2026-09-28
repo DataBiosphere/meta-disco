@@ -5,7 +5,7 @@ Classification run: **2026-09-27 23:09:29**
 
 | Source | Files Matched | Dimensions | Agree | Discrepancies |
 |---|---:|---:|---:|---:|
-| HPRC | 6,048 | 4 | 8,368 | 2 |
+| HPRC | 6,048 | 4 | 7,441 | 2 |
 
 ---
 
@@ -19,7 +19,7 @@ HPRC's open-access datasets currently populate the following genomic metadata di
 
 | Dimension | Files with dimension in HPRC |
 |---|---:|
-| Data Modality | 5,848 |
+| Data Modality | 225 |
 | Data Type | 0 |
 | Platform | 6,048 |
 | Reference Assembly | 2,569 |
@@ -27,15 +27,15 @@ HPRC's open-access datasets currently populate the following genomic metadata di
 
 ### Data Modality Validation
 
-- **5,848** files available from HPRC with ground truth Data Modality
-- **1,152** files comparable (both source and rule engine have values)
-- **4,696** files not classified by rule engine
-- **1,152** inferred data modality values match HPRC
+- **225** files available from HPRC with ground truth Data Modality
+- **225** files comparable (both source and rule engine have values)
+- **0** files not classified by rule engine
+- **225** inferred data modality values match HPRC
 - **0** discrepancies
 - **100.0%** accuracy
 
-Of the 5,848 files on HPRC with ground truth data modality, we inferred data modality values for 1,152 files. 4,696 files remain unclassifiable by the rule engine.
-Of the 1,152 inferred data modality values, 1,152 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in data modality between meta-disco and HPRC.
+Of the 225 files on HPRC with ground truth data modality, we inferred data modality values for 225 files. 0 files remain unclassifiable by the rule engine.
+Of the 225 inferred data modality values, 225 (100.0%) matched HPRC. There were 0 discrepancies (0.0%) in data modality between meta-disco and HPRC.
 
 ### Data Type Validation
 

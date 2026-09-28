@@ -21,16 +21,27 @@ rows:
     reason: Whole-genome sequencing, spelled as our term; a WGS library is genomic DNA.
     seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
   # --- data_modality --------------------------------------------------------------
-  - id: "data_modality.genomic"
+  - id: "data_modality.genomic_hprc_r2"
     match: {slot: data_modality, value: "GENOMIC"}
+    scope: {source: anvil, dataset: AnVIL_HPRC_R2}
     declares: {}
     reason: >-
-      SRA's library_source names the molecule sequenced, not the information measured: SRA files
-      WGS, bisulfite, ATAC, ChIP and Hi-C libraries alike under GENOMIC, because each sequences DNA.
-      So it is no evidence of a MODAL modality (#563). Hi-C arrived under it (AnVIL_HPRC_R2 `hic`),
-      as this row's earlier reason foresaw. Measured on run 20260927_225823: none of the 15,222 files
-      it reached depended on it alone for data_modality.
+      The `library_source` column's SRA value. It names the molecule sequenced, not the
+      information measured: SRA files WGS, bisulfite, ATAC, ChIP and Hi-C alike under GENOMIC,
+      because each sequences DNA, so it is no evidence of a MODAL modality (#563). Hi-C arrived
+      under it here (the `hic` table). Scoped to the datasets whose library_source columns carry
+      it, so a source's own `genomic` elsewhere is not swallowed. Measured on run 20260927_225823:
+      none of the 5,619 files it reached here depended on it alone for data_modality.
     seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_modality.genomic_1000g_high_coverage"
+    match: {slot: data_modality, value: "GENOMIC"}
+    scope: {source: anvil, dataset: ANVIL_1000G_high_coverage_2019}
+    declares: {}
+    reason: >-
+      The `sample` table's `library_source` column, the same SRA value as
+      `data_modality.genomic_hprc_r2`, for the same reason. Measured on run 20260927_225823:
+      none of the 9,603 files it reached depended on it alone for data_modality.
+    seeded_from: ["anvil/anvil15/ANVIL_1000G_high_coverage_2019/20260920T175642Z"]
   - id: "data_modality.methylation"
     match: {slot: data_modality, value: "methylation"}
     declares: {data_modality: epigenomic.methylation}
