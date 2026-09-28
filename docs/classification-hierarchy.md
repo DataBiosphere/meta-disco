@@ -42,7 +42,7 @@ file_format (extension)
 - `CHM13` ← filename (chm13, t2t, hs1), contig lengths (definitive)
 - `not_applicable` ← no @SQ lines (unaligned)
 
-**Coverage**: Best covered format. Four dimensions are determinable from headers; `assay_type` only where the aligner is STAR or the modality is transcriptomic. The `@SQ` name-pattern reference rules, the file-size assay rules and the long-read WGS inference were removed in #430 — the first fired on nothing, the others on nothing that meant anything.
+**Coverage**: Best covered format. Four dimensions are determinable from headers; `assay_type` only where STAR is named, in the filename or in `@PG`. The `@SQ` name-pattern reference rules, the file-size assay rules and the long-read WGS inference were removed in #430 — the first fired on nothing, the others on nothing that meant anything.
 
 ---
 
@@ -187,6 +187,12 @@ A bare `rna` in a name no longer says transcriptomic.
 
 **data_modality**:
 - `transcriptomic` ← extension default (single-cell is an assay fact, #563)
+
+**assay_type**:
+- `sc/snRNA-seq` ← extension default (#533): EFO's parent of single-cell and single-nucleus
+  RNA-seq, since the format says one of the two but not which. A source's `snRNA-seq` or
+  `SHARE-seq` nests below it, so at reconcile the more specific term is the answer. A tar whose
+  dominant members are these formats takes the same three values.
 
 **Coverage**: Good defaults from extension.
 

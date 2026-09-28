@@ -43,15 +43,11 @@ MODAL_IDS = {
 }
 
 
-def _meaning(value):
-    # `meaning` has no public accessor; the spec is read here and nowhere else
-    spec = schema_vocab._load_schema_enums()[schema_vocab.DIMENSION_ENUMS["data_modality"]][value]
-    return (spec or {}).get("meaning")
-
-
 def test_each_value_is_the_modal_term_it_spells():
     values = schema_vocab.dimension_values("data_modality")
-    assert {v: _meaning(v) for v in values} == {v: f"MODAL:{i}" for v, i in MODAL_IDS.items()}
+    assert {v: schema_vocab.value_meaning("data_modality", v) for v in values} == {
+        v: f"MODAL:{i}" for v, i in MODAL_IDS.items()
+    }
 
 
 def test_a_dotted_value_sits_under_the_path_it_spells():

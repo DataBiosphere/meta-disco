@@ -15,6 +15,37 @@ rows:
   - id: "assay_type.isoseq"
     match: {slot: assay_type, value: "isoseq"}
     seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "assay_type.single_nucleus_atac_seq"
+    match: {slot: assay_type, value: ["single-nucleus ATAC-seq"]}
+    declares: {assay_type: snATAC-seq, data_modality: epigenomic.chromatin_accessibility}
+    reason: >-
+      IGVF's `file.assay_titles`.
+      Single-nucleus ATAC-seq: our own term, under EFO's sc/snATAC-seq, which has no
+      single-nucleus child (#533). ATAC-seq measures open chromatin. In AnVIL_IGVF_Mouse_R1 the
+      value is on the reads (FASTQ) and seqspec files of the ATAC half of a SHARE-seq experiment.
+    seeded_from: ["anvil/anvil15/AnVIL_IGVF_Mouse_R1/20260922T042252Z"]
+  - id: "assay_type.single_nucleus_atac_seq+single_nucleus_rna_sequencing_assay"
+    match: {slot: assay_type, value: ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"]}
+    scope: {source: anvil, dataset: AnVIL_IGVF_Mouse_R1}
+    declares: {assay_type: SHARE-seq}
+    reason: >-
+      IGVF's `file.assay_titles`.
+      Both assays of one SHARE-seq experiment: IGVF's analysis sets that carry the pair
+      (IGVFDS5339UKYM, IGVFDS5530HYKI) give `preferred_assay_titles: ["SHARE-seq"]`, EFO:0022962.
+      Nothing is declared for data_modality. The value is the analysis set's label, on every
+      file of the set, and each file holds one half: the count matrices and kallisto outputs are
+      RNA, the fragment files ATAC. Any one modality would be wrong for some of them, and the
+      vocabulary holds one per file, so each file's own evidence decides. Scoped to this dataset:
+      the two titles alone do not name the protocol, since another joint assay (10x Multiome for
+      one) could carry the same pair, so elsewhere the value selects no row and is queued.
+    seeded_from: ["anvil/anvil15/AnVIL_IGVF_Mouse_R1/20260922T042252Z"]
+  - id: "assay_type.single_nucleus_rna_sequencing_assay"
+    match: {slot: assay_type, value: ["single-nucleus RNA sequencing assay"]}
+    declares: {assay_type: snRNA-seq, data_modality: transcriptomic}
+    reason: >-
+      IGVF's `file.assay_titles`.
+      Single-nucleus RNA sequencing, EFO:0009809 (#533); RNA-seq measures the transcriptome.
+    seeded_from: ["anvil/anvil15/AnVIL_IGVF_Mouse_R1/20260922T042252Z"]
   - id: "assay_type.wgs"
     match: {slot: assay_type, value: "WGS"}
     declares: {assay_type: WGS, data_modality: genomic}
@@ -48,6 +79,37 @@ rows:
     declares: {data_modality: epigenomic.methylation}
     reason: The `ont_methylation` table-name span; its files are bigwig methylation tracks.
     seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "data_modality.single_nucleus_atac_seq"
+    match: {slot: data_modality, value: ["single-nucleus ATAC-seq"]}
+    declares: {assay_type: snATAC-seq, data_modality: epigenomic.chromatin_accessibility}
+    reason: >-
+      AnVIL's published `anvil_file.data_modality`, which carries IGVF's assay titles.
+      Single-nucleus ATAC-seq: our own term, under EFO's sc/snATAC-seq, which has no
+      single-nucleus child (#533). ATAC-seq measures open chromatin. In AnVIL_IGVF_Mouse_R1 the
+      value is on the reads (FASTQ) and seqspec files of the ATAC half of a SHARE-seq experiment.
+    seeded_from: ["anvil_published/anvil15/AnVIL_IGVF_Mouse_R1/20260922T052718Z"]
+  - id: "data_modality.single_nucleus_atac_seq+single_nucleus_rna_sequencing_assay"
+    match: {slot: data_modality, value: ["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"]}
+    scope: {source: anvil, dataset: AnVIL_IGVF_Mouse_R1}
+    declares: {assay_type: SHARE-seq}
+    reason: >-
+      AnVIL's published `anvil_file.data_modality`, which carries IGVF's assay titles.
+      Both assays of one SHARE-seq experiment: IGVF's analysis sets that carry the pair
+      (IGVFDS5339UKYM, IGVFDS5530HYKI) give `preferred_assay_titles: ["SHARE-seq"]`, EFO:0022962.
+      Nothing is declared for data_modality. The value is the analysis set's label, on every
+      file of the set, and each file holds one half: the count matrices and kallisto outputs are
+      RNA, the fragment files ATAC. Any one modality would be wrong for some of them, and the
+      vocabulary holds one per file, so each file's own evidence decides. Scoped to this dataset:
+      the two titles alone do not name the protocol, since another joint assay (10x Multiome for
+      one) could carry the same pair, so elsewhere the value selects no row and is queued.
+    seeded_from: ["anvil_published/anvil15/AnVIL_IGVF_Mouse_R1/20260922T052718Z"]
+  - id: "data_modality.single_nucleus_rna_sequencing_assay"
+    match: {slot: data_modality, value: ["single-nucleus RNA sequencing assay"]}
+    declares: {assay_type: snRNA-seq, data_modality: transcriptomic}
+    reason: >-
+      AnVIL's published `anvil_file.data_modality`, which carries IGVF's assay titles.
+      Single-nucleus RNA sequencing, EFO:0009809 (#533); RNA-seq measures the transcriptome.
+    seeded_from: ["anvil_published/anvil15/AnVIL_IGVF_Mouse_R1/20260922T052718Z"]
   - id: "data_modality.transcriptomic"
     match: {slot: data_modality, value: "transcriptomic"}
     seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]

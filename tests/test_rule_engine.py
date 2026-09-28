@@ -827,6 +827,11 @@ class TestSpecialFileTypes:
     def test_a_special_extension_sets_the_modality(self, engine, filename, modality):
         assert engine.classify(FileInfo.from_filename(filename)).data_modality == modality
 
+    @pytest.mark.parametrize("filename", ["sample.h5ad", "sample.loom", "matrix.mtx"])
+    def test_a_single_cell_matrix_says_single_cell_but_not_which(self, engine, filename):
+        # the format says single-cell or single-nucleus, not which: EFO's parent of both (#533)
+        assert engine.classify_extended(ExtendedFileInfo(name=FileName.parse(filename))).assay_type == "sc/snRNA-seq"
+
     @pytest.mark.parametrize(
         "extension",
         sorted(ext for ext, category in EXTENSION_MAP.items() if category in {"image", "histology_image"}),

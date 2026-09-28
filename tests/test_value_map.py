@@ -254,6 +254,30 @@ rows:
     assert [r.declares for r in table.rows] == [{"data_modality": "genomic"}] * 2
 
 
+def test_one_value_in_two_slots_is_two_mappings_that_do_not_interfere(tmp_path):
+    # the match key is (slot, value) (contract 3.4, 3.9): the same text may mean different things in
+    # different slots, each row answers only in its own slot, and a slot with no row selects nothing
+    table = load(
+        tmp_path,
+        """
+rows:
+  - id: data_modality.methylation
+    match: {slot: data_modality, value: methylation}
+    declares: {data_modality: epigenomic.methylation}
+    reason: a table-name span naming methylation tracks
+  - id: data_type.methylation
+    match: {slot: data_type, value: methylation}
+    declares: {data_type: annotations}
+    reason: a column naming a file of methylation calls
+""",
+    )
+    in_modality = table.select("data_modality", "methylation", "anvil", "X")
+    in_type = table.select("data_type", "methylation", "anvil", "X")
+    assert in_modality is not None and in_modality.declares == {"data_modality": "epigenomic.methylation"}
+    assert in_type is not None and in_type.declares == {"data_type": "annotations"}
+    assert table.select("assay_type", "methylation", "anvil", "X") is None
+
+
 def test_a_scope_member_is_a_non_empty_single_line_identifier(tmp_path):
     for bad in ('""', '"  "', '"an\\nvil"', '"an\\rvil"'):
         refuses(
@@ -1001,13 +1025,21 @@ def test_the_bundled_table_covers_hprc_and_leaves_the_named_values_seeded():
     assert table.by_id("reference_assembly.unaligned").declares == {"reference_assembly": NOT_APPLICABLE}
     assert table.by_id("data_type.bam").authored and table.by_id("data_type.bam").declares == {}
     assert table.by_id("assay_type.wgs").declares == {"assay_type": "WGS", "data_modality": "genomic"}
-    # the table's only scoped rows: SRA's library_source GENOMIC, declared nothing where it occurs (#563)
+    # the table's scoped rows: SRA's library_source GENOMIC, declared nothing where it occurs (#563), and
+    # the SHARE-seq pair, whose protocol only IGVF's analysis sets name (#533)
     scoped = {row.id: row for row in table.rows if row.scope is not None}
+    share_seq = "single_nucleus_atac_seq+single_nucleus_rna_sequencing_assay"
     assert {rid: row.scope for rid, row in scoped.items()} == {
         "data_modality.genomic_hprc_r2": Scope("anvil", "AnVIL_HPRC_R2"),
         "data_modality.genomic_1000g_high_coverage": Scope("anvil", "ANVIL_1000G_high_coverage_2019"),
+        f"assay_type.{share_seq}": Scope("anvil", "AnVIL_IGVF_Mouse_R1"),
+        f"data_modality.{share_seq}": Scope("anvil", "AnVIL_IGVF_Mouse_R1"),
     }
-    assert all(row.authored and row.declares == {} for row in scoped.values())
+    assert all(row.authored for row in scoped.values())
+    assert all(row.declares == {} for rid, row in scoped.items() if ".genomic_" in rid)
+    pair = '["single-nucleus ATAC-seq", "single-nucleus RNA sequencing assay"]'
+    assert table.select("assay_type", pair, "anvil", "AnVIL_IGVF_Mouse_R1") is scoped[f"assay_type.{share_seq}"]
+    assert table.select("assay_type", pair, "anvil", "AnVIL_MAGE") is None
     assert table.select("data_modality", "GENOMIC", "anvil", "AnVIL_HPRC_R2") is scoped["data_modality.genomic_hprc_r2"]
     # in any other dataset the value selects no row, so it enters the review queue
     assert table.select("data_modality", "GENOMIC", "anvil", "AnVIL_MAGE") is None

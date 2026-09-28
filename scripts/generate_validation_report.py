@@ -22,6 +22,8 @@ these five have a row there is `make review-queue`'s to say. Recorded as the see
     GRCh38 / GRCh37 / CHM13            -> identity
     GRCm39                             -> mouse, no term (#15, #399)
 
+The two single-nucleus values have authored rows since #533.
+
 Usage:
     python scripts/generate_validation_report.py
     python scripts/generate_validation_report.py --run-dir output/20260322_112336

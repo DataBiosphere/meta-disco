@@ -14,7 +14,7 @@ The classifier populates six metadata fields:
 | `data_type` | What artifact is this? | alignments, variant_calls, reads |
 | `platform` | Which sequencing platform (vendor)? | ILLUMINA, PACBIO, ONT |
 | `reference_assembly` | What reference genome? | GRCh38, GRCh37, CHM13 and its T2T releases |
-| `assay_type` | What method class? | WGS, WES, RNAseq |
+| `assay_type` | What method class? | WGS, WES, RNA-seq, snRNA-seq |
 | `instrument_model` | Which instrument model, within the platform? | Illumina NovaSeq 6000, Revio, PromethION |
 
 #### data_modality
@@ -87,18 +87,25 @@ reference_assembly
 
 #### assay_type
 
-The top-level assay/method class. Declared only by rules that see evidence of the assay (`star_filename`, `program_star`, `star_signal_coverage`, `salmon_quant`, `bed_expression`, `idat_methylation`, `image_svs_histology`), each of which also declares the modality its assay implies. Nothing infers an assay from another rule's answer (#88), and nothing infers `WGS` or `WES` (#430).
+The experimental method, in terms borrowed from EFO (#533). Each term records its ontology id as `meaning` in the schema: EFO's, except `Histology`'s, which is OBI's `histological assay` as EFO imports it, and `snATAC-seq`, our own term, which records none. Declared only by rules that see evidence of the assay (`star_filename`, `program_star`, `star_signal_coverage`, `salmon_quant`, `bed_expression`, `idat_methylation`, `image_svs_histology`, `sc_matrix_default`, and a tar through its inner format), each of which also declares the modality its assay implies. Nothing infers an assay from another rule's answer (#88), and nothing infers `WGS` or `WES` (#430). `WGS`, `snRNA-seq`, `snATAC-seq` and `SHARE-seq` arrive only from source evidence, through the translation table; no row declares `WES` yet, so today nothing produces it.
 
 ```
-assay_type
-├── WGS                          # Whole genome sequencing
-├── WES                          # Whole exome sequencing
-├── RNAseq                       # Bulk RNA sequencing
-├── scRNAseq                     # Single-cell RNA sequencing
-├── ATACseq                      # Bulk ATAC-seq
-├── ChIPseq                      # ChIP sequencing
-├── not_applicable               # Non-sequencing data (images, annotations)
-└── not_classified               # Could not be determined from file alone
+assay_type                       # the terms nest by is_a; a record holds the most specific its evidence supports
+├── WGS                          # EFO:0003744 whole genome shotgun sequencing
+├── WES                          # EFO:0005396
+├── RNA-seq                      # EFO:0008896
+│   └── sc/snRNA-seq             # EFO:0920118; what a single-cell matrix format says
+│       ├── snRNA-seq            # EFO:0009809
+│       └── SHARE-seq            # EFO:0022962; EFO's parents are scRNA-seq and scATAC-seq, and only the first's side is expressed (#567)
+├── ATAC-seq                     # EFO:0007045
+│   └── sc/snATAC-seq            # EFO:0920117
+│       └── snATAC-seq           # our own term; EFO has no single-nucleus ATAC-seq
+├── ChIP-seq                     # EFO:0002692
+├── Bisulfite-seq                # EFO:0003753
+├── Methylation array            # EFO:0002759
+├── Histology                    # OBI:0600020, as EFO imports it
+├── not_applicable               # a status, not a term (value null): non-sequencing data (images, annotations)
+└── not_classified               # a status, not a term (value null): could not be determined from file alone
 ```
 
 ### Initial State (Before Classification)
@@ -238,7 +245,7 @@ Multiple evidence entries indicate multiple rules matched. Review files with con
 
 ### Classification Results
 
-**Coverage of all AnVIL files (758,658 total):**
+**Coverage of all AnVIL files (758,658 total), from an earlier catalog (anvil14) and before tars were classified from their members (#255):**
 
 | Category                          | Count   | % of Total | Status |
 | --------------------------------- | ------- | ---------- | ------ |
@@ -301,7 +308,7 @@ These files are excluded from classification as they are primarily:
 `data_modality` takes AnVIL's recommended vocabulary: the Findability Subset's list, which is the
 Broad's [MODAL ontology](https://github.com/broadinstitute/modal) term for term (#563). Each term is a
 dotted path with its MODAL id in the schema. Single-cell versus bulk is an assay fact, not a modality:
-`assay_type` is where it belongs, and until its single-cell terms exist (#533) no dimension records it.
+`assay_type` records it (`sc/snRNA-seq`, `snRNA-seq`, #533).
 
 ```
 data_modality

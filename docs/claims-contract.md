@@ -521,9 +521,10 @@ A line leaves this section when the assertion above it is enforced, not when it 
   3.7 retires both `claim_state` entries — a value no rule matched produces no claim at all, so there is no
   claim left to carry a state — and the queue must hold the raw value some other way. A migration to
   describe, not a gap to fill. Split out of the item above, which answered a different question.
-- Whether instrument model deserves a slot of its own. It is a finer fact than `platform`, our vocabulary has
+- ~~Whether instrument model deserves a slot of its own. It is a finer fact than `platform`, our vocabulary has
   no word for it, and today it survives only as the `raw_value` behind a `platform` claim. A dimension
-  question for #364 rather than a mapping one.
+  question for #364 rather than a mapping one.~~ **Answered by #532:** `instrument_model` is its own
+  dimension, read from `@RG PM` and declared by translation rows beside `platform`.
 - Whether a subject-level key and subject-level slots are worth adding. Without them IGSR, which keys by sample id, cannot be imported at all — correctly, but at the cost of a source. Related to the instrument-model question above, to #336 and to #361.
 - What the two artifacts are called. `*_classifications.json` means inference today and the name should be corrected rather than inherited. This is #271's scope — it already covers naming drift in `output/`, and it says it can land independently of the rest of #268.
 - ~~How many files carry a source-declared value for a slot inference calls `not_applicable`.~~ **Measured by

@@ -55,7 +55,14 @@ def default_consistency_rules_resource():
 # in _matches / _violates, so a matcher the evaluator can't interpret is rejected at
 # load time rather than silently ignored.
 _WHEN_MATCHERS = {"under": str, "value_in": list, "status": str}
-_REQUIRE_MATCHERS = {"value_in": list, "value_not_in": list, "not_under": str, "status_not": str, "status": str}
+_REQUIRE_MATCHERS = {
+    "value_in": list,
+    "value_not_in": list,
+    "under": str,
+    "not_under": str,
+    "status_not": str,
+    "status": str,
+}
 # Matchers naming a term of the field's `is_a` hierarchy; the term's subtree is built at load.
 _HIERARCHY_MATCHERS = {"under", "not_under"}
 
@@ -158,12 +165,17 @@ def _dim(record: Mapping[str, Any], name: str) -> tuple[str | None, str, list]:
     return value, status, evidence
 
 
+def _under(field: str, value: str | None, term: str) -> bool:
+    """Whether ``value`` is ``term`` or below it; a non-string value is under nothing."""
+    return isinstance(value, str) and value in _subtree(field, term)
+
+
 def _matches(field: str, value: str | None, status: str, matcher) -> bool:
     """Whether a field's (value, status) satisfies a ``when`` matcher."""
     if isinstance(matcher, str):
         return status == CLASSIFIED and value == matcher
     if "under" in matcher:
-        return status == CLASSIFIED and isinstance(value, str) and value in _subtree(field, matcher["under"])
+        return status == CLASSIFIED and _under(field, value, matcher["under"])
     if "value_in" in matcher:
         return status == CLASSIFIED and value in matcher["value_in"]
     if "status" in matcher:
@@ -177,8 +189,10 @@ def _violates(field: str, value: str | None, status: str, matcher: dict) -> bool
         return status == CLASSIFIED and value not in matcher["value_in"]
     if "value_not_in" in matcher:
         return status == CLASSIFIED and value in matcher["value_not_in"]
+    if "under" in matcher:
+        return status == CLASSIFIED and not _under(field, value, matcher["under"])
     if "not_under" in matcher:
-        return status == CLASSIFIED and isinstance(value, str) and value in _subtree(field, matcher["not_under"])
+        return status == CLASSIFIED and _under(field, value, matcher["not_under"])
     if "status_not" in matcher:
         return status == matcher["status_not"]
     if "status" in matcher:

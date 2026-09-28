@@ -963,6 +963,12 @@ class TestTarClassifier:
         result = classify_from_tar_members(["asm/hap1.fasta", "asm/hap2.fasta", "asm/readme.txt"])
         assert val(result, "data_type") == "sequence"
 
+    def test_a_tar_of_matrices_takes_the_inner_format_assay(self):
+        """The inner format's assay reaches the archive too, not only its modality and type (#533)."""
+        result = classify_from_tar_members(["out/cells_x_genes.mtx", "out/spliced.mtx", "out/genes.txt"])
+        assert val(result, "data_modality") == "transcriptomic"
+        assert val(result, "assay_type") == "sc/snRNA-seq"
+
     def test_unrecognized_contents_stay_not_classified(self):
         """Read it, but no GenomicsDB signal and no recognized inner extension → not_classified."""
         result = classify_from_tar_members(["blob/x.dat", "blob/y.bin"])

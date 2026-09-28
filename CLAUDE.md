@@ -101,7 +101,10 @@ evidence}` entry — plus the controlled vocabulary:
 - **classification_status_enum**: classified, not_applicable, not_classified, conflict
 - **instrument_model_enum**: ENA/SRA's instrument-model strings for the platforms in
   `platform_enum`, with EFO ids as `meaning` where EFO has the same model (#532)
-- also **data_type_enum**, **assay_type_enum**, **platform_enum**
+- **assay_type_enum**: EFO's assay terms as an `is_a` tree, each term's ontology id as `meaning`
+  (#533): EFO's, except `Histology`'s, which is OBI's `histological assay` as EFO imports it; a
+  term of our own (`snATAC-seq`) has no id and sits under the EFO term it narrows
+- also **data_type_enum**, **platform_enum**
 
 `status` is required on every dimension; `value` is null unless status is `classified`.
 

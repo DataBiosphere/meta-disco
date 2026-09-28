@@ -74,6 +74,7 @@ def test_rules_file_loads_and_is_nonempty():
         "rules:\n  - {id: a, when: {f: null}, require: {}}\n",  # matcher not str/mapping
         "rules:\n  - {id: a, when: {data_modality: {under: imaging.histology}}, require: {}}\n",  # not a term
         "rules:\n  - {id: a, when: {}, require: {data_modality: {not_under: nonsense}}}\n",  # not a term
+        "rules:\n  - {id: a, when: {}, require: {assay_type: {under: scRNA-seq}}}\n",  # not a term
     ],
 )
 def test_load_rules_rejects_malformed(tmp_path, yaml_text):
@@ -117,6 +118,17 @@ def test_a_malformed_value_is_under_nothing_rather_than_an_error():
     # a list where a term belongs is outside every subtree; the schema gate reports it
     rec = _rec(data_modality=(["transcriptomic"], "classified"), platform=_c("ILLUMINA"), assay_type=_c("WGS"))
     assert {"assay_for_transcriptomic", "sequencing_platform_excludes_imaging"}.isdisjoint(_rule_ids(rec))
+
+
+def test_a_required_under_accepts_the_term_and_every_term_below_it():
+    # a single-nucleus assay is RNA-seq told more precisely, not a contradiction (#533)
+    for assay in ("RNA-seq", "sc/snRNA-seq", "snRNA-seq", "SHARE-seq"):
+        rec = _rec(data_modality=_c("transcriptomic"), assay_type=_c(assay))
+        assert "assay_for_transcriptomic" not in _rule_ids(rec), assay
+    for assay in ("ATAC-seq", "snATAC-seq"):
+        rec = _rec(data_modality=_c("transcriptomic"), assay_type=_c(assay))
+        assert "assay_for_transcriptomic" in _rule_ids(rec), assay
+    assert "assay_for_transcriptomic" not in _rule_ids(_rec(data_modality=_c("transcriptomic"), assay_type=NC))
 
 
 def test_not_under_flags_every_term_below_the_one_it_names():

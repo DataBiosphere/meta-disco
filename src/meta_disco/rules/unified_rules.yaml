@@ -313,7 +313,8 @@ rules:
     then:
       data_modality: transcriptomic
       data_type: expression_matrix
-    rationale: "Single-cell matrix format indicates transcriptomic data; that it is single-cell is an assay fact (#563, #533)"
+      assay_type: sc/snRNA-seq
+    rationale: "Single-cell matrix format: transcriptomic data from a single-cell or single-nucleus assay, which one the format does not say (#563, #533)"
 
   # ---------------------------------------------------------------------------
   # Histology images (SVS)
