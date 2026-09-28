@@ -160,7 +160,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     takes it out of the queue.
 
 3.10 A declaration may name slots other than the match slot, and may name several: an implication like
-     `library_strategy = Hi-C` ⇒ `data_modality: genomic` belongs to the **value**, not to the column it
+     `library_strategy = Hi-C` ⇒ `data_modality: epigenomic.3d_contact_maps` belongs to the **value**, not to the column it
      arrived in. A row may also declare nothing for its own match slot and declare only another.
 
 3.11 Every `(slot, raw_value)` present at a seeding scan has a row, and **identity is where it starts**.

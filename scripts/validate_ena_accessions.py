@@ -101,6 +101,21 @@ def our_field(rec: dict, field: str) -> tuple[str, str]:
 _thread_local = threading.local()
 
 
+def expected_modality_from_ena(library_source: str | None, library_strategy: str | None) -> str | None:
+    """The data_modality ENA's metadata states for a run, or None where it states none.
+
+    A TRANSCRIPTOMIC source, or an RNA strategy, says transcriptomic. A GENOMIC source
+    names the molecule, not the modality: ENA files WGS, bisulfite, ATAC, ChIP and Hi-C
+    alike under it (#563), so only a whole-genome, exome or amplified-genome strategy
+    says genomic. Anything else scores unknown rather than being compared to a guess.
+    """
+    if library_source == "TRANSCRIPTOMIC" or library_strategy in ("RNA-Seq", "FL-cDNA"):
+        return "transcriptomic"
+    if library_strategy in ("WGS", "WXS", "WGA"):
+        return "genomic"
+    return None
+
+
 def _get_session() -> requests.Session:
     """The calling thread's Session, created on first use.
 
@@ -240,16 +255,7 @@ def validate_against_ena(
         our_platform, platform_status = our_field(rec, "platform")
         verdict("platform", our_platform.upper(), platform_status, ena_platform, {"ena": ena_platform})
 
-        # No default: modality scores unknown unless ENA states it. A GENOMIC
-        # library_source names the molecule, not the modality: ENA files WGS,
-        # bisulfite, ATAC, ChIP and Hi-C alike under it (#563), so only a
-        # whole-genome or exome strategy says genomic.
-        if ena_source == "TRANSCRIPTOMIC" or ena_strategy in ["RNA-Seq", "FL-cDNA"]:
-            expected_modality = "transcriptomic"
-        elif ena_strategy in ["WGS", "WXS", "WGA"]:
-            expected_modality = "genomic"
-        else:
-            expected_modality = None
+        expected_modality = expected_modality_from_ena(ena_source, ena_strategy)
         our_modality, modality_status = our_field(rec, "data_modality")
         verdict(
             "modality",
