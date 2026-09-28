@@ -168,11 +168,12 @@ rows:
     declares: {data_modality: transcriptomic}
     reason: >-
       IGVF's `file.content_type`.
-      kallisto | bustools single-cell RNA-seq quantification, as IGVF names it, so RNA. Most of
-      these files are titled snRNA-seq alone, which already says transcriptomic; on the two of the
-      SHARE-seq pair it is what says which half the file holds (#570). Scoped to this dataset, the
-      one whose vocabulary it is. No data_type: the tar holds kallisto's BUS output, neither a
-      features × samples matrix nor one sample's abundance table.
+      kallisto's single-cell RNA-seq output, as IGVF names it, so RNA. Most of these files are
+      titled snRNA-seq alone, which already says transcriptomic; on the two of the SHARE-seq pair it
+      is what says which half the file holds (#570). Scoped to this dataset, the one whose
+      vocabulary it is. No data_type: the tar is a bundle of kallisto's outputs — the cached tar
+      heads hold, variously, BUS files, `matrix.ec`, `kb_info.json` and cells × genes `.mtx`
+      matrices — not one data type, though IGVF files it as a cell-by-gene `MatrixFile`.
     seeded_from: ["anvil/anvil15/AnVIL_IGVF_Mouse_R1/20260928T183417Z"]
   - id: "data_type.liftoff"
     match: {slot: data_type, value: "liftoff"}
