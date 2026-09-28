@@ -47,7 +47,9 @@ _DIMENSION_TEXT = {
             "formats. It is determined only by a rule that sees evidence of the assay: a "
             "STAR `@PG` line, filename patterns (STAR, Salmon, expression BED), and "
             "extension where the format implies it (`.idat` is a methylation array, `.svs` "
-            "histology). Nothing infers it from the modality (#88), reads file size, or "
+            "histology, a `.h5ad` / `.loom` / `.mtx` single-cell matrix `sc/snRNA-seq`, "
+            "and a tar whose members are one of these, #533). Nothing infers it from the "
+            "modality (#88), reads file size, or "
             "infers WGS from a long-read platform (#430). The high not-classified rate is "
             "expected."
         ),

@@ -14,7 +14,7 @@ The classifier populates six metadata fields:
 | `data_type` | What artifact is this? | alignments, variant_calls, reads |
 | `platform` | Which sequencing platform (vendor)? | ILLUMINA, PACBIO, ONT |
 | `reference_assembly` | What reference genome? | GRCh38, GRCh37, CHM13 and its T2T releases |
-| `assay_type` | What method class? | WGS, WES, RNAseq |
+| `assay_type` | What method class? | WGS, WES, RNA-seq, snRNA-seq |
 | `instrument_model` | Which instrument model, within the platform? | Illumina NovaSeq 6000, Revio, PromethION |
 
 #### data_modality
@@ -87,16 +87,23 @@ reference_assembly
 
 #### assay_type
 
-The top-level assay/method class. Declared only by rules that see evidence of the assay (`star_filename`, `program_star`, `star_signal_coverage`, `salmon_quant`, `bed_expression`, `idat_methylation`, `image_svs_histology`), each of which also declares the modality its assay implies. Nothing infers an assay from another rule's answer (#88), and nothing infers `WGS` or `WES` (#430).
+The experimental method, in terms borrowed from EFO, each with its EFO id as `meaning` in the schema (#533). Declared only by rules that see evidence of the assay (`star_filename`, `program_star`, `star_signal_coverage`, `salmon_quant`, `bed_expression`, `idat_methylation`, `image_svs_histology`, `sc_matrix_default`, and a tar through its inner format), each of which also declares the modality its assay implies. Nothing infers an assay from another rule's answer (#88), and nothing infers `WGS` or `WES` (#430); those, and the single-nucleus terms, arrive from source evidence through the translation table.
 
 ```
-assay_type
-├── WGS                          # Whole genome sequencing
-├── WES                          # Whole exome sequencing
-├── RNAseq                       # Bulk RNA sequencing
-├── scRNAseq                     # Single-cell RNA sequencing
-├── ATACseq                      # Bulk ATAC-seq
-├── ChIPseq                      # ChIP sequencing
+assay_type                       # an is_a tree; a record holds the most specific term its evidence supports
+├── WGS                          # EFO:0003744 whole genome shotgun sequencing
+├── WES                          # EFO:0005396
+├── RNA-seq                      # EFO:0008896
+│   └── sc/snRNA-seq             # EFO:0920118; what a single-cell matrix format says
+│       ├── snRNA-seq            # EFO:0009809
+│       └── SHARE-seq            # EFO:0022962 (EFO's other parent, scATAC-seq, is not expressed; #567)
+├── ATAC-seq                     # EFO:0007045
+│   └── sc/snATAC-seq            # EFO:0920117
+│       └── snATAC-seq           # our own term; EFO has no single-nucleus ATAC-seq
+├── ChIP-seq                     # EFO:0002692
+├── Bisulfite-seq                # EFO:0003753
+├── Methylation array            # EFO:0002759
+├── Histology                    # OBI:0600020, as EFO imports it
 ├── not_applicable               # Non-sequencing data (images, annotations)
 └── not_classified               # Could not be determined from file alone
 ```
@@ -301,7 +308,7 @@ These files are excluded from classification as they are primarily:
 `data_modality` takes AnVIL's recommended vocabulary: the Findability Subset's list, which is the
 Broad's [MODAL ontology](https://github.com/broadinstitute/modal) term for term (#563). Each term is a
 dotted path with its MODAL id in the schema. Single-cell versus bulk is an assay fact, not a modality:
-`assay_type` is where it belongs, and until its single-cell terms exist (#533) no dimension records it.
+`assay_type` records it (`sc/snRNA-seq`, `snRNA-seq`, #533).
 
 ```
 data_modality

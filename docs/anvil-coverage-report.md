@@ -337,7 +337,7 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | `sc/snRNA-seq` | 414 | 0.1% | .h5ad (350)<br>(none) (64) |
 | `Methylation array` | 160 | 0.0% | .idat (160) |
 
-**Note**: Like platform, assay type is inherently unknowable for most derived formats. It is determined only by a rule that sees evidence of the assay: a STAR `@PG` line, filename patterns (STAR, Salmon, expression BED), and extension where the format implies it (`.idat` is a methylation array, `.svs` histology). Nothing infers it from the modality (#88), reads file size, or infers WGS from a long-read platform (#430). The high not-classified rate is expected.
+**Note**: Like platform, assay type is inherently unknowable for most derived formats. It is determined only by a rule that sees evidence of the assay: a STAR `@PG` line, filename patterns (STAR, Salmon, expression BED), and extension where the format implies it (`.idat` is a methylation array, `.svs` histology, a `.h5ad` / `.loom` / `.mtx` single-cell matrix `sc/snRNA-seq`, and a tar whose members are one of these, #533). Nothing infers it from the modality (#88), reads file size, or infers WGS from a long-read platform (#430). The high not-classified rate is expected.
 
 ---
 
