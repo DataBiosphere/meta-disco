@@ -30,9 +30,9 @@
 rules:
   # --- 1. modality <-> assay family -------------------------------------------
   - id: assay_for_transcriptomic
-    description: A transcriptomic file's assay, if classified, must be RNA-seq.
+    description: A transcriptomic file's assay, if classified, must be RNA-seq or a term under it.
     when: {data_modality: {under: transcriptomic}}
-    require: {assay_type: {value_in: ["RNA-seq"]}}
+    require: {assay_type: {under: RNA-seq}}
 
   - id: assay_for_genomic
     description: A genomic file's assay, if classified, must be WGS or WES.
@@ -40,9 +40,12 @@ rules:
     require: {assay_type: {value_in: ["WGS", "WES"]}}
 
   - id: assay_for_chromatin_accessibility
-    description: A chromatin-accessibility file's assay, if classified, must be ATAC-seq.
+    description: >-
+      A chromatin-accessibility file's assay, if classified, must be ATAC-seq or a term
+      under it. SHARE-seq is not under it (its one `is_a` is sc/snRNA-seq, #533), so a
+      SHARE-seq file classified as chromatin accessibility is flagged; none is today.
     when: {data_modality: {under: epigenomic.chromatin_accessibility}}
-    require: {assay_type: {value_in: ["ATAC-seq"]}}
+    require: {assay_type: {under: ATAC-seq}}
 
   - id: assay_for_histone_modification
     description: A histone-modification file's assay, if classified, must be ChIP-seq.

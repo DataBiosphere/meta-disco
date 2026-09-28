@@ -18,6 +18,8 @@ these five have a row there is `make review-queue`'s to say. Recorded as the see
 
     single-nucleus RNA sequencing assay -> transcriptomic.single_cell  (retired by #563; now transcriptomic)
     single-nucleus ATAC-seq            -> epigenomic.chromatin_accessibility
+
+(The two single-nucleus values have authored rows since #533.)
     GRCh38 + Gencode40                 -> GRCh38
     GRCh38 / GRCh37 / CHM13            -> identity
     GRCm39                             -> mouse, no term (#15, #399)

@@ -713,7 +713,8 @@ def classify_from_tar_members(
        VCF-attribute TileDB arrays — see :func:`_is_genomicsdb_variant_store`), not a
        file extension. → ``genomic`` / ``variants``. This is the 124K T2T case.
     2. **Generic** — the dominant recognized inner *extension*, resolved through the
-       rule engine (so the format knowledge is not duplicated here): a tar of
+       rule engine (so the format knowledge is not duplicated here), whose
+       ``data_modality``, ``data_type`` and ``assay_type`` the archive takes: a tar of
        ``.fasta`` → ``data_type: sequence`` (the ``.fasta`` extension alone leaves
        ``data_modality`` unresolved, since a FASTA may be genomic or transcriptomic).
        An inner type the rules can only classify from its *header* (BAM/CRAM resolve
@@ -741,8 +742,10 @@ def classify_from_tar_members(
     # (`x.GRCh38.bam.tar.gz`); a bare `grch38.XX.tar.gz` parses to no extension (#523).
     result = engine.classify_extended(ExtendedFileInfo(name=name), include_tier3=False)
 
-    def _claim_content(data_modality: str | None, data_type: str | None, reason: str) -> None:
-        for fld, value in (("data_modality", data_modality), ("data_type", data_type)):
+    def _claim_content(
+        data_modality: str | None, data_type: str | None, reason: str, assay_type: str | None = None
+    ) -> None:
+        for fld, value in (("data_modality", data_modality), ("data_type", data_type), ("assay_type", assay_type)):
             if value is not None:
                 # SOURCE_CONTENT_READ, not SOURCE_CONTIG_DETECTION as the other
                 # CONTENT_TIER sites use: this reads the archive head's member
@@ -775,6 +778,7 @@ def classify_from_tar_members(
         inner.data_modality,
         inner.data_type,
         f"archive head holds {dom_count} {dominant} member(s) (e.g. {example}) — dominant recognized inner format",
+        inner.assay_type,
     )
     return result.to_output_dict()
 

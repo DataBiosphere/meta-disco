@@ -97,6 +97,8 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
                           'prefix_reference': 'http://www.ebi.ac.uk/efo/EFO_'},
                   'MODAL': {'prefix_prefix': 'MODAL',
                             'prefix_reference': 'https://datamodel.terra.bio/BioCoreTerms#'},
+                  'OBI': {'prefix_prefix': 'OBI',
+                          'prefix_reference': 'http://purl.obolibrary.org/obo/OBI_'},
                   'anvil': {'prefix_prefix': 'anvil',
                             'prefix_reference': 'https://github.com/DataBiosphere/meta-disco/schema/'},
                   'insdc.gca': {'prefix_prefix': 'insdc.gca',
@@ -108,7 +110,7 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
 
 class DataModalityEnum(str, Enum):
     """
-    The biological signal a file carries: "the biological nature of the information gathered as the result of an Activity, independent of the technology or methods used to produce the information", in the words of AnVIL's Findability Subset (FSS), whose recommended values for its `data_modality` field are the Broad's MODAL ontology (github.com/broadinstitute/modal) term for term (#563). This enum is that tree: each value spells its MODAL term as a dotted path, `is_a` names its parent, and `meaning` is its MODAL id. The dotted value stands in for FSS's wording ("DNA methylation" for `epigenomic.methylation`) until labels are added. Single-cell versus bulk is not a modality here, since it is a property of the experiment: `assay_type` is where it belongs, and until its single-cell terms exist (#533) no dimension records it. A record holds one term, the most specific its evidence supports, which may be a parent: nothing emits a `genomic` child yet, so a WGS library is `genomic`. A consumer that filters on a parent walks `is_a`.
+    The biological signal a file carries: "the biological nature of the information gathered as the result of an Activity, independent of the technology or methods used to produce the information", in the words of AnVIL's Findability Subset (FSS), whose recommended values for its `data_modality` field are the Broad's MODAL ontology (github.com/broadinstitute/modal) term for term (#563). This enum is that tree: each value spells its MODAL term as a dotted path, `is_a` names its parent, and `meaning` is its MODAL id. The dotted value stands in for FSS's wording ("DNA methylation" for `epigenomic.methylation`) until labels are added. Single-cell versus bulk is not a modality here, since it is a property of the experiment, so `assay_type` records it (`sc/snRNA-seq`, `snRNA-seq`, #533). A record holds one term, the most specific its evidence supports, which may be a parent: nothing emits a `genomic` child yet, so a WGS library is `genomic`. A consumer that filters on a parent walks `is_a`.
     """
     genomic = "genomic"
     genomicFULL_STOPassembly = "genomic.assembly"
@@ -225,10 +227,30 @@ class ReferenceNameSourceEnum(str, Enum):
 
 
 class AssayTypeEnum(str, Enum):
+    """
+    The experimental method that produced a file's data, in terms borrowed from EFO (#533), which CELLxGENE requires for assays. `meaning` is the EFO term a value names, recorded and never followed at run time; `Histology`'s is OBI's `histological assay` as EFO imports it. The values form an `is_a` tree that follows EFO's where EFO has one parent to follow. `SHARE-seq` is the exception: EFO places it under both single-cell RNA-seq and single-cell ATAC-seq, and `is_a` names one parent, so it sits under `sc/snRNA-seq` and a filter on the `ATAC-seq` subtree does not reach it. Where EFO has no term as narrow as a source, the value is our own, carries no `meaning`, and sits under the EFO term it narrows: EFO has single-cell ATAC-seq terms but none for single-nucleus, so `snATAC-seq` sits under `sc/snATAC-seq`. A record holds one term, the most specific its evidence supports; a consumer that filters on a parent walks `is_a`.
+    """
     WGS = "WGS"
+    """
+    EFO's whole genome shotgun sequencing: EFO has no term labelled whole genome sequencing, and OBI's whole genome sequencing assay is not among its imports.
+    """
     WES = "WES"
     RNA_seq = "RNA-seq"
+    scSOLIDUSsnRNA_seq = "sc/snRNA-seq"
+    """
+    Single-cell or single-nucleus RNA-seq, EFO's parent of both: the term for a file whose evidence says single-cell but not which.
+    """
+    snRNA_seq = "snRNA-seq"
+    SHARE_seq = "SHARE-seq"
+    """
+    Joint chromatin accessibility and RNA from the same nuclei. EFO's other parent, scATAC-seq, is not expressed here (see the enum description).
+    """
     ATAC_seq = "ATAC-seq"
+    scSOLIDUSsnATAC_seq = "sc/snATAC-seq"
+    snATAC_seq = "snATAC-seq"
+    """
+    Single-nucleus ATAC-seq. Our own term: EFO's children of sc/snATAC-seq are single-cell only, so no EFO term is as narrow, and it records none.
+    """
     ChIP_seq = "ChIP-seq"
     Bisulfite_seq = "Bisulfite-seq"
     Methylation_array = "Methylation array"

@@ -23,6 +23,7 @@ prefixes:
   linkml: https://w3id.org/linkml/
   anvil: https://github.com/DataBiosphere/meta-disco/schema/
   EFO: http://www.ebi.ac.uk/efo/EFO_
+  OBI: http://purl.obolibrary.org/obo/OBI_
   EDAM: http://edamontology.org/
   MODAL: "https://datamodel.terra.bio/BioCoreTerms#"
   insdc.gca: "https://identifiers.org/insdc.gca:"
@@ -918,8 +919,7 @@ enums:
       parent, and `meaning` is its MODAL id. The dotted value stands in for FSS's
       wording ("DNA methylation" for `epigenomic.methylation`) until labels are added.
       Single-cell versus bulk is not a modality here, since it is a property of the
-      experiment: `assay_type` is where it belongs, and until its single-cell terms
-      exist (#533) no dimension records it. A record holds one term, the most specific
+      experiment, so `assay_type` records it (`sc/snRNA-seq`, `snRNA-seq`, #533). A record holds one term, the most specific
       its evidence supports, which may be a parent: nothing emits a `genomic` child
       yet, so a WGS library is `genomic`. A consumer that filters on a parent walks
       `is_a`.
@@ -1112,15 +1112,62 @@ enums:
       command_line:
 
   assay_type_enum:
+    description: >-
+      The experimental method that produced a file's data, in terms borrowed from EFO
+      (#533), which CELLxGENE requires for assays. `meaning` is the EFO term a value
+      names, recorded and never followed at run time; `Histology`'s is OBI's
+      `histological assay` as EFO imports it. The values form an `is_a` tree that
+      follows EFO's where EFO has one parent to follow. `SHARE-seq` is the exception:
+      EFO places it under both single-cell RNA-seq and single-cell ATAC-seq, and
+      `is_a` names one parent, so it sits under `sc/snRNA-seq` and a filter on the
+      `ATAC-seq` subtree does not reach it. Where EFO has no term as narrow as a
+      source, the value is our own, carries no `meaning`, and sits under the EFO term
+      it narrows: EFO has single-cell ATAC-seq terms but none for single-nucleus, so
+      `snATAC-seq` sits under `sc/snATAC-seq`. A record holds one term, the most
+      specific its evidence supports; a consumer that filters on a parent walks `is_a`.
     permissible_values:
       WGS:
+        description: >-
+          EFO's whole genome shotgun sequencing: EFO has no term labelled whole genome
+          sequencing, and OBI's whole genome sequencing assay is not among its imports.
+        meaning: EFO:0003744
       WES:
+        meaning: EFO:0005396
       "RNA-seq":
+        meaning: EFO:0008896
+      "sc/snRNA-seq":
+        description: >-
+          Single-cell or single-nucleus RNA-seq, EFO's parent of both: the term for a
+          file whose evidence says single-cell but not which.
+        is_a: "RNA-seq"
+        meaning: EFO:0920118
+      "snRNA-seq":
+        is_a: "sc/snRNA-seq"
+        meaning: EFO:0009809
+      "SHARE-seq":
+        description: >-
+          Joint chromatin accessibility and RNA from the same nuclei. EFO's other
+          parent, scATAC-seq, is not expressed here (see the enum description).
+        is_a: "sc/snRNA-seq"
+        meaning: EFO:0022962
       "ATAC-seq":
+        meaning: EFO:0007045
+      "sc/snATAC-seq":
+        is_a: "ATAC-seq"
+        meaning: EFO:0920117
+      "snATAC-seq":
+        description: >-
+          Single-nucleus ATAC-seq. Our own term: EFO's children of sc/snATAC-seq are
+          single-cell only, so no EFO term is as narrow, and it records none.
+        is_a: "sc/snATAC-seq"
       "ChIP-seq":
+        meaning: EFO:0002692
       "Bisulfite-seq":
+        meaning: EFO:0003753
       "Methylation array":
+        meaning: EFO:0002759
       Histology:
+        meaning: OBI:0600020
 
   platform_enum:
     permissible_values:
