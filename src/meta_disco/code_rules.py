@@ -85,13 +85,18 @@ CONTIG_LENGTH_DETECTION = CodeRule(
     module=HEADER_CLASSIFIER,
     basis=BASIS_CONTENT,
     source_type=SOURCE_CONTIG_DETECTION,
-    reads="BAM/CRAM/SAM header: the @SQ contig names and lengths",
+    reads=(
+        "BAM/CRAM/SAM header: the @SQ contig names and lengths for the family; for the build within "
+        "it, chr1 and chrY's lengths and M5 checksums, and the reference name @SQ UR or an @PG "
+        "command line declares"
+    ),
     sets=_REFERENCE,
     rationale=(
         "An alignment's @SQ lines list the reference it was aligned to, contig by contig, "
         "and the lengths of the primary chromosomes differ between GRCh37, GRCh38 and "
-        "CHM13. Matching them identifies the reference family, and the build within it "
-        "where the header's build has a term of its own (#473)."
+        "CHM13, so matching them identifies the reference family. Where the build within it "
+        "has a term of its own (#473), chr1 and chrY's lengths and checksums pick it, and a "
+        "declared reference name only breaks a tie among the builds those allow."
     ),
 )
 VCF_CONTIG_LENGTH = CodeRule(
@@ -99,12 +104,17 @@ VCF_CONTIG_LENGTH = CodeRule(
     module=HEADER_CLASSIFIER,
     basis=BASIS_CONTENT,
     source_type=SOURCE_CONTIG_DETECTION,
-    reads="VCF header: the ##contig names and lengths",
+    reads=(
+        "VCF header: the ##contig names and lengths for the family; for the build within it, chr1 "
+        "and chrY's lengths, and the reference name ##reference or a command line declares (not for "
+        "a lifted-over VCF)"
+    ),
     sets=_REFERENCE,
     rationale=(
         "A VCF's ##contig lines declare the reference its positions are on. Their lengths "
-        "identify the reference family as @SQ lengths do. ##contig carries no checksum, "
-        "so builds that differ only in sequence stay ambiguous, and the value is the family."
+        "identify the reference family as @SQ lengths do. ##contig carries no checksum, so "
+        "builds that differ only in sequence are told apart only by a declared reference "
+        "name, and without one the value is the family."
     ),
 )
 BED_COORDINATE_REFERENCE = CodeRule(

@@ -252,7 +252,7 @@ def yaml_rules(path: Path | None) -> list[dict]:
         {
             "id": r.id,
             "kind": KIND_YAML,
-            "defined_in": "src/meta_disco/rules/unified_rules.yaml",
+            "defined_in": str(path) if path else "src/meta_disco/rules/unified_rules.yaml",
             "basis": basis_of(r.id, r.when),
             "tier": r.tier,
             "condition": sliced[r.id]["when"][0],
@@ -299,7 +299,7 @@ def mapping_rows(path: Path | None) -> list[dict]:
             {
                 "id": row.id,
                 "kind": KIND_MAPPING,
-                "defined_in": "src/meta_disco/rules/value_map.yaml",
+                "defined_in": str(path) if path else "src/meta_disco/rules/value_map.yaml",
                 "basis": code_rules.BASIS_MAPPING,
                 "tier": None,
                 "condition": sliced[row.id]["match"][0],

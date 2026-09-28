@@ -191,6 +191,12 @@ def test_when_and_then_are_the_file_s_own_text(data):
     assert rules["hifi_name"]["effect"] == "platform: PACBIO\nstatus:\n  assay_type: not_applicable"
     assert rules["platform.revio"]["condition"] == '{slot: platform, value: "Revio"}'
     assert rules["platform.revio"]["rationale"] == "Revio is a PacBio instrument"
+    # Where a rule is defined names the file the report was given, not the bundled one.
+    assert rules["hifi_name"]["defined_in"].endswith("rules.yaml") and "src/" not in rules["hifi_name"]["defined_in"]
+    assert (
+        rules["platform.revio"]["defined_in"].endswith("value_map.yaml")
+        and "src/" not in rules["platform.revio"]["defined_in"]
+    )
 
 
 def test_each_kind_is_listed_with_its_basis_and_declared_dataset(data):

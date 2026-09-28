@@ -31,8 +31,9 @@ def literal_rule_ids(source: str) -> list[tuple[int, str]]:
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.keyword) and node.arg == "rule_id" and is_text(node.value):
             found.append((node.value.lineno, ast.unparse(node.value)))
-        elif isinstance(node, ast.Assign) and is_text(node.value):
-            if any(isinstance(t, ast.Name) and t.id.endswith("RULE_ID") for t in node.targets):
+        elif isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None and is_text(node.value):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if any(isinstance(t, ast.Name) and t.id.endswith("RULE_ID") for t in targets):
                 found.append((node.value.lineno, ast.unparse(node.value)))
         elif isinstance(node, ast.Dict):
             keys = {k.value: v for k, v in zip(node.keys, node.values, strict=True) if isinstance(k, ast.Constant)}
@@ -58,6 +59,7 @@ def test_no_rule_id_is_written_as_a_literal_outside_code_rules():
         'result.add_claim("data_type", rule_id=f"rule_{n}", tier=4)',
         '{"rule_id": "new_rule", "reason": "r", "value": "v"}',
         'NEW_RULE_ID = "platform.new"',
+        'NEW_RULE_ID: Final = "new_rule"',
     ],
 )
 def test_the_search_finds_each_spelling(snippet):
