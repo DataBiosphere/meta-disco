@@ -112,28 +112,45 @@ def dimension_values(field: str) -> frozenset[str]:
     return enums[enum_name]
 
 
+def _term_spec(field: str, value: str) -> dict:
+    """A dimension term's schema spec (``is_a``, ``meaning``, ...); ValueError for a value outside the vocabulary."""
+    if not value_in_vocabulary(field, value):
+        raise ValueError(f"{value!r} is not a {field} term")
+    return _load_schema_enums()[DIMENSION_ENUMS[field]][value] or {}
+
+
 def value_ancestors(field: str, value: str) -> tuple[str, ...]:
     """The terms above ``value`` in its dimension's ``is_a`` hierarchy, nearest first.
 
     Empty for a term with no parent, which is every term of an enum that declares no
-    ``is_a``. ``reference_assembly_enum`` (#473) and ``data_modality_enum`` (#563)
-    do: a hybrid's ancestors are its T2T release and then ``CHM13``, and
-    ``epigenomic.methylation``'s is ``epigenomic``. Raises ValueError for a value
+    ``is_a``. ``reference_assembly_enum`` (#473), ``data_modality_enum`` (#563) and
+    ``assay_type_enum`` (#533) do: a hybrid's ancestors are its T2T release and then
+    ``CHM13``, ``epigenomic.methylation``'s is ``epigenomic``, and ``snRNA-seq``'s are
+    ``sc/snRNA-seq`` and then ``RNA-seq``. Raises ValueError for a value
     outside the dimension's vocabulary or an ``is_a`` chain that names a missing
     term or loops, and the same errors as ``dimension_values`` for an unrecognized
     field or a missing enum.
     """
-    if not value_in_vocabulary(field, value):
-        raise ValueError(f"{value!r} is not a {field} term")
     values = _load_schema_enums()[DIMENSION_ENUMS[field]]
     ancestors: list[str] = []
-    parent = (values[value] or {}).get("is_a")
+    parent = _term_spec(field, value).get("is_a")
     while parent is not None:
         if parent not in values or parent in ancestors or parent == value:
             raise ValueError(f"{field} term {value!r} has a broken is_a chain at {parent!r}")
         ancestors.append(parent)
         parent = (values[parent] or {}).get("is_a")
     return tuple(ancestors)
+
+
+def value_meaning(field: str, value: str) -> str | None:
+    """The ontology id a dimension term records in its ``meaning`` (``EFO:0009809``), or None where it records none.
+
+    Which ontology varies by enum and, within ``assay_type_enum``, by term (Histology's
+    is OBI's). Recorded for consumers and never followed at run time. Raises the same
+    errors as :func:`value_ancestors` for a value outside the vocabulary, an
+    unrecognized field or a missing enum.
+    """
+    return _term_spec(field, value).get("meaning")
 
 
 def most_specific(field: str, values: Iterable[str]) -> str | None:

@@ -15,12 +15,14 @@
 #   require:     field -> matcher; a violation is raised when any is UNsatisfied
 #                  {value_in: [...]}    -> violation if classified AND value not in list
 #                  {value_not_in: [...]}-> violation if classified AND value in list
+#                  {under: <term>}      -> violation if classified AND value is neither <term>
+#                                          nor below it in the field's `is_a` tree (#533)
 #                  {not_under: <term>}  -> violation if classified AND value is <term> or
 #                                          below it in the field's `is_a` tree
 #                  {status_not: <s>}    -> violation if field status == <s>
 #                  {status: <s>}        -> violation if field status != <s>
 #
-# `value_in`/`value_not_in`/`not_under` only fire on CLASSIFIED fields, so absence of a value
+# `value_in`/`value_not_in`/`under`/`not_under` only fire on CLASSIFIED fields, so absence of a value
 # is never flagged — only a determined value that contradicts another determined one.
 #
 # Scope note: the flat/deterministic subset only (spike). Conditional rules
@@ -43,7 +45,8 @@ rules:
     description: >-
       A chromatin-accessibility file's assay, if classified, must be ATAC-seq or a term
       under it. SHARE-seq is not under it (its one `is_a` is sc/snRNA-seq, #533), so a
-      SHARE-seq file classified as chromatin accessibility is flagged; none is today.
+      SHARE-seq file classified as chromatin accessibility is flagged; run
+      20260928_013215 had none.
     when: {data_modality: {under: epigenomic.chromatin_accessibility}}
     require: {assay_type: {under: ATAC-seq}}
 

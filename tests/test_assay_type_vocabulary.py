@@ -27,19 +27,16 @@ TERMS = {
 }
 
 
-def _spec(value):
-    # `meaning` has no public accessor; the spec is read here and nowhere else
-    return schema_vocab._load_schema_enums()[schema_vocab.DIMENSION_ENUMS["assay_type"]][value] or {}
-
-
 def test_each_value_is_the_efo_term_it_borrows():
     values = schema_vocab.dimension_values("assay_type")
-    assert {v: _spec(v).get("meaning") for v in values} == {v: m for v, (m, _) in TERMS.items()}
+    assert {v: schema_vocab.value_meaning("assay_type", v) for v in values} == {v: m for v, (m, _) in TERMS.items()}
 
 
 def test_each_value_sits_under_its_parent():
+    # value_ancestors, not the raw `is_a`, so a parent missing from the enum or a loop fails here
     values = schema_vocab.dimension_values("assay_type")
-    assert {v: _spec(v).get("is_a") for v in values} == {v: p for v, (_, p) in TERMS.items()}
+    parents = {v: next(iter(schema_vocab.value_ancestors("assay_type", v)), None) for v in values}
+    assert parents == {v: p for v, (_, p) in TERMS.items()}
 
 
 def test_a_single_nucleus_term_nests_with_the_generic_single_cell_term():

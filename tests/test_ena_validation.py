@@ -1,5 +1,6 @@
 """Tests for the ENA validator's join key and vocabulary mapping (#330)."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -114,3 +115,28 @@ class TestOurField:
         # models' coherence check raises ValueError; the validator must not crash
         rec = {"classifications": {"platform": {"value": None, "status": "classified"}}}
         assert ena.our_field(rec, "platform") == ("", "")
+
+
+class TestAssayVerdict:
+    """The assay verdict reads assay_type's is_a tree (#533)."""
+
+    def _validate(self, tmp_path, monkeypatch, assay):
+        record = {
+            "file_name": "ERR123456_1.fastq.gz",
+            "classifications": {
+                "platform": {"value": "ILLUMINA", "status": "classified"},
+                "assay_type": {"value": assay, "status": "classified"},
+            },
+        }
+        source = tmp_path / "in.json"
+        source.write_text(json.dumps([record]))
+        ena_run = {"instrument_platform": "ILLUMINA", "library_strategy": "RNA-Seq", "library_source": ""}
+        monkeypatch.setattr(ena, "fetch_ena_metadata", lambda acc: ena_run)
+        return ena.validate_against_ena(source, tmp_path / "out.json", workers=1)
+
+    @pytest.mark.parametrize("assay", ["RNA-seq", "snRNA-seq", "SHARE-seq"])
+    def test_a_term_at_or_below_enas_matches(self, tmp_path, monkeypatch, assay):
+        assert self._validate(tmp_path, monkeypatch, assay)["assay_match"] == 1
+
+    def test_a_term_outside_enas_subtree_mismatches(self, tmp_path, monkeypatch):
+        assert self._validate(tmp_path, monkeypatch, "snATAC-seq")["assay_mismatch"] == 1

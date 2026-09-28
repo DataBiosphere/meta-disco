@@ -41,6 +41,7 @@ import requests
 
 from meta_disco.models import STATUS_LABELS, field_status, field_value
 from meta_disco.output_utils import find_latest_run
+from meta_disco.schema_vocab import most_specific
 from meta_disco.validation_maps import ENA_LIBRARY_STRATEGY_MAP
 
 ENA_API = "https://www.ebi.ac.uk/ena/portal/api/filereport"
@@ -234,14 +235,28 @@ def validate_against_ena(
 
         result: dict = {"error": False}
 
-        def verdict(dim: str, ours: str, status: str, expected: str | None, detail: dict, prefix: bool = False) -> None:
+        def verdict(
+            dim: str,
+            ours: str,
+            status: str,
+            expected: str | None,
+            detail: dict,
+            prefix: bool = False,
+            nests_in: str | None = None,
+        ) -> None:
             if not ours or status in _SENTINEL_STATUSES:
                 result[dim] = "unknown"
                 return
             if expected is None:
                 result[dim] = "unknown"  # nothing comparable on the ENA side
                 return
-            matched = ours.startswith(expected) if prefix else ours == expected
+            if prefix:
+                matched = ours.startswith(expected)
+            elif nests_in is not None:
+                # a value below ENA's in the field's is_a tree is ENA's, told more precisely (#533)
+                matched = most_specific(nests_in, {ours, expected}) == ours
+            else:
+                matched = ours == expected
             result[dim] = "match" if matched else "mismatch"
             if not matched:
                 result[f"{dim}_detail"] = {
@@ -277,6 +292,7 @@ def validate_against_ena(
             assay_status,
             expected_assay,
             {"ena_strategy": ena_strategy, "expected": expected_assay},
+            nests_in="assay_type",
         )
 
         return result

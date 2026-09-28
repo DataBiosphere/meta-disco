@@ -742,10 +742,8 @@ def classify_from_tar_members(
     # (`x.GRCh38.bam.tar.gz`); a bare `grch38.XX.tar.gz` parses to no extension (#523).
     result = engine.classify_extended(ExtendedFileInfo(name=name), include_tier3=False)
 
-    def _claim_content(
-        data_modality: str | None, data_type: str | None, reason: str, assay_type: str | None = None
-    ) -> None:
-        for fld, value in (("data_modality", data_modality), ("data_type", data_type), ("assay_type", assay_type)):
+    def _claim_content(reason: str, **values: str | None) -> None:
+        for fld, value in values.items():
             if value is not None:
                 # SOURCE_CONTENT_READ, not SOURCE_CONTIG_DETECTION as the other
                 # CONTENT_TIER sites use: this reads the archive head's member
@@ -762,7 +760,11 @@ def classify_from_tar_members(
     # (1) GenomicsDB variant store — a member-name layout signature, caught even when
     # the `.vcf` member / schema files are pushed past the head in the larger stores.
     if _is_genomicsdb_variant_store(member_names):
-        _claim_content("genomic", "variants", "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)")
+        _claim_content(
+            "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)",
+            data_modality="genomic",
+            data_type="variants",
+        )
         return result.to_output_dict()
 
     # (2) Generic: classify by the dominant recognized inner member extension.
@@ -775,10 +777,10 @@ def classify_from_tar_members(
     example = next(basename for ext, basename in recognized if ext == dominant)
     inner = engine.classify_extended(ExtendedFileInfo(name=FileName.EMPTY, file_format=dominant), include_tier3=False)
     _claim_content(
-        inner.data_modality,
-        inner.data_type,
         f"archive head holds {dom_count} {dominant} member(s) (e.g. {example}) — dominant recognized inner format",
-        inner.assay_type,
+        data_modality=inner.data_modality,
+        data_type=inner.data_type,
+        assay_type=inner.assay_type,
     )
     return result.to_output_dict()
 

@@ -243,7 +243,7 @@ class AssayTypeEnum(str, Enum):
     snRNA_seq = "snRNA-seq"
     SHARE_seq = "SHARE-seq"
     """
-    Joint chromatin accessibility and RNA from the same nuclei. EFO's other parent, scATAC-seq, is not expressed here (see the enum description).
+    Joint chromatin accessibility and RNA from the same nuclei.
     """
     ATAC_seq = "ATAC-seq"
     scSOLIDUSsnATAC_seq = "sc/snATAC-seq"
