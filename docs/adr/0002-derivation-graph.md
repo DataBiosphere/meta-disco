@@ -135,20 +135,22 @@ decision 1 rejects.
 ### 5. Activities
 
 *Amended by #580.* A step is named by its **activity**, not by a verb between two files. The
-vocabulary is `activity_type_enum`: AnVIL FSS's Activity-table values (its "BioCore values"), term for
-term and spelled as FSS spells them, plus four of our own. A term's `meaning` is the Terra
+vocabulary is `activity_type_enum`: AnVIL FSS's `ActivityTypes`, spelled as FSS's released LinkML schema
+spells them (`DataBiosphere/biocore-data-model`, `AnVILDataSubmissionFindabilitySubsetSchema.linkml.yaml`),
+plus four of our own. FSS's values spreadsheet spells three differently (`VariantCallingActivity`,
+`ImagingActivity`, `IndexingActivity`); the schema a submission is validated against wins. A term's `meaning` is the Terra
 Interoperability Model's class where it has one, else EDAM's operation where EDAM defines the same step.
 TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `generated_file_id` are PROV's
-`used` and `wasGeneratedBy`. An edge on a file's record names the activity that made the file from that
-parent (decision 6).
+`used` and `wasGeneratedBy`. A file's record names the activity that made it
+(decision 3).
 
 | activity | child ← parent | detected from | replaces |
 |---|---|---|---|
-| `IndexingActivity` | index ← indexed file | filename convention, `anvil_activity` `Indexing` | `index_of` |
+| `IndexActivity` | index ← indexed file | filename convention, `anvil_activity` `Indexing` | `index_of` |
 | `ChecksumActivity` | checksum ← checked file | filename convention, `anvil_activity` `Checksum` | `checksum_of` |
 | `QualityControlActivity` (ours, under `AnalysisActivity`) | QC report ← the file it reports on | submitter same-row (T2T `samtools_stats`, `mosdepth_*` → `cram`) | `summarizes` |
 | `AlignmentActivity` | alignment ← reads | submitter same-row, `@PG`, `anvil_activity` (ENCORE `Alignment: STAR`) | `aligned_from` |
-| `VariantCallingActivity` | variants ← alignments or gVCFs | VCF caller command lines, submitter same-row (1000G `cram` → `gvcf`) | `called_from` |
+| `VariantCallActivity` | variants ← alignments or gVCFs | VCF caller command lines, submitter same-row (1000G `cram` → `gvcf`) | `called_from` |
 | `MergeActivity` (ours) | merged file ← shards | headers and filenames (T2T chromosome VCF ← window VCFs) | `merged_from` |
 | `LiftoverActivity` (ours, under `AnalysisActivity`) | lifted file ← the file it was lifted from | a source naming the parent (schema changes, `source_assembly`) | `lifted_over_from` |
 | `AssemblyActivity` (ours) | assembly ← reads | HPRC assembly sample sheets, where the output resolves to a held assembly (Open) | `assembled_from` |
@@ -157,7 +159,7 @@ parent (decision 6).
 | `Activity` | related, step unknown | IGVF `file.derived_from` between content types no term names, `anvil_activity` `Unknown` | `derived_from` |
 
 FSS's other types (`SampleCollectionActivity`, `SampleTreatmentActivity`, `ExpressionActivity`,
-`AnalysisActivity`, `ImagingActivity`) are in the vocabulary, though no translation row maps a source's
+`AnalysisActivity`, `ImageActivity`) are in the vocabulary, though no translation row maps a source's
 value to one yet; ENCORE's `anvil_activity` rows (`Quantificatioin: salmon`, `DifferentialExpression:
 deseq2`, `AlternativeSplicing: rMATS`) state expression and analysis steps that such rows would map. A
 source's raw `activity_type` reaches a term through translation rows, as a raw value does (contract
@@ -282,11 +284,11 @@ authority, and this table is its reading when #580 wrote it.
 
 | activity | `data_modality` | `assay_type` | `platform` | `instrument_model` | `reference_assembly` |
 |---|---|---|---|---|---|
-| `IndexingActivity`, `ChecksumActivity`, `QualityControlActivity`, `MergeActivity`, `VariantCallingActivity` | yes | yes | yes | yes | yes |
+| `IndexActivity`, `ChecksumActivity`, `QualityControlActivity`, `MergeActivity`, `VariantCallActivity` | yes | yes | yes | yes | yes |
 | `AlignmentActivity` | yes, from `reads` | yes, from `reads` | yes, from `reads` | yes, from `reads` | from its `reference` input only, not from the reads |
 | `LiftoverActivity` | yes | yes | yes | yes | **no** — liftover changes it |
 | `AssemblyActivity` | yes | yes | yes | yes | **no** — an assembly is its own reference |
-| `Activity`, `SequenceActivity`, `SampleCollectionActivity`, `SampleTreatmentActivity`, `ImagingActivity`, `ExpressionActivity`, `AnalysisActivity` | no | no | no | no | no |
+| `Activity`, `SequenceActivity`, `SampleCollectionActivity`, `SampleTreatmentActivity`, `ImageActivity`, `ExpressionActivity`, `AnalysisActivity` | no | no | no | no | no |
 
 - Carrying `reference_assembly` carries the build's identity — `ReferenceBuild.base` and `version` —
   so a child describes its reference as precisely as its parents agree on it. The build's observations
@@ -296,7 +298,7 @@ authority, and this table is its reading when #580 wrote it.
   value and no build, until how builds reconcile is decided (Open). (Today's index producer copies the
   whole build; that path is #413's.)
 - `Activity` is the step not known, so nothing is known to carry. `SequenceActivity`,
-  `SampleCollectionActivity`, `SampleTreatmentActivity` and `ImagingActivity` have a sample identifier as
+  `SampleCollectionActivity`, `SampleTreatmentActivity` and `ImageActivity` have a sample identifier as
   input, which has no dimensions.
 - `ExpressionActivity` and `AnalysisActivity` carry nothing until someone decides what they keep. Whether a
   quantification keeps its reads' reference depends on the tool (salmon quantifies against a
@@ -320,7 +322,7 @@ concern where it matters: the dimensions that describe the file itself (`data_ty
 *Rejected: the child's own evidence wins a contradiction.* It would settle a disagreement nobody reviewed.
 
 **Today's case.** The index producer's inheritance (`classify_index_files.INHERITED_FIELDS`) is the
-`IndexingActivity` row of the table (read from `rules/activities.yaml` since #580), built the way the contract's "What is not true yet" entry on 1.1 describes.
+`IndexActivity` row of the table (read from `rules/activities.yaml` since #580), built the way the contract's "What is not true yet" entry on 1.1 describes.
 How that path moves under 4.9 is #413's. That producer used to write the edge decision 2 rejects, an
 index edge naming no parent on an index file it took no parent for (`declined_record`, #438, ~15K
 files); #356 removed it, and `anvil_activity`, which names most of those parents, gives them theirs (#577).
@@ -404,7 +406,7 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   (decision 8), are declared once, in `rules/activities.yaml`, whose shape is the LinkML class
   `ActivityDeclarations`; `meta_disco.activities` reads it through the generated pydantic model, so it is
   checked as it loads, and its readers trust it; `INHERITED_FIELDS` and the index producer's code rule read the
-  `IndexingActivity` entry.
+  `IndexActivity` entry.
 - An inherited claim (decision 8) carries `inherited_from`: a list, one entry per contributing parent, of
   `{activity, parent_key, value | status | state}` — so the parents a declaration is credited to, and the
   values a mixed one stands for, are on the record rather than re-joined from the parents'.

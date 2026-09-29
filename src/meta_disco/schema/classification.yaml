@@ -1474,8 +1474,9 @@ enums:
 
   activity_type_enum:
     description: >-
-      The kind of step that made a file (ADR-0002, #580): AnVIL FSS's activity types plus
-      four of our own, each under the FSS term it narrows. `meaning` is TerraCore's class,
+      The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its
+      released LinkML schema spells them, plus four of our own, each under the FSS term it
+      narrows. `meaning` is TerraCore's class,
       else EDAM's operation for the same step; a near EDAM operation is a close mapping.
       What each passes is in `rules/activities.yaml`.
     permissible_values:
@@ -1491,8 +1492,7 @@ enums:
         meaning: TerraCore:SampleTreatmentActivity
       SequenceActivity:
         description: >-
-          Sequencing a sample into reads. FSS's spelling; TerraCore names the same class
-          `SequencingActivity`.
+          Sequencing a sample into reads. TerraCore names the same class `SequencingActivity`.
         is_a: Activity
         meaning: TerraCore:SequencingActivity
       AlignmentActivity:
@@ -1500,9 +1500,9 @@ enums:
         meaning: TerraCore:AlignmentActivity
         close_mappings:
           - EDAM:operation_3198
-      VariantCallingActivity:
+      VariantCallActivity:
         is_a: Activity
-        meaning: TerraCore:VariantCallingActivity
+        meaning: TerraCore:VariantCallActivity
         close_mappings:
           - EDAM:operation_3227
       ExpressionActivity:
@@ -1515,11 +1515,11 @@ enums:
       AnalysisActivity:
         is_a: Activity
         meaning: TerraCore:AnalysisActivity
-      ImagingActivity:
+      ImageActivity:
         description: >-
           Making an image. Neither TerraCore nor EDAM has this class, so no id is recorded.
         is_a: Activity
-      IndexingActivity:
+      IndexActivity:
         is_a: Activity
         meaning: EDAM:operation_0227
       ChecksumActivity:

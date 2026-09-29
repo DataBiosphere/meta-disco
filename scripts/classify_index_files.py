@@ -2,7 +2,7 @@
 """Propagate metadata from parent files to index files.
 
 An index file's ``data_type`` is ``index``, from its extension. The dimensions
-``IndexingActivity`` passes (``INHERITED_FIELDS``, from ``rules/activities.yaml``) describe the data it points into, so they are inherited from
+``IndexActivity`` passes (``INHERITED_FIELDS``, from ``rules/activities.yaml``) describe the data it points into, so they are inherited from
 its parent, found by filename within a dataset. ``INDEX_TO_PARENT`` declares which
 index extensions have which parent extensions.
 
@@ -146,7 +146,7 @@ def unmatched_entry(record: dict, index_ext: str, candidates: list[str], reason:
 
 DATA_TYPE = "data_type"
 # The dimensions an index file takes from its parent: every one but its own kind, as
-# `IndexingActivity` declares them (`rules/activities.yaml`, #580).
+# `IndexActivity` declares them (`rules/activities.yaml`, #580).
 INHERITED_FIELDS = activities.passes(activities.INDEXING)
 INDEX_DATA_TYPE = "index"  # a term in `data_type_enum`, and what an index file is
 
@@ -253,7 +253,7 @@ def declined_record(record: dict, index_ext: str, reason: str) -> dict:
 
 
 def every_field(classifications: dict[str, dict]) -> dict[str, dict]:
-    """Every slot, in field order; one ``IndexingActivity`` does not pass is ``not_classified`` (#580)."""
+    """Every slot, in field order; one ``IndexActivity`` does not pass is ``not_classified`` (#580)."""
     return {
         fld: classifications.get(fld) or build_field_entry(None, status=NOT_CLASSIFIED) for fld in CLASSIFICATION_FIELDS
     }
@@ -613,7 +613,7 @@ def propagate_to_index_files(
         # Field entries share to_output_dict's builder (epic #116): `status`
         # carries the sentinel, `value` is None unless CLASSIFIED (Stage 3).
         # `data_type` is the file's own kind and is never inherited (#437); the
-        # dimensions `IndexingActivity` passes describe the data the index points into.
+        # dimensions `IndexActivity` passes describe the data the index points into.
         classifications = {DATA_TYPE: index_data_type_entry(r["index_extension"])}
         for fld in INHERITED_FIELDS:
             label = r.get(fld)

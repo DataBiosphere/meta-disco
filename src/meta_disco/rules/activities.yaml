@@ -47,7 +47,7 @@ activities:
     reason: >-
       An alignment is its reads placed on a reference: the sequencer and the library pass
       from the reads, and the reference assembly from the reference it was aligned to.
-  - term: VariantCallingActivity
+  - term: VariantCallActivity
     output: {form: [file], kind: [variants, genotypes]}
     inputs:
       - role: calls_from
@@ -73,12 +73,12 @@ activities:
     reason: >-
       Too broad to say what passes: differential expression and splicing analysis share
       this term. A narrower term of our own under it declares its own.
-  - term: ImagingActivity
+  - term: ImageActivity
     output: {form: [file], kind: [images]}
     inputs:
       - {role: sample, form: [identifier], required: true, many: false}
     reason: An image is made from a sample; an identifier has no dimensions to pass.
-  - term: IndexingActivity
+  - term: IndexActivity
     output: {form: [file], kind: [index]}
     inputs:
       - role: indexed

@@ -301,7 +301,7 @@
         "file_name": "sample.flnc.bam.bai",
         "file_size": 9000,
         "generated_by": {
-          "activity": "IndexingActivity",
+          "activity": "IndexActivity",
           "inputs": [
             {
               "parent_file": "sample.flnc.bam",

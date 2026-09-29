@@ -189,7 +189,7 @@ _INPUT = {
     "source_type": "filename_rule",
     "rule_id": "index_by_name",
 }
-_STEP = {"activity": "IndexingActivity", "source_type": "filename_rule", "rule_id": "index_by_name"}
+_STEP = {"activity": "IndexActivity", "source_type": "filename_rule", "rule_id": "index_by_name"}
 
 
 def _generated_by(*inputs, **step):
@@ -286,13 +286,13 @@ def test_output_records_validate_against_schema(validator):
 
 
 def test_a_producers_generated_by_reaches_the_gate():
-    """Some fixture record carries each step a producer states from a name: `IndexingActivity`
+    """Some fixture record carries each step a producer states from a name: `IndexActivity`
     (the index producer) and `ChecksumActivity` (the catch-all), each input with its `parent_key`."""
     steps = [record["generated_by"] for _, record in _fixture_records() if record.get("generated_by")]
     assert steps, f"no fixture record carries a generated_by; regenerate with `{_REGEN}`"
     grounded = {s["activity"] for s in steps if all(i.get("parent_key") for i in s["inputs"])}
-    assert grounded >= {"IndexingActivity", "ChecksumActivity"}, (
-        "no fixture record carries an IndexingActivity and a ChecksumActivity grounded by parent_key"
+    assert grounded >= {"IndexActivity", "ChecksumActivity"}, (
+        "no fixture record carries an IndexActivity and a ChecksumActivity grounded by parent_key"
     )
 
 

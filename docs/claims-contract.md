@@ -250,7 +250,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     `external`, and nothing is inherited across it. For each activity that carries a dimension,
     the child's parents across that activity settle their resolved answers among themselves and give the child
     one declaration, credited to them, to which 4.2–4.6 apply as to inputs 1–4 — so a child with two
-    carrying activities (`VariantCallingActivity` and `MergeActivity`) has two declarations, which reconcile with each other
+    carrying activities (`VariantCallActivity` and `MergeActivity`) has two declarations, which reconcile with each other
     as any two do:
     - parents that agree (4.4) declare their value — for `reference_assembly` with its build's identity
       (base and version, not the parent's header observations), unless that differs among them, when the
@@ -445,7 +445,7 @@ importer's half is built — 7.12 is enforced (below), and the published importe
 
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move. 4.9 is now that clause for what an inherited value declares; how the index path builds it is still #413's.
 - **4.9 is not built** (ADR-0002). Its one instance is the index producer's, built as the 1.1 entry above
-  describes. Inference writes the `IndexingActivity` and `ChecksumActivity` edges a file's name states, each by the
+  describes. Inference writes the `IndexActivity` and `ChecksumActivity` edges a file's name states, each by the
   parent's record key and only where the parent resolves (#356); no other step's edge is emitted, and the
   edges the source tables state wait for #577 (#363). The `checksum_file` rule still stamps the dimensions
   `ChecksumActivity` carries `not_applicable`, which 4.6 would turn into a conflict once 4.9 is built.

@@ -17,7 +17,7 @@ from .schema.classification_model import ActivityDeclaration, ActivityDeclaratio
 from .schema_vocab import activity_values
 
 UNKNOWN = "Activity"
-INDEXING = "IndexingActivity"
+INDEXING = "IndexActivity"
 CHECKSUM = "ChecksumActivity"
 
 

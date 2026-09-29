@@ -277,7 +277,7 @@ INHERITED_FROM_PARENT = CodeRule(
     sets=activities.passes(activities.INDEXING),
     rationale=(
         "An index describes the data it points into, so it takes its parent's answer for "
-        "each dimension IndexingActivity passes (rules/activities.yaml), including a status and a conflict. It is copied, "
+        "each dimension IndexActivity passes (rules/activities.yaml), including a status and a conflict. It is copied, "
         "not weighed in resolution; folding it into make_claim is #413."
     ),
 )

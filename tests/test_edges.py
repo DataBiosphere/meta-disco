@@ -1,6 +1,6 @@
 """Derivation edges from a child's own name: the catch-all's ``ChecksumActivity`` edge (#356).
 
-The index producer's ``IndexingActivity`` edge is tested with that producer, in
+The index producer's ``IndexActivity`` edge is tested with that producer, in
 ``test_index_propagation``. Here: a checksum file names the file it checks where exactly
 one file of its dataset carries its name less ``.md5``, and nothing otherwise.
 """

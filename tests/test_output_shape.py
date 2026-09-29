@@ -183,7 +183,7 @@ GOLDEN_INPUTS = {
 }
 
 # The index producer's inputs. Both its record paths reach the schema gate: a matched
-# index carries an `IndexingActivity` edge, a declined one none. `sample.flnc.bam` is the
+# index carries an `IndexActivity` edge, a declined one none. `sample.flnc.bam` is the
 # golden's own bam input, so the matched `.bai` inherits from a row a real producer wrote
 # rather than a hand-built stand-in — and the `inherited_evidence` it inherits through is
 # built outside `make_claim` (#413), so no constructor's invariants cover its shape.

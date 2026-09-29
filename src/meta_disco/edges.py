@@ -1,6 +1,6 @@
 """Derivation edges inference states from a child's own name (ADR-0002, #356).
 
-Two producers write one: the index producer (``IndexingActivity``) and the catch-all, for a
+Two producers write one: the index producer (``IndexActivity``) and the catch-all, for a
 checksum file (``ChecksumActivity``). Each works out the parent's name from the child's own
 (the index producer's candidates are its own, ``get_parent_candidates``) and looks it up
 in the child's dataset; the name index, that lookup and the edge it yields are built here.

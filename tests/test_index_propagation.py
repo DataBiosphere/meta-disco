@@ -742,7 +742,7 @@ def _assert_inherited(output, index_name, parent_name, parent_md5):
     # Grounded by the parent's record key, not its md5 (ADR-0002 decision 2, #356).
     assert edge["parent_key"] == _fid(parent_md5)
     assert (step["activity"], edge["role"], edge["source_type"], edge["rule_id"]) == (
-        "IndexingActivity",
+        "IndexActivity",
         "indexed",
         "filename_rule",
         "index_by_name",
@@ -880,8 +880,8 @@ class TestMixedCaseNames:
             )
 
 
-class TestWhatIndexingActivityPasses:
-    """The producer takes what `IndexingActivity` passes and nothing else (#580).
+class TestWhatIndexActivityPasses:
+    """The producer takes what `IndexActivity` passes and nothing else (#580).
 
     The declarations are validated where they load; the producer does not second-guess
     them. A dimension they stop passing is written `not_classified`, on a matched index

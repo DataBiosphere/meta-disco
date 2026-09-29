@@ -280,7 +280,7 @@ evidence}` entry — plus the controlled vocabulary:
     activity declares. What each role passes is `rules/activities.yaml`'s to say, read
     through `meta_disco.activities` and trusted by its readers. Inference states two, from
     the child's own name through `meta_disco.edges` and `code_rules.EDGE_RULES`: the index
-    producer's `IndexingActivity` and the catch-all's `ChecksumActivity` for a `.md5`. An
+    producer's `IndexActivity` and the catch-all's `ChecksumActivity` for a `.md5`. An
     input carries `parent_file`, `parent_key` (the parent's record key, never its md5),
     `parent_kind`, and the `source_type` / `rule_id` that named it. A parent no file or
     two files of the dataset carry gives none. Steps the source tables state are built at

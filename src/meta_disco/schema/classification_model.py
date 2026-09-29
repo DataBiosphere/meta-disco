@@ -417,7 +417,7 @@ class CreditedToEnum(str, Enum):
 
 class ActivityTypeEnum(str, Enum):
     """
-    The kind of step that made a file (ADR-0002, #580): AnVIL FSS's activity types plus four of our own, each under the FSS term it narrows. `meaning` is TerraCore's class, else EDAM's operation for the same step; a near EDAM operation is a close mapping. What each passes is in `rules/activities.yaml`.
+    The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its released LinkML schema spells them, plus four of our own, each under the FSS term it narrows. `meaning` is TerraCore's class, else EDAM's operation for the same step; a near EDAM operation is a close mapping. What each passes is in `rules/activities.yaml`.
     """
     Activity = "Activity"
     """
@@ -430,20 +430,20 @@ class ActivityTypeEnum(str, Enum):
     SampleTreatmentActivity = "SampleTreatmentActivity"
     SequenceActivity = "SequenceActivity"
     """
-    Sequencing a sample into reads. FSS's spelling; TerraCore names the same class `SequencingActivity`.
+    Sequencing a sample into reads. TerraCore names the same class `SequencingActivity`.
     """
     AlignmentActivity = "AlignmentActivity"
-    VariantCallingActivity = "VariantCallingActivity"
+    VariantCallActivity = "VariantCallActivity"
     ExpressionActivity = "ExpressionActivity"
     """
     Quantifying expression. EDAM's RNA-Seq quantification is one kind of it, not the same step.
     """
     AnalysisActivity = "AnalysisActivity"
-    ImagingActivity = "ImagingActivity"
+    ImageActivity = "ImageActivity"
     """
     Making an image. Neither TerraCore nor EDAM has this class, so no id is recorded.
     """
-    IndexingActivity = "IndexingActivity"
+    IndexActivity = "IndexActivity"
     ChecksumActivity = "ChecksumActivity"
     """
     Computing a file's checksum. EDAM's only checksum operation is a molecular sequence's (operation_3348), not a file's, so no id is recorded.
