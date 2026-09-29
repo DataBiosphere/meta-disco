@@ -247,9 +247,11 @@ the "conflict" becomes structured provenance instead of an error.
 
 > **Superseded by ADR-0002** (decisions 2, 3; built by #356): the edge's shape. The live `derived_from` is a
 > list of edges, each naming its parent by `parent_file` and grounding it by `parent_key`, the parent's
-> record key, and each carrying the `source_type` and `rule_id` that stated it. An edge is written only where
-> the parent resolves, so there is no ungrounded edge, and `parent_md5sum` is retired. The single-object,
-> md5-grounded edge in the example and paragraphs below describes the output before #356.
+> record key where it resolves, and each carrying the `source_type` and `rule_id` that stated it.
+> `parent_md5sum` is retired. An edge from a filename convention (the index and checksum edges #356 writes) is
+> written only where its parent resolves, so it always carries `parent_key`; an edge from a source that names
+> the parent independently of the child may be `external`, with no `parent_key` (decision 2). The
+> single-object, md5-grounded edge in the example and paragraphs below describes the output before #356.
 
 A classification record is identified by the source's record key
 (`pipeline.SOURCE_RECORD_KEYS`, #446): for AnVIL its `file_id`, the catalog identity
