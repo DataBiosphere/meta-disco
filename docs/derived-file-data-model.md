@@ -245,6 +245,12 @@ the "conflict" becomes structured provenance instead of an error.
 
 ### 5a. Representation — one pointer, not copied values
 
+> **Superseded by ADR-0002** (decisions 2, 3; built by #356): the edge's shape. The live `derived_from` is a
+> list of edges, each naming its parent by `parent_file` and grounding it by `parent_key`, the parent's
+> record key, and each carrying the `source_type` and `rule_id` that stated it. An edge is written only where
+> the parent resolves, so there is no ungrounded edge, and `parent_md5sum` is retired. The single-object,
+> md5-grounded edge in the example and paragraphs below describes the output before #356.
+
 A classification record is identified by the source's record key
 (`pipeline.SOURCE_RECORD_KEYS`, #446): for AnVIL its `file_id`, the catalog identity
 that survives a re-index (`records.CATALOG_IDENTITY_FIELDS`). An AnVIL `md5sum` is not
@@ -368,11 +374,12 @@ distinction.
 > are the batch **report generators**, and none of them follows a link: an index
 > record's inherited values are copied onto it at write time (`classify_index_files.py`
 > looks the parent up by the source's record key, `pipeline.SOURCE_RECORD_KEYS`, and
-> writes the parent's labels into the index's own record). The emitted `derived_from`
-> edge grounds on `parent_md5sum` and `parent_file` only — it carries no `file_id`
-> — so a consumer cannot resolve it into a key-indexed map today, and in the
-> same-bytes case (#486) an md5 alone cannot say which parent row is meant. A linked
-> view needs the edge to carry the parent's record key; widening the edge is #371.
+> writes the parent's labels into the index's own record). Before #356 the emitted
+> `derived_from` edge grounded on `parent_md5sum` and `parent_file` only, so a
+> consumer could not resolve it into a key-indexed map, and in the same-bytes case
+> (#486) an md5 alone could not say which parent row was meant. Since #356 the edge
+> carries the parent's record key as `parent_key` (ADR-0002 decision 2), which is what
+> a linked view needs.
 >
 > The real decision is **what meta-disco hands to the Explorer**: records with
 > inherited values pre-copied in (today), or clean identity records plus links

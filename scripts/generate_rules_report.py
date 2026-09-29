@@ -391,9 +391,13 @@ def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict
                 if claimed is not None and _won(field_name, claimed, answer):
                     won.add(key)
         # An edge rule states an edge, not a claim: counted per edge, and per file carrying one.
-        for edge in record.get("derived_from") or []:
-            stats[edge["rule_id"]].claims += 1
-            fired.add(edge["rule_id"])
+        # A run written before #356 carries one edge object with no `rule_id`, which no
+        # edge rule stated, so it is not counted.
+        edges = record.get("derived_from")
+        for edge in edges if isinstance(edges, list) else []:
+            if edge.get("rule_id"):
+                stats[edge["rule_id"]].claims += 1
+                fired.add(edge["rule_id"])
         for key in fired:
             stats[key].files += 1
             stats[key].datasets[dataset] += 1
@@ -451,7 +455,7 @@ def build(rules_path: Path | None, value_map_path: Path | None, records, run_dir
     return {
         "run": run_dir.name,
         "records": n,
-        "provenance": f"{len(rules)} rules. Counts from classifying {n:,} files"
+        "provenance": f"{len(rules)} rules and {len(edge_rules)} edge rules. Counts from classifying {n:,} files"
         + (f" on {date}" if date else "")
         + f" (output folder {run_dir.name}).",
         "rules": rules,

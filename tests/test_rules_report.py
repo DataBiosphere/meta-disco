@@ -261,6 +261,14 @@ def test_edge_rules_are_listed_and_counted_by_the_edges_they_stated(data):
     assert rows[code_rules.INDEX_BY_NAME.id]["datasets"] == {"STUDY_B": 1}
 
 
+def test_a_run_from_before_edge_rules_is_still_read(tmp_path):
+    """A pre-#356 record carries one edge object and no `rule_id`: read, and counted for no edge rule."""
+    legacy = {**RECORDS[0], "derived_from": {"relation": "index_of", "parent_file": "s.bam", "parent_md5sum": None}}
+    run_dir = reconciled_run(tmp_path, [legacy])
+    data = grr.build(*rule_files(tmp_path), iter_reconciled_records(run_dir), run_dir)
+    assert all(e["files"] == 0 for e in data["edge_rules"])
+
+
 def test_every_schema_marker_is_worded():
     assert set(grr.PLACEHOLDER_MARKERS) == marker_values()
 
