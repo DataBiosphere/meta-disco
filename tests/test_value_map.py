@@ -7,14 +7,13 @@ generation layout, so the seeder and queue read them the way they read a real ge
 """
 
 import ast
-import re
 from pathlib import Path
 
 import generate_review_queue as grq
 import pytest
 import yaml
-from classify_index_files import AMBIGUOUS_PARENT, NO_MATCHING_PARENT
 
+from meta_disco import code_rules
 from meta_disco.models import CLASSIFICATION_FIELDS, JOIN_KEY_DRS_URI, NOT_APPLICABLE, SOURCE_REPOSITORY_METADATA
 from meta_disco.rule_loader import get_unified_rules
 from meta_disco.schema_vocab import dimension_values
@@ -830,10 +829,15 @@ def test_ac26_nothing_but_reconcile_imports_the_table():
     """Inference output is unchanged because no classification code reaches the module: the argument the
     issue allows in place of a corpus diff, made checkable over every module and script but the table's own.
     The reconcile stage is the table's one reader in a run (#432), and it writes its own artifact, never
-    inference's; the review-queue report (#524) reads it too and writes only its two report files."""
-    sources = [*Path("src/meta_disco").rglob("*.py"), *Path("scripts").glob("*.py")]
+    inference's; the review-queue report (#524) and the rules report (#572) read it too, and each writes only its
+    two report files."""
+    sources = [*Path("src/meta_disco").rglob("*.py"), *Path("scripts").rglob("*.py")]
     importers = sorted(str(p) for p in sources if p.name != "value_map.py" and "value_map" in imported_segments(p))
-    assert importers == ["scripts/generate_review_queue.py", "src/meta_disco/reconcile.py"], importers
+    assert importers == [
+        "scripts/generate_review_queue.py",
+        "scripts/generate_rules_report.py",
+        "src/meta_disco/reconcile.py",
+    ], importers
 
 
 def test_ac27_the_seeder_and_the_queue_read_every_line_through_iter_evidence(empty_table, evidence_root, monkeypatch):
@@ -875,23 +879,14 @@ def test_row_ids_are_slot_dot_slug_with_set_elements_joined():
 
 def test_row_ids_and_rule_ids_are_disjoint_by_shape(tmp_path):
     """A row id starts with its slot and a dot; no rule id contains a dot; so a claim's ``rule_id`` names one or
-    the other and neither loader has to read the other's file. Rule ids live in two places: the rule set, and the
-    literals the content classifiers and standalone producers write — as a keyword, a dictionary entry, or a
-    ``*_RULE_ID`` constant."""
+    the other and neither loader has to read the other's file. Rule ids live in two places: the rule set, and
+    ``code_rules`` for the rules and markers written in Python (#572), which ``test_code_rules`` holds every call
+    site to."""
     rules = get_unified_rules()
     ids = {rule.id for rule in rules.rules}
-    for path in [*Path("src/meta_disco").rglob("*.py"), *Path("scripts").glob("*.py")]:
-        if path.name != "value_map.py":
-            # Both spellings a producer writes one in: `rule_id="x"` to `make_claim`, `"rule_id": "x"` in a dict.
-            ids.update(re.findall(r"rule_id=\"([^\"]+)\"", path.read_text()))
-            ids.update(re.findall(r"\"rule_id\":\s*\"([^\"\s]+)\"", path.read_text()))
-            # And the third: a module constant handed to `make_claim` (`FETCH_FAILED_RULE_ID`, `VALIDATION_RULE_ID`).
-            ids.update(re.findall(r"RULE_ID\s*=\s*\"([^\"\s]+)\"", path.read_text()))
-    # The index producer writes its *reason* for taking no parent as the `rule_id` (#438); those two
-    # values flow through constants no regex names, so they are imported rather than scanned for.
-    ids.update({NO_MATCHING_PARENT, AMBIGUOUS_PARENT})
+    ids.update(r.id for r in (*code_rules.CODE_RULES, *code_rules.MARKERS))
     assert {"inherited_from_parent", "index_by_extension", "fetch_failed", "input_validation"} <= ids, (
-        "each spelling a rule id is written in is collected"
+        "the code rules and markers are collected"
     )
     assert ids, "no rule ids found — the search is broken, not the namespace"
     assert sorted(i for i in ids if "." in i) == []

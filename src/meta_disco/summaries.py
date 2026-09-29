@@ -1,5 +1,6 @@
 """Summary printers for classification results."""
 
+import json
 import re
 from typing import Literal
 
@@ -30,6 +31,16 @@ def md_code(value: str) -> str:
     fence = "`" * (max((len(run) for run in re.findall("`+", value)), default=0) + 1)
     pad = " " if value.startswith("`") or value.endswith("`") else ""
     return f"{fence}{pad}{value}{pad}{fence}"
+
+
+def embed_json(template: str, placeholder: str, data) -> str:
+    """``template`` with ``placeholder`` replaced by ``data`` as JSON, for a dashboard's ``<script>``.
+
+    Every ``<`` is written as ``\\u003c``, which JSON and JavaScript read back as ``<``: no
+    value can then close the ``<script>`` tag the payload sits in, or open an HTML comment
+    inside it.
+    """
+    return template.replace(placeholder, json.dumps(data).replace("<", "\\u003c"))
 
 
 def md_table(header: list[str], rows: list[list[str]], align: Literal["left", "right"] = "left") -> list[str]:

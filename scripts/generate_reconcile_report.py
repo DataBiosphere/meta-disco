@@ -38,7 +38,7 @@ from meta_disco.reconcile import (
     SOURCE_PRECEDENCE,
     fill_category,
 )
-from meta_disco.summaries import md_code, md_table
+from meta_disco.summaries import embed_json, md_code, md_table
 
 PROJECT_ROOT = Path(__file__).parent.parent
 TEMPLATE = PROJECT_ROOT / "docs" / "reconcile-dashboard-template.html"
@@ -646,9 +646,7 @@ def render_markdown(data: dict) -> str:
 
 
 def render_html(data: dict, template: str) -> str:
-    # Every < as \u003c, which JSON and JavaScript read back as <: no value can then close
-    # the <script> tag the payload sits in, or open an HTML comment inside it.
-    return template.replace(PLACEHOLDER, json.dumps(data).replace("<", "\\u003c"))
+    return embed_json(template, PLACEHOLDER, data)
 
 
 def main(argv: list[str] | None = None) -> int:

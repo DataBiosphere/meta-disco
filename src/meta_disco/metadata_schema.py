@@ -22,11 +22,12 @@ from dataclasses import dataclass, field
 from pydantic import ConfigDict, ValidationError
 from pydantic_core import ErrorDetails
 
+from . import code_rules
 from .models import all_not_classified
 from .schema.metadata_model import AnvilFileMetadataRecord
 
 # rule_id stamped on the evidence of a record that failed input validation.
-VALIDATION_RULE_ID = "input_validation"
+VALIDATION_RULE_ID = code_rules.INPUT_VALIDATION.id
 
 # Offending record keys kept per problem kind, so a report over 758k records stays
 # bounded while still pointing at concrete records to inspect.
