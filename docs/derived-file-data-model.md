@@ -1,7 +1,7 @@
 # Design: Data Model for Derived Files
 
 **Date:** 2026-06-25
-**Status:** Proposed (decision record for [#109](https://github.com/DataBiosphere/meta-disco/issues/109)); extended, and superseded in part, by [ADR-0002](adr/0002-derivation-graph.md) (#355), whose "What this supersedes" lists the sections, each marked below
+**Status:** Proposed (decision record for [#109](https://github.com/DataBiosphere/meta-disco/issues/109)); extended, and superseded in part, by [ADR-0002](adr/0002-derivation-graph.md) (#355), whose "What this supersedes" lists the sections, each marked below; the edge's `relation` verb below (`index_of`, `summarizes`, …) is the June design's, replaced by an `activity` from AnVIL FSS's vocabulary ([#580](https://github.com/DataBiosphere/meta-disco/issues/580), ADR-0002 decision 5)
 **Related:** [#90](https://github.com/DataBiosphere/meta-disco/issues/90) (provenance), [#88](https://github.com/DataBiosphere/meta-disco/issues/88) (conflict surfacing), [#16](https://github.com/DataBiosphere/meta-disco/issues/16) (DuckDB output)
 
 ---

@@ -59,7 +59,10 @@ is in ANVIL_1000G_high_coverage_2019, ANVIL_T2T, ANVIL_T2T_CHRY and AnVIL_HPRC_R
 all four. It is also what keeps two datasets that both call someone `S1` apart: a `dataset_local`
 identifier carries its dataset, which is part of its identity, so it never matches across datasets.
 Equal identifiers say nothing about whether a sample identifier and a donor identifier are one person;
-that is what a `donor_of` edge states (#361). **Identifiers are the one thing that crosses datasets;
+that is what a `SampleCollectionActivity` edge states (#361, #580). A `SequenceActivity` uses a sample
+identifier, and a `SampleCollectionActivity` makes that sample from a donor identifier, read from the
+sample's own row: AnVIL's `anvil_biosample.donor_id`, filled on every sample row of ten anvil15 datasets,
+and a submitter table's donor column where one has it (1000G `sample.participant`, IGVF `sample.donors`). **Identifiers are the one thing that crosses datasets;
 file edges never do** (decision 2).
 
 **Mapping between namespaces is out of scope here** and stays with #361: one person as
@@ -85,7 +88,7 @@ only within the child's dataset), `parent_ref` for anything else a source gives 
 
 `parent_scope` is **not stored** on the record: it is whether `parent_key` is set, and a stored copy
 could disagree with it. `edges.jsonl` works it out, so a consumer can filter on it. An edge whose parent
-is an identifier (a `SequenceActivity`'s sample, `donor_of`, `child_of`) has no `parent_scope`: an identifier is neither a
+is an identifier (a `SequenceActivity`'s sample, a `SampleCollectionActivity`'s donor, `child_of`) has no `parent_scope`: an identifier is neither a
 file we hold nor one we lack.
 
 *Rejected: a third scope, `type_only`* (the June doc's ungrounded edge: verb and parent kind known, no
@@ -106,11 +109,12 @@ child: a header line, a table row, IGVF's `derived_from`.
 A CRAM derives from two FASTQs; a joint-called VCF from many gVCFs. `derived_from` becomes a list with one
 edge per parent per source that states it, so a parent two sources name is two edges (decision 6).
 
-The reference a file was aligned to is an input of its alignment, but it is **not** a `derived_from` entry
-(#580): an entry passes what its activity declares from its parent (decision 8), and a reference FASTA has
-none of the reads' platform or library to pass. Where a source names the reference (`@PG`'s reference
-argument, `@SQ UR`), that is evidence beside the `reference_assembly` dimension, which a consistency check
-(#362) can compare with it; it never decides the dimension.
+The reference a file was aligned to is an input of its alignment in a role of its own (#580): an
+`AlignmentActivity` has a `reads` input, which passes the sequencer and the library, and a `reference`
+input, which passes `reference_assembly` and nothing else (decision 8). Where a source names the reference
+(`@PG`'s reference argument, `@SQ UR`, a table row), the edge to it is a `derived_from` entry in that role;
+where the file itself states its reference (`@SQ` lengths), that is the child's own declaration, and the
+two reconcile as any two do (4.9).
 
 ### 4. A merged file is made from its shards by a `MergeActivity`; there is no callset node
 
@@ -144,27 +148,38 @@ parent (decision 6).
 | `LiftoverActivity` (ours, under `AnalysisActivity`) | lifted file ← the file it was lifted from | a source naming the parent (schema changes, `source_assembly`) | `lifted_over_from` |
 | `AssemblyActivity` (ours) | assembly ← reads | HPRC assembly sample sheets, where the output resolves to a held assembly (Open) | `assembled_from` |
 | `SequenceActivity` | reads ← sample id | `anvil_activity` `Sequencing`, submitter tables (#357) | `sample_of`, for reads |
+| `SampleCollectionActivity` | sample id ← donor id | the sample's row: `anvil_biosample.donor_id`, a submitter donor column (#361) | `donor_of` |
 | `Activity` | related, step unknown | IGVF `file.derived_from` between content types no term names, `anvil_activity` `Unknown` | `derived_from` |
 
 FSS's other types (`SampleCollectionActivity`, `SampleTreatmentActivity`, `ExpressionActivity`,
-`AnalysisActivity`, `ImagingActivity`) are in the vocabulary, though no source row states one yet. A
+`AnalysisActivity`, `ImagingActivity`) are in the vocabulary, though no translation row maps a source's
+value to one yet; ENCORE's `anvil_activity` rows (`Quantificatioin: salmon`, `DifferentialExpression:
+deseq2`, `AlternativeSplicing: rMATS`) state expression and analysis steps that such rows would map. A
 source's raw `activity_type` reaches a term through translation rows, as a raw value does (contract
 3.9). Those rows land with the import that first reads `activity_type` (#577).
 
-**Not activities.** `aligned_to` is dropped: the reference is not a parent the child's values come from
-(decision 3). `donor_of` (sample id ← donor id) and `child_of` (donor id ← donor id) relate two
-identifiers, not a file to what it was made from. They stay identity relations of their own, in
-`edges.jsonl` only (decision 6, #361). A sample that a file's own header names (`@RG SM`, a VCF's sample
+**Not activities.** `aligned_to` is dropped: the reference is the `reference` input of an
+`AlignmentActivity` (decision 3). `child_of` (donor id ← donor id, HPRC's `maternal_id`/`paternal_id`,
+1000G pedigrees) is a family tie between donors: no processing step makes a child from its parents and
+nothing passes across it, so it stays the one relation of its own, in `edges.jsonl` only (decision 6,
+#361). *Rejected (#580): `donor_of` as a relation* beside the activities. A sample row naming its donor
+states no step, but neither does a submitter row naming a CRAM beside its FASTQs, and the lineage map
+names that step all the same; one formalism for lineage (HCA's `process`) keeps a place for what a paper
+or methods section says about a collection. A sample that a file's own header names (`@RG SM`, a VCF's sample
 columns) says which sample the data is about, not which step made the file; how it is recorded is #357's
 (Open).
 
-**Each activity has a number of inputs**, declared as `inputs` in `rules/activities.yaml`: **one** for
-`IndexingActivity`, `ChecksumActivity`, `QualityControlActivity` and `LiftoverActivity`, **many** for
-the rest. Sources that name the same parent for a one-input activity are one parent with two sources.
-Sources that name different parents for it are an **edge conflict**: a `.tbi` whose filename match says
+**Each activity declares its output and its inputs by role**, in `rules/activities.yaml`, whose shape is
+the LinkML class `ActivityDeclarations`. The output is a file or an identifier, and for a file the
+`data_type` kinds it may be. Each input role says the same, and whether the step always has it
+(`required`), whether an output has several in that role (`many`), and what the output takes from it
+(`passes`). An `AlignmentActivity`'s `reads` are many and its `reference` one; an index's `indexed` file is
+one. A required role no source names is lineage known to exist and not held. Sources that name the same
+parent for a role that takes one are one parent with two sources. Sources that name different parents for
+it are an **edge conflict**: a `.tbi` whose filename match says
 `a.vcf.gz` and whose `anvil_activity` says `b.vcf.gz` has one of them wrong. An edge conflict is listed
-for review, and nothing is inherited across that activity until it is settled. For a many-input
-activity, the parents every source names are pooled into one set, each source's parents still their own
+for review, and nothing is inherited across that activity until it is settled. For a role that
+takes many, the parents every source names are pooled into one set, each source's parents still their own
 edges (decision 6).
 
 *Rejected (#580): verbs on file-to-file edges*, which this decision first minted. The sources state
@@ -178,8 +193,8 @@ Five sources name file parents, the Context table's: submitter tables (same row 
 header command lines, HPRC's assembly sheets, and filename convention (companion files, and T2T's window
 VCFs for a `MergeActivity`). Every edge
 records which one stated it, and an edge two sources state is two edges that agree — a consistency
-check (#362) reads them. Identifier parents come from the sources decision 5 lists for `SequenceActivity`,
-`donor_of` and `child_of`, registries among them.
+check (#362) reads them. Identifier parents come from the sources decision 5 lists for `SequenceActivity` and
+`SampleCollectionActivity`, and, for `child_of`, from submitter tables and registries (#361).
 
 Submitter tables and `anvil_activity` are source evidence, which inference never reads (contract 1.2,
 6.1). So **edges the evidence states are built at reconcile** (settled with #356, 2026-09-28; built by
@@ -189,8 +204,9 @@ stage holding both kinds, which a chain mixes (T2T: `.tbi` → VCF by name, CRAM
 re-running it costs no corpus run (6.4) when a lineage mapping is corrected.
 
 An edge whose child is a file is stored on that file's record as `derived_from: [DerivationEdge]`.
-`donor_of` and `child_of` have an identifier as their child, which has no record, so they live only in a
-flat `edges.jsonl` written once per run: child (a record key or an identifier), the edge's activity (or, for `donor_of` and `child_of`, that identity relation), parent
+A `SampleCollectionActivity` and a `child_of` have an identifier as their child, which has no record, so
+they live only in a flat `edges.jsonl` written once per run: child (a record key or an identifier), the
+edge's activity (or `child_of`), parent
 (`parent_key` where it resolves, and `parent_file` or `parent_ref` as the source wrote it, or an
 identifier), provenance (`source_type`, plus `source` and `rule_id` for evidence or `rule_id` alone for inference,
 as on the edge), and `parent_scope`,
@@ -227,7 +243,7 @@ VCF takes `ILLUMINA`, and a VCF whose filename says `hifi` beside that CRAM is a
 a mislabelled file or a wrong edge, which must not be settled silently.
 
 **Parents that differ are mixed, not a conflict.** A child's parents across one activity — the pooled set of a
-many-input activity (decision 5) — are settled among themselves first, one declaration per activity; a
+role that takes many (decision 5) — are settled among themselves first, one declaration per activity; a
 child with two carrying activities has two, which reconcile with each other as any two declarations do:
 parents that agree (4.4's sense, `is_a` nesting included) give the child one inherited declaration,
 naming how many parents and which; parents that differ give it a **mixed** declaration, which carries no
@@ -256,7 +272,7 @@ authority, and this table is its reading when #580 wrote it.
 | activity | `data_modality` | `assay_type` | `platform` | `instrument_model` | `reference_assembly` |
 |---|---|---|---|---|---|
 | `IndexingActivity`, `ChecksumActivity`, `QualityControlActivity`, `MergeActivity`, `VariantCallingActivity` | yes | yes | yes | yes | yes |
-| `AlignmentActivity` | yes | yes | yes | yes | **no** — alignment introduces the reference |
+| `AlignmentActivity` | yes, from `reads` | yes, from `reads` | yes, from `reads` | yes, from `reads` | from its `reference` input only, not from the reads |
 | `LiftoverActivity` | yes | yes | yes | yes | **no** — liftover changes it |
 | `AssemblyActivity` | yes | yes | yes | yes | **no** — an assembly is its own reference |
 | `Activity`, `SequenceActivity`, `SampleCollectionActivity`, `SampleTreatmentActivity`, `ImagingActivity`, `ExpressionActivity`, `AnalysisActivity` | no | no | no | no | no |
@@ -371,9 +387,10 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   with no room for a step or a parent. The shape of relationship evidence, and the per-dataset
   lineage map that fills it, are not designed here; #577 (split from #356) designs them with the first
   evidence-stated edge (`anvil_activity`).
-- **Done (#580):** what each activity carries (decision 8) and its number of inputs (decision 5) are
-  declared once, in `rules/activities.yaml`, read by `meta_disco.activities` and held to
-  `activity_type_enum` by its tests; `INHERITED_FIELDS` and the index producer's code rule read the
+- **Done (#580):** each activity's output and input roles (decision 5), and what each role passes
+  (decision 8), are declared once, in `rules/activities.yaml`, whose shape is the LinkML class
+  `ActivityDeclarations`; `meta_disco.activities` reads it through the generated pydantic model, so it is
+  checked as it loads, and its readers trust it; `INHERITED_FIELDS` and the index producer's code rule read the
   `IndexingActivity` entry.
 - An inherited claim (decision 8) carries `inherited_from`: a list, one entry per contributing parent, of
   `{activity, parent_key, value | status | state}` — so the parents a declaration is credited to, and the
@@ -387,7 +404,7 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   source (contract 6.10). The report also needs a way to list a mixed dimension with its parents' values,
   and an edge conflict with the parents each source named.
 - An `edges.jsonl` row is its own class, not a `DerivationEdge`: its child is a record key or an
-  `EntityIdentifier`, because `donor_of` and `child_of`, identity relations and not activities (decision 5), have no record to sit on; its parent carries the
+  `EntityIdentifier`, because a `SampleCollectionActivity`'s child, a sample, and `child_of`'s, a donor, have no record to sit on; its parent carries the
   same fields as `DerivationEdge`'s — `parent_key`, `parent_file`, `parent_ref`, or `parent_id` — and its
   provenance `source_type` plus `source` and `rule_id` for evidence or `rule_id` alone for inference, with `parent_scope` worked out (decision 6).
 - `parent_kind_enum` gains `reference` and `assembly` if #358 and #360 need them; decided there.
@@ -409,7 +426,7 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
 - **A parent in `conflict`.** 4.4–4.5 reconcile declarations, and a conflict declares no value. Whether a
   parent's conflict reaches the child as a conflict (what the index producer does today) or as nothing is
   #413's to decide.
-- **Sources that name different parent sets for a many-input activity.** A caller header naming `{A}` and a
+- **Sources that name different parent sets for a role that takes many.** A caller header naming `{A}` and a
   submitter table naming `{B}` pool to `{A, B}`, which could hide a wrong edge; but sources are often
   partial (a header lists a subset), so differing sets are not a conflict. The consistency check (#362)
   flags an activity whose sources' sets do not overlap.

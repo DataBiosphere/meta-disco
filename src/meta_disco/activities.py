@@ -1,63 +1,51 @@
-"""What each kind of step passes from its inputs to its outputs, declared once (#580).
+"""What each kind of step takes in, makes, and passes to its output, declared once (#580).
 
 The vocabulary is ``activity_type_enum`` in the LinkML schema: AnVIL FSS's activity
-types plus four of our own. This module reads the declarations beside it,
-``rules/activities.yaml``, a mapping whose one key is ``activities``::
+types plus four of our own. The declarations are ``rules/activities.yaml``, whose shape
+is the schema's ``ActivityDeclarations``: per term, its output and its inputs by role,
+each role with its form (file or identifier), the ``data_type`` kinds it may carry,
+whether it is required, whether an output has many of it, and what it passes.
 
-    activities:
-      - term: IndexingActivity
-        inputs: one          # an output has one input of the step, or `many`
-        parent: file         # an input is a file, or an `identifier` (a sample)
-        passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
-        reason: An index describes the data it points into.
-
-**Checked when it loads**, raising ``ValueError`` naming the term: the terms are exactly
-the enum's, each once; ``inputs`` and ``parent`` are one of their two values; ``passes``
-names classification slots, each once and never ``data_type``, which never passes (a
-VCF is not an alignment, ADR-0002 decision 8); ``Activity``, the step not known, passes nothing; and
-every term carries a ``reason``. ``passes`` is returned in ``CLASSIFICATION_FIELDS``
-order, whatever order the file writes it in, so a reader can compare it with a tuple
-built from that constant.
+**Checked when it loads.** The file is read through the pydantic model generated from
+that class, which refuses an unknown key, a missing member, and a term, kind, form or
+dimension outside its enum; ``data_type`` is not among the dimensions an input can pass.
+PyYAML's silent keeping of the last of a repeated key is refused before that. The
+checks that need the whole file are here, raising ``ValueError``: every term of the enum
+declared exactly once, a role named once within a term, and ``Activity``, the step not
+known, passing nothing. What it declares is then trusted: a reader does not re-check it.
 
 **Who reads it today**: the index producer's inheritance (``INHERITED_FIELDS``) and its
-code rule's ``sets`` are ``IndexingActivity``'s ``passes``. Inheritance across the other
+code rule's ``sets`` are what ``IndexingActivity`` passes. Inheritance across the other
 terms is #571's.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from functools import cache
 from importlib.resources import files
 
 import yaml
 
 from .models import CLASSIFICATION_FIELDS
+from .schema.classification_model import ActivityDeclaration, ActivityDeclarations
 from .schema_vocab import activity_values
 
 UNKNOWN = "Activity"
 INDEXING = "IndexingActivity"
 CHECKSUM = "ChecksumActivity"
 
-ONE = "one"
-MANY = "many"
-INPUTS = (ONE, MANY)
-PARENT_FILE = "file"
-PARENT_IDENTIFIER = "identifier"
-PARENTS = (PARENT_FILE, PARENT_IDENTIFIER)
 
-_KEYS = {"term", "inputs", "parent", "passes", "reason"}
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """A YAML loader that refuses a key given twice, which PyYAML would otherwise keep the last of."""
 
-
-@dataclass(frozen=True)
-class Declaration:
-    """One term's declaration: its inputs' number and form, and what passes to its outputs."""
-
-    term: str
-    inputs: str
-    parent: str
-    passes: tuple[str, ...]
-    reason: str
+    def construct_mapping(self, node, deep=False):
+        seen: set = set()
+        for key_node, _value in node.value:
+            key = self.construct_object(key_node, deep=deep)
+            if key in seen:
+                raise ValueError(f"activities file line {key_node.start_mark.line + 1}: key {key!r} given twice")
+            seen.add(key)
+        return super().construct_mapping(node, deep=deep)
 
 
 def default_activities_resource():
@@ -65,65 +53,44 @@ def default_activities_resource():
     return files(f"{__package__}.rules") / "activities.yaml"
 
 
-def load_activities(text: str | None = None) -> dict[str, Declaration]:
-    """The declarations by term, from ``text`` or the bundled file; ``ValueError`` on any check the module docstring lists."""
+def load_activities(text: str | None = None) -> dict[str, ActivityDeclaration]:
+    """The declarations by term, from ``text`` or the bundled file.
+
+    Raises ``ValueError`` (pydantic's ``ValidationError`` is one) on any check the
+    module docstring lists.
+    """
     if text is None:
         text = default_activities_resource().read_text(encoding="utf-8")
-    document = yaml.safe_load(text)
-    if not isinstance(document, dict) or set(document) != {"activities"}:
-        raise ValueError("activities file: expected a mapping whose one key is 'activities'")
-    entries = document["activities"]
-    if not isinstance(entries, list):
-        raise ValueError("activities file: 'activities' must be a list")
-    declared: dict[str, Declaration] = {}
-    for entry in entries:
-        declaration = _declaration(entry)
-        if declaration.term in declared:
-            raise ValueError(f"activity {declaration.term!r}: declared twice")
-        declared[declaration.term] = declaration
-    terms = activity_values()
-    missing = sorted(terms - set(declared))
+    document = ActivityDeclarations.model_validate(yaml.load(text, Loader=_UniqueKeyLoader))
+    declared: dict[str, ActivityDeclaration] = {}
+    for declaration in document.activities:
+        term = str(declaration.term)
+        if term in declared:
+            raise ValueError(f"activity {term!r}: declared twice")
+        roles = [i.role for i in declaration.inputs]
+        if len(set(roles)) != len(roles):
+            raise ValueError(f"activity {term!r}: a role is named twice in {roles}")
+        declared[term] = declaration
+    missing = sorted(activity_values() - set(declared))
     if missing:
         raise ValueError(f"activity_type_enum terms with no declaration: {missing}")
+    unknown = _passes(declared[UNKNOWN])
+    if unknown:
+        raise ValueError(f"activity {UNKNOWN!r}: the step not known passes nothing, not {unknown}")
     return declared
 
 
-def _declaration(entry: object) -> Declaration:
-    if not isinstance(entry, dict) or set(entry) != _KEYS:
-        raise ValueError(f"activity entry {entry!r}: expected exactly the keys {sorted(_KEYS)}")
-    term = entry["term"]
-    if term not in activity_values():
-        raise ValueError(f"activity {term!r}: not a term of activity_type_enum")
-    if entry["inputs"] not in INPUTS:
-        raise ValueError(f"activity {term!r}: inputs {entry['inputs']!r} is not one of {INPUTS}")
-    if entry["parent"] not in PARENTS:
-        raise ValueError(f"activity {term!r}: parent {entry['parent']!r} is not one of {PARENTS}")
-    passes = entry["passes"]
-    if not isinstance(passes, list) or len(set(passes)) != len(passes):
-        raise ValueError(f"activity {term!r}: passes must be a list naming each slot once")
-    unknown = [slot for slot in passes if slot not in CLASSIFICATION_FIELDS or slot == "data_type"]
-    if unknown:
-        raise ValueError(f"activity {term!r}: passes {unknown}, which are not slots an output can take")
-    if term == UNKNOWN and passes:
-        raise ValueError(f"activity {UNKNOWN!r}: the step not known passes nothing, not {passes}")
-    reason = entry["reason"]
-    if not isinstance(reason, str) or not reason.strip():
-        raise ValueError(f"activity {term!r}: needs a reason")
-    return Declaration(
-        term=term,
-        inputs=entry["inputs"],
-        parent=entry["parent"],
-        passes=tuple(slot for slot in CLASSIFICATION_FIELDS if slot in passes),
-        reason=reason,
-    )
+def _passes(declaration: ActivityDeclaration) -> tuple[str, ...]:
+    passed = {str(slot) for i in declaration.inputs for slot in i.passes or ()}
+    return tuple(slot for slot in CLASSIFICATION_FIELDS if slot in passed)
 
 
 @cache
-def declarations() -> dict[str, Declaration]:
+def declarations() -> dict[str, ActivityDeclaration]:
     """The bundled declarations, loaded once."""
     return load_activities()
 
 
 def passes(term: str) -> tuple[str, ...]:
-    """The dimensions an output of ``term`` takes from its inputs, in ``CLASSIFICATION_FIELDS`` order."""
-    return declarations()[term].passes
+    """The dimensions an output of ``term`` takes from any of its inputs, in ``CLASSIFICATION_FIELDS`` order."""
+    return _passes(declarations()[term])

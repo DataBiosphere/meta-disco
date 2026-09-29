@@ -1,102 +1,146 @@
-# What each kind of step passes from its inputs to its outputs (#580, ADR-0002 decision 8).
-# The terms are `activity_type_enum`'s, in the LinkML schema; this file declares, for
-# each, exactly once: `inputs`, whether an output has one input of the step or many;
-# `parent`, whether an input is a file or an identifier (a sample); `passes`, the
-# dimensions an output takes from its inputs. Shape and checks: src/meta_disco/activities.py.
+# What each kind of step takes in, makes, and passes from its inputs to its output
+# (#580, ADR-0002 decision 8). The terms are `activity_type_enum`'s; the shape is the
+# LinkML class `ActivityDeclarations`, and src/meta_disco/activities.py reads it through
+# the model generated from that class. An input's `kind` is the `data_type` terms it may
+# carry (absent: any); `passes` is what the output takes from it (absent: nothing).
 activities:
   - term: Activity
-    inputs: many
-    parent: file
-    passes: []
+    output: {form: [file, identifier]}
+    inputs:
+      - {role: input, form: [file, identifier], required: true, many: true}
     reason: >-
       The step is not known, so nothing is known to pass: a generic `derived_from` in the
       source (IGVF's `file.derived_from` between two content types no term names) or an
-      `activity_type` of `Unknown`.
+      `activity_type` of `Unknown`, whose rows name files and samples alike.
   - term: SampleCollectionActivity
-    inputs: many
-    parent: identifier
-    passes: []
-    reason: A sample taken from a donor; an identifier has no dimensions to pass.
+    output: {form: [identifier]}
+    inputs:
+      - {role: donor, form: [identifier], required: true, many: false}
+    reason: >-
+      A sample taken from a donor, the donor read from the sample's own row
+      (`anvil_biosample.donor_id`, a submitter donor column); an identifier has no
+      dimensions to pass.
   - term: SampleTreatmentActivity
-    inputs: many
-    parent: identifier
-    passes: []
+    output: {form: [identifier]}
+    inputs:
+      - {role: sample, form: [identifier], required: true, many: false}
     reason: One sample made from another; an identifier has no dimensions to pass.
   - term: SequenceActivity
-    inputs: many
-    parent: identifier
-    passes: []
+    output: {form: [file], kind: [reads, raw_signal]}
+    inputs:
+      - {role: sample, form: [identifier], required: true, many: true}
     reason: >-
       Reads made from a sample. Its input is a sample identifier, which has no dimensions;
       the reads' own platform and assay come from their own evidence.
   - term: AlignmentActivity
-    inputs: many
-    parent: file
-    passes: [data_modality, assay_type, platform, instrument_model]
+    output: {form: [file], kind: [alignments]}
+    inputs:
+      - role: reads
+        form: [file]
+        kind: [reads]
+        required: true
+        many: true
+        passes: [data_modality, assay_type, platform, instrument_model]
+      - role: reference
+        form: [file]
+        kind: [sequence, assembly, pangenome]
+        required: true
+        many: false
+        passes: [reference_assembly]
     reason: >-
-      An alignment is its reads placed on a reference: the sequencer and the library pass,
-      and the reference does not, since alignment introduces it.
+      An alignment is its reads placed on a reference: the sequencer and the library pass
+      from the reads, and the reference assembly from the reference it was aligned to.
   - term: VariantCallingActivity
-    inputs: many
-    parent: file
-    passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
+    output: {form: [file], kind: [variants, genotypes]}
+    inputs:
+      - role: calls_from
+        form: [file]
+        kind: [alignments, variants]
+        required: true
+        many: true
+        passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
     reason: >-
-      Variants are called in the coordinates of the alignments they are called from, so the
-      reference passes with the sequencer and the library.
+      Variants are called in the coordinates of the alignments (or gVCFs) they are called
+      from, so the reference passes with the sequencer and the library.
   - term: ExpressionActivity
-    inputs: many
-    parent: file
-    passes: []
+    output: {form: [file], kind: [quantification, expression_matrix]}
+    inputs:
+      - {role: quantified, form: [file], kind: [reads, alignments], required: true, many: true}
     reason: >-
       Not decided: whether a quantification keeps its reads' reference depends on the tool
-      (salmon quantifies against a transcriptome), and no source row maps to this term yet.
+      (salmon quantifies against a transcriptome), and no translation row maps to this term yet.
   - term: AnalysisActivity
-    inputs: many
-    parent: file
-    passes: []
+    output: {form: [file]}
+    inputs:
+      - {role: analysed, form: [file], required: true, many: true}
     reason: >-
       Too broad to say what passes: differential expression and splicing analysis share
       this term. A narrower term of our own under it declares its own.
   - term: ImagingActivity
-    inputs: many
-    parent: identifier
-    passes: []
+    output: {form: [file], kind: [images]}
+    inputs:
+      - {role: sample, form: [identifier], required: true, many: false}
     reason: An image is made from a sample; an identifier has no dimensions to pass.
   - term: IndexingActivity
-    inputs: one
-    parent: file
-    passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
+    output: {form: [file], kind: [index]}
+    inputs:
+      - role: indexed
+        form: [file]
+        required: true
+        many: false
+        passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
     reason: >-
       An index describes the data it points into, so it takes every dimension but its own
       kind, `data_type`.
   - term: ChecksumActivity
-    inputs: one
-    parent: file
-    passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
+    output: {form: [file], kind: [checksum]}
+    inputs:
+      - role: checked
+        form: [file]
+        required: true
+        many: false
+        passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
     reason: >-
       A checksum is a companion of one file, as an index is (ADR-0002 decision 8), so it
       takes every dimension but its own kind.
   - term: QualityControlActivity
-    inputs: one
-    parent: file
-    passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
+    output: {form: [file], kind: [qc_report, annotations]}
+    inputs:
+      - role: reported_on
+        form: [file]
+        required: true
+        many: false
+        passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
     reason: >-
       A report on one file's content (samtools stats, mosdepth) describes that file's data,
       so it takes every dimension but its own kind.
   - term: LiftoverActivity
-    inputs: one
-    parent: file
-    passes: [data_modality, assay_type, platform, instrument_model]
+    output: {form: [file]}
+    inputs:
+      - role: lifted
+        form: [file]
+        required: true
+        many: false
+        passes: [data_modality, assay_type, platform, instrument_model]
     reason: A liftover changes the reference and keeps the rest.
   - term: MergeActivity
-    inputs: many
-    parent: file
-    passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
+    output: {form: [file]}
+    inputs:
+      - role: shard
+        form: [file]
+        required: true
+        many: true
+        passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
     reason: >-
       Files of one kind joined into one keep what they share; where the inputs differ, the
       output is mixed (ADR-0002 decision 8).
   - term: AssemblyActivity
-    inputs: many
-    parent: file
-    passes: [data_modality, assay_type, platform, instrument_model]
+    output: {form: [file], kind: [assembly]}
+    inputs:
+      - role: reads
+        form: [file]
+        kind: [reads]
+        required: true
+        many: true
+        passes: [data_modality, assay_type, platform, instrument_model]
     reason: An assembly is its own reference, so the reads' reference does not pass.

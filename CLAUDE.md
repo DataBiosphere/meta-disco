@@ -279,8 +279,8 @@ evidence}` entry — plus the controlled vocabulary:
     `meta_disco.edges`: the index producer's `IndexingActivity` and the catch-all's
     `ChecksumActivity` for a `.md5`. Each names its step as an `activity`, a term of
     `activity_type_enum` (AnVIL FSS's activity types, #580), never a verb; what an
-    activity passes from parent to child is declared once, in `rules/activities.yaml`
-    (`meta_disco.activities`). Each carries `parent_file`, `parent_key` (the parent's record key, never
+    activity passes from parent to child is `rules/activities.yaml`'s to say, the one
+    place code reads it (`meta_disco.activities`). Each carries `parent_file`, `parent_key` (the parent's record key, never
     its md5), `parent_kind` from the parent's extension, and the `source_type` / `rule_id`
     of the edge rule that stated it (`code_rules.EDGE_RULES`). A parent no file or two
     files of the dataset carry gives no edge, since the name would only restate the

@@ -14,6 +14,7 @@ from classify_index_files import (
 
 from meta_disco.edges import parent_kind_of
 from meta_disco.models import (
+    CLASSIFICATION_FIELDS,
     CLASSIFIED,
     CONFLICT,
     NOT_APPLICABLE,
@@ -875,3 +876,36 @@ class TestMixedCaseNames:
                 tmp_path,
                 [{**_file("placeholder", ".bai", "1" * 32, "e1"), "file_name": 67890}],
             )
+
+
+class TestWhatIndexingActivityPasses:
+    """The producer takes what `IndexingActivity` passes and nothing else (#580).
+
+    The declarations are validated where they load; the producer does not second-guess
+    them. A dimension they stop passing is written `not_classified`, on a matched index
+    and a declined one alike, so the record keeps every slot.
+    """
+
+    @pytest.fixture
+    def narrowed(self, monkeypatch):
+        import classify_index_files
+
+        kept = tuple(f for f in classify_index_files.INHERITED_FIELDS if f != "reference_assembly")
+        monkeypatch.setattr(classify_index_files, "INHERITED_FIELDS", kept)
+
+    def test_a_matched_index_leaves_a_dimension_not_passed_open(self, tmp_path, narrowed):
+        output = run_index_producer(
+            tmp_path,
+            [_file("sample.bam", ".bam", "1" * 32, "e1"), _file("sample.bam.bai", ".bai", "2" * 32, "e2")],
+            [_classified_record("1" * 32, "GRCh38")],
+        )
+        [record] = output["classifications"]
+        assert list(record["classifications"]) == list(CLASSIFICATION_FIELDS)
+        assert record["classifications"]["reference_assembly"]["status"] == NOT_CLASSIFIED
+        assert record["classifications"]["reference_assembly"]["evidence"] == []
+
+    def test_a_declined_index_keeps_every_slot(self, tmp_path, narrowed):
+        output = run_index_producer(tmp_path, [_file("orphan.bai", ".bai", "3" * 32, "e3")])
+        [record] = output["classifications"]
+        assert list(record["classifications"]) == list(CLASSIFICATION_FIELDS)
+        assert record["classifications"]["reference_assembly"]["status"] == NOT_CLASSIFIED

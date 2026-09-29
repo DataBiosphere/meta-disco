@@ -424,6 +424,9 @@ class ActivityTypeEnum(str, Enum):
     A step whose kind the source does not state; nothing passes across it.
     """
     SampleCollectionActivity = "SampleCollectionActivity"
+    """
+    Taking a sample. Neither TerraCore nor EDAM has this class, so no id is recorded.
+    """
     SampleTreatmentActivity = "SampleTreatmentActivity"
     SequenceActivity = "SequenceActivity"
     """
@@ -437,6 +440,9 @@ class ActivityTypeEnum(str, Enum):
     """
     AnalysisActivity = "AnalysisActivity"
     ImagingActivity = "ImagingActivity"
+    """
+    Making an image. Neither TerraCore nor EDAM has this class, so no id is recorded.
+    """
     IndexingActivity = "IndexingActivity"
     ChecksumActivity = "ChecksumActivity"
     """
@@ -458,6 +464,28 @@ class ActivityTypeEnum(str, Enum):
     """
     Assembling reads into sequences. Not an FSS term; EDAM's Sequence assembly is the same step.
     """
+
+
+class ActivityFormEnum(str, Enum):
+    """
+    Whether an activity's input or output is a file we hold or an identifier (#580).
+    """
+    file = "file"
+    identifier = "identifier"
+    """
+    A sample or donor identifier (ADR-0002 decision 1), which has no record.
+    """
+
+
+class PassedDimensionEnum(str, Enum):
+    """
+    The dimensions an activity's output can take from an input (#580): the six classification dimensions but `data_type`, which names a file's own kind and never passes (ADR-0002 decision 8: a VCF is not an alignment).
+    """
+    data_modality = "data_modality"
+    platform = "platform"
+    reference_assembly = "reference_assembly"
+    assay_type = "assay_type"
+    instrument_model = "instrument_model"
 
 
 class ParentKindEnum(str, Enum):
@@ -1200,7 +1228,7 @@ class Evidence(ConfiguredBaseModel):
 
     rule_id: Optional[str] = Field(default=None, description="""Identifier of the rule or content classifier that produced this evidence. Absent on synthetic resolution markers, which carry `marker` instead.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'DerivationEdge']} })
     marker: Optional[EvidenceMarkerEnum] = Field(default=None, description="""Kind of synthetic resolution marker, when this entry is not a claim but a note about the outcome: `not_classified` (no rule determined a value) or `conflict` (claims disagreed at the top tier). The marker's `status` is the status the field resolved to — `conflict` on a conflict marker (#88). Absent on real claims.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
-    reason: Optional[str] = Field(default=None, description="""Human-readable rationale.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
+    reason: Optional[str] = Field(default=None, description="""Human-readable rationale.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'ActivityDeclaration']} })
     value: Optional[str] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     status: Optional[ClassificationStatusEnum] = Field(default=None, description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     claim_state: Optional[ClaimStateEnum] = Field(default=None, description="""The state of a claim that produced no vocabulary value — see `claim_state_enum` for what each state means. Present instead of `value` or `status`, and only on such a claim: one that mapped successfully carries a `value`, and the two sentinels are carried in `status` as before.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
@@ -1240,6 +1268,51 @@ class DerivationEdge(ConfiguredBaseModel):
     rule_id: str = Field(default=..., description="""The edge rule that stated the edge (`code_rules.EDGE_RULES`), naming the convention or field it reads.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'DerivationEdge']} })
 
 
+class ActivityDeclarations(ConfiguredBaseModel):
+    """
+    The file `rules/activities.yaml` (#580): what each kind of step (`activity_type_enum`) takes in, makes, and passes from its inputs to its output. `meta_disco.activities` reads the file through the pydantic model generated from this class, so what the schema refuses and what the loader refuses are one definition. The loader adds the checks that need the whole file: every term of the enum declared exactly once, role names unique within a term, and `Activity` passing nothing. Declared as class-local `attributes`, like `ReferenceBuild`: `role`, `kind` and `form` are names nothing outside these classes needs.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    activities: list[ActivityDeclaration] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityDeclarations']} })
+
+
+class ActivityDeclaration(ConfiguredBaseModel):
+    """
+    One kind of step, its output, and its inputs by role.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    term: ActivityTypeEnum = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityDeclaration']} })
+    output: ActivityEnd = Field(default=..., description="""What the step makes. The child of an edge is always its output.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityDeclaration']} })
+    inputs: list[ActivityInput] = Field(default=..., description="""The step's inputs, each by the part it plays: an alignment's `reads` and its `reference` pass different dimensions.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityDeclaration']} })
+    reason: str = Field(default=..., description="""Why the step passes what it passes.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'ActivityDeclaration']} })
+
+
+class ActivityEnd(ConfiguredBaseModel):
+    """
+    An input or output of a step: whether it is a file we hold or an identifier (a sample, a donor, ADR-0002 decision 1), and for a file, the kinds it may be.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    form: list[ActivityFormEnum] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityEnd']} })
+    kind: Optional[list[DataTypeEnum]] = Field(default=None, description="""The `data_type` terms a file here may carry, a dotted term's children meant with it (`variants` covering `variants.germline`); matching a file against it is #577's. Absent: any kind.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityEnd']} })
+
+
+class ActivityInput(ActivityEnd):
+    """
+    One input role of a step.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    role: str = Field(default=..., description="""The part the input plays (`reads`, `reference`, `indexed`).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
+    required: bool = Field(default=..., description="""Whether the step always has this input. A required input no source names is lineage we know exists and do not have.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
+    many: bool = Field(default=..., description="""Whether an output has several inputs in this role. Sources naming different parents for a role that takes one are an edge conflict (ADR-0002 decision 5).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
+    passes: Optional[list[PassedDimensionEnum]] = Field(default=None, description="""The dimensions the output takes from an input in this role. Absent: none.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
+    form: list[ActivityFormEnum] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityEnd']} })
+    kind: Optional[list[DataTypeEnum]] = Field(default=None, description="""The `data_type` terms a file here may carry, a dotted term's children meant with it (`variants` covering `variants.germline`); matching a file against it is #577's. Absent: any kind.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityEnd']} })
+
+
 # Model rebuild
 # see https://pydantic-docs.helpmanual.io/usage/models/#rebuilding-a-model
 ClassificationRecord.model_rebuild()
@@ -1266,3 +1339,7 @@ EvidenceRow.model_rebuild()
 EvidenceFileEnvelope.model_rebuild()
 Evidence.model_rebuild()
 DerivationEdge.model_rebuild()
+ActivityDeclarations.model_rebuild()
+ActivityDeclaration.model_rebuild()
+ActivityEnd.model_rebuild()
+ActivityInput.model_rebuild()

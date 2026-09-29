@@ -266,9 +266,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
       already known to differ, or a mixed parent, give mixed whatever the rest are; what a parent in
       `conflict` passes, and so what its activity gives, is #413's.
 
-    Which activity carries which dimension is declared once, as its `passes` in `rules/activities.yaml`
-    (ADR-0002 decision 8, #580); `data_type` is never carried. Sources that name different parents for an
-    activity with one input are an edge conflict, across which nothing is
+    Which activity carries which dimension is its `passes` in `rules/activities.yaml`, the one place
+    code reads it (ADR-0002 decision 8 records the reasoning, #580); `data_type` is never carried. Sources that name different parents for an
+    input role that takes one are an edge conflict, across which nothing is
     inherited until it is settled. The declaration is a claim like any other (1.1, 3.2), naming the step it
     crossed as its rule. It is the only way a slot is filled from another file's answer, and nothing fills
     one slot from another slot's answer within a file.

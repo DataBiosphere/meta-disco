@@ -741,6 +741,88 @@ classes:
           The edge rule that stated the edge (`code_rules.EDGE_RULES`), naming the
           convention or field it reads.
 
+  ActivityDeclarations:
+    description: >-
+      The file `rules/activities.yaml` (#580): what each kind of step
+      (`activity_type_enum`) takes in, makes, and passes from its inputs to its output.
+      `meta_disco.activities` reads the file through the pydantic model generated from
+      this class, so what the schema refuses and what the loader refuses are one
+      definition. The loader adds the checks that need the whole file: every term of
+      the enum declared exactly once, role names unique within a term, and `Activity`
+      passing nothing. Declared as class-local `attributes`, like `ReferenceBuild`:
+      `role`, `kind` and `form` are names nothing outside these classes needs.
+    attributes:
+      activities:
+        range: ActivityDeclaration
+        multivalued: true
+        inlined_as_list: true
+        required: true
+
+  ActivityDeclaration:
+    description: One kind of step, its output, and its inputs by role.
+    attributes:
+      term:
+        range: activity_type_enum
+        required: true
+      output:
+        range: ActivityEnd
+        inlined: true
+        required: true
+        description: What the step makes. The child of an edge is always its output.
+      inputs:
+        range: ActivityInput
+        multivalued: true
+        inlined_as_list: true
+        required: true
+        description: >-
+          The step's inputs, each by the part it plays: an alignment's `reads` and its
+          `reference` pass different dimensions.
+      reason:
+        required: true
+        description: Why the step passes what it passes.
+
+  ActivityEnd:
+    description: >-
+      An input or output of a step: whether it is a file we hold or an identifier
+      (a sample, a donor, ADR-0002 decision 1), and for a file, the kinds it may be.
+    attributes:
+      form:
+        range: activity_form_enum
+        multivalued: true
+        required: true
+      kind:
+        range: data_type_enum
+        multivalued: true
+        description: >-
+          The `data_type` terms a file here may carry, a dotted term's children meant
+          with it (`variants` covering `variants.germline`); matching a file against it
+          is #577's. Absent: any kind.
+
+  ActivityInput:
+    is_a: ActivityEnd
+    description: One input role of a step.
+    attributes:
+      role:
+        required: true
+        description: The part the input plays (`reads`, `reference`, `indexed`).
+      required:
+        range: boolean
+        required: true
+        description: >-
+          Whether the step always has this input. A required input no source names is
+          lineage we know exists and do not have.
+      many:
+        range: boolean
+        required: true
+        description: >-
+          Whether an output has several inputs in this role. Sources naming different
+          parents for a role that takes one are an edge conflict (ADR-0002 decision 5).
+      passes:
+        range: passed_dimension_enum
+        multivalued: true
+        description: >-
+          The dimensions the output takes from an input in this role. Absent: none.
+
 # =============================================================================
 # SLOTS
 # =============================================================================
@@ -1402,6 +1484,8 @@ enums:
         description: A step whose kind the source does not state; nothing passes across it.
         meaning: TerraCore:Activity
       SampleCollectionActivity:
+        description: >-
+          Taking a sample. Neither TerraCore nor EDAM has this class, so no id is recorded.
         is_a: Activity
       SampleTreatmentActivity:
         is_a: Activity
@@ -1433,6 +1517,8 @@ enums:
         is_a: Activity
         meaning: TerraCore:AnalysisActivity
       ImagingActivity:
+        description: >-
+          Making an image. Neither TerraCore nor EDAM has this class, so no id is recorded.
         is_a: Activity
       IndexingActivity:
         is_a: Activity
@@ -1466,6 +1552,25 @@ enums:
           the same step.
         is_a: Activity
         meaning: EDAM:operation_0310
+
+  activity_form_enum:
+    description: Whether an activity's input or output is a file we hold or an identifier (#580).
+    permissible_values:
+      file:
+      identifier:
+        description: A sample or donor identifier (ADR-0002 decision 1), which has no record.
+
+  passed_dimension_enum:
+    description: >-
+      The dimensions an activity's output can take from an input (#580): the six
+      classification dimensions but `data_type`, which names a file's own kind and never
+      passes (ADR-0002 decision 8: a VCF is not an alignment).
+    permissible_values:
+      data_modality:
+      platform:
+      reference_assembly:
+      assay_type:
+      instrument_model:
 
   parent_kind_enum:
     description: The kind of file a derivation edge points at.
