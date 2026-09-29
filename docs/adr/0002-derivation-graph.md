@@ -88,7 +88,7 @@ only within the child's dataset), `parent_ref` for anything else a source gives 
 
 `parent_scope` is **not stored** on the record: it is whether `parent_key` is set, and a stored copy
 could disagree with it. `edges.jsonl` works it out, so a consumer can filter on it. An edge whose parent
-is an identifier (a `SequenceActivity`'s sample, a `SampleCollectionActivity`'s donor, `child_of`) has no `parent_scope`: an identifier is neither a
+is an identifier (a `SequenceActivity`'s sample, a `SampleCollectionActivity`'s donor, an `isBiologicalChildOf` parent) has no `parent_scope`: an identifier is neither a
 file we hold nor one we lack.
 
 *Rejected: a third scope, `type_only`* (the June doc's ungrounded edge: verb and parent kind known, no
@@ -159,10 +159,15 @@ source's raw `activity_type` reaches a term through translation rows, as a raw v
 3.9). Those rows land with the import that first reads `activity_type` (#577).
 
 **Not activities.** `aligned_to` is dropped: the reference is the `reference` input of an
-`AlignmentActivity` (decision 3). `child_of` (donor id ← donor id, HPRC's `maternal_id`/`paternal_id`,
-1000G pedigrees) is a family tie between donors: no processing step makes a child from its parents and
-nothing passes across it, so it stays the one relation of its own, in `edges.jsonl` only (decision 6,
-#361). *Rejected (#580): `donor_of` as a relation* beside the activities. A sample row naming its donor
+`AlignmentActivity` (decision 3). A donor's parents are a family tie, not a step: no processing step
+makes a child from its parents and nothing passes across it, so it stays the one relation of its own,
+**`isBiologicalChildOf`** (the GA4GH Pedigree Standard's Kinship Ontology, KIN:032; its inverse is
+`isBiologicalParentOf`, KIN:003), in `edges.jsonl` only (decision 6, #361). It points from child to
+parent, as every edge here does, and carries a `role`, `mother` or `father`, from the submitter column
+that states it: HPRC's and HPRC_R2's `maternal_id` / `paternal_id` (tables `sample`, `sample_metadata`,
+`illumina`), 1000G's `pedigree.motherid` / `fatherid`, where `0` means not known and gives no edge. A
+role takes one parent, so two tables naming different mothers for one donor are an edge conflict.
+`anvil_donor` has no parent columns. *Rejected (#580): `donor_of` as a relation* beside the activities. A sample row naming its donor
 states no step, but neither does a submitter row naming a CRAM beside its FASTQs, and the lineage map
 names that step all the same; one formalism for lineage (HCA's `process`) keeps a place for what a paper
 or methods section says about a collection. A sample that a file's own header names (`@RG SM`, a VCF's sample
@@ -194,7 +199,7 @@ header command lines, HPRC's assembly sheets, and filename convention (companion
 VCFs for a `MergeActivity`). Every edge
 records which one stated it, and an edge two sources state is two edges that agree — a consistency
 check (#362) reads them. Identifier parents come from the sources decision 5 lists for `SequenceActivity` and
-`SampleCollectionActivity`, and, for `child_of`, from submitter tables and registries (#361).
+`SampleCollectionActivity`, and, for `isBiologicalChildOf`, from submitter tables and registries (#361).
 
 Submitter tables and `anvil_activity` are source evidence, which inference never reads (contract 1.2,
 6.1). So **edges the evidence states are built at reconcile** (settled with #356, 2026-09-28; built by
@@ -204,9 +209,9 @@ stage holding both kinds, which a chain mixes (T2T: `.tbi` → VCF by name, CRAM
 re-running it costs no corpus run (6.4) when a lineage mapping is corrected.
 
 An edge whose child is a file is stored on that file's record as `derived_from: [DerivationEdge]`.
-A `SampleCollectionActivity` and a `child_of` have an identifier as their child, which has no record, so
+A `SampleCollectionActivity` and an `isBiologicalChildOf` have an identifier as their child, which has no record, so
 they live only in a flat `edges.jsonl` written once per run: child (a record key or an identifier), the
-edge's activity (or `child_of`), parent
+edge's activity (or `isBiologicalChildOf`, with its `role`), parent
 (`parent_key` where it resolves, and `parent_file` or `parent_ref` as the source wrote it, or an
 identifier), provenance (`source_type`, plus `source` and `rule_id` for evidence or `rule_id` alone for inference,
 as on the edge), and `parent_scope`,
@@ -404,7 +409,7 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   source (contract 6.10). The report also needs a way to list a mixed dimension with its parents' values,
   and an edge conflict with the parents each source named.
 - An `edges.jsonl` row is its own class, not a `DerivationEdge`: its child is a record key or an
-  `EntityIdentifier`, because a `SampleCollectionActivity`'s child, a sample, and `child_of`'s, a donor, have no record to sit on; its parent carries the
+  `EntityIdentifier`, because a `SampleCollectionActivity`'s child, a sample, and `isBiologicalChildOf`'s, a donor, have no record to sit on; its parent carries the
   same fields as `DerivationEdge`'s — `parent_key`, `parent_file`, `parent_ref`, or `parent_id` — and its
   provenance `source_type` plus `source` and `rule_id` for evidence or `rule_id` alone for inference, with `parent_scope` worked out (decision 6).
 - `parent_kind_enum` gains `reference` and `assembly` if #358 and #360 need them; decided there.
