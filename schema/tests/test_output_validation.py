@@ -182,7 +182,7 @@ def test_output_entries_validate_against_schema(validator):
 
 
 _EDGE = {
-    "relation": "index_of",
+    "activity": "IndexingActivity",
     "parent_file": "s.bam",
     "parent_key": "f-bam",
     "parent_kind": "alignment",
@@ -200,12 +200,25 @@ def test_a_populated_derivation_edge_validates(validator):
     """
     _, record = next(_records_in(_GOLDEN))
     external = {k: v for k, v in _EDGE.items() if k != "parent_key"}
+    # The source's own id for the step, as `anvil_activity` gives one (#580).
+    with_step = {**_EDGE, "activity_id": "776a27ee-8438-b39b-d711-49aeda25ee79"}
 
     failures = []
-    for label, edges in (("internal", [_EDGE]), ("external", [external]), ("two", [_EDGE, external])):
+    cases = (("internal", [_EDGE]), ("external", [external]), ("two", [_EDGE, external]), ("step id", [with_step]))
+    for label, edges in cases:
         for result in validator.validate({**record, "derived_from": edges}, target_class="ClassificationRecord").results:
             failures.append(f"{label}: {result.severity}: {result.message}")
     assert not failures, "A derivation edge violates the record schema:\n  " + "\n  ".join(failures)
+
+
+def test_a_derivation_edge_naming_no_activity_type_is_refused(validator):
+    """`activity` is a term of `activity_type_enum` (#580); the verbs it replaced are not."""
+    _, record = next(_records_in(_GOLDEN))
+    edge = {**_EDGE, "activity": "index_of"}
+    report = validator.validate({**record, "derived_from": [edge]}, target_class="ClassificationRecord")
+    assert any("index_of" in result.message for result in report.results), (
+        f"expected a failure citing the retired verb, got: {[r.message for r in report.results]}"
+    )
 
 
 def test_an_inferred_value_outside_its_dimensions_enum_is_refused(validator):
@@ -220,9 +233,9 @@ def test_an_inferred_value_outside_its_dimensions_enum_is_refused(validator):
     assert report.results, "an inferred data_modality of PACBIO passed the schema"
 
 
-@pytest.mark.parametrize("member", ["relation", "parent_file", "source_type", "rule_id"])
+@pytest.mark.parametrize("member", ["activity", "parent_file", "source_type", "rule_id"])
 def test_a_derivation_edge_missing_a_required_member_is_refused(validator, member):
-    """An edge names its verb, its parent and the source that stated it (ADR-0002): an edge
+    """An edge names its step, its parent and the source that stated it (ADR-0002): an edge
     exists only where a source names a parent (decision 2), so there is no half-edge."""
     _, record = next(_records_in(_GOLDEN))
     edge = {k: v for k, v in _EDGE.items() if k != member}
@@ -259,12 +272,12 @@ def test_output_records_validate_against_schema(validator):
 
 
 def test_a_producers_derivation_edge_reaches_the_gate():
-    """Some fixture record carries each edge a producer states from a name: `index_of`
-    (the index producer) and `checksum_of` (the catch-all), each with its `parent_key`."""
+    """Some fixture record carries each edge a producer states from a name: `IndexingActivity`
+    (the index producer) and `ChecksumActivity` (the catch-all), each with its `parent_key`."""
     edges = [edge for _, record in _fixture_records() for edge in record.get("derived_from") or []]
     assert edges, f"no fixture record carries a derivation edge; regenerate with `{_REGEN}`"
-    assert {e["relation"] for e in edges if e.get("parent_key")} >= {"index_of", "checksum_of"}, (
-        "no fixture record carries an index_of and a checksum_of edge grounded by parent_key"
+    assert {e["activity"] for e in edges if e.get("parent_key")} >= {"IndexingActivity", "ChecksumActivity"}, (
+        "no fixture record carries an IndexingActivity and a ChecksumActivity edge grounded by parent_key"
     )
 
 

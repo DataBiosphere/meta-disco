@@ -42,9 +42,9 @@ IMPORTER_SOURCE_TYPE_ENUM = "importer_source_type_enum"
 CLAIM_STATE_ENUM = "claim_state_enum"
 JOIN_KEY_ENUM = "join_key_enum"
 
-# The derivation edge's two vocabularies (issue #450): the verb, and the kind of file
-# the edge points at.
-RELATION_ENUM = "relation_enum"
+# The derivation edge's two vocabularies (issues #450, #580): the kind of step, and the
+# kind of file the edge points at.
+ACTIVITY_TYPE_ENUM = "activity_type_enum"
 PARENT_KIND_ENUM = "parent_kind_enum"
 
 
@@ -217,14 +217,15 @@ def reference_family_values() -> frozenset[str]:
     return _enum_values(REFERENCE_FAMILY_ENUM)
 
 
-def relation_values() -> frozenset[str]:
-    """Return the permissible derivation verbs from the schema.
+def activity_values() -> frozenset[str]:
+    """Return the permissible activity types from the schema.
 
-    The single source of truth for ``DerivationEdge.relation`` (issue #450), so a
-    producer emitting an edge stays pinned to the schema. Raises KeyError (with the
-    schema path) if the schema is missing the enum.
+    The single source of truth for ``DerivationEdge.activity`` (issues #450, #580), so a
+    producer emitting an edge, and the declarations in ``rules/activities.yaml``, stay
+    pinned to the schema. Raises KeyError (with the schema path) if the schema is missing
+    the enum.
     """
-    return _enum_values(RELATION_ENUM)
+    return _enum_values(ACTIVITY_TYPE_ENUM)
 
 
 def parent_kind_values() -> frozenset[str]:

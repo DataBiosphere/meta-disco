@@ -435,7 +435,7 @@ def build(rules_path: Path | None, value_map_path: Path | None, records, run_dir
     markers = [{"id": m.id, "written_as": "rule_id", "meaning": m.meaning} for m in code_rules.MARKERS]
     markers += [{"id": k, "written_as": "marker", "meaning": v} for k, v in PLACEHOLDER_MARKERS.items()]
     edge_rules = [
-        {"id": e.id, "relation": e.relation, "defined_in": e.module, "reads": e.reads, "rationale": e.rationale}
+        {"id": e.id, "activity": e.activity, "defined_in": e.module, "reads": e.reads, "rationale": e.rationale}
         for e in code_rules.EDGE_RULES
     ]
     # A marker's or edge rule's id among them too: a rule named `fetch_failed` would take the marker's counts.
@@ -564,7 +564,7 @@ def render_markdown(data: dict) -> str:
         [
             [
                 md_code(e["id"]),
-                md_code(e["relation"]),
+                md_code(e["activity"]),
                 _n(e["files"]),
                 e["reads"],
                 e["rationale"],

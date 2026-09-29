@@ -1,7 +1,7 @@
 """Derivation edges inference states from a child's own name (ADR-0002, #356).
 
-Two producers write one: the index producer (``index_of``) and the catch-all, for a
-checksum file (``checksum_of``). Each works out the parent's name from the child's own
+Two producers write one: the index producer (``IndexingActivity``) and the catch-all, for a
+checksum file (``ChecksumActivity``). Each works out the parent's name from the child's own
 (the index producer's candidates are its own, ``get_parent_candidates``) and looks it up
 in the child's dataset; the name index, that lookup and the edge it yields are built here.
 
@@ -26,7 +26,7 @@ from .file_name import EXTENSION_MAP, FileName
 from .pipeline import RecordKey, input_key_value
 
 # The `EXTENSION_MAP` category of a checksum file's extension. The extension decides
-# whether a `checksum_of` edge is looked for, not whether a rule fired on the file.
+# whether a checksum edge is looked for, not whether a rule fired on the file.
 CHECKSUM_CATEGORY = "checksum"
 
 # An extension category (``file_name.EXTENSION_MAP``) to the derivation model's
@@ -109,9 +109,9 @@ def name_edge(rule: EdgeRule, parent: dict, key: RecordKey) -> dict:
     """
     parent_name = parent["file_name"]
     return {
-        "relation": rule.relation,
+        "activity": rule.activity,
         "parent_file": parent_name,
-        "parent_key": input_key_value(parent, key, f"ground a {rule.relation} edge on its parent"),
+        "parent_key": input_key_value(parent, key, f"ground a {rule.activity} edge on its parent"),
         "parent_kind": parent_kind_of(parent_name),
         "source_type": rule.source_type,
         "rule_id": rule.id,
@@ -130,7 +130,7 @@ def resolve(index: NameIndex, dataset_id: str, name: str) -> dict | None:
 
 
 def checksum_edges(record: dict, name: FileName, index: NameIndex, key: RecordKey) -> list[dict] | None:
-    """A checksum file's ``checksum_of`` edge, as a one-edge ``derived_from``, or None.
+    """A checksum file's ``ChecksumActivity`` edge, as a one-edge ``derived_from``, or None.
 
     A file is a checksum when ``EXTENSION_MAP`` calls its extension one (``.md5``), read
     off ``name`` as ``FileName.parse`` peeled it. Its parent is ``name``'s stem, the name

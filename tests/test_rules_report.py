@@ -128,7 +128,7 @@ RECORDS = [
                 status="not_classified", evidence=[claim(code_rules.FETCH_FAILED.id, status="not_classified")]
             ),
         },
-        "derived_from": [{"relation": "index_of", "rule_id": code_rules.INDEX_BY_NAME.id}],
+        "derived_from": [{"activity": "IndexingActivity", "rule_id": code_rules.INDEX_BY_NAME.id}],
     },
 ]
 

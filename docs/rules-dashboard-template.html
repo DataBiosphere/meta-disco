@@ -136,7 +136,7 @@
 
     document.getElementById("edge-rules").innerHTML =
       "<tr><th>id</th><th>states</th><th>files</th><th>reads</th><th>rationale</th><th>in</th></tr>" +
-      DATA.edge_rules.map(e => `<tr><td><code>${esc(e.id)}</code></td><td><code>${esc(e.relation)}</code></td>` +
+      DATA.edge_rules.map(e => `<tr><td><code>${esc(e.id)}</code></td><td><code>${esc(e.activity)}</code></td>` +
         `<td class="num">${fmt(e.files)}</td><td>${esc(e.reads)}</td><td>${esc(e.rationale)}</td>` +
         `<td><code>${esc(e.defined_in)}</code></td></tr>`).join("");
 

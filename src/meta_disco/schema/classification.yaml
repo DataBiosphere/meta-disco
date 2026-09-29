@@ -25,6 +25,7 @@ prefixes:
   EFO: http://www.ebi.ac.uk/efo/EFO_
   OBI: http://purl.obolibrary.org/obo/OBI_
   EDAM: http://edamontology.org/
+  TerraCore: "https://datamodel.terra.bio/TerraCore#"
   MODAL: "https://datamodel.terra.bio/BioCoreTerms#"
   insdc.gca: "https://identifiers.org/insdc.gca:"
 default_prefix: anvil
@@ -710,7 +711,8 @@ classes:
   DerivationEdge:
     description: >-
       Typed link from a derived file to one file it was derived from (ADR-0002). The
-      verb is `relation`; `parent_file` names the parent as the source wrote it, and
+      kind of step is `activity`, and `activity_id` the source's own id for the step
+      where it gives one; `parent_file` names the parent as the source wrote it, and
       `parent_key` is the parent's record key where it resolves to exactly one record of
       the child's dataset. An edge whose `parent_key` is set is `internal`, one without
       it `external`; the scope is worked out from `parent_key`, not stored (decision 2).
@@ -718,7 +720,8 @@ classes:
       source kind states stay apart (decision 6). An edge exists only where a source
       names a parent.
     slots:
-      - relation
+      - activity
+      - activity_id
       - parent_file
       - parent_key
       - parent_kind
@@ -914,10 +917,17 @@ slots:
     range: boolean
 
   # --- DerivationEdge sub-fields ---
-  relation:
-    description: The derivation verb.
-    range: relation_enum
+  activity:
+    description: >-
+      The kind of step that made the child from this parent (`activity_type_enum`); what
+      passes across it is declared per term in `rules/activities.yaml`.
+    range: activity_type_enum
     required: true
+  activity_id:
+    description: >-
+      The source's own identifier for the step, as it wrote it (`anvil_activity`'s
+      `activity_id`), so edges from one step can be grouped. Absent where the source
+      names no step, as a file-name edge does.
   parent_file:
     description: >-
       The parent file's name: the matched record's own spelling where the edge resolves
@@ -1375,16 +1385,87 @@ enums:
       not_classified:
         description: The slot settled `not_classified`.
 
-  relation_enum:
+  activity_type_enum:
     description: >-
-      Derivation verbs we can currently detect. subset_of / merged_from /
-      member_of are intentionally held back until detectable (data-model doc 8d).
+      The kind of step that made a file from its parents (ADR-0002, #580): AnVIL's
+      Findability Subset (FSS) Activity table's recommended `activity_type` values, its
+      "BioCore values", term for term and spelled as FSS spells them, plus four of our
+      own. `meaning` is the Terra Interoperability Model's class (TerraCore, whose
+      `Activity` is a `prov:Activity`) where it has one, else EDAM's operation where EDAM
+      defines the same step, else absent; an EDAM operation near a term but not the same
+      step is in `close_mappings`. A term of our own sits under the FSS term it narrows,
+      or under `Activity`. What each term passes from its inputs to its outputs is
+      declared once, in `rules/activities.yaml`, and `Activity`, the step not known,
+      passes nothing.
     permissible_values:
-      index_of:
-      checksum_of:
-      summarizes:
-      lifted_over_from:
-      derived_from:   # generic fallback: related, verb unknown
+      Activity:
+        description: A step whose kind the source does not state; nothing passes across it.
+        meaning: TerraCore:Activity
+      SampleCollectionActivity:
+        is_a: Activity
+      SampleTreatmentActivity:
+        is_a: Activity
+        meaning: TerraCore:SampleTreatmentActivity
+      SequenceActivity:
+        description: >-
+          Sequencing a sample into reads. FSS's spelling; TerraCore names the same class
+          `SequencingActivity`.
+        is_a: Activity
+        meaning: TerraCore:SequencingActivity
+      AlignmentActivity:
+        is_a: Activity
+        meaning: TerraCore:AlignmentActivity
+        close_mappings:
+          - EDAM:operation_3198
+      VariantCallingActivity:
+        is_a: Activity
+        meaning: TerraCore:VariantCallingActivity
+        close_mappings:
+          - EDAM:operation_3227
+      ExpressionActivity:
+        description: >-
+          Quantifying expression. EDAM's RNA-Seq quantification is one kind of it, not the
+          same step.
+        is_a: Activity
+        close_mappings:
+          - EDAM:operation_3800
+      AnalysisActivity:
+        is_a: Activity
+        meaning: TerraCore:AnalysisActivity
+      ImagingActivity:
+        is_a: Activity
+      IndexingActivity:
+        is_a: Activity
+        meaning: EDAM:operation_0227
+      ChecksumActivity:
+        description: >-
+          Computing a file's checksum. EDAM's only checksum operation is a molecular
+          sequence's (operation_3348), not a file's, so no id is recorded.
+        is_a: Activity
+      QualityControlActivity:
+        description: >-
+          A report on another file's content: samtools stats, mosdepth coverage. Our own
+          term, under FSS's AnalysisActivity, which is too broad to say what passes.
+        is_a: AnalysisActivity
+        close_mappings:
+          - EDAM:operation_3218
+      LiftoverActivity:
+        description: >-
+          Moving a file's coordinates to another reference. Our own term; neither
+          TerraCore nor EDAM has one.
+        is_a: AnalysisActivity
+      MergeActivity:
+        description: >-
+          Joining several files of one kind into one: window VCFs into a chromosome VCF,
+          FASTQs into one. Our own term; EDAM's Sequence merging (operation_0232) merges
+          sequences, not files.
+        is_a: Activity
+      AssemblyActivity:
+        description: >-
+          Assembling reads into sequences. Not an FSS term; EDAM's Sequence assembly is
+          the same step.
+        is_a: Activity
+        meaning: EDAM:operation_0310
 
   parent_kind_enum:
     description: The kind of file a derivation edge points at.

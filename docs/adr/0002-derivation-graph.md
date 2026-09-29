@@ -5,6 +5,7 @@
 - **Extends, and supersedes in part:** `docs/derived-file-data-model.md` (#109), which settled the edge for companion files only; see [What this supersedes](#what-this-supersedes)
 - **Contract:** adds 4.9 to `docs/claims-contract.md` (inheritance) and its entry under "What is not true yet"; amends 2.8, 3.1, 4.1, 4.2 and 6.6 to match
 - **Related:** #356 (companion edges), #357 (sample identity), #358 (alignment ← reads), #359 (variants ← alignments), #360 (assemblies), #361 (sample ← donor), #362 (consistency and coverage), #371 (the edge carries the parent's record key), #413 (index inheritance and contract 1.1), #438 (ambiguous index parents)
+- **Amended by:** [#580](https://github.com/DataBiosphere/meta-disco/issues/580) (2026-09-29): a step is an activity from AnVIL FSS's vocabulary, not a verb between two files (decision 5)
 
 ## Context
 
@@ -84,7 +85,7 @@ only within the child's dataset), `parent_ref` for anything else a source gives 
 
 `parent_scope` is **not stored** on the record: it is whether `parent_key` is set, and a stored copy
 could disagree with it. `edges.jsonl` works it out, so a consumer can filter on it. An edge whose parent
-is an identifier (`sample_of`, `donor_of`, `child_of`) has no `parent_scope`: an identifier is neither a
+is an identifier (a `SequenceActivity`'s sample, `donor_of`, `child_of`) has no `parent_scope`: an identifier is neither a
 file we hold nor one we lack.
 
 *Rejected: a third scope, `type_only`* (the June doc's ungrounded edge: verb and parent kind known, no
@@ -105,57 +106,79 @@ child: a header line, a table row, IGVF's `derived_from`.
 A CRAM derives from two FASTQs; a joint-called VCF from many gVCFs. `derived_from` becomes a list with one
 edge per parent per source that states it, so a parent two sources name is two edges (decision 6).
 
-The reference a file was aligned to is recorded **both** ways: the `reference_assembly` dimension is the
-answer, and an `aligned_to` edge — to the reference FASTA where the child's dataset holds it, otherwise external — is
-where the answer came from. The edge never decides the dimension; it is evidence a consistency check
-(#362) can compare with it.
+The reference a file was aligned to is an input of its alignment, but it is **not** a `derived_from` entry
+(#580): an entry passes what its activity declares from its parent (decision 8), and a reference FASTA has
+none of the reads' platform or library to pass. Where a source names the reference (`@PG`'s reference
+argument, `@SQ UR`), that is evidence beside the `reference_assembly` dimension, which a consistency check
+(#362) can compare with it; it never decides the dimension.
 
-### 4. A merged file is `merged_from` its shards; there is no callset node
+### 4. A merged file is made from its shards by a `MergeActivity`; there is no callset node
 
 ANVIL_T2T split calling into 100 kb windows (`chrY.39900001_40000000.genotyped.vcf.gz`). The chromosome
-VCF is `merged_from` its window VCFs, where a source names them: the merged file is the child and the
-shards its parents, because that is the direction values flow (decision 8) — the lineage reaches the
+VCF's `MergeActivity` has its window VCFs as inputs, where a source names them: the merged file is the
+child and the shards its parents, because that is the direction values flow (decision 8) — the lineage reaches the
 windows from the CRAMs, and the chromosome VCF, the file people want, inherits it from them. The reverse
-verb (`shard_of`, merged file as parent) would send values the wrong way, from the file built last to the
+step (a shard as the child, the merged file as its parent) would send values the wrong way, from the file built last to the
 files it was built from. There is **no callset node**:
 no source names a callset as a thing of its own, and inventing one would be the entity scaffolding
 decision 1 rejects.
 
-### 5. Verbs
+### 5. Activities
 
-Only a verb a source can detect is minted (June doc 8d). The existing five stay:
-`index_of`, `checksum_of`, `summarizes`, `lifted_over_from`, `derived_from` (generic: related, verb unknown).
+*Amended by #580.* A step is named by its **activity**, not by a verb between two files. The
+vocabulary is `activity_type_enum`: AnVIL FSS's Activity-table values (its "BioCore values"), term for
+term and spelled as FSS spells them, plus four of our own. A term's `meaning` is the Terra
+Interoperability Model's class where it has one, else EDAM's operation where EDAM defines the same step.
+TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `generated_file_id` are PROV's
+`used` and `wasGeneratedBy`. An edge on a file's record names the activity that made the file from that
+parent (decision 6).
 
-| new verb | child ← parent | detected from |
-|---|---|---|
-| `aligned_from` | alignment ← reads | submitter same-row, `@PG`, `anvil_activity` (ENCORE `Alignment: STAR`) |
-| `aligned_to` | alignment ← the reference it was aligned to | `@PG` reference argument, `@SQ UR` |
-| `called_from` | variants ← alignments or gVCFs | VCF caller command lines, submitter same-row (1000G `cram` → `gvcf`) |
-| `merged_from` | merged file ← shards | headers and filenames (T2T chromosome VCF ← window VCFs); the held-back verb of the June doc's 8d, now detectable |
-| `assembled_from` | assembly ← reads | HPRC assembly sample sheets, where the output resolves to a held assembly (Open) |
-| `sample_of` | file ← sample id | `@RG SM`, VCF sample columns, filename accession, submitter tables (#357) |
-| `donor_of` | sample id ← donor id | submitter tables, registries (#361) |
-| `child_of` | donor id ← donor id | HPRC `sample.maternal_id`/`paternal_id`, 1000G pedigree (#361) |
+| activity | child ← parent | detected from | replaces |
+|---|---|---|---|
+| `IndexingActivity` | index ← indexed file | filename convention, `anvil_activity` `Indexing` | `index_of` |
+| `ChecksumActivity` | checksum ← checked file | filename convention, `anvil_activity` `Checksum` | `checksum_of` |
+| `QualityControlActivity` (ours, under `AnalysisActivity`) | QC report ← the file it reports on | submitter same-row (T2T `samtools_stats`, `mosdepth_*` → `cram`) | `summarizes` |
+| `AlignmentActivity` | alignment ← reads | submitter same-row, `@PG`, `anvil_activity` (ENCORE `Alignment: STAR`) | `aligned_from` |
+| `VariantCallingActivity` | variants ← alignments or gVCFs | VCF caller command lines, submitter same-row (1000G `cram` → `gvcf`) | `called_from` |
+| `MergeActivity` (ours) | merged file ← shards | headers and filenames (T2T chromosome VCF ← window VCFs) | `merged_from` |
+| `LiftoverActivity` (ours, under `AnalysisActivity`) | lifted file ← the file it was lifted from | a source naming the parent (schema changes, `source_assembly`) | `lifted_over_from` |
+| `AssemblyActivity` (ours) | assembly ← reads | HPRC assembly sample sheets, where the output resolves to a held assembly (Open) | `assembled_from` |
+| `SequenceActivity` | reads ← sample id | `anvil_activity` `Sequencing`, submitter tables (#357) | `sample_of`, for reads |
+| `Activity` | related, step unknown | IGVF `file.derived_from` between content types no term names, `anvil_activity` `Unknown` | `derived_from` |
 
-`sample_of`, `donor_of` and `child_of` have an identifier as their parent, not a file (decision 1).
+FSS's other types (`SampleCollectionActivity`, `SampleTreatmentActivity`, `ExpressionActivity`,
+`AnalysisActivity`, `ImagingActivity`) are in the vocabulary, though no source row states one yet. A
+source's raw `activity_type` reaches a term through translation rows, as a raw value does (contract
+3.9). Those rows land with the import that first reads `activity_type` (#577).
 
-**Each verb has a cardinality.** A child has **one** parent across `index_of`, `checksum_of`,
-`summarizes`, `lifted_over_from`, `aligned_to` and `donor_of`, and **many** across `called_from`,
-`merged_from`, `aligned_from`, `assembled_from`, `sample_of` (a joint VCF names every sample in it),
-`child_of` and `derived_from`. Sources
-that name the same parent for a one-parent verb are one parent with two sources. Sources that name
-different parents for it are an **edge conflict**: a `.tbi` whose filename match says `a.vcf.gz` and whose
-`anvil_activity` says `b.vcf.gz` has one of them wrong. An edge conflict is listed for review, and nothing
-is inherited across that verb until it is settled. For a many-parent verb, the parents every source
-names are pooled into one set, each source's parents still their own edges (decision 6).
+**Not activities.** `aligned_to` is dropped: the reference is not a parent the child's values come from
+(decision 3). `donor_of` (sample id ← donor id) and `child_of` (donor id ← donor id) relate two
+identifiers, not a file to what it was made from. They stay identity relations of their own, in
+`edges.jsonl` only (decision 6, #361). A sample that a file's own header names (`@RG SM`, a VCF's sample
+columns) says which sample the data is about, not which step made the file; how it is recorded is #357's
+(Open).
+
+**Each activity has a number of inputs**, declared as `inputs` in `rules/activities.yaml`: **one** for
+`IndexingActivity`, `ChecksumActivity`, `QualityControlActivity` and `LiftoverActivity`, **many** for
+the rest. Sources that name the same parent for a one-input activity are one parent with two sources.
+Sources that name different parents for it are an **edge conflict**: a `.tbi` whose filename match says
+`a.vcf.gz` and whose `anvil_activity` says `b.vcf.gz` has one of them wrong. An edge conflict is listed
+for review, and nothing is inherited across that activity until it is settled. For a many-input
+activity, the parents every source names are pooled into one set, each source's parents still their own
+edges (decision 6).
+
+*Rejected (#580): verbs on file-to-file edges*, which this decision first minted. The sources state
+lineage as steps: `anvil_activity` has one row per step, and FSS's Activity table is its model. What
+passes to a child depends on the step, so a verb was the activity seen from the child's side, and a verb
+list of our own was a vocabulary no submitter writes.
 
 ### 6. Sources, and where edges live
 
 Five sources name file parents, the Context table's: submitter tables (same row or id join), `anvil_activity`,
 header command lines, HPRC's assembly sheets, and filename convention (companion files, and T2T's window
-VCFs for `merged_from`). Every edge
+VCFs for a `MergeActivity`). Every edge
 records which one stated it, and an edge two sources state is two edges that agree — a consistency
-check (#362) reads them. Identifier parents come from the sources decision 5 lists for `sample_of`,
+check (#362) reads them. Identifier parents come from the sources decision 5 lists for `SequenceActivity`,
 `donor_of` and `child_of`, registries among them.
 
 Submitter tables and `anvil_activity` are source evidence, which inference never reads (contract 1.2,
@@ -167,7 +190,7 @@ re-running it costs no corpus run (6.4) when a lineage mapping is corrected.
 
 An edge whose child is a file is stored on that file's record as `derived_from: [DerivationEdge]`.
 `donor_of` and `child_of` have an identifier as their child, which has no record, so they live only in a
-flat `edges.jsonl` written once per run: child (a record key or an identifier), relation, parent
+flat `edges.jsonl` written once per run: child (a record key or an identifier), the edge's activity (or, for `donor_of` and `child_of`, that identity relation), parent
 (`parent_key` where it resolves, and `parent_file` or `parent_ref` as the source wrote it, or an
 identifier), provenance (`source_type`, plus `source` and `rule_id` for evidence or `rule_id` alone for inference,
 as on the edge), and `parent_scope`,
@@ -180,10 +203,16 @@ source: the two agreed on all 209,668 index files matched today.
 
 ### 7. Specific process runs stay out of scope
 
-An edge records the relation between two files (`aligned_from`), not a process. The `@PG` line that
-shows a BAM was made by `bwa mem` is evidence for the edge; recording the tool as a fact of its own is
-#341's, and undecided. No edge records a particular run (a job id, a date, the exact parameters) as an
-object files link to. The June doc made this call; it stands.
+An edge records the kind of step between two files (`AlignmentActivity`), not the run. The `@PG` line
+that shows a BAM was made by `bwa mem` is evidence for the edge; recording the tool as a fact of its own
+is #341's, and undecided. Where a source gives the run an id (`anvil_activity.activity_id`), the edge
+carries it as `activity_id`, so the edges one run states can be grouped (#580). The run is still not an
+object that files link to, with its date and parameters. The June doc made this call; it stands.
+
+*Rejected (#580): activities as objects of their own*: a run-level file of `{activity_id, type, used,
+generated}`, each record pointing at one, as PROV and FSS's Activity table model it. A record would no
+longer say where it came from without a join, reconcile would read a second file beside the records, and
+most sources name no run (a submitter row, a file name), so ids would be invented for most of them.
 
 ### 8. Inheritance: what a child takes from its parent
 
@@ -197,9 +226,9 @@ declaration credited to the parent that reconciles with the child's own; contrac
 VCF takes `ILLUMINA`, and a VCF whose filename says `hifi` beside that CRAM is a `conflict` for a curator:
 a mislabelled file or a wrong edge, which must not be settled silently.
 
-**Parents that differ are mixed, not a conflict.** A child's parents across one verb — the pooled set of a
-many-parent verb (decision 5) — are settled among themselves first, one declaration per verb; a child
-with two carrying verbs has two, which reconcile with each other as any two declarations do:
+**Parents that differ are mixed, not a conflict.** A child's parents across one activity — the pooled set of a
+many-input activity (decision 5) — are settled among themselves first, one declaration per activity; a
+child with two carrying activities has two, which reconcile with each other as any two declarations do:
 parents that agree (4.4's sense, `is_a` nesting included) give the child one inherited declaration,
 naming how many parents and which; parents that differ give it a **mixed** declaration, which carries no
 value. A 1000G joint call over NovaSeq 6000 and HiSeq X CRAMs has no single `instrument_model`, and an
@@ -207,29 +236,30 @@ HPRC assembly built from HiFi, ONT and Hi-C reads no single `platform`: nobody i
 says nothing the slot stays `not_classified`, marked mixed, with nothing for a curator to answer; the report
 lists the parents' values. But a joint call whose filename says `NovaSeq 6000` claims one value for a
 lineage that has none, so the child declaring a value against mixed is a conflict, as is the child
-declaring `not_applicable` against it. A second carrying verb's value or `not_applicable` against mixed is
+declaring `not_applicable` against it. A second carrying activity's value or `not_applicable` against mixed is
 a conflict the same way; two mixed declarations stay mixed (contract 4.9). Separately, the child
 contradicting a value its parents agree on is a conflict.
 
 **What a parent passes on.** A value, or `not_applicable`, which the child's own evidence then meets as
 4.6 says: a `.fai` stays `not_applicable` for `platform` beside its reference FASTA, as it is today. A
 parent that is `not_classified` has no answer, and where the parents that have one agree, the others
-cannot then be known to be unanimous, so the whole verb passes nothing for that dimension: a joint VCF over
+cannot then be known to be unanimous, so the whole activity passes nothing for that dimension: a joint VCF over
 one `ILLUMINA` CRAM and one unclassified CRAM inherits no `platform`. Where the parents are already known to
-differ, or one is mixed, the verb gives mixed whatever the unclassified ones are. A parent that is mixed passes mixed: a
+differ, or one is mixed, the activity gives mixed whatever the unclassified ones are. A parent that is mixed passes mixed: a
 CRAM merged from NovaSeq and HiSeq reads makes its VCF mixed too. One parent with a value and another
 `not_applicable` differ, so the dimension is mixed. What a parent in `conflict` passes is open (below).
 
 **What each step carries.** The dimensions split by whether the step keeps them. `data_type` never
-carries: a VCF is not an alignment.
+carries: a VCF is not an alignment. Each activity's `passes` in `rules/activities.yaml` is the
+authority, and this table is its reading when #580 wrote it.
 
-| step | `data_modality` | `assay_type` | `platform` | `instrument_model` | `reference_assembly` |
+| activity | `data_modality` | `assay_type` | `platform` | `instrument_model` | `reference_assembly` |
 |---|---|---|---|---|---|
-| `index_of`, `checksum_of`, `summarizes`, `merged_from`, `called_from` | yes | yes | yes | yes | yes |
-| `aligned_from` | yes | yes | yes | yes | **no** — alignment introduces the reference |
-| `lifted_over_from` | yes | yes | yes | yes | **no** — liftover changes it |
-| `assembled_from` | yes | yes | yes | yes | **no** — an assembly is its own reference |
-| `aligned_to`, `derived_from`, `sample_of`, `donor_of`, `child_of` | no | no | no | no | no |
+| `IndexingActivity`, `ChecksumActivity`, `QualityControlActivity`, `MergeActivity`, `VariantCallingActivity` | yes | yes | yes | yes | yes |
+| `AlignmentActivity` | yes | yes | yes | yes | **no** — alignment introduces the reference |
+| `LiftoverActivity` | yes | yes | yes | yes | **no** — liftover changes it |
+| `AssemblyActivity` | yes | yes | yes | yes | **no** — an assembly is its own reference |
+| `Activity`, `SequenceActivity`, `SampleCollectionActivity`, `SampleTreatmentActivity`, `ImagingActivity`, `ExpressionActivity`, `AnalysisActivity` | no | no | no | no | no |
 
 - Carrying `reference_assembly` carries the build's identity — `ReferenceBuild.base` and `version` —
   so a child describes its reference as precisely as its parents agree on it. The build's observations
@@ -238,9 +268,13 @@ carries: a VCF is not an alignment.
   reconciles on its value (4.4). Parents that agree on the value but differ in build identity give the
   value and no build, until how builds reconcile is decided (Open). (Today's index producer copies the
   whole build; that path is #413's.)
-- `aligned_to` points at a reference, not at the data the child came from. `derived_from` is the verb
-  for "related, step unknown", so nothing is known to carry. `sample_of`, `donor_of` and `child_of`
-  have an identifier as parent, which has no dimensions.
+- `Activity` is the step not known, so nothing is known to carry. `SequenceActivity`,
+  `SampleCollectionActivity`, `SampleTreatmentActivity` and `ImagingActivity` have a sample identifier as
+  input, which has no dimensions.
+- `ExpressionActivity` and `AnalysisActivity` carry nothing until someone decides what they keep. Whether a
+  quantification keeps its reads' reference depends on the tool (salmon quantifies against a
+  transcriptome), and `AnalysisActivity` covers steps too different to share one answer. A narrower term
+  under one declares its own, as `QualityControlActivity` and `LiftoverActivity` do.
 - Where the child reads a carried dimension itself — a VCF's `##contig` lines state its reference —
   inheriting it is a cross-check: agreement confirms the value, and a contradiction exposes a wrong edge.
   This supersedes the June doc's 7a (see [What this supersedes](#what-this-supersedes)).
@@ -259,12 +293,12 @@ concern where it matters: the dimensions that describe the file itself (`data_ty
 *Rejected: the child's own evidence wins a contradiction.* It would settle a disagreement nobody reviewed.
 
 **Today's case.** The index producer's inheritance (`classify_index_files.INHERITED_FIELDS`) is the
-`index_of` row of the table, built the way the contract's "What is not true yet" entry on 1.1 describes.
+`IndexingActivity` row of the table (read from `rules/activities.yaml` since #580), built the way the contract's "What is not true yet" entry on 1.1 describes.
 How that path moves under 4.9 is #413's. That producer used to write the edge decision 2 rejects, an
-`index_of` edge naming no parent on an index file it took no parent for (`declined_record`, #438, ~15K
+index edge naming no parent on an index file it took no parent for (`declined_record`, #438, ~15K
 files); #356 removed it, and `anvil_activity`, which names most of those parents, gives them theirs (#577).
 
-The `checksum_file` rule contradicts the `checksum_of` row: it stamps all five lineage dimensions
+The `checksum_file` rule contradicts the `ChecksumActivity` row: it stamps all five lineage dimensions
 `not_applicable`, which 4.6 would make a conflict against every inherited value (~14K `.md5` files). A
 checksum is a companion like an index, not a special case, so when 4.9 is built that rule keeps only
 `data_type: checksum` and drops the five statuses — the correction #437 made to the index rule. It also
@@ -281,13 +315,13 @@ on the bullets concerned).
 | §4a's edge with no parent; §4b; §6 Levels 1–2; §9 items 4 (its `parent_md5sum`), 5 | grounding by md5; an edge may name no parent | grounding by record key; no parent named, no edge (decision 2) |
 | §1 point (1); §3's "not values copied onto this file"; §5a–5c; §6 Level 3; §9 item 7; §10 "Confirmed" on materialization and query time | store a pointer, never a copy; follow at query time | copy, as a declaration that reconciles (decision 8, contract 4.9) |
 | §1 point (4); §7a; §9 item 8 | read the reference from the file first, inherit second | both are declarations; contradiction is a conflict (decision 8) |
-| §8d | `merged_from` held back | minted (decisions 4, 5) |
+| §8d | `merged_from` held back | a `MergeActivity` (decisions 4, 5) |
 | §10 "What ships to the Explorer" | open | inherited values are on the record (decision 8) |
 
 What stands: identity and origin are separate questions (§3's split, though not where it stores
 origin) — an inherited value is credited to the parent, so the record still says which values are the
 file's own — `data_type` names a companion's own
-content type (§1 point 2, §8c's factoring), the verb is not redundant with `data_type` (§4c), and process instances
+content type (§1 point 2, §8c's factoring), the step is not redundant with `data_type` (§4c), and process instances
 stay out of scope (§4b's process type vs instance, decision 7).
 
 ## Schema changes this implies
@@ -299,7 +333,7 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   - Provenance, as a claim carries it, so two edges of one source kind stay distinguishable
     (decision 6): `source_type` (the existing slot, range `source_type_enum`); for an edge evidence
     states, the existing `source` slot (`ClaimSource`: name, dataset, table, column) **and** a `rule_id`
-    naming the mapping that turned that column or activity into a verb, as an external claim carries both
+    naming the mapping that turned that column or activity type into an activity, as an external claim carries both
     today; for one inference reads, `rule_id` alone, naming the rule and header field or filename
     convention it came from. Which kind
     `anvil_activity` is — it is neither the submitter tables nor `anvil_file` — is #577's (split from #356).
@@ -311,16 +345,17 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
     an S3 or filesystem path — kept whether or not
     it resolves (decision 2); a name stays in `parent_file`.
   - A constraint: exactly one parent form per edge — `parent_id`, or a file parent (`parent_file` or
-    `parent_ref`, with `parent_key` where it resolves) — and the form the relation takes (an identifier
-    for `sample_of`, `donor_of`, `child_of`; a file otherwise). Today's schema accepts an edge with no
+    `parent_ref`, with `parent_key` where it resolves) — and the form its activity's `parent` declares
+    (`rules/activities.yaml`: an identifier for `SequenceActivity` and the other sample steps; a file
+    otherwise). Today's schema accepts an edge with no
     parent, which decision 2 rules out.
-  - `parent_id`: an `EntityIdentifier`, the alternative to a file parent for `sample_of`, `donor_of`,
-    `child_of` (decisions 1, 5).
+  - `parent_id`: an `EntityIdentifier`, the alternative to a file parent for an activity whose input is
+    a sample (decisions 1, 5).
 - `source_assembly` on the record's `reference_assembly` slot, beside `build`, not on the edge: an inlined
   `{value: reference_assembly_enum, build: ReferenceBuild}` (build optional) naming the assembly a lifted
   file's coordinates came from, read from its header (`##liftOverChain`) or name (`GRCh38` in
   `dbSNP.build_154.GRCh38.*`) whether or not a parent file is named. The slot's value stays the current
-  assembly (the comment on #355; 178 Picard-lifted dbSNP files in ANVIL_T2T). A `lifted_over_from` edge is
+  assembly (the comment on #355; 178 Picard-lifted dbSNP files in ANVIL_T2T). A `LiftoverActivity` edge is
   written only where a parent is named.
 - An inherited `reference_assembly` claim carries a `ReferenceBuild` with `base` and `version` only, where
   the parents agree on them, and none where they differ, and
@@ -330,29 +365,29 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   when the namespace is `dataset_local`, and part of its identity), and the same provenance as
   `DerivationEdge` — `source_type`, plus `source` and `rule_id` for evidence or `rule_id` alone for inference
   (decision 1).
-- `relation_enum` gains `aligned_from`, `aligned_to`, `called_from`, `merged_from`, `assembled_from`,
-  `sample_of`, `donor_of`, `child_of` (decision 5); its description drops `merged_from` from the
-  held-back list.
+- **Done (#580):** `DerivationEdge.relation` is replaced by `activity` (range `activity_type_enum`,
+  decision 5) and an optional `activity_id` (decision 7); `relation_enum` is removed.
 - Evidence cannot state an edge yet: an `EvidenceRow` carries one classification slot and a `raw_value`,
-  with no room for a relation or a parent. The shape of relationship evidence, and the per-dataset
+  with no room for a step or a parent. The shape of relationship evidence, and the per-dataset
   lineage map that fills it, are not designed here; #577 (split from #356) designs them with the first
   evidence-stated edge (`anvil_activity`).
-- What each step carries (decision 8), and each verb's cardinality (decision 5), are declared once in
-  data — on the `relation_enum` values or in a rules file — and read by code and a drift test;
-  `INHERITED_FIELDS` becomes a reader of the `index_of` entry rather than a second copy.
+- **Done (#580):** what each activity carries (decision 8) and its number of inputs (decision 5) are
+  declared once, in `rules/activities.yaml`, read by `meta_disco.activities` and held to
+  `activity_type_enum` by its tests; `INHERITED_FIELDS` and the index producer's code rule read the
+  `IndexingActivity` entry.
 - An inherited claim (decision 8) carries `inherited_from`: a list, one entry per contributing parent, of
-  `{relation, parent_key, value | status | state}` — so the parents a declaration is credited to, and the
+  `{activity, parent_key, value | status | state}` — so the parents a declaration is credited to, and the
   values a mixed one stands for, are on the record rather than re-joined from the parents'.
 - Mixed is a new `claim_state_enum` value, `mixed`: a claim with no value and no status, and the one state
   that takes part in resolution, as 4.9 says. Alone or beside another mixed declaration it leaves the slot
   `not_classified`; against a value or `not_applicable` from any other declaration — the child's own, or
-  another verb's inherited one — the slot is `conflict`.
+  another activity's inherited one — the slot is `conflict`.
 - `credited_to_enum` and `reconcile.SLOT_CATEGORIES` gain a category for a slot filled by inheritance,
   and the conflict kinds one for a child against its parent, so the reconcile report counts neither as a
   source (contract 6.10). The report also needs a way to list a mixed dimension with its parents' values,
   and an edge conflict with the parents each source named.
 - An `edges.jsonl` row is its own class, not a `DerivationEdge`: its child is a record key or an
-  `EntityIdentifier`, because `donor_of` and `child_of` have no record to sit on; its parent carries the
+  `EntityIdentifier`, because `donor_of` and `child_of`, identity relations and not activities (decision 5), have no record to sit on; its parent carries the
   same fields as `DerivationEdge`'s — `parent_key`, `parent_file`, `parent_ref`, or `parent_id` — and its
   provenance `source_type` plus `source` and `rule_id` for evidence or `rule_id` alone for inference, with `parent_scope` worked out (decision 6).
 - `parent_kind_enum` gains `reference` and `assembly` if #358 and #360 need them; decided there.
@@ -374,10 +409,10 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
 - **A parent in `conflict`.** 4.4–4.5 reconcile declarations, and a conflict declares no value. Whether a
   parent's conflict reaches the child as a conflict (what the index producer does today) or as nothing is
   #413's to decide.
-- **Sources that name different parent sets for a many-parent verb.** A caller header naming `{A}` and a
+- **Sources that name different parent sets for a many-input activity.** A caller header naming `{A}` and a
   submitter table naming `{B}` pool to `{A, B}`, which could hide a wrong edge; but sources are often
   partial (a header lists a subset), so differing sets are not a conflict. The consistency check (#362)
-  flags a verb whose sources' sets do not overlap.
+  flags an activity whose sources' sets do not overlap.
 - **Two builds under one `reference_assembly` value.** A `ReferenceBuild` is an object whose `version` is
   free text, so 4.4's value agreement does not say whether two GRCh38 builds with different patches
   conflict, or how their details merge. Until that is defined, an inherited build rides along as
@@ -385,7 +420,11 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   reconciles on its value alone.
 - **HPRC's sheets name working outputs, not released assemblies.** Their outputs are `/private/groups/...`
   paths; tying one to a released `*_hprc_r2_v1.0.1.fa.gz` by sample and haplotype assumes the release came
-  from that run. Until that is established, an `assembled_from` edge's child is only an output that resolves
+  from that run. Until that is established, an `AssemblyActivity` edge's child is only an output that resolves
   to a held file, and the released assemblies have no such edge.
+- **A sample a file's own header names.** `@RG SM` on 80% of BAM headers and VCF sample columns on 99.9%
+  of VCF headers (Context) say which sample the data is about. That is not a step, so it is not a
+  `SequenceActivity` edge on the BAM or the VCF; whether it is an edge of its own or a field of the record
+  is #357's.
 - **`external` covers two cases** — never deposited, and ambiguous by name. If a consumer needs them apart,
   a reason field on the edge would do it.

@@ -99,6 +99,8 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
                             'prefix_reference': 'https://datamodel.terra.bio/BioCoreTerms#'},
                   'OBI': {'prefix_prefix': 'OBI',
                           'prefix_reference': 'http://purl.obolibrary.org/obo/OBI_'},
+                  'TerraCore': {'prefix_prefix': 'TerraCore',
+                                'prefix_reference': 'https://datamodel.terra.bio/TerraCore#'},
                   'anvil': {'prefix_prefix': 'anvil',
                             'prefix_reference': 'https://github.com/DataBiosphere/meta-disco/schema/'},
                   'insdc.gca': {'prefix_prefix': 'insdc.gca',
@@ -413,15 +415,49 @@ class CreditedToEnum(str, Enum):
     """
 
 
-class RelationEnum(str, Enum):
+class ActivityTypeEnum(str, Enum):
     """
-    Derivation verbs we can currently detect. subset_of / merged_from / member_of are intentionally held back until detectable (data-model doc 8d).
+    The kind of step that made a file from its parents (ADR-0002, #580): AnVIL's Findability Subset (FSS) Activity table's recommended `activity_type` values, its "BioCore values", term for term and spelled as FSS spells them, plus four of our own. `meaning` is the Terra Interoperability Model's class (TerraCore, whose `Activity` is a `prov:Activity`) where it has one, else EDAM's operation where EDAM defines the same step, else absent; an EDAM operation near a term but not the same step is in `close_mappings`. A term of our own sits under the FSS term it narrows, or under `Activity`. What each term passes from its inputs to its outputs is declared once, in `rules/activities.yaml`, and `Activity`, the step not known, passes nothing.
     """
-    index_of = "index_of"
-    checksum_of = "checksum_of"
-    summarizes = "summarizes"
-    lifted_over_from = "lifted_over_from"
-    derived_from = "derived_from"
+    Activity = "Activity"
+    """
+    A step whose kind the source does not state; nothing passes across it.
+    """
+    SampleCollectionActivity = "SampleCollectionActivity"
+    SampleTreatmentActivity = "SampleTreatmentActivity"
+    SequenceActivity = "SequenceActivity"
+    """
+    Sequencing a sample into reads. FSS's spelling; TerraCore names the same class `SequencingActivity`.
+    """
+    AlignmentActivity = "AlignmentActivity"
+    VariantCallingActivity = "VariantCallingActivity"
+    ExpressionActivity = "ExpressionActivity"
+    """
+    Quantifying expression. EDAM's RNA-Seq quantification is one kind of it, not the same step.
+    """
+    AnalysisActivity = "AnalysisActivity"
+    ImagingActivity = "ImagingActivity"
+    IndexingActivity = "IndexingActivity"
+    ChecksumActivity = "ChecksumActivity"
+    """
+    Computing a file's checksum. EDAM's only checksum operation is a molecular sequence's (operation_3348), not a file's, so no id is recorded.
+    """
+    QualityControlActivity = "QualityControlActivity"
+    """
+    A report on another file's content: samtools stats, mosdepth coverage. Our own term, under FSS's AnalysisActivity, which is too broad to say what passes.
+    """
+    LiftoverActivity = "LiftoverActivity"
+    """
+    Moving a file's coordinates to another reference. Our own term; neither TerraCore nor EDAM has one.
+    """
+    MergeActivity = "MergeActivity"
+    """
+    Joining several files of one kind into one: window VCFs into a chromosome VCF, FASTQs into one. Our own term; EDAM's Sequence merging (operation_0232) merges sequences, not files.
+    """
+    AssemblyActivity = "AssemblyActivity"
+    """
+    Assembling reads into sequences. Not an FSS term; EDAM's Sequence assembly is the same step.
+    """
 
 
 class ParentKindEnum(str, Enum):
@@ -1179,7 +1215,7 @@ class Evidence(ConfiguredBaseModel):
 
 class DerivationEdge(ConfiguredBaseModel):
     """
-    Typed link from a derived file to one file it was derived from (ADR-0002). The verb is `relation`; `parent_file` names the parent as the source wrote it, and `parent_key` is the parent's record key where it resolves to exactly one record of the child's dataset. An edge whose `parent_key` is set is `internal`, one without it `external`; the scope is worked out from `parent_key`, not stored (decision 2). `source_type` and `rule_id` say which source stated the edge, so two edges one source kind states stay apart (decision 6). An edge exists only where a source names a parent.
+    Typed link from a derived file to one file it was derived from (ADR-0002). The kind of step is `activity`, and `activity_id` the source's own id for the step where it gives one; `parent_file` names the parent as the source wrote it, and `parent_key` is the parent's record key where it resolves to exactly one record of the child's dataset. An edge whose `parent_key` is set is `internal`, one without it `external`; the scope is worked out from `parent_key`, not stored (decision 2). `source_type` and `rule_id` say which source stated the edge, so two edges one source kind states stay apart (decision 6). An edge exists only where a source names a parent.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
          'slot_usage': {'parent_file': {'name': 'parent_file', 'required': True},
@@ -1195,7 +1231,8 @@ class DerivationEdge(ConfiguredBaseModel):
                                         'name': 'source_type',
                                         'required': True}}})
 
-    relation: RelationEnum = Field(default=..., description="""The derivation verb.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DerivationEdge']} })
+    activity: ActivityTypeEnum = Field(default=..., description="""The kind of step that made the child from this parent (`activity_type_enum`); what passes across it is declared per term in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DerivationEdge']} })
+    activity_id: Optional[str] = Field(default=None, description="""The source's own identifier for the step, as it wrote it (`anvil_activity`'s `activity_id`), so edges from one step can be grouped. Absent where the source names no step, as a file-name edge does.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DerivationEdge']} })
     parent_file: str = Field(default=..., description="""The parent file's name: the matched record's own spelling where the edge resolves (a file-name edge matches case-insensitively, so it may differ in case from the name worked out from the child), otherwise as the source that states the edge wrote it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DerivationEdge']} })
     parent_key: Optional[str] = Field(default=None, description="""The parent's record key (`pipeline.SOURCE_RECORD_KEYS`: AnVIL's `file_id`, HPRC's URL hash in `md5sum`), set only when the parent resolves to exactly one record of the child's dataset (ADR-0002 decision 2). Named for the key rather than `parent_file_id` because HPRC's key is not a `file_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DerivationEdge']} })
     parent_kind: Optional[ParentKindEnum] = Field(default=None, description="""The kind of file the parent is.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DerivationEdge']} })

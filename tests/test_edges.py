@@ -1,6 +1,6 @@
-"""Derivation edges from a child's own name: the catch-all's ``checksum_of`` (#356).
+"""Derivation edges from a child's own name: the catch-all's ``ChecksumActivity`` edge (#356).
 
-The index producer's ``index_of`` edge is tested with that producer, in
+The index producer's ``IndexingActivity`` edge is tested with that producer, in
 ``test_index_propagation``. Here: a checksum file names the file it checks where exactly
 one file of its dataset carries its name less ``.md5``, and nothing otherwise.
 """
@@ -23,7 +23,7 @@ def test_a_checksum_file_names_the_one_file_it_checks(tmp_path):
     rows = _rows(tmp_path, [_file("sample.bam", "f-bam"), _file("sample.bam.md5", "f-md5")])
     assert rows["sample.bam.md5"]["derived_from"] == [
         {
-            "relation": "checksum_of",
+            "activity": "ChecksumActivity",
             "parent_file": "sample.bam",
             "parent_key": "f-bam",
             "parent_kind": "alignment",

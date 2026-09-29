@@ -1155,10 +1155,10 @@
         "dataset_title": "GOLDEN_FIXTURE",
         "derived_from": [
           {
+            "activity": "IndexingActivity",
             "parent_file": "sample.flnc.bam",
             "parent_key": "g-file-b",
             "parent_kind": "alignment",
-            "relation": "index_of",
             "rule_id": "index_by_name",
             "source_type": "filename_rule"
           }
@@ -1571,10 +1571,10 @@
         "dataset_title": "GOLDEN_FIXTURE",
         "derived_from": [
           {
+            "activity": "ChecksumActivity",
             "parent_file": "mystery.xyz",
             "parent_key": "g-file-5",
             "parent_kind": null,
-            "relation": "checksum_of",
             "rule_id": "checksum_by_name",
             "source_type": "filename_rule"
           }

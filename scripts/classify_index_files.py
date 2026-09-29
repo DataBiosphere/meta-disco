@@ -37,7 +37,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from meta_disco import code_rules, edges
+from meta_disco import activities, code_rules, edges
 from meta_disco.deployments import PROD
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
@@ -145,8 +145,9 @@ def unmatched_entry(record: dict, index_ext: str, candidates: list[str], reason:
 
 
 DATA_TYPE = "data_type"
-# The dimensions an index file takes from its parent: every one but its own kind.
-INHERITED_FIELDS = tuple(fld for fld in CLASSIFICATION_FIELDS if fld != DATA_TYPE)
+# The dimensions an index file takes from its parent: every one but its own kind, as
+# `IndexingActivity` declares them (`rules/activities.yaml`, #580).
+INHERITED_FIELDS = activities.passes(activities.INDEXING)
 INDEX_DATA_TYPE = "index"  # a term in `data_type_enum`, and what an index file is
 
 # Written verbatim into a declined record's evidence, so it is read by someone deciding

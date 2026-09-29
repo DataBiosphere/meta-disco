@@ -183,7 +183,7 @@ GOLDEN_INPUTS = {
 }
 
 # The index producer's inputs. Both its record paths reach the schema gate: a matched
-# index carries an `index_of` edge, a declined one none. `sample.flnc.bam` is the
+# index carries an `IndexingActivity` edge, a declined one none. `sample.flnc.bam` is the
 # golden's own bam input, so the matched `.bai` inherits from a row a real producer wrote
 # rather than a hand-built stand-in — and the `inherited_evidence` it inherits through is
 # built outside `make_claim` (#413), so no constructor's invariants cover its shape.
@@ -360,7 +360,7 @@ def build_standalone_output(tmp_path: Path, pipeline_output: dict) -> dict:
         )
         records = [record]
         if name == "remaining":
-            # A checksum of the catch-all's own input, so its `checksum_of` edge (#356)
+            # A checksum of the catch-all's own input, so its `ChecksumActivity` edge (#356)
             # reaches the schema gate too. Seed `9` is free of every other input's.
             companion = _golden_record(
                 "9", file_name=f"{file_name}.md5", file_size=33, file_format=".md5", entry_id="g-remaining-md5"

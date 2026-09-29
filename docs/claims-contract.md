@@ -247,10 +247,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 4.9 **A child inherits across a derivation edge** (ADR-0002, #355) — an `internal` one, which joins two
     files of one dataset. A parent is looked for only in the child's dataset; one missing there is
-    `external`, and nothing is inherited across it. For each verb that carries a dimension,
-    the child's parents across that verb settle their resolved answers among themselves and give the child
+    `external`, and nothing is inherited across it. For each activity that carries a dimension,
+    the child's parents across that activity settle their resolved answers among themselves and give the child
     one declaration, credited to them, to which 4.2–4.6 apply as to inputs 1–4 — so a child with two
-    carrying verbs (`called_from` and `merged_from`) has two declarations, which reconcile with each other
+    carrying activities (`VariantCallingActivity` and `MergeActivity`) has two declarations, which reconcile with each other
     as any two do:
     - parents that agree (4.4) declare their value — for `reference_assembly` with its build's identity
       (base and version, not the parent's header observations), unless that differs among them, when the
@@ -258,16 +258,17 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     - parents that differ, or any parent that is itself mixed, declare the state **mixed**: no value, no
       status, and not a conflict. It is the one claim state that takes part in resolution, and only here:
       alone, or beside another mixed declaration, it leaves the slot `not_classified`, marked mixed; against
-      a value from any other declaration — the child's own, or another verb's inherited one — the slot is
+      a value from any other declaration — the child's own, or another activity's inherited one — the slot is
       `conflict`, since one value contradicts a lineage that has none; against `not_applicable` from any
       other declaration it is a conflict too, as the values it stands for would be (4.6);
-    - if the parents with an answer agree but any parent across the verb is `not_classified`, the verb
+    - if the parents with an answer agree but any parent across the activity is `not_classified`, the activity
       passes nothing for that dimension, since the unclassified one cannot be known to agree; parents
       already known to differ, or a mixed parent, give mixed whatever the rest are; what a parent in
-      `conflict` passes, and so what its verb gives, is #413's.
+      `conflict` passes, and so what its activity gives, is #413's.
 
-    Which step carries which dimension is ADR-0002's table; `data_type` is never carried. Sources that
-    name different parents for a verb with one parent are an edge conflict, across which nothing is
+    Which activity carries which dimension is declared once, as its `passes` in `rules/activities.yaml`
+    (ADR-0002 decision 8, #580); `data_type` is never carried. Sources that name different parents for an
+    activity with one input are an edge conflict, across which nothing is
     inherited until it is settled. The declaration is a claim like any other (1.1, 3.2), naming the step it
     crossed as its rule. It is the only way a slot is filled from another file's answer, and nothing fills
     one slot from another slot's answer within a file.
@@ -444,10 +445,10 @@ importer's half is built — 7.12 is enforced (below), and the published importe
 
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move. 4.9 is now that clause for what an inherited value declares; how the index path builds it is still #413's.
 - **4.9 is not built** (ADR-0002). Its one instance is the index producer's, built as the 1.1 entry above
-  describes. Inference writes the `index_of` and `checksum_of` edges a file's name states, each by the
+  describes. Inference writes the `IndexingActivity` and `ChecksumActivity` edges a file's name states, each by the
   parent's record key and only where the parent resolves (#356); no other step's edge is emitted, and the
   edges the source tables state wait for #577 (#363). The `checksum_file` rule still stamps the dimensions
-  `checksum_of` carries `not_applicable`, which 4.6 would turn into a conflict once 4.9 is built.
+  `ChecksumActivity` carries `not_applicable`, which 4.6 would turn into a conflict once 4.9 is built.
   6.6's inheritance clause is true vacuously until then; when 4.9 is built, the `--no-evidence` help in
   `reconcile.main` ("concludes what inference did") changes with it.
 - **The slot maps and their importer exist for AnVIL only** (#369, #497): `slot_map` loads

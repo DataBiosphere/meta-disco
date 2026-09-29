@@ -739,7 +739,11 @@ def _assert_inherited(output, index_name, parent_name, parent_md5):
     assert edge["parent_file"] == parent_name
     # Grounded by the parent's record key, not its md5 (ADR-0002 decision 2, #356).
     assert edge["parent_key"] == _fid(parent_md5)
-    assert (edge["relation"], edge["source_type"], edge["rule_id"]) == ("index_of", "filename_rule", "index_by_name")
+    assert (edge["activity"], edge["source_type"], edge["rule_id"]) == (
+        "IndexingActivity",
+        "filename_rule",
+        "index_by_name",
+    )
     # The parent's kind still resolves off an upper-case extension, because
     # `FileName.parse` lowers the extension it returns.
     assert record["derived_from"][0]["parent_kind"] == "alignment"

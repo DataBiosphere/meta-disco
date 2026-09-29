@@ -629,11 +629,11 @@ def test_name_source_constants_match_schema_enum():
 
 
 def test_derivation_edge_constants_match_schema_enums():
-    # The edge rules emit `relation` and `parent_kind` as literals, and nothing in
+    # The edge rules emit `activity` and `parent_kind` as literals, and nothing in
     # `make test` validates output against the LinkML enums. Pin both so a typo or a
-    # schema rename cannot drift silently (#450, #356).
+    # schema rename cannot drift silently (#450, #356, #580).
     assert set(PARENT_KIND_BY_CATEGORY.values()) <= schema_vocab.parent_kind_values()
-    assert {rule.relation for rule in code_rules.EDGE_RULES} <= schema_vocab.relation_values()
+    assert {rule.activity for rule in code_rules.EDGE_RULES} <= schema_vocab.activity_values()
 
 
 @pytest.mark.parametrize(
