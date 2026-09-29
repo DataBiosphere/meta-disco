@@ -16,7 +16,7 @@ Each rule's **basis** is what it reads to reach its answer (``code_rules.BASES``
 YAML rule's is worked out from its ``when`` keys by :data:`WHEN_BASIS`, the most specific
 key deciding: a header condition makes it ``content``, else a ``dataset_pattern``
 ``dataset``, else a ``filename_pattern`` ``file_name``, else an extension or format
-condition ``extension``. A code rule declares its own, and a translation row is always
+condition ``extension``, else a size bound ``file_size``. A code rule declares its own, and a translation row is always
 ``mapping``. A ``when`` key missing from ``WHEN_BASIS`` fails the report, rather than
 going unclassified.
 
@@ -77,9 +77,9 @@ GENERAL = "general"
 # What a rule's condition and effect are called, by kind: a code rule has no `when`, only what it reads.
 LABELS = {KIND_YAML: ("When", "Then"), KIND_CODE: ("Reads", "Sets"), KIND_MAPPING: ("Match", "Declares")}
 
-# Every key ``RuleLoader.VALID_WHEN_KEYS`` accepts, and the basis it gives a rule. A key
-# mapped to None narrows when a rule applies without saying what it reads: a size bound,
-# or ``always``. A rule with only such keys has no basis, and the report refuses it.
+# Every key ``RuleLoader.VALID_WHEN_KEYS`` accepts, and the basis it gives a rule.
+# ``always`` is mapped to None: it looks at nothing, so a rule with only it has no basis,
+# and the report refuses it.
 # ``test_rules_report`` holds these keys to VALID_WHEN_KEYS, so a key added there fails
 # until it is listed here.
 WHEN_BASIS = {
@@ -97,8 +97,8 @@ WHEN_BASIS = {
     "extensions": code_rules.BASIS_EXTENSION,
     "format": code_rules.BASIS_EXTENSION,
     "file_format": code_rules.BASIS_EXTENSION,
-    "file_size_min_gb": None,
-    "file_size_max_gb": None,
+    "file_size_min_gb": code_rules.BASIS_FILE_SIZE,
+    "file_size_max_gb": code_rules.BASIS_FILE_SIZE,
     "always": None,
 }
 # Most specific first: the first basis a rule's `when` has is its basis.
@@ -107,6 +107,8 @@ BASIS_PRECEDENCE = (
     code_rules.BASIS_DATASET,
     code_rules.BASIS_FILE_NAME,
     code_rules.BASIS_EXTENSION,
+    # Last: a size bound beside any other condition only narrows it.
+    code_rules.BASIS_FILE_SIZE,
 )
 
 # The report's prose, written once: the markdown uses it, and the dashboard reads it from
@@ -125,7 +127,7 @@ KEY = [
     ),
     (
         "Basis",
-        "what the rule looks at: the file's extension, its name, the dataset it belongs to, its contents (headers, "
+        "what the rule looks at: the file's extension, its size, its name, the dataset it belongs to, its contents (headers, "
         "chromosome names and lengths, what a tar archive holds), the answer for the file it was made from "
         "(parent_file, for an index), or a submitter's value (mapping).",
     ),

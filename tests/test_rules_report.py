@@ -171,6 +171,7 @@ def test_every_when_key_the_loader_accepts_has_a_basis_entry():
         ({"extensions": [".bam"], "dataset_pattern": "x", "filename_pattern": "y"}, "dataset"),
         ({"extensions": [".bam"], "header_section": "@PG", "filename_pattern": "y"}, "content"),
         ({"extensions": [".fastq"], "file_size_min_gb": 1}, "extension"),
+        ({"file_size_min_gb": 1, "file_size_max_gb": 5}, "file_size"),
     ],
 )
 def test_the_most_specific_condition_decides_the_basis(when, basis):
@@ -181,7 +182,7 @@ def test_a_when_key_with_no_basis_or_only_a_gate_is_refused():
     with pytest.raises(grr.ReportError, match="no basis"):
         grr.basis_of("r", {"extensions": [".bam"], "new_key": 1})
     with pytest.raises(grr.ReportError, match="names nothing it reads"):
-        grr.basis_of("r", {"file_size_min_gb": 1})
+        grr.basis_of("r", {"always": True})
 
 
 def test_when_and_then_are_the_file_s_own_text(data):

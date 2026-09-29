@@ -36,15 +36,24 @@ from .models import (
     SOURCE_FILENAME_RULE,
 )
 
-# What a rule reads to reach its answer. The first four describe a rule of ours; a
+# What a rule reads to reach its answer. All but the last describe a rule of ours; a
 # translation row (`rules/value_map.yaml`) is always `mapping`.
 BASIS_EXTENSION = "extension"
+BASIS_FILE_SIZE = "file_size"
 BASIS_FILE_NAME = "file_name"
 BASIS_DATASET = "dataset"
 BASIS_CONTENT = "content"
 BASIS_PARENT_FILE = "parent_file"
 BASIS_MAPPING = "mapping"
-BASES = (BASIS_EXTENSION, BASIS_FILE_NAME, BASIS_DATASET, BASIS_CONTENT, BASIS_PARENT_FILE, BASIS_MAPPING)
+BASES = (
+    BASIS_EXTENSION,
+    BASIS_FILE_SIZE,
+    BASIS_FILE_NAME,
+    BASIS_DATASET,
+    BASIS_CONTENT,
+    BASIS_PARENT_FILE,
+    BASIS_MAPPING,
+)
 
 HEADER_CLASSIFIER = "src/meta_disco/header_classifier.py"
 INDEX_PRODUCER = "scripts/classify_index_files.py"
