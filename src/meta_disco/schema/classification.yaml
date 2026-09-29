@@ -919,7 +919,10 @@ slots:
     range: relation_enum
     required: true
   parent_file:
-    description: The parent file's name, as the source that states the edge wrote it.
+    description: >-
+      The parent file's name: the matched record's own spelling where the edge resolves
+      (a file-name edge matches case-insensitively, so it may differ in case from the name
+      worked out from the child), otherwise as the source that states the edge wrote it.
   parent_key:
     description: >-
       The parent's record key (`pipeline.SOURCE_RECORD_KEYS`: AnVIL's `file_id`, HPRC's

@@ -302,7 +302,7 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
     naming the mapping that turned that column or activity into a verb, as an external claim carries both
     today; for one inference reads, `rule_id` alone, naming the rule and header field or filename
     convention it came from. Which kind
-    `anvil_activity` is — it is neither the submitter tables nor `anvil_file` — is #356's.
+    `anvil_activity` is — it is neither the submitter tables nor `anvil_file` — is #577's (split from #356).
   - `parent_key`: the parent's record key per `SOURCE_RECORD_KEYS`, set only when the parent resolves to
     a record of the child's dataset; its presence is what `parent_scope` means, so `parent_scope` is not a
     slot (decisions 2, #371). Named for the key rather than `parent_file_id` because HPRC's key is not a
@@ -335,8 +335,8 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   held-back list.
 - Evidence cannot state an edge yet: an `EvidenceRow` carries one classification slot and a `raw_value`,
   with no room for a relation or a parent. The shape of relationship evidence, and the per-dataset
-  lineage map that fills it, are not designed here; #356 designs them with the first evidence-stated
-  edge (`anvil_activity`).
+  lineage map that fills it, are not designed here; #577 (split from #356) designs them with the first
+  evidence-stated edge (`anvil_activity`).
 - What each step carries (decision 8), and each verb's cardinality (decision 5), are declared once in
   data — on the `relation_enum` values or in a rules file — and read by code and a drift test;
   `INHERITED_FIELDS` becomes a reader of the `index_of` entry rather than a second copy.

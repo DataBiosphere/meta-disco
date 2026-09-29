@@ -1196,7 +1196,7 @@ class DerivationEdge(ConfiguredBaseModel):
                                         'required': True}}})
 
     relation: RelationEnum = Field(default=..., description="""The derivation verb.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DerivationEdge']} })
-    parent_file: str = Field(default=..., description="""The parent file's name, as the source that states the edge wrote it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DerivationEdge']} })
+    parent_file: str = Field(default=..., description="""The parent file's name: the matched record's own spelling where the edge resolves (a file-name edge matches case-insensitively, so it may differ in case from the name worked out from the child), otherwise as the source that states the edge wrote it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DerivationEdge']} })
     parent_key: Optional[str] = Field(default=None, description="""The parent's record key (`pipeline.SOURCE_RECORD_KEYS`: AnVIL's `file_id`, HPRC's URL hash in `md5sum`), set only when the parent resolves to exactly one record of the child's dataset (ADR-0002 decision 2). Named for the key rather than `parent_file_id` because HPRC's key is not a `file_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DerivationEdge']} })
     parent_kind: Optional[ParentKindEnum] = Field(default=None, description="""The kind of file the parent is.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DerivationEdge']} })
     source_type: SourceTypeEnum = Field(default=..., description="""Kind of source that stated the edge: `filename_rule` for one inference reads from the child's name.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'DerivationEdge']} })

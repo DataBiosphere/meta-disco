@@ -351,14 +351,15 @@ class Tally:
 
 
 def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict[str, Tally]]:
-    """One pass over the reconciled records: the record count, and per rule id and per marker, what fired where.
+    """One pass over the reconciled records: the record count, and per rule id, marker and edge rule, what fired where.
 
     For a rule or a translation row, only a claim that declares something counts: a value,
     or ``not_applicable`` (``reconcile.declaration``). One that declares ``not_classified``
     or copies a ``conflict`` gave the file no answer, as the index producer's
     ``inherited_from_parent`` does for a parent with none. A marker is counted wherever it
     appears, since recording no answer is what a marker does. An id in neither set (one
-    nothing declares) is counted like a marker and never judged as having won.
+    nothing declares) is counted like a marker and never judged as having won. An edge
+    rule is counted by the edges records' ``derived_from`` carries under its ``rule_id``.
     """
     stats: defaultdict[str, Tally] = defaultdict(Tally)
     n = 0
