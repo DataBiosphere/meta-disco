@@ -505,6 +505,8 @@ datasets:
       file_path:
         assay_type:
           - {cell: assay_titles}
+        data_type:
+          - {cell: content_type}
         platform:
           - {cell: sequencing_platform}
         reference_assembly:
