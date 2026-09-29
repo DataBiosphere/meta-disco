@@ -29,15 +29,13 @@ from tests.run_fixtures import OUTPUT_FILE, write_run
 #
 # Each param's id is the producer's registry name, so a test can check this list against
 # `producers.PRODUCERS` and notice a producer nothing here runs.
+# The catch-all as a standalone producer: no other producer's rows to skip.
+CATCH_ALL = functools.partial(classify_remaining, classification_paths=[])
+
 STANDALONE_PRODUCERS = [
     pytest.param(classify_images, "slide.svs", ".svs", id="images"),
     pytest.param(classify_auxiliary_genomic, "cohort.pvar", ".pvar", id="auxiliary"),
-    pytest.param(
-        functools.partial(classify_remaining, classification_paths=[]),
-        "mystery.xyz",
-        ".xyz",
-        id="remaining",
-    ),
+    pytest.param(CATCH_ALL, "mystery.xyz", ".xyz", id="remaining"),
 ]
 
 

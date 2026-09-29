@@ -35,7 +35,9 @@ For each claim carrying a ``rule_id``, per rule:
   published columns (``published_value``) among them.
 
 Markers are counted in a table of their own: the ``code_rules.MARKERS`` a producer writes
-as a ``rule_id``, and the engine's two placeholders written as ``marker``. An id or marker
+as a ``rule_id``, and the engine's two placeholders written as ``marker``. So are the edge
+rules (``code_rules.EDGE_RULES``, #356), which state a derivation edge rather than claim a
+field, counted by the files whose ``derived_from`` carries an edge they stated. An id or marker
 the run carries and nothing declares (a rule retired since the run, say) is listed rather
 than dropped.
 
@@ -145,6 +147,10 @@ KEY = [
 # The dashboard colours a count that is zero; the markdown has no colour to explain.
 DASHBOARD_KEY = [*KEY, ("Highlighted", "a rule that gave no answer for any file this time.")]
 MARKERS_NOTE = "Not rules. Each is a reason a field of a file was left without an answer."
+EDGE_RULES_NOTE = (
+    "Rules that say which file a file was made from, rather than giving a field an answer. Each names the "
+    "parent from the file's own name, and only where exactly one file of the dataset carries that name."
+)
 UNDECLARED_HEAD = "Rule names with no rule behind them"
 UNDECLARED_NOTE = (
     "The counts name these rules, but the rule files in this version of meta-disco do not contain them. That "
@@ -345,14 +351,15 @@ class Tally:
 
 
 def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict[str, Tally]]:
-    """One pass over the reconciled records: the record count, and per rule id and per marker, what fired where.
+    """One pass over the reconciled records: the record count, and per rule id, marker and edge rule, what fired where.
 
     For a rule or a translation row, only a claim that declares something counts: a value,
     or ``not_applicable`` (``reconcile.declaration``). One that declares ``not_classified``
     or copies a ``conflict`` gave the file no answer, as the index producer's
     ``inherited_from_parent`` does for a parent with none. A marker is counted wherever it
     appears, since recording no answer is what a marker does. An id in neither set (one
-    nothing declares) is counted like a marker and never judged as having won.
+    nothing declares) is counted like a marker and never judged as having won. An edge
+    rule is counted by the edges records' ``derived_from`` carries under its ``rule_id``.
     """
     stats: defaultdict[str, Tally] = defaultdict(Tally)
     n = 0
@@ -384,6 +391,14 @@ def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict
                     continue
                 if claimed is not None and _won(field_name, claimed, answer):
                     won.add(key)
+        # An edge rule states an edge, not a claim: counted per edge, and per file carrying one.
+        # A run written before #356 carries one edge object with no `rule_id`, which no
+        # edge rule stated, so it is not counted.
+        edges = record.get("derived_from")
+        for edge in edges if isinstance(edges, list) else []:
+            if edge.get("rule_id"):
+                stats[edge["rule_id"]].claims += 1
+                fired.add(edge["rule_id"])
         for key in fired:
             stats[key].files += 1
             stats[key].datasets[dataset] += 1
@@ -419,9 +434,14 @@ def build(rules_path: Path | None, value_map_path: Path | None, records, run_dir
     rules = yaml_rules(rules_path) + code_rule_rows() + mapping_rows(value_map_path)
     markers = [{"id": m.id, "written_as": "rule_id", "meaning": m.meaning} for m in code_rules.MARKERS]
     markers += [{"id": k, "written_as": "marker", "meaning": v} for k, v in PLACEHOLDER_MARKERS.items()]
-    # A marker's id among them too: a rule named `fetch_failed` would take the marker's counts.
+    edge_rules = [
+        {"id": e.id, "relation": e.relation, "defined_in": e.module, "reads": e.reads, "rationale": e.rationale}
+        for e in code_rules.EDGE_RULES
+    ]
+    # A marker's or edge rule's id among them too: a rule named `fetch_failed` would take the marker's counts.
     ids = [r["id"] for r in rules]
-    duplicates = sorted(i for i, c in Counter([*ids, *(m["id"] for m in markers)]).items() if c > 1)
+    others = [*(m["id"] for m in markers), *(e["id"] for e in edge_rules)]
+    duplicates = sorted(i for i, c in Counter([*ids, *others]).items() if c > 1)
     if duplicates:
         raise ReportError(f"ids declared twice: {duplicates}")
     n, stats = tally(
@@ -429,24 +449,26 @@ def build(rules_path: Path | None, value_map_path: Path | None, records, run_dir
         rule_ids={r["id"] for r in rules if r["kind"] != KIND_MAPPING},
         mapping_ids={r["id"] for r in rules if r["kind"] == KIND_MAPPING},
     )
-    for r in [*rules, *markers]:
+    for r in [*rules, *markers, *edge_rules]:
         r.update(_counted(stats.get(r["id"])))
-    known = set(ids) | {m["id"] for m in markers}
+    known = set(ids) | set(others)
     date = run_date(run_dir.name)
     return {
         "run": run_dir.name,
         "records": n,
-        "provenance": f"{len(rules)} rules. Counts from classifying {n:,} files"
+        "provenance": f"{len(rules)} rules and {len(edge_rules)} edge rules. Counts from classifying {n:,} files"
         + (f" on {date}" if date else "")
         + f" (output folder {run_dir.name}).",
         "rules": rules,
         "markers": markers,
+        "edge_rules": edge_rules,
         "undeclared": [{"id": k, **_counted(v)} for k, v in sorted(stats.items()) if k not in known],
         "labels": LABELS,
         "text": {
             "intro": INTRO,
             "key": DASHBOARD_KEY,
             "markers_note": MARKERS_NOTE,
+            "edge_rules_note": EDGE_RULES_NOTE,
             "undeclared_head": UNDECLARED_HEAD,
             "undeclared_note": UNDECLARED_NOTE,
             "none_note": NONE_NOTE,
@@ -535,6 +557,21 @@ def render_markdown(data: dict) -> str:
     lines += md_table(
         ["id", "written as", "files", "meaning"],
         [[md_code(m["id"]), m["written_as"], _n(m["files"]), m["meaning"]] for m in data["markers"]],
+    )
+    lines += ["", "## Edge rules", "", EDGE_RULES_NOTE, ""]
+    lines += md_table(
+        ["id", "states", "files", "reads", "rationale", "in"],
+        [
+            [
+                md_code(e["id"]),
+                md_code(e["relation"]),
+                _n(e["files"]),
+                e["reads"],
+                e["rationale"],
+                md_code(e["defined_in"]),
+            ]
+            for e in data["edge_rules"]
+        ],
     )
     lines += ["", f"## {UNDECLARED_HEAD}", "", UNDECLARED_NOTE, ""]
     if data["undeclared"]:

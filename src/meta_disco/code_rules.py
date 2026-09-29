@@ -19,6 +19,10 @@ producer took no parent. ``make rules-report`` lists markers in a table of their
 The ``not_classified`` placeholder carries no ``rule_id`` at all, so it is not declared
 here.
 
+An **edge rule** states a derivation edge (ADR-0002) rather than a claim, so it sets no
+dimension. It is declared here, in ``EDGE_RULES``, for the same reason the rules are: its id
+is what an edge's ``rule_id`` carries, and nothing else lists it.
+
 ``basis`` says what a rule reads to reach its answer, in the report's terms
 (``BASES``). A YAML rule's basis is worked out from its ``when`` by the report. A code
 rule's is declared, because a code rule has no ``when`` to work it out from.
@@ -57,6 +61,7 @@ BASES = (
 
 HEADER_CLASSIFIER = "src/meta_disco/header_classifier.py"
 INDEX_PRODUCER = "scripts/classify_index_files.py"
+EDGES = "src/meta_disco/edges.py"
 METADATA_SCHEMA = "src/meta_disco/metadata_schema.py"
 
 
@@ -86,6 +91,23 @@ class CodeMarker:
     id: str
     module: str
     meaning: str
+
+
+@dataclass(frozen=True)
+class EdgeRule:
+    """A rule that states a derivation edge from the child's own name (ADR-0002).
+
+    ``relation`` is the verb it states, a term of ``relation_enum``. ``reads`` says how the
+    parent's name is worked out from the child's, and ``rationale`` why that names the
+    parent. Its ``source_type`` is ``filename_rule``: both edge rules read the name.
+    """
+
+    id: str
+    module: str
+    relation: str
+    source_type: str
+    reads: str
+    rationale: str
 
 
 _REFERENCE = ("reference_assembly",)
@@ -272,6 +294,41 @@ CODE_RULES = (
     INDEX_BY_EXTENSION,
     INHERITED_FROM_PARENT,
 )
+
+INDEX_BY_NAME = EdgeRule(
+    id="index_by_name",
+    module=INDEX_PRODUCER,
+    relation="index_of",
+    source_type=SOURCE_FILENAME_RULE,
+    reads=(
+        "the index file's name: the name without its index extension (sample.bam.bai -> "
+        "sample.bam), or with it replaced by a parent extension INDEX_TO_PARENT declares "
+        "(sample.bai -> sample.bam), matched case-insensitively within the dataset"
+    ),
+    rationale=(
+        "An index is named after the file it indexes, so the first candidate name any file "
+        "of the dataset carries names its parent. Where two files carry that name it names "
+        "neither and no edge is written; a later candidate is not tried (#438)."
+    ),
+)
+CHECKSUM_BY_NAME = EdgeRule(
+    id="checksum_by_name",
+    module=EDGES,
+    relation="checksum_of",
+    source_type=SOURCE_FILENAME_RULE,
+    reads=(
+        "the name of a file whose extension EXTENSION_MAP calls a checksum, less that "
+        "extension and any wrapper (sample.bam.md5 -> sample.bam), matched "
+        "case-insensitively within the dataset"
+    ),
+    rationale=(
+        "A checksum file is its file's name plus .md5, so the name without it, carried by "
+        "exactly one file of the dataset, is the file it checks. A name two files carry "
+        "names neither, and no edge is written."
+    ),
+)
+
+EDGE_RULES = (INDEX_BY_NAME, CHECKSUM_BY_NAME)
 
 FETCH_FAILED = CodeMarker(
     id="fetch_failed",

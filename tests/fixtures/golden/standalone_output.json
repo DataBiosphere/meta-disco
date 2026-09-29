@@ -294,12 +294,16 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "derived_from": {
-          "parent_file": "sample.flnc.bam",
-          "parent_kind": "alignment",
-          "parent_md5sum": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-          "relation": "index_of"
-        },
+        "derived_from": [
+          {
+            "parent_file": "sample.flnc.bam",
+            "parent_key": "g-file-b",
+            "parent_kind": "alignment",
+            "relation": "index_of",
+            "rule_id": "index_by_name",
+            "source_type": "filename_rule"
+          }
+        ],
         "drs_uri": "drs://golden/v2_g-object-1",
         "entry_id": "g-bai-1",
         "file_format": ".bai",
@@ -384,12 +388,7 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "derived_from": {
-          "parent_file": null,
-          "parent_kind": "alignment",
-          "parent_md5sum": null,
-          "relation": "index_of"
-        },
+        "derived_from": null,
         "drs_uri": "drs://golden/v2_g-object-2",
         "entry_id": "g-bai-2",
         "file_format": ".bai",
@@ -516,6 +515,106 @@
         "file_name": "mystery.xyz",
         "file_size": 1000,
         "md5sum": "55555555555555555555555555555555"
+      },
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "checksum"
+              }
+            ],
+            "status": "classified",
+            "value": "checksum"
+          },
+          "instrument_model": {
+            "evidence": [
+              {
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
+          "platform": {
+            "evidence": [
+              {
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "derived_from": [
+          {
+            "parent_file": "mystery.xyz",
+            "parent_key": "g-file-5",
+            "parent_kind": null,
+            "relation": "checksum_of",
+            "rule_id": "checksum_by_name",
+            "source_type": "filename_rule"
+          }
+        ],
+        "drs_uri": "drs://golden/v2_g-object-9",
+        "entry_id": "g-remaining-md5",
+        "file_format": ".md5",
+        "file_id": "g-file-9",
+        "file_name": "mystery.xyz.md5",
+        "file_size": 33,
+        "md5sum": "99999999999999999999999999999999"
       }
     ],
     "metadata": {
@@ -523,6 +622,7 @@
       "content_unreadable": 0,
       "details": {
         "by_extension": {
+          ".md5": 1,
           ".xyz": 1
         }
       },
@@ -530,9 +630,9 @@
       "errored": 0,
       "failed": 0,
       "from_cache": 0,
-      "processed": 1,
-      "successful": 1,
-      "total_to_process": 1,
+      "processed": 2,
+      "successful": 2,
+      "total_to_process": 2,
       "validation_failed": 0
     }
   }

@@ -9,7 +9,7 @@ from meta_disco import code_rules, models
 from meta_disco.models import CLASSIFICATION_FIELDS, SOURCE_TYPES
 from meta_disco.rule_loader import get_unified_rules
 
-DECLARED = (*code_rules.CODE_RULES, *code_rules.MARKERS)
+DECLARED = (*code_rules.CODE_RULES, *code_rules.MARKERS, *code_rules.EDGE_RULES)
 SOURCES = [*Path("src/meta_disco").rglob("*.py"), *Path("scripts").rglob("*.py")]
 
 
@@ -91,13 +91,21 @@ def test_a_marker_says_what_it_means(marker):
     assert marker.meaning.strip()
 
 
+@pytest.mark.parametrize("rule", code_rules.EDGE_RULES, ids=lambda r: r.id)
+def test_an_edge_rule_says_what_it_reads_and_why(rule):
+    assert rule.rationale.strip() and rule.reads.strip()
+    assert rule.source_type in SOURCE_TYPES
+
+
 def test_each_declaration_is_named_in_the_module_it_says_emits_it():
     names = {
         obj: name
         for name, obj in vars(code_rules).items()
-        if isinstance(obj, (code_rules.CodeRule, code_rules.CodeMarker))
+        if isinstance(obj, (code_rules.CodeRule, code_rules.CodeMarker, code_rules.EdgeRule))
     }
-    assert set(names) == set(DECLARED), "every CodeRule and CodeMarker is in CODE_RULES or MARKERS"
+    assert set(names) == set(DECLARED), (
+        "every CodeRule, CodeMarker and EdgeRule is in CODE_RULES, MARKERS or EDGE_RULES"
+    )
     unused = [d.id for d in DECLARED if f"code_rules.{names[d]}" not in Path(d.module).read_text(encoding="utf-8")]
     assert unused == []
 

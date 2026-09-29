@@ -274,11 +274,15 @@ evidence}` entry — plus the controlled vocabulary:
     stays on the index producer's `unmatched_files` diagnostic, but it is not a slot of
     `ClassificationRecord` and no reader of a run wants it: consumers group on
     `dataset_title` and join on `file_id`. Do not add it back to a record.
-  - **`derived_from` is the index producer's typed edge** (#450): `relation` is always
-    `index_of` and required, the grounding (`parent_file` / `parent_md5sum`) is null
-    where #438 took no parent, and `parent_kind` comes from the matched parent's
-    extension — or, with no parent, from what `INDEX_TO_PARENT` declares when those
-    agree. No other producer emits an edge; widening it is #371.
+  - **`derived_from` is a list of edges, written only where the parent resolves**
+    (#450, #356, ADR-0002). Inference states two, both from the child's own name through
+    `meta_disco.edges`: the index producer's `index_of` and the catch-all's `checksum_of`
+    for a `.md5`. Each carries `parent_file`, `parent_key` (the parent's record key, never
+    its md5), `parent_kind` from the parent's extension, and the `source_type` / `rule_id`
+    of the edge rule that stated it (`code_rules.EDGE_RULES`). A parent no file or two
+    files of the dataset carry gives no edge, since the name would only restate the
+    child's. Edges the source tables state (`anvil_activity`, submitter rows, IGVF
+    `derived_from`) are built at reconcile (#577); inheritance across edges is #571.
   - **A producer is declared once**, in `producers.PRODUCERS` — the eleven writers of a
     run's `*_classifications.json` files. Add one there, never to a second list:
     `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,

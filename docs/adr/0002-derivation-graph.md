@@ -92,7 +92,13 @@ parent named). A `.tbi` whose VCF cannot be picked already says it is a VCF inde
 `data_type` and extension, so the edge would restate the file. **An edge exists only where a source names
 a parent.**
 
-*Rejected: grounding by md5*, which today's edge does, for the reason the June doc's 5a gives (#486).
+*Settled with #356: an edge from a filename convention is written only where its parent resolves.* The name
+such a convention gives is the child's own less a suffix (`HG01466.chr15.hc.vcf.gz.tbi` names
+`HG01466.chr15.hc.vcf.gz`), so an unresolved one — no file carrying it, or two (#438) — would restate the file
+for the reason above. An `external` edge comes only from a source that names the parent independently of the
+child: a header line, a table row, IGVF's `derived_from`.
+
+*Rejected: grounding by md5*, which the edge did until #356, for the reason the June doc's 5a gives (#486).
 
 ### 3. An edge can have several parents
 
@@ -153,9 +159,11 @@ check (#362) reads them. Identifier parents come from the sources decision 5 lis
 `donor_of` and `child_of`, registries among them.
 
 Submitter tables and `anvil_activity` are source evidence, which inference never reads (contract 1.2,
-6.1). So **I recommend edges be built at reconcile**, the stage that reads both evidence and inference:
-inference keeps writing the edges it reads itself (filename convention, header lines), and reconcile adds
-the ones evidence states.
+6.1). So **edges the evidence states are built at reconcile** (settled with #356, 2026-09-28; built by
+#577), the stage that reads both evidence and inference: inference keeps writing the edges it reads itself
+(filename convention, header lines), and reconcile adds the ones evidence states. Reconcile is also the one
+stage holding both kinds, which a chain mixes (T2T: `.tbi` → VCF by name, CRAM → FASTQ by table row), and
+re-running it costs no corpus run (6.4) when a lineage mapping is corrected.
 
 An edge whose child is a file is stored on that file's record as `derived_from: [DerivationEdge]`.
 `donor_of` and `child_of` have an identifier as their child, which has no record, so they live only in a
@@ -252,9 +260,9 @@ concern where it matters: the dimensions that describe the file itself (`data_ty
 
 **Today's case.** The index producer's inheritance (`classify_index_files.INHERITED_FIELDS`) is the
 `index_of` row of the table, built the way the contract's "What is not true yet" entry on 1.1 describes.
-How that path moves under 4.9 is #413's. That producer also writes the edge decision 2 rejects: an index
-file with no parent picked (`declined_record`, #438, ~15K files) gets an `index_of` edge naming no parent.
-#356 is where it is revisited, since `anvil_activity` names most of those parents.
+How that path moves under 4.9 is #413's. That producer used to write the edge decision 2 rejects, an
+`index_of` edge naming no parent on an index file it took no parent for (`declined_record`, #438, ~15K
+files); #356 removed it, and `anvil_activity`, which names most of those parents, gives them theirs (#577).
 
 The `checksum_file` rule contradicts the `checksum_of` row: it stamps all five lineage dimensions
 `not_applicable`, which 4.6 would make a conflict against every inherited value (~14K `.md5` files). A
@@ -294,7 +302,7 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
     naming the mapping that turned that column or activity into a verb, as an external claim carries both
     today; for one inference reads, `rule_id` alone, naming the rule and header field or filename
     convention it came from. Which kind
-    `anvil_activity` is — it is neither the submitter tables nor `anvil_file` — is #356's.
+    `anvil_activity` is — it is neither the submitter tables nor `anvil_file` — is #577's (split from #356).
   - `parent_key`: the parent's record key per `SOURCE_RECORD_KEYS`, set only when the parent resolves to
     a record of the child's dataset; its presence is what `parent_scope` means, so `parent_scope` is not a
     slot (decisions 2, #371). Named for the key rather than `parent_file_id` because HPRC's key is not a
@@ -317,8 +325,7 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
 - An inherited `reference_assembly` claim carries a `ReferenceBuild` with `base` and `version` only, where
   the parents agree on them, and none where they differ, and
   names the parent it came from (decision 8); the header observations stay on the parent's record.
-- `parent_md5sum` stays while the index producer emits it, and is retired by #371 once `parent_key` is
-  written.
+- `parent_md5sum` is retired: #356 writes `parent_key` in its place.
 - New class `EntityIdentifier`: `id`, `namespace` (`identifier_namespace_enum`), `dataset` (set exactly
   when the namespace is `dataset_local`, and part of its identity), and the same provenance as
   `DerivationEdge` — `source_type`, plus `source` and `rule_id` for evidence or `rule_id` alone for inference
@@ -328,8 +335,8 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   held-back list.
 - Evidence cannot state an edge yet: an `EvidenceRow` carries one classification slot and a `raw_value`,
   with no room for a relation or a parent. The shape of relationship evidence, and the per-dataset
-  lineage map that fills it, are not designed here; #356 designs them with the first evidence-stated
-  edge (`anvil_activity`).
+  lineage map that fills it, are not designed here; #577 (split from #356) designs them with the first
+  evidence-stated edge (`anvil_activity`).
 - What each step carries (decision 8), and each verb's cardinality (decision 5), are declared once in
   data — on the `relation_enum` values or in a rules file — and read by code and a drift test;
   `INHERITED_FIELDS` becomes a reader of the `index_of` entry rather than a second copy.
@@ -352,15 +359,18 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
 
 ## Open
 
-- **Which stage builds edges from evidence, and from what input.** Decision 6 recommends reconcile, and
-  no evidence shape carries an edge yet (schema changes, above). #356 designs both.
+- **What input evidence edges are built from.** Reconcile builds them (decision 6, settled), but no
+  evidence shape carries an edge yet (schema changes, above). #577 designs it.
 - **Inheritance needs the parent settled first.** Parents and children are in different producer files
   (the CRAM in one, its VCF in another) and chains are deeper than one step (FASTQ → CRAM → VCF → `.tbi`),
-  so sorting ~700K records by edge would break reconcile's one-file-at-a-time streaming. I think two
-  passes fit instead: settle every record's own slots and keep only the carried dimensions per record key,
-  resolve inheritance over that small map by a memoized walk that refuses a cycle, then write the files in
-  their current order. Deciding `internal` for an evidence-stated parent needs each dataset's record keys and names; the
-  pass reconcile's join already makes over the records can collect them. Not designed here.
+  so sorting ~700K records by edge would break reconcile's one-file-at-a-time streaming. I think a lookup
+  table fits instead: one read of the files builds, per record key, the record's own settled answer for
+  each carried dimension and its parents' keys; a file's final answer is then its own reconciled with its
+  parents' final answers, looked up recursively to any depth (a `.bai`, then its BAM, then the BAM's
+  FASTQs, which have none), each remembered once worked out and a cycle refused; then the files are
+  written in their current order. Deciding `internal` for an evidence-stated parent needs each dataset's
+  record keys and names; the pass reconcile's join already makes over the records can collect them. #571's
+  to build.
 - **A parent in `conflict`.** 4.4–4.5 reconcile declarations, and a conflict declares no value. Whether a
   parent's conflict reaches the child as a conflict (what the index producer does today) or as nothing is
   #413's to decide.

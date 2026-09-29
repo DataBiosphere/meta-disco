@@ -42,9 +42,9 @@ classes:
     tree_root: true
     description: >-
       One classified file. `classifications` carries the file's identity (the
-      six dimension fields — what it is); derived_from is a typed edge to the
-      file it was derived from (where it came from). Matches the pipeline output
-      shape (see docs/derived-file-data-model.md section 5a).
+      six dimension fields — what it is); derived_from lists typed edges to the
+      files it was derived from (where it came from; ADR-0002). Matches the
+      pipeline output shape.
     slots:
       - md5sum
       - file_name
@@ -709,15 +709,34 @@ classes:
 
   DerivationEdge:
     description: >-
-      Typed link from a derived file to the file it was derived from. The verb
-      (relation) and parent_kind are the type — knowable from the filename;
-      parent_md5sum is the grounding, which may be null when the parent cannot
-      be resolved. See docs/derived-file-data-model.md.
+      Typed link from a derived file to one file it was derived from (ADR-0002). The
+      verb is `relation`; `parent_file` names the parent as the source wrote it, and
+      `parent_key` is the parent's record key where it resolves to exactly one record of
+      the child's dataset. An edge whose `parent_key` is set is `internal`, one without
+      it `external`; the scope is worked out from `parent_key`, not stored (decision 2).
+      `source_type` and `rule_id` say which source stated the edge, so two edges one
+      source kind states stay apart (decision 6). An edge exists only where a source
+      names a parent.
     slots:
       - relation
-      - parent_md5sum
       - parent_file
+      - parent_key
       - parent_kind
+      - source_type
+      - rule_id
+    slot_usage:
+      parent_file:
+        required: true
+      source_type:
+        required: true
+        description: >-
+          Kind of source that stated the edge: `filename_rule` for one inference
+          reads from the child's name.
+      rule_id:
+        required: true
+        description: >-
+          The edge rule that stated the edge (`code_rules.EDGE_RULES`), naming the
+          convention or field it reads.
 
 # =============================================================================
 # SLOTS
@@ -777,8 +796,12 @@ slots:
       6000` where `platform` says `ILLUMINA`. Not applicable wherever `platform` is not.
 
   derived_from:
-    description: Typed derivation edge to the parent file, if this is a derived file.
+    description: >-
+      The file's derivation edges, one per parent per source that states it (ADR-0002
+      decision 3); null where no source names a parent.
     range: DerivationEdge
+    multivalued: true
+    inlined_as_list: true
 
   # --- Classification sub-fields ---
   value:
@@ -895,10 +918,17 @@ slots:
     description: The derivation verb.
     range: relation_enum
     required: true
-  parent_md5sum:
-    description: md5sum of the parent file; null if the edge is ungrounded.
   parent_file:
-    description: Name of the parent file.
+    description: >-
+      The parent file's name: the matched record's own spelling where the edge resolves
+      (a file-name edge matches case-insensitively, so it may differ in case from the name
+      worked out from the child), otherwise as the source that states the edge wrote it.
+  parent_key:
+    description: >-
+      The parent's record key (`pipeline.SOURCE_RECORD_KEYS`: AnVIL's `file_id`, HPRC's
+      URL hash in `md5sum`), set only when the parent resolves to exactly one record of
+      the child's dataset (ADR-0002 decision 2). Named for the key rather than
+      `parent_file_id` because HPRC's key is not a `file_id`.
   parent_kind:
     description: The kind of file the parent is.
     range: parent_kind_enum
