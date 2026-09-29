@@ -181,15 +181,15 @@ def test_output_entries_validate_against_schema(validator):
     assert not failures, "Producer output violates the classification schema:\n  " + "\n  ".join(failures)
 
 
+_NAMED_BY = [{"source_type": "filename_rule", "rule_id": "index_by_name"}]
 _INPUT = {
     "role": "indexed",
     "parent_file": "s.bam",
     "parent_key": "f-bam",
     "parent_kind": "alignment",
-    "source_type": "filename_rule",
-    "rule_id": "index_by_name",
+    "named_by": _NAMED_BY,
 }
-_STEP = {"activity": "IndexActivity", "source_type": "filename_rule", "rule_id": "index_by_name"}
+_STEP = {"activity": "IndexActivity", "named_by": _NAMED_BY}
 
 
 def _generated_by(*inputs, **step):
@@ -209,7 +209,7 @@ def test_a_populated_generated_by_validates(validator):
         ("internal", _generated_by(_INPUT)),
         ("external", _generated_by(external)),
         ("two", _generated_by(_INPUT, external)),
-        ("step id", _generated_by(_INPUT, activity_id="776a27ee-8438-b39b-d711-49aeda25ee79")),
+        ("two sources", _generated_by(_INPUT, named_by=[*_NAMED_BY, {**_NAMED_BY[0], "activity_id": "776a27ee"}])),
     )
     failures = []
     for label, step in cases:
@@ -244,9 +244,10 @@ def test_an_inferred_value_outside_its_dimensions_enum_is_refused(validator):
 @pytest.mark.parametrize(
     "member, step",
     [
-        ("activity", {k: v for k, v in _STEP.items() if k != "activity"} | {"inputs": [_INPUT]}),
+        *((m, {k: v for k, v in _STEP.items() if k != m} | {"inputs": [_INPUT]}) for m in _STEP),
         ("inputs", dict(_STEP)),
-        *((m, _generated_by({k: v for k, v in _INPUT.items() if k != m})) for m in ("role", "parent_file", "source_type")),
+        *((m, _generated_by({k: v for k, v in _INPUT.items() if k != m})) for m in ("role", "parent_file", "named_by")),
+        *((m, _generated_by(_INPUT, named_by=[{k: v for k, v in _NAMED_BY[0].items() if k != m}])) for m in _NAMED_BY[0]),
     ],
 )
 def test_a_generated_by_missing_a_required_member_is_refused(validator, member, step):

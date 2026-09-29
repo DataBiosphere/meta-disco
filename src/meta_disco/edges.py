@@ -106,15 +106,15 @@ def generated_by(rule: EdgeRule, parent: dict, key: RecordKey) -> dict:
     no record key raises rather than giving an ungrounded input.
     """
     parent_name = parent["file_name"]
-    provenance = {"source_type": rule.source_type, "rule_id": rule.id}
+    named_by = [{"source_type": rule.source_type, "rule_id": rule.id}]
     used = {
         "role": rule.role,
         "parent_file": parent_name,
         "parent_key": input_key_value(parent, key, f"ground a {rule.activity} input on its parent"),
         "parent_kind": parent_kind_of(parent_name),
-        **provenance,
+        "named_by": named_by,
     }
-    return {"activity": rule.activity, **provenance, "inputs": [used]}
+    return {"activity": rule.activity, "named_by": named_by, "inputs": [used]}
 
 
 def matches(index: NameIndex, dataset_id: str, name: str) -> list[dict]:

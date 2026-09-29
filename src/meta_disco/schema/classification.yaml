@@ -711,59 +711,61 @@ classes:
   GeneratedBy:
     description: >-
       The one step that made a file and the inputs it used (PROV's `wasGeneratedBy` and
-      `used`, ADR-0002 decision 3, #580). `source_type` and `rule_id` name the source that
-      named the step; each input carries its own.
+      `used`, ADR-0002 decision 3, #580). `named_by` lists every source that named the
+      step; each input lists its own.
     slots:
       - activity
-      - activity_id
-      - source_type
-      - rule_id
     attributes:
+      named_by:
+        range: Attribution
+        multivalued: true
+        inlined_as_list: true
+        required: true
       inputs:
         range: ActivityInput
         multivalued: true
         inlined_as_list: true
         required: true
         description: The inputs the step used, each in one of the roles its activity declares.
-    slot_usage:
-      source_type:
-        required: true
-        description: >-
-          Kind of source that named the step: `filename_rule` for one inference reads
-          from the child's name.
-      rule_id:
-        required: true
-        description: >-
-          The rule that named the step (`code_rules.EDGE_RULES` for inference's), naming
-          the convention or field it reads.
 
   ActivityInput:
     description: >-
       One input a step used, in one role (PROV's `hadRole`). With `parent_key` it is
-      `internal`, without it `external` (ADR-0002 decision 2). `source_type` and `rule_id`
-      name the source that named it.
+      `internal`, without it `external` (ADR-0002 decision 2).
     slots:
       - parent_file
       - parent_key
       - parent_kind
-      - source_type
-      - rule_id
     attributes:
       role:
         required: true
         description: One of the roles its activity declares in `rules/activities.yaml`.
+      named_by:
+        range: Attribution
+        multivalued: true
+        inlined_as_list: true
+        required: true
     slot_usage:
       parent_file:
         required: true
+
+  Attribution:
+    description: >-
+      One source that named a step or an input (ADR-0002 decision 6): sources that agree
+      are each listed.
+    slots:
+      - source_type
+      - rule_id
+      - activity_id
+      - source
+    slot_usage:
       source_type:
         required: true
-        description: >-
-          Kind of source that named the input: `filename_rule` for one inference reads
-          from the child's name.
       rule_id:
         required: true
         description: >-
-          The rule that named the input (`code_rules.EDGE_RULES` for inference's).
+          The rule or translation row that turned what the source says into this step or
+          input (`code_rules.EDGE_RULES` for inference's).
 
   ActivityDeclarations:
     description: >-

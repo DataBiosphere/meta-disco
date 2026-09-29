@@ -1165,12 +1165,9 @@ class EvidenceFileEnvelope(ConfiguredBaseModel):
                     'preconditions': {'slot_conditions': {'target_key': {'equals_string': 'file_name',
                                                                          'name': 'target_key'}}}}]})
 
-    source: EvidenceFileSource = Field(default=..., description="""Where the claims were read from — repository, dataset and table. `inlined` for the reason `Evidence.source` is: line 1 carries the whole object, and without the declaration a class-valued slot is read as a reference rather than as the object the file holds.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence']} })
+    source: EvidenceFileSource = Field(default=..., description="""Where the claims were read from — repository, dataset and table. `inlined` for the reason `Evidence.source` is: line 1 carries the whole object, and without the declaration a class-valued slot is read as a reference rather than as the object the file holds.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
     source_type: ImporterSourceTypeEnum = Field(default=..., description="""Which kind of external source this file was read from. On the envelope rather than on every row for the reason the key names are: one repository, dataset and table is one kind of source, so it is checked once per file rather than a few million times, and reconcile reads it from here when it stamps the claim it makes from a row (#421).
-Restricted to the kinds an importer may write. A file declaring `filename_rule` would be naming our own rule engine as its publisher, and one declaring `wrangler_annotation` would be a curator arriving as evidence, which contract 1.6 routes to rules instead.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope',
-                       'Evidence',
-                       'GeneratedBy',
-                       'ActivityInput']} })
+Restricted to the kinds an importer may write. A file declaring `filename_rule` would be naming our own rule engine as its publisher, and one declaring `wrangler_annotation` would be a curator arriving as evidence, which contract 1.6 routes to rules instead.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
     source_version: str = Field(default=..., description="""The version of the source the claims were taken from — a release tag, a publication date, a catalog generation. Required even where the source publishes no version of its own: an evidence file that cannot say what it was built from cannot be reasoned about later.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope']} })
     source_key: str = Field(default=..., description="""The key the *source* publishes its rows by, in the source's own name for it — `filename`, `run_accession`, `object_id`. Recorded as provenance: the values on each line are already in the target's space, so the run never reads this, but a person auditing the file needs to know which column of the source produced them.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope']} })
     target: EvidenceTarget = Field(default=..., description="""The system the claims are about, the scope within it, and the generation resolved against.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope']} })
@@ -1229,7 +1226,7 @@ class Evidence(ConfiguredBaseModel):
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
          'slot_usage': {'status': {'name': 'status', 'required': False}}})
 
-    rule_id: Optional[str] = Field(default=None, description="""Identifier of the rule or content classifier that produced this evidence. Absent on synthetic resolution markers, which carry `marker` instead.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'GeneratedBy', 'ActivityInput']} })
+    rule_id: Optional[str] = Field(default=None, description="""Identifier of the rule or content classifier that produced this evidence. Absent on synthetic resolution markers, which carry `marker` instead.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
     marker: Optional[EvidenceMarkerEnum] = Field(default=None, description="""Kind of synthetic resolution marker, when this entry is not a claim but a note about the outcome: `not_classified` (no rule determined a value) or `conflict` (claims disagreed at the top tier). The marker's `status` is the status the field resolved to — `conflict` on a conflict marker (#88). Absent on real claims.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
     reason: Optional[str] = Field(default=None, description="""Human-readable rationale.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'ActivityDeclaration']} })
     value: Optional[str] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
@@ -1237,11 +1234,8 @@ class Evidence(ConfiguredBaseModel):
     claim_state: Optional[ClaimStateEnum] = Field(default=None, description="""The state of a claim that produced no vocabulary value — see `claim_state_enum` for what each state means. Present instead of `value` or `status`, and only on such a claim: one that mapped successfully carries a `value`, and the two sentinels are carried in `status` as before.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
     tier: Optional[int] = Field(default=None, description="""The tier at which this evidence fired.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
     competing_values: Optional[list[str]] = Field(default=None, description="""On a `conflict` marker, the disagreeing top-tier values that made the field ambiguous. Absent on claims and on the `not_classified` marker.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
-    source_type: Optional[SourceTypeEnum] = Field(default=None, description="""Kind of source that produced this claim (provenance, #90; populated on every claim by #392) — see `source_type_enum` for the kinds. Absent on a synthetic marker and on the note left by a failed fetch or input contract, neither of which is a claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope',
-                       'Evidence',
-                       'GeneratedBy',
-                       'ActivityInput']} })
-    source: Optional[ClaimSource] = Field(default=None, description="""The external source that produced this claim, for a claim that is not from one of our rules. Absent on a rule or content claim, which carries `rule_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence']} })
+    source_type: Optional[SourceTypeEnum] = Field(default=None, description="""Kind of source that produced this claim (provenance, #90; populated on every claim by #392) — see `source_type_enum` for the kinds. Absent on a synthetic marker and on the note left by a failed fetch or input contract, neither of which is a claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
+    source: Optional[ClaimSource] = Field(default=None, description="""The external source that produced this claim, for a claim that is not from one of our rules. Absent on a rule or content claim, which carries `rule_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
     raw_value: Optional[str] = Field(default=None, description="""What the source actually said, before mapping — `Revio` beside a mapped `PACBIO`. The mapping is the reviewable decision, and storing only the mapped value makes it unauditable. Also present on an `unmapped` or `no_vocabulary_term` claim, where it is the whole content of the claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'Evidence']} })
     join_key: Optional[JoinKeyEnum] = Field(default=None, description="""Which key attached this claim to our file. Recorded per claim rather than per source because identity is the risky step and sources publish different keys: md5 collides on 1.72% of the corpus's rows and the HPRC catalog publishes only file names (#390). Absent on a claim our own inference produced, which was never joined to anything.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
     match_exact: Optional[bool] = Field(default=None, description="""Whether the join on `join_key` was an exact match rather than a normalized or partial one. Absent whenever `join_key` is.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
@@ -1249,59 +1243,47 @@ class Evidence(ConfiguredBaseModel):
 
 class GeneratedBy(ConfiguredBaseModel):
     """
-    The one step that made a file and the inputs it used (PROV's `wasGeneratedBy` and `used`, ADR-0002 decision 3, #580). `source_type` and `rule_id` name the source that named the step; each input carries its own.
+    The one step that made a file and the inputs it used (PROV's `wasGeneratedBy` and `used`, ADR-0002 decision 3, #580). `named_by` lists every source that named the step; each input lists its own.
     """
-    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
-         'slot_usage': {'rule_id': {'description': 'The rule that named the step '
-                                                   '(`code_rules.EDGE_RULES` for '
-                                                   "inference's), naming the "
-                                                   'convention or field it reads.',
-                                    'name': 'rule_id',
-                                    'required': True},
-                        'source_type': {'description': 'Kind of source that named the '
-                                                       'step: `filename_rule` for one '
-                                                       'inference reads from the '
-                                                       "child's name.",
-                                        'name': 'source_type',
-                                        'required': True}}})
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
     activity: ActivityTypeEnum = Field(default=..., description="""The kind of step that made the file (`activity_type_enum`); what passes from each input role is declared per term in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy']} })
-    activity_id: Optional[str] = Field(default=None, description="""The source's own id for the step (`anvil_activity.activity_id`), where it gives one.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy']} })
-    source_type: SourceTypeEnum = Field(default=..., description="""Kind of source that named the step: `filename_rule` for one inference reads from the child's name.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope',
-                       'Evidence',
-                       'GeneratedBy',
-                       'ActivityInput']} })
-    rule_id: str = Field(default=..., description="""The rule that named the step (`code_rules.EDGE_RULES` for inference's), naming the convention or field it reads.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'GeneratedBy', 'ActivityInput']} })
+    named_by: list[Attribution] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityInput']} })
     inputs: list[ActivityInput] = Field(default=..., description="""The inputs the step used, each in one of the roles its activity declares.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityDeclaration']} })
 
 
 class ActivityInput(ConfiguredBaseModel):
     """
-    One input a step used, in one role (PROV's `hadRole`). With `parent_key` it is `internal`, without it `external` (ADR-0002 decision 2). `source_type` and `rule_id` name the source that named it.
+    One input a step used, in one role (PROV's `hadRole`). With `parent_key` it is `internal`, without it `external` (ADR-0002 decision 2).
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
-         'slot_usage': {'parent_file': {'name': 'parent_file', 'required': True},
-                        'rule_id': {'description': 'The rule that named the input '
-                                                   '(`code_rules.EDGE_RULES` for '
-                                                   "inference's).",
-                                    'name': 'rule_id',
-                                    'required': True},
-                        'source_type': {'description': 'Kind of source that named the '
-                                                       'input: `filename_rule` for one '
-                                                       'inference reads from the '
-                                                       "child's name.",
-                                        'name': 'source_type',
-                                        'required': True}}})
+         'slot_usage': {'parent_file': {'name': 'parent_file', 'required': True}}})
 
     parent_file: str = Field(default=..., description="""The input file's name: the matched record's own spelling where the input resolves (a file-name rule matches case-insensitively, so it may differ in case from the name worked out from the child), otherwise as the source that names the input wrote it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
     parent_key: Optional[str] = Field(default=None, description="""The parent's record key (`pipeline.SOURCE_RECORD_KEYS`: AnVIL's `file_id`, HPRC's URL hash in `md5sum`), set only when the parent resolves to exactly one record of the child's dataset (ADR-0002 decision 2). Named for the key rather than `parent_file_id` because HPRC's key is not a `file_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
     parent_kind: Optional[ParentKindEnum] = Field(default=None, description="""The kind of file the parent is.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
-    source_type: SourceTypeEnum = Field(default=..., description="""Kind of source that named the input: `filename_rule` for one inference reads from the child's name.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope',
-                       'Evidence',
-                       'GeneratedBy',
-                       'ActivityInput']} })
-    rule_id: str = Field(default=..., description="""The rule that named the input (`code_rules.EDGE_RULES` for inference's).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'GeneratedBy', 'ActivityInput']} })
     role: str = Field(default=..., description="""One of the roles its activity declares in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput', 'InputRole']} })
+    named_by: list[Attribution] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityInput']} })
+
+
+class Attribution(ConfiguredBaseModel):
+    """
+    One source that named a step or an input (ADR-0002 decision 6): sources that agree are each listed.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'rule_id': {'description': 'The rule or translation row that '
+                                                   'turned what the source says into '
+                                                   'this step or input '
+                                                   '(`code_rules.EDGE_RULES` for '
+                                                   "inference's).",
+                                    'name': 'rule_id',
+                                    'required': True},
+                        'source_type': {'name': 'source_type', 'required': True}}})
+
+    source_type: SourceTypeEnum = Field(default=..., description="""Kind of source that produced this claim (provenance, #90; populated on every claim by #392) — see `source_type_enum` for the kinds. Absent on a synthetic marker and on the note left by a failed fetch or input contract, neither of which is a claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
+    rule_id: str = Field(default=..., description="""The rule or translation row that turned what the source says into this step or input (`code_rules.EDGE_RULES` for inference's).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
+    activity_id: Optional[str] = Field(default=None, description="""The source's own id for the step (`anvil_activity.activity_id`), where it gives one.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Attribution']} })
+    source: Optional[ClaimSource] = Field(default=None, description="""The external source that produced this claim, for a claim that is not from one of our rules. Absent on a rule or content claim, which carries `rule_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
 
 
 class ActivityDeclarations(ConfiguredBaseModel):
@@ -1376,6 +1358,7 @@ EvidenceFileEnvelope.model_rebuild()
 Evidence.model_rebuild()
 GeneratedBy.model_rebuild()
 ActivityInput.model_rebuild()
+Attribution.model_rebuild()
 ActivityDeclarations.model_rebuild()
 ActivityDeclaration.model_rebuild()
 ActivityEnd.model_rebuild()

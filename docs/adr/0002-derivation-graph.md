@@ -108,8 +108,10 @@ child: a header line, a table row, IGVF's `derived_from`.
 
 A CRAM derives from two FASTQs; a joint-called VCF from many gVCFs. A file is made by **one** step, so its
 record carries one `generated_by` (#580): the activity, and its `inputs`, one per parent, each in a role
-the activity declares and each with the source that named it. An *edge* in this record is one such input.
-Sources add inputs to the one step: a parent two sources name is one input they agree on, or, for a role
+the activity declares. The step and each input carry `named_by`, every source that named it, so agreeing
+sources are all listed: a `.tbi`'s file name and `anvil_activity` both name its indexing and its VCF. An
+*edge* in this record is one such input. Sources add inputs to the one step: a parent two sources name is
+one input they agree on, or, for a role
 that takes one, two inputs in conflict (decision 5). *Rejected (#580): one edge per parent, each naming
 the activity*, the shape #356 first wrote: three edges naming `AlignmentActivity` read as three
 alignments, and none said which input was the reads and which the reference.
@@ -234,8 +236,8 @@ source: the two agreed on all 209,668 index files matched today.
 
 An edge records the kind of step between two files (`AlignmentActivity`), not the run. The `@PG` line
 that shows a BAM was made by `bwa mem` is evidence for the edge; recording the tool as a fact of its own
-is #341's, and undecided. Where a source gives the run an id (`anvil_activity.activity_id`), the edge
-carries it as `activity_id`, so the edges one run states can be grouped (#580). The run is still not an
+is #341's, and undecided. Where a source gives the run an id (`anvil_activity.activity_id`), the step's `named_by` entry for that
+source carries it as `activity_id` (#580). The run is still not an
 object that files link to, with its date and parameters. The June doc made this call; it stands.
 
 *Rejected (#580): activities as objects of their own*: a run-level file of `{activity_id, type, used,
@@ -357,9 +359,10 @@ stay out of scope (§4b's process type vs instance, decision 7).
 
 Listed, not applied. Each lands with the sub-issue that first emits it.
 
-- **Done (#580):** `derived_from` is replaced by `generated_by` (`GeneratedBy`: `activity`,
-  `activity_id`, the provenance of the source that named the step, and `inputs`, each an `ActivityInput`
-  with its `role`) (decision 3).
+- **Done (#580):** `derived_from` is replaced by `generated_by` (`GeneratedBy`: `activity`, `named_by`,
+  and `inputs`, each an `ActivityInput` with its `role` and `named_by`). A `named_by` entry is an
+  `Attribution`: `source_type`, `rule_id`, and `activity_id` and `source` where a source gives them
+  (decisions 3, 6).
 - `ActivityInput` gains:
   - Provenance, as a claim carries it, so two edges of one source kind stay distinguishable
     (decision 6): `source_type` (the existing slot, range `source_type_enum`); for an input evidence
@@ -397,7 +400,7 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   `ActivityInput` — `source_type`, plus `source` and `rule_id` for evidence or `rule_id` alone for inference
   (decision 1).
 - **Done (#580):** the verb (`relation`, `relation_enum`) is replaced by `GeneratedBy.activity` (range
-  `activity_type_enum`, decision 5), with an optional `activity_id` (decision 7).
+  `activity_type_enum`, decision 5), and a source's run id is its `named_by` entry's `activity_id` (decision 7).
 - Evidence cannot state an edge yet: an `EvidenceRow` carries one classification slot and a `raw_value`,
   with no room for a step or a parent. The shape of relationship evidence, and the per-dataset
   lineage map that fills it, are not designed here; #577 (split from #356) designs them with the first

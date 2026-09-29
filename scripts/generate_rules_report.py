@@ -395,9 +395,9 @@ def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict
         # A run written before #580 has `derived_from` instead, which is not counted.
         step = record.get("generated_by")
         for used in step.get("inputs") or [] if isinstance(step, dict) else []:
-            if used.get("rule_id"):
-                stats[used["rule_id"]].claims += 1
-                fired.add(used["rule_id"])
+            for source in used.get("named_by") or []:
+                stats[source["rule_id"]].claims += 1
+                fired.add(source["rule_id"])
         for key in fired:
             stats[key].files += 1
             stats[key].datasets[dataset] += 1

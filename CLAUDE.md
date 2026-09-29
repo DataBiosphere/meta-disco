@@ -282,7 +282,7 @@ evidence}` entry — plus the controlled vocabulary:
     the child's own name through `meta_disco.edges` and `code_rules.EDGE_RULES`: the index
     producer's `IndexActivity` and the catch-all's `ChecksumActivity` for a `.md5`. An
     input carries `parent_file`, `parent_key` (the parent's record key, never its md5),
-    `parent_kind`, and the `source_type` / `rule_id` that named it. A parent no file or
+    `parent_kind`, and `named_by`, every source that named it (the step has its own). A parent no file or
     two files of the dataset carry gives none. Steps the source tables state are built at
     reconcile (#577); inheritance is #571.
   - **A producer is declared once**, in `producers.PRODUCERS` — the eleven writers of a

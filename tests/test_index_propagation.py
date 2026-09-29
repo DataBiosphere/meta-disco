@@ -741,7 +741,8 @@ def _assert_inherited(output, index_name, parent_name, parent_md5):
     assert edge["parent_file"] == parent_name
     # Grounded by the parent's record key, not its md5 (ADR-0002 decision 2, #356).
     assert edge["parent_key"] == _fid(parent_md5)
-    assert (step["activity"], edge["role"], edge["source_type"], edge["rule_id"]) == (
+    [named] = edge["named_by"]
+    assert (step["activity"], edge["role"], named["source_type"], named["rule_id"]) == (
         "IndexActivity",
         "indexed",
         "filename_rule",

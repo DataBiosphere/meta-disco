@@ -714,6 +714,8 @@ def test_every_edge_rule_id_in_the_output_is_declared(output, standalone_output)
         for record in payload["classifications"]
         if record.get("generated_by")
     ]
-    emitted = {step["rule_id"] for step in steps} | {used["rule_id"] for step in steps for used in step["inputs"]}
+    emitted = {n["rule_id"] for step in steps for n in step["named_by"]} | {
+        n["rule_id"] for step in steps for used in step["inputs"] for n in used["named_by"]
+    }
     assert emitted, "no edges found: the walk is broken, not the output"
     assert emitted <= {r.id for r in code_rules.EDGE_RULES}

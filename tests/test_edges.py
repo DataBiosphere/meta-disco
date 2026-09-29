@@ -21,17 +21,17 @@ def _rows(tmp_path, records) -> dict[str, dict]:
 
 def test_a_checksum_file_names_the_one_file_it_checks(tmp_path):
     rows = _rows(tmp_path, [_file("sample.bam", "f-bam"), _file("sample.bam.md5", "f-md5")])
-    provenance = {"source_type": "filename_rule", "rule_id": "checksum_by_name"}
+    named_by = [{"source_type": "filename_rule", "rule_id": "checksum_by_name"}]
     assert rows["sample.bam.md5"]["generated_by"] == {
         "activity": "ChecksumActivity",
-        **provenance,
+        "named_by": named_by,
         "inputs": [
             {
                 "role": "checked",
                 "parent_file": "sample.bam",
                 "parent_key": "f-bam",
                 "parent_kind": "alignment",
-                **provenance,
+                "named_by": named_by,
             }
         ],
     }

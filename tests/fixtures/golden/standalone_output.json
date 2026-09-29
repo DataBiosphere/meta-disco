@@ -304,16 +304,24 @@
           "activity": "IndexActivity",
           "inputs": [
             {
+              "named_by": [
+                {
+                  "rule_id": "index_by_name",
+                  "source_type": "filename_rule"
+                }
+              ],
               "parent_file": "sample.flnc.bam",
               "parent_key": "g-file-b",
               "parent_kind": "alignment",
-              "role": "indexed",
+              "role": "indexed"
+            }
+          ],
+          "named_by": [
+            {
               "rule_id": "index_by_name",
               "source_type": "filename_rule"
             }
-          ],
-          "rule_id": "index_by_name",
-          "source_type": "filename_rule"
+          ]
         },
         "md5sum": "11111111111111111111111111111111"
       },
@@ -613,16 +621,24 @@
           "activity": "ChecksumActivity",
           "inputs": [
             {
+              "named_by": [
+                {
+                  "rule_id": "checksum_by_name",
+                  "source_type": "filename_rule"
+                }
+              ],
               "parent_file": "mystery.xyz",
               "parent_key": "g-file-5",
               "parent_kind": null,
-              "role": "checked",
+              "role": "checked"
+            }
+          ],
+          "named_by": [
+            {
               "rule_id": "checksum_by_name",
               "source_type": "filename_rule"
             }
-          ],
-          "rule_id": "checksum_by_name",
-          "source_type": "filename_rule"
+          ]
         },
         "md5sum": "99999999999999999999999999999999"
       }
