@@ -125,13 +125,13 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "derived_from": null,
         "drs_uri": "drs://golden/v2_g-object-4",
         "entry_id": "g-auxiliary-1",
         "file_format": ".pvar",
         "file_id": "g-file-4",
         "file_name": "cohort.pvar",
         "file_size": 1000,
+        "generated_by": null,
         "md5sum": "44444444444444444444444444444444"
       }
     ]
@@ -264,13 +264,13 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "derived_from": null,
         "drs_uri": "drs://golden/v2_g-object-b",
         "entry_id": "g-bam-1",
         "file_format": ".bam",
         "file_id": "g-file-b",
         "file_name": "sample.flnc.bam",
         "file_size": 12345678,
+        "generated_by": null,
         "md5sum": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
       }
     ]
@@ -401,13 +401,13 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "derived_from": null,
         "drs_uri": "drs://golden/v2_g-object-7",
         "entry_id": "g-bed-1",
         "file_format": ".bed.gz",
         "file_id": "g-file-7",
         "file_name": "sample.regions.bed.gz",
         "file_size": 45000,
+        "generated_by": null,
         "md5sum": "77777777777777777777777777777777"
       }
     ]
@@ -574,13 +574,13 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "derived_from": null,
         "drs_uri": "drs://golden/v2_g-object-a",
         "entry_id": "g-fasta-1",
         "file_format": ".fasta",
         "file_id": "g-file-a",
         "file_name": "hapdup_contigs.hap1.fasta",
         "file_size": 2974881710,
+        "generated_by": null,
         "md5sum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
       }
     ]
@@ -717,13 +717,13 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "derived_from": null,
         "drs_uri": "drs://golden/v2_g-object-d",
         "entry_id": "g-fastq-1",
         "file_format": ".fastq.gz",
         "file_id": "g-file-d",
         "file_name": "sample.fastq.gz",
         "file_size": 8000,
+        "generated_by": null,
         "md5sum": "dddddddddddddddddddddddddddddddd"
       }
     ]
@@ -869,13 +869,13 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "derived_from": null,
         "drs_uri": "drs://golden/v2_g-object-e",
         "entry_id": "g-gfa-1",
         "file_format": ".gfa.gz",
         "file_id": "g-file-e",
         "file_name": "hprc-v1.0-minigraph-grch38.gfa.gz",
         "file_size": 848467761,
+        "generated_by": null,
         "md5sum": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
       }
     ]
@@ -1014,13 +1014,13 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "derived_from": null,
         "drs_uri": "drs://golden/v2_g-object-3",
         "entry_id": "g-images-1",
         "file_format": ".svs",
         "file_id": "g-file-3",
         "file_name": "slide.svs",
         "file_size": 1000,
+        "generated_by": null,
         "md5sum": "33333333333333333333333333333333"
       }
     ]
@@ -1153,22 +1153,27 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "derived_from": [
-          {
-            "activity": "IndexingActivity",
-            "parent_file": "sample.flnc.bam",
-            "parent_key": "g-file-b",
-            "parent_kind": "alignment",
-            "rule_id": "index_by_name",
-            "source_type": "filename_rule"
-          }
-        ],
         "drs_uri": "drs://golden/v2_g-object-1",
         "entry_id": "g-bai-1",
         "file_format": ".bai",
         "file_id": "g-file-1",
         "file_name": "sample.flnc.bam.bai",
         "file_size": 9000,
+        "generated_by": {
+          "activity": "IndexingActivity",
+          "inputs": [
+            {
+              "parent_file": "sample.flnc.bam",
+              "parent_key": "g-file-b",
+              "parent_kind": "alignment",
+              "role": "indexed",
+              "rule_id": "index_by_name",
+              "source_type": "filename_rule"
+            }
+          ],
+          "rule_id": "index_by_name",
+          "source_type": "filename_rule"
+        },
         "md5sum": "11111111111111111111111111111111"
       },
       {
@@ -1296,13 +1301,13 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "derived_from": null,
         "drs_uri": "drs://golden/v2_g-object-2",
         "entry_id": "g-bai-2",
         "file_format": ".bai",
         "file_id": "g-file-2",
         "file_name": "orphan.bai",
         "file_size": 9001,
+        "generated_by": null,
         "md5sum": "22222222222222222222222222222222"
       }
     ]
@@ -1429,13 +1434,13 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "derived_from": null,
         "drs_uri": "drs://golden/v2_g-object-5",
         "entry_id": "g-remaining-1",
         "file_format": ".xyz",
         "file_id": "g-file-5",
         "file_name": "mystery.xyz",
         "file_size": 1000,
+        "generated_by": null,
         "md5sum": "55555555555555555555555555555555"
       },
       {
@@ -1569,22 +1574,27 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "derived_from": [
-          {
-            "activity": "ChecksumActivity",
-            "parent_file": "mystery.xyz",
-            "parent_key": "g-file-5",
-            "parent_kind": null,
-            "rule_id": "checksum_by_name",
-            "source_type": "filename_rule"
-          }
-        ],
         "drs_uri": "drs://golden/v2_g-object-9",
         "entry_id": "g-remaining-md5",
         "file_format": ".md5",
         "file_id": "g-file-9",
         "file_name": "mystery.xyz.md5",
         "file_size": 33,
+        "generated_by": {
+          "activity": "ChecksumActivity",
+          "inputs": [
+            {
+              "parent_file": "mystery.xyz",
+              "parent_key": "g-file-5",
+              "parent_kind": null,
+              "role": "checked",
+              "rule_id": "checksum_by_name",
+              "source_type": "filename_rule"
+            }
+          ],
+          "rule_id": "checksum_by_name",
+          "source_type": "filename_rule"
+        },
         "md5sum": "99999999999999999999999999999999"
       }
     ]
@@ -1715,13 +1725,13 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "derived_from": null,
         "drs_uri": "drs://golden/v2_g-object-f",
         "entry_id": "g-tar-1",
         "file_format": ".tar",
         "file_id": "g-file-f",
         "file_name": "chr5.136400001_136500001.tar",
         "file_size": 45516800,
+        "generated_by": null,
         "md5sum": "ffffffffffffffffffffffffffffffff"
       }
     ]
@@ -1852,13 +1862,13 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "derived_from": null,
         "drs_uri": "drs://golden/v2_g-object-c",
         "entry_id": "g-vcf-1",
         "file_format": ".vcf.gz",
         "file_id": "g-file-c",
         "file_name": "sample.vcf.gz",
         "file_size": 5000,
+        "generated_by": null,
         "md5sum": "cccccccccccccccccccccccccccccccc"
       },
       {
@@ -2002,13 +2012,13 @@
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
-        "derived_from": null,
         "drs_uri": "drs://golden/v2_g-object-8",
         "entry_id": "g-vcf-2",
         "file_format": ".vcf.gz",
         "file_id": "g-file-8",
         "file_name": "sample.chm13.hg38.vcf.gz",
         "file_size": 5001,
+        "generated_by": null,
         "md5sum": "88888888888888888888888888888888"
       }
     ]

@@ -176,7 +176,7 @@ def index_data_type_entry(index_ext: str) -> dict:
     describes the file itself, and is the one that must not be borrowed.
 
     Nothing is lost by dropping the borrowed value. What a matched file indexes is on
-    the record as ``derived_from`` — the activity, the parent's name and its record key,
+    the record as ``generated_by`` — the activity, the parent's name and its record key,
     which joins to its record — more than a copied category said. A declined row carries
     no edge (ADR-0002 decision 2), and never had a borrowed ``data_type`` to lose: it has
     no parent, which is what declined means.
@@ -253,13 +253,7 @@ def declined_record(record: dict, index_ext: str, reason: str) -> dict:
 
 
 def every_field(classifications: dict[str, dict]) -> dict[str, dict]:
-    """Every slot, in ``CLASSIFICATION_FIELDS`` order: a dimension neither the index's own kind
-    nor one ``IndexingActivity`` passes is ``not_classified``, with no evidence.
-
-    What an index takes from its parent is ``rules/activities.yaml``'s to say, validated
-    where it loads and not second-guessed here (#580): a dimension it stops passing is
-    left open, and shows in the reports as not classified.
-    """
+    """Every slot, in field order; one ``IndexingActivity`` does not pass is ``not_classified`` (#580)."""
     return {
         fld: classifications.get(fld) or build_field_entry(None, status=NOT_CLASSIFIED) for fld in CLASSIFICATION_FIELDS
     }
@@ -445,7 +439,7 @@ def propagate_to_index_files(
                 continue
 
             # The matched file's own name, not the candidate that found it: this reaches
-            # the row and the `derived_from` edge, which name the file as the catalog
+            # the row and its `generated_by`, which name the file as the catalog
             # spells it (#455).
             parent = parent_files[0]
             stats[index_ext]["matched"] += 1
@@ -632,7 +626,7 @@ def propagate_to_index_files(
             OutputRecord.from_record(
                 r["record"],
                 classifications,
-                derived_from=[edges.name_edge(code_rules.INDEX_BY_NAME, r["parent_record"], key)],
+                generated_by=edges.generated_by(code_rules.INDEX_BY_NAME, r["parent_record"], key),
             ).to_dict()
         )
 

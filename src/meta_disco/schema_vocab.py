@@ -220,7 +220,7 @@ def reference_family_values() -> frozenset[str]:
 def activity_values() -> frozenset[str]:
     """Return the permissible activity types from the schema.
 
-    The single source of truth for ``DerivationEdge.activity`` (issues #450, #580), so a
+    The single source of truth for ``GeneratedBy.activity`` (issues #450, #580), so a
     producer emitting an edge, and the declarations in ``rules/activities.yaml``, stay
     pinned to the schema. Raises KeyError (with the schema path) if the schema is missing
     the enum.
@@ -229,7 +229,7 @@ def activity_values() -> frozenset[str]:
 
 
 def parent_kind_values() -> frozenset[str]:
-    """Return the permissible ``DerivationEdge.parent_kind`` values from the schema.
+    """Return the permissible ``ActivityInput.parent_kind`` values from the schema.
 
     The single source of truth for what kind of file an edge may point at (issue #450),
     so the index producer's category-to-kind map stays pinned to the schema. Raises

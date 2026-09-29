@@ -1,22 +1,8 @@
-"""What each kind of step takes in, makes, and passes to its output, declared once (#580).
+"""Loads ``rules/activities.yaml``: what each activity takes in and passes on (#580).
 
-The vocabulary is ``activity_type_enum`` in the LinkML schema: AnVIL FSS's activity
-types plus four of our own. The declarations are ``rules/activities.yaml``, whose shape
-is the schema's ``ActivityDeclarations``: per term, its output and its inputs by role,
-each role with its form (file or identifier), the ``data_type`` kinds it may carry,
-whether it is required, whether an output has many of it, and what it passes.
-
-**Checked when it loads.** The file is read through the pydantic model generated from
-that class, which refuses an unknown key, a missing member, and a term, kind, form or
-dimension outside its enum; ``data_type`` is not among the dimensions an input can pass.
-PyYAML's silent keeping of the last of a repeated key is refused before that. The
-checks that need the whole file are here, raising ``ValueError``: every term of the enum
-declared exactly once, a role named once within a term, and ``Activity``, the step not
-known, passing nothing. What it declares is then trusted: a reader does not re-check it.
-
-**Who reads it today**: the index producer's inheritance (``INHERITED_FIELDS``) and its
-code rule's ``sets`` are what ``IndexingActivity`` passes. Inheritance across the other
-terms is #571's.
+Its shape is the schema's ``ActivityDeclarations``, enforced by the generated model.
+The checks that need the whole file are here: every term declared once, roles unique
+within a term, and ``Activity`` passing nothing. Readers trust the result.
 """
 
 from __future__ import annotations
@@ -36,7 +22,7 @@ CHECKSUM = "ChecksumActivity"
 
 
 class _UniqueKeyLoader(yaml.SafeLoader):
-    """A YAML loader that refuses a key given twice, which PyYAML would otherwise keep the last of."""
+    """Refuses a repeated key, which PyYAML would silently keep the last of."""
 
     def construct_mapping(self, node, deep=False):
         seen: set = set()
@@ -54,11 +40,7 @@ def default_activities_resource():
 
 
 def load_activities(text: str | None = None) -> dict[str, ActivityDeclaration]:
-    """The declarations by term, from ``text`` or the bundled file.
-
-    Raises ``ValueError`` (pydantic's ``ValidationError`` is one) on any check the
-    module docstring lists.
-    """
+    """The declarations by term, from ``text`` or the bundled file; ``ValueError`` when invalid."""
     if text is None:
         text = default_activities_resource().read_text(encoding="utf-8")
     document = ActivityDeclarations.model_validate(yaml.load(text, Loader=_UniqueKeyLoader))

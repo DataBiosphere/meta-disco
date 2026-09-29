@@ -106,13 +106,18 @@ child: a header line, a table row, IGVF's `derived_from`.
 
 ### 3. An edge can have several parents
 
-A CRAM derives from two FASTQs; a joint-called VCF from many gVCFs. `derived_from` becomes a list with one
-edge per parent per source that states it, so a parent two sources name is two edges (decision 6).
+A CRAM derives from two FASTQs; a joint-called VCF from many gVCFs. A file is made by **one** step, so its
+record carries one `generated_by` (#580): the activity, and its `inputs`, one per parent, each in a role
+the activity declares and each with the source that named it. An *edge* in this record is one such input.
+Sources add inputs to the one step: a parent two sources name is one input they agree on, or, for a role
+that takes one, two inputs in conflict (decision 5). *Rejected (#580): one edge per parent, each naming
+the activity*, the shape #356 first wrote: three edges naming `AlignmentActivity` read as three
+alignments, and none said which input was the reads and which the reference.
 
 The reference a file was aligned to is an input of its alignment in a role of its own (#580): an
 `AlignmentActivity` has a `reads` input, which passes the sequencer and the library, and a `reference`
 input, which passes `reference_assembly` and nothing else (decision 8). Where a source names the reference
-(`@PG`'s reference argument, `@SQ UR`, a table row), the edge to it is a `derived_from` entry in that role;
+(`@PG`'s reference argument, `@SQ UR`, a table row), it is an input of the alignment in that role;
 where the file itself states its reference (`@SQ` lengths), that is the child's own declaration, and the
 two reconcile as any two do (4.9).
 
@@ -208,7 +213,8 @@ Submitter tables and `anvil_activity` are source evidence, which inference never
 stage holding both kinds, which a chain mixes (T2T: `.tbi` → VCF by name, CRAM → FASTQ by table row), and
 re-running it costs no corpus run (6.4) when a lineage mapping is corrected.
 
-An edge whose child is a file is stored on that file's record as `derived_from: [DerivationEdge]`.
+A step whose output is a file is stored on that file's record as `generated_by: GeneratedBy`, its inputs
+`ActivityInput`s.
 A `SampleCollectionActivity` and an `isBiologicalChildOf` have an identifier as their child, which has no record, so
 they live only in a flat `edges.jsonl` written once per run: child (a record key or an identifier), the
 edge's activity (or `isBiologicalChildOf`, with its `role`), parent
@@ -349,10 +355,12 @@ stay out of scope (§4b's process type vs instance, decision 7).
 
 Listed, not applied. Each lands with the sub-issue that first emits it.
 
-- `derived_from`: multivalued, `inlined_as_list` (decision 3).
-- `DerivationEdge` gains:
+- **Done (#580):** `derived_from` is replaced by `generated_by` (`GeneratedBy`: `activity`,
+  `activity_id`, the provenance of the source that named the step, and `inputs`, each an `ActivityInput`
+  with its `role`) (decision 3).
+- `ActivityInput` gains:
   - Provenance, as a claim carries it, so two edges of one source kind stay distinguishable
-    (decision 6): `source_type` (the existing slot, range `source_type_enum`); for an edge evidence
+    (decision 6): `source_type` (the existing slot, range `source_type_enum`); for an input evidence
     states, the existing `source` slot (`ClaimSource`: name, dataset, table, column) **and** a `rule_id`
     naming the mapping that turned that column or activity type into an activity, as an external claim carries both
     today; for one inference reads, `rule_id` alone, naming the rule and header field or filename
@@ -365,11 +373,11 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   - `parent_ref`: the parent as a source wrote it when that is not a bare name — a `file_id`, a DRS URI,
     an S3 or filesystem path — kept whether or not
     it resolves (decision 2); a name stays in `parent_file`.
-  - A constraint: exactly one parent form per edge — `parent_id`, or a file parent (`parent_file` or
+  - A constraint: exactly one parent form per input — `parent_id`, or a file parent (`parent_file` or
     `parent_ref`, with `parent_key` where it resolves) — and the form its activity's `parent` declares
     (`rules/activities.yaml`: an identifier for `SequenceActivity` and the other sample steps; a file
-    otherwise). Today's schema accepts an edge with no
-    parent, which decision 2 rules out.
+    otherwise). Today's schema requires `parent_file`, which an
+    input a source names only by `file_id` does not have (#577).
   - `parent_id`: an `EntityIdentifier`, the alternative to a file parent for an activity whose input is
     a sample (decisions 1, 5).
 - `source_assembly` on the record's `reference_assembly` slot, beside `build`, not on the edge: an inlined
@@ -384,10 +392,10 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
 - `parent_md5sum` is retired: #356 writes `parent_key` in its place.
 - New class `EntityIdentifier`: `id`, `namespace` (`identifier_namespace_enum`), `dataset` (set exactly
   when the namespace is `dataset_local`, and part of its identity), and the same provenance as
-  `DerivationEdge` — `source_type`, plus `source` and `rule_id` for evidence or `rule_id` alone for inference
+  `ActivityInput` — `source_type`, plus `source` and `rule_id` for evidence or `rule_id` alone for inference
   (decision 1).
-- **Done (#580):** `DerivationEdge.relation` is replaced by `activity` (range `activity_type_enum`,
-  decision 5) and an optional `activity_id` (decision 7); `relation_enum` is removed.
+- **Done (#580):** the verb (`relation`, `relation_enum`) is replaced by `GeneratedBy.activity` (range
+  `activity_type_enum`, decision 5), with an optional `activity_id` (decision 7).
 - Evidence cannot state an edge yet: an `EvidenceRow` carries one classification slot and a `raw_value`,
   with no room for a step or a parent. The shape of relationship evidence, and the per-dataset
   lineage map that fills it, are not designed here; #577 (split from #356) designs them with the first
@@ -408,9 +416,9 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   and the conflict kinds one for a child against its parent, so the reconcile report counts neither as a
   source (contract 6.10). The report also needs a way to list a mixed dimension with its parents' values,
   and an edge conflict with the parents each source named.
-- An `edges.jsonl` row is its own class, not a `DerivationEdge`: its child is a record key or an
+- An `edges.jsonl` row is its own class, not a `GeneratedBy`: its child is a record key or an
   `EntityIdentifier`, because a `SampleCollectionActivity`'s child, a sample, and `isBiologicalChildOf`'s, a donor, have no record to sit on; its parent carries the
-  same fields as `DerivationEdge`'s — `parent_key`, `parent_file`, `parent_ref`, or `parent_id` — and its
+  same fields as an `ActivityInput`'s — `parent_key`, `parent_file`, `parent_ref`, or `parent_id` — and its
   provenance `source_type` plus `source` and `rule_id` for evidence or `rule_id` alone for inference, with `parent_scope` worked out (decision 6).
 - `parent_kind_enum` gains `reference` and `assembly` if #358 and #360 need them; decided there.
 

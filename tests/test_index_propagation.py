@@ -49,7 +49,7 @@ def _assert_declined(output: dict, file_name: str) -> dict:
         assert field_status(cls, fld) == NOT_CLASSIFIED, f"{fld} should be not_classified, not asserted"
     # A declined record carries no edge: an edge exists only where the parent resolves
     # (ADR-0002 decision 2, #356), and the name it points at is its own less the extension.
-    assert records[0]["derived_from"] is None
+    assert records[0]["generated_by"] is None
     return records[0]
 
 
@@ -315,14 +315,14 @@ class TestLoadClassifications:
         assert len(index_cls) == 1
         csi = index_cls[0]
         assert csi["file_name"] == "HG03652.regions.bed.gz.csi"
-        assert csi["derived_from"][0]["parent_file"] == "HG03652.regions.bed.gz"
+        assert csi["generated_by"]["inputs"][0]["parent_file"] == "HG03652.regions.bed.gz"
         # `.csi` indexes variants or intervals, so the type alone cannot say which;
         # the matched parent does.
-        assert csi["derived_from"][0]["parent_kind"] == "intervals"
+        assert csi["generated_by"]["inputs"][0]["parent_kind"] == "intervals"
         cls = csi["classifications"]
         assert field_value(cls, "data_modality") == "genomic"
         # The parent is annotations; the index is an index (#437). The parent is still
-        # reachable, through the `derived_from` edge.
+        # reachable, through its `generated_by`.
         assert field_value(cls, "data_type") == "index"
         assert field_value(cls, "reference_assembly") == "CHM13"
         assert cls["data_modality"]["evidence"][0]["rule_id"] == "inherited_from_parent"
@@ -352,7 +352,7 @@ class TestLoadClassifications:
         rows = {r["file_name"]: r for r in json.loads(output_file.read_text())["classifications"]}
         assert field_value(rows["sample.bam.bai"]["classifications"], "reference_assembly") == "GRCh38"
         # The edge grounds on the same key: HPRC's is the URL hash, not a `file_id`.
-        assert rows["sample.bam.bai"]["derived_from"][0]["parent_key"] == "a" * 32
+        assert rows["sample.bam.bai"]["generated_by"]["inputs"][0]["parent_key"] == "a" * 32
 
     def test_a_parent_row_without_the_key_is_refused(self, tmp_path):
         """A parent row missing the source's key raises rather than being left out.
@@ -397,7 +397,7 @@ class TestLoadClassifications:
         index = _file("notes.txt.gz.tbi", ".tbi", "b" * 32, "e2")
         output = run_index_producer(tmp_path, [txt, index])
         [row] = [r for r in output["classifications"] if r["file_name"] == "notes.txt.gz.tbi"]
-        assert row["derived_from"][0]["parent_file"] == "notes.txt.gz"
+        assert row["generated_by"]["inputs"][0]["parent_file"] == "notes.txt.gz"
         for fld in INHERITED_FIELDS:
             entry = row["classifications"][fld]
             assert field_status(row["classifications"], fld) == NOT_CLASSIFIED
@@ -506,8 +506,8 @@ class TestLoadClassifications:
         assert field_value(cls, "data_type") == "index"
         assert field_value(cls, "reference_assembly") == "CHM13"
         assert field_value(cls, "data_modality") == "genomic"
-        assert row["derived_from"][0]["parent_file"] == "chm13v2.0.fa.gz"
-        assert row["derived_from"][0]["parent_kind"] == "sequence"
+        assert row["generated_by"]["inputs"][0]["parent_file"] == "chm13v2.0.fa.gz"
+        assert row["generated_by"]["inputs"][0]["parent_kind"] == "sequence"
 
     def test_tbi_inherits_from_vcf_parent(self, tmp_path):
         """End-to-end: a .tbi index inherits from its .vcf.gz parent.
@@ -661,7 +661,7 @@ class TestLoadClassifications:
         assert output["unmatched_files"] == []
         assert len(output["classifications"]) == 1
         record = output["classifications"][0]
-        assert record["derived_from"][0]["parent_key"] == _fid("1" * 32)
+        assert record["generated_by"]["inputs"][0]["parent_key"] == _fid("1" * 32)
         assert record["classifications"]["reference_assembly"]["value"] == "GRCh38"
 
     def test_does_not_fall_through_to_a_later_candidate(self, tmp_path):
@@ -736,18 +736,20 @@ def _assert_inherited(output, index_name, parent_name, parent_md5):
     assert field_value(record["classifications"], "reference_assembly") == "GRCh38"
     # The edge names the parent as the catalog spells it, not as the candidate that
     # found it — see `get_parent_candidates` on why a candidate is only a probe.
-    [edge] = record["derived_from"]
+    step = record["generated_by"]
+    [edge] = step["inputs"]
     assert edge["parent_file"] == parent_name
     # Grounded by the parent's record key, not its md5 (ADR-0002 decision 2, #356).
     assert edge["parent_key"] == _fid(parent_md5)
-    assert (edge["activity"], edge["source_type"], edge["rule_id"]) == (
+    assert (step["activity"], edge["role"], edge["source_type"], edge["rule_id"]) == (
         "IndexingActivity",
+        "indexed",
         "filename_rule",
         "index_by_name",
     )
     # The parent's kind still resolves off an upper-case extension, because
     # `FileName.parse` lowers the extension it returns.
-    assert record["derived_from"][0]["parent_kind"] == "alignment"
+    assert record["generated_by"]["inputs"][0]["parent_kind"] == "alignment"
 
 
 class TestMixedCaseNames:

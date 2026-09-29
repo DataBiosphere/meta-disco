@@ -37,7 +37,7 @@ For each claim carrying a ``rule_id``, per rule:
 Markers are counted in a table of their own: the ``code_rules.MARKERS`` a producer writes
 as a ``rule_id``, and the engine's two placeholders written as ``marker``. So are the edge
 rules (``code_rules.EDGE_RULES``, #356), which state a derivation edge rather than claim a
-field, counted by the files whose ``derived_from`` carries an edge they stated. An id or marker
+field, counted by the inputs a record's ``generated_by`` carries under their ``rule_id``. An id or marker
 the run carries and nothing declares (a rule retired since the run, say) is listed rather
 than dropped.
 
@@ -359,7 +359,7 @@ def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict
     ``inherited_from_parent`` does for a parent with none. A marker is counted wherever it
     appears, since recording no answer is what a marker does. An id in neither set (one
     nothing declares) is counted like a marker and never judged as having won. An edge
-    rule is counted by the edges records' ``derived_from`` carries under its ``rule_id``.
+    rule is counted by the inputs records' ``generated_by`` carries under its ``rule_id``.
     """
     stats: defaultdict[str, Tally] = defaultdict(Tally)
     n = 0
@@ -391,14 +391,13 @@ def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict
                     continue
                 if claimed is not None and _won(field_name, claimed, answer):
                     won.add(key)
-        # An edge rule states an edge, not a claim: counted per edge, and per file carrying one.
-        # A run written before #356 carries one edge object with no `rule_id`, which no
-        # edge rule stated, so it is not counted.
-        edges = record.get("derived_from")
-        for edge in edges if isinstance(edges, list) else []:
-            if edge.get("rule_id"):
-                stats[edge["rule_id"]].claims += 1
-                fired.add(edge["rule_id"])
+        # An edge rule names a step's input, not a claim: counted per input and per file.
+        # A run written before #580 has `derived_from` instead, which is not counted.
+        step = record.get("generated_by")
+        for used in step.get("inputs") or [] if isinstance(step, dict) else []:
+            if used.get("rule_id"):
+                stats[used["rule_id"]].claims += 1
+                fired.add(used["rule_id"])
         for key in fired:
             stats[key].files += 1
             stats[key].datasets[dataset] += 1

@@ -43,8 +43,8 @@ classes:
     tree_root: true
     description: >-
       One classified file. `classifications` carries the file's identity (the
-      six dimension fields — what it is); derived_from lists typed edges to the
-      files it was derived from (where it came from; ADR-0002). Matches the
+      six dimension fields — what it is); generated_by names the step that made it
+      and the files it used (where it came from; ADR-0002). Matches the
       pipeline output shape.
     slots:
       - md5sum
@@ -56,7 +56,7 @@ classes:
       - drs_uri
       - dataset_title
       - classifications
-      - derived_from
+      - generated_by
 
   Classifications:
     description: >-
@@ -708,49 +708,67 @@ classes:
       status:
         required: false
 
-  DerivationEdge:
+  GeneratedBy:
     description: >-
-      Typed link from a derived file to one file it was derived from (ADR-0002). The
-      kind of step is `activity`, and `activity_id` the source's own id for the step
-      where it gives one; `parent_file` names the parent as the source wrote it, and
-      `parent_key` is the parent's record key where it resolves to exactly one record of
-      the child's dataset. An edge whose `parent_key` is set is `internal`, one without
-      it `external`; the scope is worked out from `parent_key`, not stored (decision 2).
-      `source_type` and `rule_id` say which source stated the edge, so two edges one
-      source kind states stay apart (decision 6). An edge exists only where a source
-      names a parent.
+      The one step that made a file and the inputs it used (PROV's `wasGeneratedBy` and
+      `used`, ADR-0002 decision 3, #580). `source_type` and `rule_id` name the source that
+      named the step; each input carries its own.
     slots:
       - activity
       - activity_id
+      - source_type
+      - rule_id
+    attributes:
+      inputs:
+        range: ActivityInput
+        multivalued: true
+        inlined_as_list: true
+        required: true
+        description: The inputs the step used, each in one of the roles its activity declares.
+    slot_usage:
+      source_type:
+        required: true
+        description: >-
+          Kind of source that named the step: `filename_rule` for one inference reads
+          from the child's name.
+      rule_id:
+        required: true
+        description: >-
+          The rule that named the step (`code_rules.EDGE_RULES` for inference's), naming
+          the convention or field it reads.
+
+  ActivityInput:
+    description: >-
+      One input a step used, in one role (PROV's `hadRole`). With `parent_key` it is
+      `internal`, without it `external` (ADR-0002 decision 2). `source_type` and `rule_id`
+      name the source that named it.
+    slots:
       - parent_file
       - parent_key
       - parent_kind
       - source_type
       - rule_id
+    attributes:
+      role:
+        required: true
+        description: One of the roles its activity declares in `rules/activities.yaml`.
     slot_usage:
       parent_file:
         required: true
       source_type:
         required: true
         description: >-
-          Kind of source that stated the edge: `filename_rule` for one inference
-          reads from the child's name.
+          Kind of source that named the input: `filename_rule` for one inference reads
+          from the child's name.
       rule_id:
         required: true
         description: >-
-          The edge rule that stated the edge (`code_rules.EDGE_RULES`), naming the
-          convention or field it reads.
+          The rule that named the input (`code_rules.EDGE_RULES` for inference's).
 
   ActivityDeclarations:
     description: >-
-      The file `rules/activities.yaml` (#580): what each kind of step
-      (`activity_type_enum`) takes in, makes, and passes from its inputs to its output.
-      `meta_disco.activities` reads the file through the pydantic model generated from
-      this class, so what the schema refuses and what the loader refuses are one
-      definition. The loader adds the checks that need the whole file: every term of
-      the enum declared exactly once, role names unique within a term, and `Activity`
-      passing nothing. Declared as class-local `attributes`, like `ReferenceBuild`:
-      `role`, `kind` and `form` are names nothing outside these classes needs.
+      The shape of `rules/activities.yaml` (#580): per activity, its output and its input
+      roles. Read through the generated model by `meta_disco.activities`.
     attributes:
       activities:
         range: ActivityDeclaration
@@ -768,23 +786,19 @@ classes:
         range: ActivityEnd
         inlined: true
         required: true
-        description: What the step makes. The child of an edge is always its output.
+        description: What the step makes.
       inputs:
-        range: ActivityInput
+        range: InputRole
         multivalued: true
         inlined_as_list: true
         required: true
-        description: >-
-          The step's inputs, each by the part it plays: an alignment's `reads` and its
-          `reference` pass different dimensions.
+        description: The step's input roles.
       reason:
         required: true
         description: Why the step passes what it passes.
 
   ActivityEnd:
-    description: >-
-      An input or output of a step: whether it is a file we hold or an identifier
-      (a sample, a donor, ADR-0002 decision 1), and for a file, the kinds it may be.
+    description: An input or output of a step, a file or an identifier, and a file's kinds.
     attributes:
       form:
         range: activity_form_enum
@@ -794,13 +808,12 @@ classes:
         range: data_type_enum
         multivalued: true
         description: >-
-          The `data_type` terms a file here may carry, a dotted term's children meant
-          with it (`variants` covering `variants.germline`); matching a file against it
-          is #577's. Absent: any kind.
+          The `data_type` terms a file here may carry, dotted children included. Absent:
+          any kind.
 
-  ActivityInput:
+  InputRole:
     is_a: ActivityEnd
-    description: One input role of a step.
+    description: One input role a kind of step declares, in `rules/activities.yaml`.
     attributes:
       role:
         required: true
@@ -808,20 +821,15 @@ classes:
       required:
         range: boolean
         required: true
-        description: >-
-          Whether the step always has this input. A required input no source names is
-          lineage we know exists and do not have.
+        description: Whether the step always has this input.
       many:
         range: boolean
         required: true
-        description: >-
-          Whether an output has several inputs in this role. Sources naming different
-          parents for a role that takes one are an edge conflict (ADR-0002 decision 5).
+        description: Whether an output has several inputs in this role.
       passes:
         range: passed_dimension_enum
         multivalued: true
-        description: >-
-          The dimensions the output takes from an input in this role. Absent: none.
+        description: "What the output takes from an input in this role. Absent: nothing."
 
 # =============================================================================
 # SLOTS
@@ -880,13 +888,12 @@ slots:
       The sequencing instrument's model, refining `platform` (#532): `Illumina NovaSeq
       6000` where `platform` says `ILLUMINA`. Not applicable wherever `platform` is not.
 
-  derived_from:
+  generated_by:
     description: >-
-      The file's derivation edges, one per parent per source that states it (ADR-0002
-      decision 3); null where no source names a parent.
-    range: DerivationEdge
-    multivalued: true
-    inlined_as_list: true
+      The step that made the file and the inputs it used, by role (ADR-0002 decisions 3,
+      6, #580); null where no source names a parent.
+    range: GeneratedBy
+    inlined: true
 
   # --- Classification sub-fields ---
   value:
@@ -998,23 +1005,21 @@ slots:
       or partial one. Absent whenever `join_key` is.
     range: boolean
 
-  # --- DerivationEdge sub-fields ---
+  # --- GeneratedBy and ActivityInput sub-fields ---
   activity:
     description: >-
-      The kind of step that made the child from this parent (`activity_type_enum`); what
-      passes across it is declared per term in `rules/activities.yaml`.
+      The kind of step that made the file (`activity_type_enum`); what passes from each
+      input role is declared per term in `rules/activities.yaml`.
     range: activity_type_enum
     required: true
   activity_id:
     description: >-
-      The source's own identifier for the step, as it wrote it (`anvil_activity`'s
-      `activity_id`), so edges from one step can be grouped. Absent where the source
-      names no step, as a file-name edge does.
+      The source's own id for the step (`anvil_activity.activity_id`), where it gives one.
   parent_file:
     description: >-
-      The parent file's name: the matched record's own spelling where the edge resolves
-      (a file-name edge matches case-insensitively, so it may differ in case from the name
-      worked out from the child), otherwise as the source that states the edge wrote it.
+      The input file's name: the matched record's own spelling where the input resolves
+      (a file-name rule matches case-insensitively, so it may differ in case from the name
+      worked out from the child), otherwise as the source that names the input wrote it.
   parent_key:
     description: >-
       The parent's record key (`pipeline.SOURCE_RECORD_KEYS`: AnVIL's `file_id`, HPRC's
@@ -1469,16 +1474,10 @@ enums:
 
   activity_type_enum:
     description: >-
-      The kind of step that made a file from its parents (ADR-0002, #580): AnVIL's
-      Findability Subset (FSS) Activity table's recommended `activity_type` values, its
-      "BioCore values", term for term and spelled as FSS spells them, plus four of our
-      own. `meaning` is the Terra Interoperability Model's class (TerraCore, whose
-      `Activity` is a `prov:Activity`) where it has one, else EDAM's operation where EDAM
-      defines the same step, else absent; an EDAM operation near a term but not the same
-      step is in `close_mappings`. A term of our own sits under the FSS term it narrows,
-      or under `Activity`. What each term passes from its inputs to its outputs is
-      declared once, in `rules/activities.yaml`, and `Activity`, the step not known,
-      passes nothing.
+      The kind of step that made a file (ADR-0002, #580): AnVIL FSS's activity types plus
+      four of our own, each under the FSS term it narrows. `meaning` is TerraCore's class,
+      else EDAM's operation for the same step; a near EDAM operation is a close mapping.
+      What each passes is in `rules/activities.yaml`.
     permissible_values:
       Activity:
         description: A step whose kind the source does not state; nothing passes across it.

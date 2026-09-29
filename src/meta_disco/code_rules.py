@@ -97,7 +97,8 @@ class CodeMarker:
 class EdgeRule:
     """A rule that states a derivation edge from the child's own name (ADR-0002).
 
-    ``activity`` is the kind of step it states, a term of ``activity_type_enum`` (#580). ``reads`` says how the
+    ``activity`` and ``role`` are the step it states and the parent's part in it (#580).
+    ``reads`` says how the
     parent's name is worked out from the child's, and ``rationale`` why that names the
     parent. Its ``source_type`` is ``filename_rule``: both edge rules read the name.
     """
@@ -105,6 +106,7 @@ class EdgeRule:
     id: str
     module: str
     activity: str
+    role: str
     source_type: str
     reads: str
     rationale: str
@@ -299,6 +301,7 @@ INDEX_BY_NAME = EdgeRule(
     id="index_by_name",
     module=INDEX_PRODUCER,
     activity=activities.INDEXING,
+    role="indexed",
     source_type=SOURCE_FILENAME_RULE,
     reads=(
         "the index file's name: the name without its index extension (sample.bam.bai -> "
@@ -315,6 +318,7 @@ CHECKSUM_BY_NAME = EdgeRule(
     id="checksum_by_name",
     module=EDGES,
     activity=activities.CHECKSUM,
+    role="checked",
     source_type=SOURCE_FILENAME_RULE,
     reads=(
         "the name of a file whose extension EXTENSION_MAP calls a checksum, less that "

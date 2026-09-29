@@ -99,23 +99,22 @@ def _category_of(file_name: str) -> str | None:
     return None
 
 
-def name_edge(rule: EdgeRule, parent: dict, key: RecordKey) -> dict:
-    """The derivation edge ``rule`` states to one resolved parent input record.
+def generated_by(rule: EdgeRule, parent: dict, key: RecordKey) -> dict:
+    """The child's ``generated_by``: ``rule``'s step, with ``parent`` as its one input.
 
-    ``parent_file`` is the parent's own name, as the catalog spells it, not the name the
-    child's was folded to (#455). ``parent_key`` is its record key; a parent without one
-    raises (``pipeline.input_key_value``) rather than yielding an edge that grounds on
-    nothing.
+    ``parent_file`` is the catalog's spelling, not the folded name (#455); a parent with
+    no record key raises rather than giving an ungrounded input.
     """
     parent_name = parent["file_name"]
-    return {
-        "activity": rule.activity,
+    provenance = {"source_type": rule.source_type, "rule_id": rule.id}
+    used = {
+        "role": rule.role,
         "parent_file": parent_name,
-        "parent_key": input_key_value(parent, key, f"ground a {rule.activity} edge on its parent"),
+        "parent_key": input_key_value(parent, key, f"ground a {rule.activity} input on its parent"),
         "parent_kind": parent_kind_of(parent_name),
-        "source_type": rule.source_type,
-        "rule_id": rule.id,
+        **provenance,
     }
+    return {"activity": rule.activity, **provenance, "inputs": [used]}
 
 
 def matches(index: NameIndex, dataset_id: str, name: str) -> list[dict]:
@@ -129,8 +128,8 @@ def resolve(index: NameIndex, dataset_id: str, name: str) -> dict | None:
     return found[0] if len(found) == 1 else None
 
 
-def checksum_edges(record: dict, name: FileName, index: NameIndex, key: RecordKey) -> list[dict] | None:
-    """A checksum file's ``ChecksumActivity`` edge, as a one-edge ``derived_from``, or None.
+def checksum_generated_by(record: dict, name: FileName, index: NameIndex, key: RecordKey) -> dict | None:
+    """A checksum file's ``generated_by``, a ``ChecksumActivity`` with its one input, or None.
 
     A file is a checksum when ``EXTENSION_MAP`` calls its extension one (``.md5``), read
     off ``name`` as ``FileName.parse`` peeled it. Its parent is ``name``'s stem, the name
@@ -143,4 +142,4 @@ def checksum_edges(record: dict, name: FileName, index: NameIndex, key: RecordKe
     parent = resolve(index, record.get("dataset_id", "unknown"), name.stem)
     if parent is None:
         return None
-    return [name_edge(code_rules.CHECKSUM_BY_NAME, parent, key)]
+    return generated_by(code_rules.CHECKSUM_BY_NAME, parent, key)

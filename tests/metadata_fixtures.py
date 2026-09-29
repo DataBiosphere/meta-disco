@@ -65,10 +65,10 @@ RECORD_KEYS = {
     # `entry_id` does not, and `drs_uri` is the handle a resolver dereferences.
     "file_id",
     "drs_uri",
-    # The derivation edges (#450, #356): a list, written by the index producer and the
-    # catch-all (for a checksum file) where a parent resolves, null elsewhere; emitted
+    # The step that made the file (#450, #356, #580): written by the index producer and
+    # the catch-all (for a checksum file) where a parent resolves, null elsewhere; emitted
     # rather than omitted so the envelope keeps one shape across all eleven files.
-    "derived_from",
+    "generated_by",
 }
 
 

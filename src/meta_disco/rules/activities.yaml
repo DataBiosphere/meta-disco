@@ -1,8 +1,5 @@
-# What each kind of step takes in, makes, and passes from its inputs to its output
-# (#580, ADR-0002 decision 8). The terms are `activity_type_enum`'s; the shape is the
-# LinkML class `ActivityDeclarations`, and src/meta_disco/activities.py reads it through
-# the model generated from that class. An input's `kind` is the `data_type` terms it may
-# carry (absent: any); `passes` is what the output takes from it (absent: nothing).
+# What each activity takes in and passes on (#580). Shape: the LinkML class
+# `ActivityDeclarations`. `kind` absent: any; `passes` absent: nothing.
 activities:
   - term: Activity
     output: {form: [file, identifier]}

@@ -577,9 +577,9 @@ class TestPipelineRun:
         # classify_single emits the same canonical envelope as every other producer
         # (#204, widened to all eleven by #450). Every field it has no input record to
         # carry is present and None: dataset_title/entry_id, file_id/drs_uri (#433),
-        # and derived_from (#450).
+        # and generated_by (#450, #580).
         assert set(result) == RECORD_KEYS
-        for absent in ("dataset_title", "entry_id", "file_id", "drs_uri", "derived_from"):
+        for absent in ("dataset_title", "entry_id", "file_id", "drs_uri", "generated_by"):
             assert result[absent] is None, f"{absent} has no source on the single-file path"
 
     def test_gzip_detection(self, tmp_path):

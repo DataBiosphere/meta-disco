@@ -96,7 +96,7 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
     print(f"Already classified by other scripts: {len(already):,}")
 
     # Every input record by name within its dataset, for a checksum file's parent
-    # (`edges.checksum_edges`). Built over all of them: the parent is any file, claimed
+    # (`edges.checksum_generated_by`). Built over all of them: the parent is any file, claimed
     # by whichever producer.
     by_name = edges.files_by_folded_name(files)
 
@@ -146,8 +146,8 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
 
         # One record shape for every producer (#450). A checksum file also names the
         # file it checks, where exactly one file of its dataset carries that name.
-        derived_from = edges.checksum_edges(rec, file_info.name, by_name, key)
-        results.append(OutputRecord.from_record(rec, result.to_output_dict(), derived_from=derived_from).to_dict())
+        generated_by = edges.checksum_generated_by(rec, file_info.name, by_name, key)
+        results.append(OutputRecord.from_record(rec, result.to_output_dict(), generated_by=generated_by).to_dict())
 
     print(f"\nClassified {len(results):,} remaining files")
     print("\nBy extension:")
