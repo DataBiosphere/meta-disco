@@ -182,14 +182,13 @@ GOLDEN_INPUTS = {
     ],
 }
 
-# The index producer's inputs. Its two record paths both have to reach the schema gate,
-# because `DerivationEdge` models them as one class: a required verb with nullable
-# grounding. `sample.flnc.bam` is the golden's own bam input, so the matched `.bai`
-# inherits from a row a real producer wrote rather than a hand-built stand-in — and the
-# `inherited_evidence` it inherits through is built outside `make_claim` (#413), so no
-# constructor's invariants cover its shape. `orphan.bai` names a parent the snapshot does
-# not hold, so this producer declines it (#438) and writes the ungrounded edge, whose
-# `parent_file` and `parent_md5sum` are null.
+# The index producer's inputs. Both its record paths reach the schema gate: a matched
+# index carries an `index_of` edge, a declined one none. `sample.flnc.bam` is the
+# golden's own bam input, so the matched `.bai` inherits from a row a real producer wrote
+# rather than a hand-built stand-in — and the `inherited_evidence` it inherits through is
+# built outside `make_claim` (#413), so no constructor's invariants cover its shape.
+# `orphan.bai` names a parent the snapshot does not hold, so this producer declines it
+# (#438) and writes no edge (#356).
 INDEX_INPUTS = [
     GOLDEN_INPUTS["bam"][0],
     _golden_record("1", file_name="sample.flnc.bam.bai", file_size=9000, file_format=".bai", entry_id="g-bai-1"),
@@ -359,7 +358,16 @@ def build_standalone_output(tmp_path: Path, pipeline_output: dict) -> dict:
         assert record["file_md5sum"] not in SEEDS_TAKEN, (
             f"the {name!r} input's md5 seed {seed!r} is already used by another fixture input"
         )
-        out[name] = run_producer_envelope(producer, work, [record])
+        records = [record]
+        if name == "remaining":
+            # A checksum of the catch-all's own input, so its `checksum_of` edge (#356)
+            # reaches the schema gate too. Seed `9` is free of every other input's.
+            companion = _golden_record(
+                "9", file_name=f"{file_name}.md5", file_size=33, file_format=".md5", entry_id="g-remaining-md5"
+            )
+            assert companion["file_md5sum"] not in SEEDS_TAKEN
+            records.append(companion)
+        out[name] = run_producer_envelope(producer, work, records)
 
     index_work = tmp_path / "index"
     index_work.mkdir()
@@ -370,8 +378,8 @@ def build_standalone_output(tmp_path: Path, pipeline_output: dict) -> dict:
     # rows would regenerate as an empty `classifications` list and reach no schema
     # validation, with every test still green — the coverage test compares only keys, and
     # the deep-equal holds against the empty fixture it just wrote. Two index rows, one
-    # per record path (#438).
-    expected_rows = dict.fromkeys(out, 1) | {"index": 2}
+    # per record path (#438), and two catch-all rows, its input and that input's checksum.
+    expected_rows = dict.fromkeys(out, 1) | {"index": 2, "remaining": 2}
     for name, envelope in out.items():
         assert len(envelope["classifications"]) == expected_rows[name], (
             f"{name!r} wrote {len(envelope['classifications'])} rows, expected {expected_rows[name]}: "
@@ -426,7 +434,7 @@ def _assert_matches_fixture(actual: dict, path: Path, what: str):
 
     Shared by both fixtures' guards, so a change to the regen flow or to either message
     is made once. Deep-equal is what makes the schema gate bite: that gate reads
-    committed files, so without this a change to `OutputRecord` or `derivation_edge`
+    committed files, so without this a change to `OutputRecord` or `edges.name_edge`
     would leave a fixture stale and the gate green.
     """
     assert path.exists(), f"{what} fixture missing at {path}. Regenerate with `{REGEN}`."
@@ -694,3 +702,17 @@ def test_every_rule_id_in_the_output_is_declared(output, standalone_output):
                     emitted.update(e["rule_id"] for e in slot.get("evidence") or [] if e.get("rule_id"))
     assert emitted, "no rule ids found: the walk is broken, not the output"
     assert emitted - declared == set(), "declare these in unified_rules.yaml or meta_disco.code_rules"
+
+
+def test_every_edge_rule_id_in_the_output_is_declared(output, standalone_output):
+    """Every edge's ``rule_id`` the golden output carries is an edge rule in ``code_rules`` (#356)."""
+    from meta_disco import code_rules
+
+    emitted = {
+        edge["rule_id"]
+        for payload in (*output.values(), *standalone_output.values())
+        for record in payload["classifications"]
+        for edge in record.get("derived_from") or []
+    }
+    assert emitted, "no edges found: the walk is broken, not the output"
+    assert emitted <= {r.id for r in code_rules.EDGE_RULES}

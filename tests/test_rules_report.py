@@ -128,6 +128,7 @@ RECORDS = [
                 status="not_classified", evidence=[claim(code_rules.FETCH_FAILED.id, status="not_classified")]
             ),
         },
+        "derived_from": [{"relation": "index_of", "rule_id": code_rules.INDEX_BY_NAME.id}],
     },
 ]
 
@@ -155,7 +156,7 @@ def data(tmp_path):
 
 
 def by_id(data):
-    return {r["id"]: r for r in [*data["rules"], *data["markers"], *data["undeclared"]]}
+    return {r["id"]: r for r in [*data["rules"], *data["markers"], *data["edge_rules"], *data["undeclared"]]}
 
 
 def test_every_when_key_the_loader_accepts_has_a_basis_entry():
@@ -251,6 +252,13 @@ def test_the_bundled_rules_all_get_a_row_and_a_basis():
             assert yaml.safe_load(r["condition"]) == rule.when, r["id"]
             then = yaml.safe_load(r["effect"])
             assert then.pop("status", {}) == rule.then_status and then == rule.then, r["id"]
+
+
+def test_edge_rules_are_listed_and_counted_by_the_edges_they_stated(data):
+    rows = by_id(data)
+    assert [e["id"] for e in data["edge_rules"]] == [r.id for r in code_rules.EDGE_RULES]
+    assert (rows[code_rules.INDEX_BY_NAME.id]["files"], rows[code_rules.CHECKSUM_BY_NAME.id]["files"]) == (1, 0)
+    assert rows[code_rules.INDEX_BY_NAME.id]["datasets"] == {"STUDY_B": 1}
 
 
 def test_every_schema_marker_is_worded():

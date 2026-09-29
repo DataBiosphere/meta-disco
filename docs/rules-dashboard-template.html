@@ -57,6 +57,10 @@
   <p class="note" id="markers-note"></p>
   <div class="scroll"><table id="markers"></table></div>
 
+  <h2>Edge rules</h2>
+  <p class="note" id="edge-rules-note"></p>
+  <div class="scroll"><table id="edge-rules"></table></div>
+
   <h2 id="undeclared-head"></h2>
   <p class="note" id="undeclared-note"></p>
   <div id="undeclared"></div>
@@ -72,6 +76,7 @@
     document.getElementById("provenance").textContent = DATA.provenance;
     document.getElementById("key").innerHTML = TEXT.key.map(([k, v]) => `<li><strong>${esc(k)}</strong>: ${esc(v)}</li>`).join("");
     document.getElementById("markers-note").textContent = TEXT.markers_note;
+    document.getElementById("edge-rules-note").textContent = TEXT.edge_rules_note;
     document.getElementById("undeclared-head").textContent = TEXT.undeclared_head;
     document.getElementById("undeclared-note").textContent = TEXT.undeclared_note;
 
@@ -128,6 +133,12 @@
       "<tr><th>id</th><th>written as</th><th>files</th><th>meaning</th></tr>" +
       DATA.markers.map(m => `<tr><td><code>${esc(m.id)}</code></td><td>${esc(m.written_as)}</td>` +
         `<td class="num">${fmt(m.files)}</td><td>${esc(m.meaning)}</td></tr>`).join("");
+
+    document.getElementById("edge-rules").innerHTML =
+      "<tr><th>id</th><th>states</th><th>files</th><th>reads</th><th>rationale</th><th>in</th></tr>" +
+      DATA.edge_rules.map(e => `<tr><td><code>${esc(e.id)}</code></td><td><code>${esc(e.relation)}</code></td>` +
+        `<td class="num">${fmt(e.files)}</td><td>${esc(e.reads)}</td><td>${esc(e.rationale)}</td>` +
+        `<td><code>${esc(e.defined_in)}</code></td></tr>`).join("");
 
     document.getElementById("undeclared").innerHTML = DATA.undeclared.length
       ? "<table><tr><th>id</th><th>files</th><th>claims</th></tr>" + DATA.undeclared.map(u =>

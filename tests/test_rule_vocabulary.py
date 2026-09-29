@@ -17,9 +17,9 @@ from types import SimpleNamespace
 
 import pytest
 import yaml
-from classify_index_files import _PARENT_KIND_BY_CATEGORY, INDEX_RELATION
 
-from meta_disco import schema_vocab
+from meta_disco import code_rules, schema_vocab
+from meta_disco.edges import PARENT_KIND_BY_CATEGORY
 from meta_disco.file_name import Format
 from meta_disco.rule_loader import RuleLoader, get_unified_rules
 
@@ -629,11 +629,11 @@ def test_name_source_constants_match_schema_enum():
 
 
 def test_derivation_edge_constants_match_schema_enums():
-    # The index producer emits `relation` and `parent_kind` as literals, and nothing in
+    # The edge rules emit `relation` and `parent_kind` as literals, and nothing in
     # `make test` validates output against the LinkML enums. Pin both so a typo or a
-    # schema rename cannot drift silently (#450).
-    assert set(_PARENT_KIND_BY_CATEGORY.values()) <= schema_vocab.parent_kind_values()
-    assert INDEX_RELATION in schema_vocab.relation_values()
+    # schema rename cannot drift silently (#450, #356).
+    assert set(PARENT_KIND_BY_CATEGORY.values()) <= schema_vocab.parent_kind_values()
+    assert {rule.relation for rule in code_rules.EDGE_RULES} <= schema_vocab.relation_values()
 
 
 @pytest.mark.parametrize(

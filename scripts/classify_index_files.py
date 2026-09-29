@@ -32,15 +32,13 @@ better is import work (#369, #402).
 """
 
 import argparse
-import functools
 import json
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from meta_disco import code_rules
+from meta_disco import code_rules, edges
 from meta_disco.deployments import PROD
-from meta_disco.file_name import EXTENSION_MAP, FileName
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
@@ -76,96 +74,6 @@ AMBIGUOUS_PARENT = code_rules.AMBIGUOUS_PARENT.id
 # producer's extensions as the keys of `INDEX_TO_PARENT`, so what it routes on and what
 # it inherits from cannot drift apart.
 INDEX = PRODUCERS["index"]
-
-
-# An extension category (``file_name.EXTENSION_MAP``) to the derivation model's
-# ``parent_kind_enum``: the two vocabularies overlap but are not the same words. A
-# category with no enum member is deliberately absent, so it yields a null
-# ``parent_kind`` — we cannot tell, rather than a guessed kind.
-_PARENT_KIND_BY_CATEGORY = {
-    "alignment": "alignment",
-    "variant": "variants",
-    "reads": "reads",
-    "sequence": "sequence",
-    "intervals": "intervals",
-    "signal": "signal",
-    "genotype_plink": "genotypes",
-    "single_cell_matrix": "expression_matrix",
-}
-
-
-def parent_kind_of(parent_name: str | None, index_ext: str) -> str | None:
-    """What kind of file this index points at, or None when that cannot be told.
-
-    The matched parent's own extension answers it where there is one — or leaves it
-    None, for a parent whose category has no ``parent_kind`` term. Without a parent it
-    falls back to the type-level answer — what the extensions ``INDEX_TO_PARENT``
-    declares for this index agree on, if they agree — which is the data model's claim
-    that you need not find the parent to know a ``.bai`` indexes an alignment
-    (docs/derived-file-data-model.md 4a). A ``.tbi`` indexes several kinds, so only a
-    match resolves it and the fallback gives None.
-    """
-    if not parent_name:
-        return _declared_kind(index_ext)
-    return _agreed_kind([parent_name])
-
-
-@functools.cache
-def _declared_kind(index_ext: str) -> str | None:
-    """The kind every parent ``INDEX_TO_PARENT`` declares for this index agrees on.
-
-    Cached: this is a pure function of the index extensions `INDEX_TO_PARENT` declares, and the declined path
-    asks it once per record.
-    """
-    return _agreed_kind(INDEX_TO_PARENT.get(index_ext, []))
-
-
-def _agreed_kind(names: list[str]) -> str | None:
-    """The one kind these names agree on, or None.
-
-    A `None` stays in the set rather than being discarded, so a name this cannot map is
-    one that disagrees: `{variants, None}` is ambiguous, not `variants`. A lone `None`
-    pops as `None`, which is the same answer either way.
-    """
-    kinds = {_PARENT_KIND_BY_CATEGORY.get(_category_of(name) or "") for name in names}
-    return kinds.pop() if len(kinds) == 1 else None
-
-
-def _category_of(file_name: str) -> str | None:
-    """The extension category of one filename, trying shorter suffixes of a compound one.
-
-    ``FileName.parse`` keeps a compound core whole — a gVCF is ``.g.vcf`` — and
-    ``EXTENSION_MAP`` keys the simple form, so an exact lookup misses every gVCF parent
-    and calls it a kind we cannot tell. Dropping leading segments finds ``.vcf``.
-
-    The map is the rules vocabulary and is deliberately not edited to suit this: adding
-    a key there would move what the rules match on, and the kind of a parent is this
-    producer's question.
-    """
-    parsed = FileName.parse(file_name).extension or ""
-    segments = parsed.split(".")
-    for start in range(1, len(segments)):
-        category = EXTENSION_MAP.get("." + ".".join(segments[start:]))
-        if category:
-            return category
-    return None
-
-
-def derivation_edge(parent_name: str | None, parent_md5sum: str | None, index_ext: str) -> dict:
-    """The typed derivation edge for one index file (#450, data model 4a).
-
-    ``relation`` is always ``index_of``: this producer classifies index files, and the
-    schema requires the verb, so there is no half-edge to emit. The grounding —
-    ``parent_file`` and ``parent_md5sum`` — is null where no parent was taken (#438),
-    which is the ungrounded edge ``parent_md5sum``'s own schema description anticipates:
-    the *type* of the link is known from the extension even when the parent is not.
-    """
-    return {
-        "relation": INDEX_RELATION,
-        "parent_md5sum": parent_md5sum,
-        "parent_file": parent_name,
-        "parent_kind": parent_kind_of(parent_name, index_ext),
-    }
 
 
 def get_parent_candidates(index_name: str, index_ext: str) -> list[str]:
@@ -240,9 +148,6 @@ DATA_TYPE = "data_type"
 # The dimensions an index file takes from its parent: every one but its own kind.
 INHERITED_FIELDS = tuple(fld for fld in CLASSIFICATION_FIELDS if fld != DATA_TYPE)
 INDEX_DATA_TYPE = "index"  # a term in `data_type_enum`, and what an index file is
-# The derivation verb this producer emits, a term in `relation_enum`. Pinned to the
-# schema by `test_rule_vocabulary`, as `INDEX_DATA_TYPE` is.
-INDEX_RELATION = "index_of"
 
 # Written verbatim into a declined record's evidence, so it is read by someone deciding
 # what to do about the file. Both say "carries", matched case-insensitively (#455): two
@@ -269,11 +174,11 @@ def index_data_type_entry(index_ext: str) -> dict:
     honestly, because they describe the data the index points into; ``data_type``
     describes the file itself, and is the one that must not be borrowed.
 
-    Nothing is lost by dropping the borrowed value. What the file indexes is on the
-    record as ``derived_from`` — the verb, and where the parent is resolvable its name
-    and md5, which join to its record — more than a copied category said. A declined row
-    carries the edge without its grounding, and never had a borrowed ``data_type`` to
-    lose: it has no parent, which is what declined means.
+    Nothing is lost by dropping the borrowed value. What a matched file indexes is on
+    the record as ``derived_from`` — the verb, the parent's name and its record key,
+    which joins to its record — more than a copied category said. A declined row carries
+    no edge (ADR-0002 decision 2), and never had a borrowed ``data_type`` to lose: it has
+    no parent, which is what declined means.
     """
     return build_field_entry(
         INDEX_DATA_TYPE,
@@ -340,14 +245,10 @@ def declined_record(record: dict, index_ext: str, reason: str) -> dict:
                 }
             ],
         )
-    # The edge is still typed without a parent: the extension says this is an index of
-    # something, and for an unambiguous one it says of what (`parent_kind_of`). Only the
-    # grounding is missing, which is the ungrounded edge the schema anticipates.
-    return OutputRecord.from_record(
-        record,
-        {fld: classifications[fld] for fld in CLASSIFICATION_FIELDS},
-        derived_from=derivation_edge(None, None, index_ext),
-    ).to_dict()
+    # No edge: an edge exists only where the parent resolves (`meta_disco.edges`). The
+    # names this index points at are worked out from its own, so an unresolved edge
+    # would restate the file.
+    return OutputRecord.from_record(record, {fld: classifications[fld] for fld in CLASSIFICATION_FIELDS}).to_dict()
 
 
 def load_classifications(*paths: Path, key: RecordKey) -> dict[str, dict[str, Any]]:
@@ -435,31 +336,14 @@ def propagate_to_index_files(
         ds = f.get("dataset_id", "unknown")
         by_dataset[ds].append(f)
 
-    # Every file a `(dataset_id, file_name)` names, not just the last one written.
-    # A dict keyed that way silently collapses a name two files share, which is what
-    # let an index inherit from a parent picked by iteration order (#438); keeping the
-    # list makes "this name identifies one file" a thing the match loop can test.
-    # Every *record* here has a well-formed md5 — `load_classifiable_records` excluded
-    # the rest (#376) — so reading one off a chosen file never needs a guard. That says
+    # Every file a `(dataset_id, file_name)` names, case-folded, not just the last one
+    # written: `edges.files_by_folded_name` says why. Every *record* here has a
+    # well-formed md5 — `load_classifiable_records` excluded the rest (#376) — which says
     # nothing about names: a name reaching more than one record is the case this exists
-    # to detect.
-    #
-    # The name half of the key is case-folded, so this agrees with `route`, which has
-    # folded case since #449 (#455). Folding makes two names differing only by case
-    # identify neither file, which is #438's rule read case-insensitively.
-    #
-    # `str` only because folding reads every record in the dataset, index file or not: an
-    # exact key took a drifted non-string name as-is, and `.lower()` would not, so one
-    # bystander could take the producer down. It does not make a drifted name safe to
-    # *classify* — a record this producer owns still raises below, as the three sibling
-    # filename producers do via `FileInfo.from_filename`, which is what lets
-    # `OutputRecord.from_record` promise no producer hands it a drifted `file_name`.
-    files_by_folded_name: defaultdict[tuple[str, str], list[dict]] = defaultdict(list)
-    for ds, ds_files in by_dataset.items():
-        for f in ds_files:
-            name = f.get("file_name")
-            if name:
-                files_by_folded_name[(ds, str(name).lower())].append(f)
+    # to detect. A drifted non-string name on a record this producer owns still raises
+    # below, as the three sibling filename producers do via `FileInfo.from_filename`,
+    # which is what lets `OutputRecord.from_record` promise no producer hands it one.
+    files_by_folded_name = edges.files_by_folded_name(files)
 
     # Find index files and match to parents
     results = []
@@ -508,15 +392,16 @@ def propagate_to_index_files(
             # falling through have found a unique later one. It is here for the shape of
             # the decision, not for a measured save.
             parent_candidates = get_parent_candidates(name, index_ext)
-            candidate_tried = next((c for c in parent_candidates if (ds, c.lower()) in files_by_folded_name), None)
+            candidate_tried, parent_files = next(
+                ((c, found) for c in parent_candidates if (found := edges.matches(files_by_folded_name, ds, c))),
+                (None, []),
+            )
 
             if candidate_tried is None:
                 stats[index_ext]["unmatched"] += 1
                 unmatched.append(unmatched_entry(f, index_ext, parent_candidates, NO_MATCHING_PARENT))
                 declined.append((f, index_ext, NO_MATCHING_PARENT))
                 continue
-
-            parent_files = files_by_folded_name[(ds, candidate_tried.lower())]
 
             if len(parent_files) > 1:
                 # Not a failed lookup: the parent is present, and present more than once.
@@ -549,12 +434,10 @@ def propagate_to_index_files(
             # the row and the `derived_from` edge, which name the file as the catalog
             # spells it (#455).
             parent = parent_files[0]
-            parent_name = parent["file_name"]
-            parent_md5 = parent["file_md5sum"]
             stats[index_ext]["matched"] += 1
 
             # Joined on the source's key, under its input spelling; the map was keyed
-            # on the same field under its output spelling. Not on `parent_md5`: for
+            # on the same field under its output spelling. Not on the parent's md5: for
             # AnVIL a checksum is not an identity (see `load_classifications`). A
             # drifted key on the parent would match nothing and the index would inherit
             # nothing, silently, so `input_key_value` raises on one.
@@ -577,8 +460,7 @@ def propagate_to_index_files(
                 # The extension this file matched on, which is not always `file_format`:
                 # every `.fai` in the corpus carries `file_format: "Other"` (#437).
                 "index_extension": index_ext,
-                "parent_file": parent_name,
-                "parent_md5sum": parent_md5,
+                "parent_record": parent,
                 "parent_row_found": parent_row_found,
                 **{fld: parent_class.get(fld) or nc for fld in INHERITED_FIELDS},
                 "detail": parent_class.get("detail", {}),
@@ -719,7 +601,7 @@ def propagate_to_index_files(
 
     standard_results = []
     for r in results:
-        parent = r["parent_file"]
+        parent = r["parent_record"]["file_name"]
         # Field entries share to_output_dict's builder (epic #116): `status`
         # carries the sentinel, `value` is None unless CLASSIFIED (Stage 3).
         classifications = {}
@@ -738,7 +620,7 @@ def propagate_to_index_files(
             OutputRecord.from_record(
                 r["record"],
                 classifications,
-                derived_from=derivation_edge(parent, r["parent_md5sum"], r["index_extension"]),
+                derived_from=[edges.name_edge(code_rules.INDEX_BY_NAME, r["parent_record"], key)],
             ).to_dict()
         )
 

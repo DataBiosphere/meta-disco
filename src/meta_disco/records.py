@@ -281,10 +281,11 @@ class OutputRecord:
     entry_id: Any
     file_id: Any
     drs_uri: Any
-    # The typed derivation edge (#450). Null on every producer but the index one,
-    # which is the only one that resolves a parent today — emitted rather than omitted,
-    # so the envelope keeps one shape for every row.
-    derived_from: dict | None = None
+    # The derivation edges (#450, ADR-0002): a list, one per parent per source that
+    # states it, and null where none does. Only the index producer and the catch-all (for
+    # a checksum file) state one (`meta_disco.edges`); emitted rather than omitted, so
+    # the envelope keeps one shape for every row.
+    derived_from: list[dict] | None = None
 
     @classmethod
     def from_work_item(
@@ -315,7 +316,7 @@ class OutputRecord:
         record: dict,
         classifications: dict,
         *,
-        derived_from: dict | None = None,
+        derived_from: list[dict] | None = None,
     ) -> OutputRecord:
         """Build from a raw input record, for a producer that reads dicts not work items.
 
@@ -326,8 +327,8 @@ class OutputRecord:
         rather than by each producer, which is what retires the sweep that checked it had
         been.
 
-        ``derived_from`` is the index producer's typed edge; every other producer leaves
-        it null.
+        ``derived_from`` is the edges the index producer and the catch-all state
+        (``meta_disco.edges``); every other producer leaves it null.
 
         Its callers do not run the input contract — they classify from the filename and
         never build a work item — so this cannot assume types the way

@@ -12,9 +12,9 @@ dimension's enum.
 the reconcile stage writes them (#432), so a reconciled record is held to the same schema. The golden carries the seven
 ``ClassifyPipeline`` writes; ``standalone_output.json`` carries the four standalone
 ones, which until #465 reached no schema validation at all. Between them they also put
-the block only one producer emits in front of the schema as records it wrote:
-``derived_from`` (#450), whose class was otherwise exercised only by dicts typed by
-hand below. The root suite owns what this side cannot
+the block only two producers emit in front of the schema as records they wrote:
+``derived_from`` (#450, #356), whose class was otherwise exercised only by dicts typed
+by hand below. The root suite owns what this side cannot
 check: that the two fixtures' producer keys together equal ``producers.PRODUCERS``, and
 that each fixture is what a fresh run produces.
 
@@ -181,21 +181,29 @@ def test_output_entries_validate_against_schema(validator):
     assert not failures, "Producer output violates the classification schema:\n  " + "\n  ".join(failures)
 
 
-def test_a_populated_derivation_edge_validates(validator):
-    """Both shapes the index producer emits: grounded, and ungrounded where it took no
-    parent (#438) — the case `parent_md5sum`'s own schema description anticipates.
+_EDGE = {
+    "relation": "index_of",
+    "parent_file": "s.bam",
+    "parent_key": "f-bam",
+    "parent_kind": "alignment",
+    "source_type": "filename_rule",
+    "rule_id": "index_by_name",
+}
 
-    The standalone fixture now carries both off the producer itself (#465). This case
-    stays because it is written out: it says which members make an edge, where reading
-    that off the fixture means reading a record the producer happened to write.
+
+def test_a_populated_derivation_edge_validates(validator):
+    """An internal edge (its parent resolved, so `parent_key` is set) and an external one
+    (named, not resolved, so no `parent_key`), as a list (ADR-0002 decisions 2, 3).
+
+    The standalone fixture carries the internal one off the producers themselves (#465).
+    Nothing emits an external edge yet (#577 will); this case says the schema takes one.
     """
     _, record = next(_records_in(_GOLDEN))
-    grounded = {"relation": "index_of", "parent_md5sum": "b" * 32, "parent_file": "s.bam", "parent_kind": "alignment"}
-    ungrounded = {"relation": "index_of", "parent_md5sum": None, "parent_file": None, "parent_kind": None}
+    external = {k: v for k, v in _EDGE.items() if k != "parent_key"}
 
     failures = []
-    for label, edge in (("grounded", grounded), ("ungrounded", ungrounded)):
-        for result in validator.validate({**record, "derived_from": edge}, target_class="ClassificationRecord").results:
+    for label, edges in (("internal", [_EDGE]), ("external", [external]), ("two", [_EDGE, external])):
+        for result in validator.validate({**record, "derived_from": edges}, target_class="ClassificationRecord").results:
             failures.append(f"{label}: {result.severity}: {result.message}")
     assert not failures, "A derivation edge violates the record schema:\n  " + "\n  ".join(failures)
 
@@ -212,18 +220,19 @@ def test_an_inferred_value_outside_its_dimensions_enum_is_refused(validator):
     assert report.results, "an inferred data_modality of PACBIO passed the schema"
 
 
-def test_a_derivation_edge_without_a_verb_is_refused(validator):
-    """`relation` is required, which is why there is no half-edge to emit: the producer
-    must name the verb even where it cannot name the parent."""
+@pytest.mark.parametrize("member", ["relation", "parent_file", "source_type", "rule_id"])
+def test_a_derivation_edge_missing_a_required_member_is_refused(validator, member):
+    """An edge names its verb, its parent and the source that stated it (ADR-0002): an edge
+    exists only where a source names a parent (decision 2), so there is no half-edge."""
     _, record = next(_records_in(_GOLDEN))
-    edge = {"parent_md5sum": None, "parent_file": None, "parent_kind": None}
-    report = validator.validate({**record, "derived_from": edge}, target_class="ClassificationRecord")
-    # Assert it fails *because of* the missing verb, as this file's other negative cases
+    edge = {k: v for k, v in _EDGE.items() if k != member}
+    report = validator.validate({**record, "derived_from": [edge]}, target_class="ClassificationRecord")
+    # Assert it fails *because of* the missing member, as this file's other negative cases
     # do. The base record is a real fixture row, so a regression elsewhere in it would
     # invalidate the record itself and leave a bare `assert report.results` green while
-    # saying nothing about `relation`.
-    assert any("relation" in result.message for result in report.results), (
-        f"expected a failure citing the missing relation, got: {[r.message for r in report.results]}"
+    # saying nothing about the member.
+    assert any(member in result.message for result in report.results), (
+        f"expected a failure citing the missing {member}, got: {[r.message for r in report.results]}"
     )
 
 
@@ -250,15 +259,12 @@ def test_output_records_validate_against_schema(validator):
 
 
 def test_a_producers_derivation_edge_reaches_the_gate():
-    """Some fixture record carries each `derived_from` shape: grounded, and the
-    ungrounded one whose parent members are null (#438)."""
-    edges = [record["derived_from"] for _, record in _fixture_records() if record.get("derived_from")]
+    """Some fixture record carries each edge a producer states from a name: `index_of`
+    (the index producer) and `checksum_of` (the catch-all), each with its `parent_key`."""
+    edges = [edge for _, record in _fixture_records() for edge in record.get("derived_from") or []]
     assert edges, f"no fixture record carries a derivation edge; regenerate with `{_REGEN}`"
-    assert any(edge.get("parent_md5sum") and edge.get("parent_file") for edge in edges), (
-        "no fixture record carries a grounded derivation edge"
-    )
-    assert any(edge.get("parent_md5sum") is None and edge.get("parent_file") is None for edge in edges), (
-        "no fixture record carries the ungrounded derivation edge #438 emits"
+    assert {e["relation"] for e in edges if e.get("parent_key")} >= {"index_of", "checksum_of"}, (
+        "no fixture record carries an index_of and a checksum_of edge grounded by parent_key"
     )
 
 
