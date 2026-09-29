@@ -193,8 +193,8 @@ parent for a role that takes one are one parent with two sources. Sources that n
 it are an **edge conflict**: a `.tbi` whose filename match says
 `a.vcf.gz` and whose `anvil_activity` says `b.vcf.gz` has one of them wrong. An edge conflict is listed
 for review, and nothing is inherited across that activity until it is settled. For a role that
-takes many, the parents every source names are pooled into one set, each source's parents still their own
-edges (decision 6).
+takes many, the parents every source names are pooled into one set of inputs, each listing in `named_by`
+the sources that named it (decision 6).
 
 *Rejected (#580): verbs on file-to-file edges*, which this decision first minted. The sources state
 lineage as steps: `anvil_activity` has one row per step, and FSS's Activity table is its model. What
@@ -205,9 +205,9 @@ list of our own was a vocabulary no submitter writes.
 
 Five sources name file parents, the Context table's: submitter tables (same row or id join), `anvil_activity`,
 header command lines, HPRC's assembly sheets, and filename convention (companion files, and T2T's window
-VCFs for a `MergeActivity`). Every edge
-records which one stated it, and an edge two sources state is two edges that agree — a consistency
-check (#362) reads them. Identifier parents come from the sources decision 5 lists for `SequenceActivity` and
+VCFs for a `MergeActivity`). Every step
+and input records which sources named it, and one two sources name is one step or input listing both in
+`named_by` — a consistency check (#362) reads them. Identifier parents come from the sources decision 5 lists for `SequenceActivity` and
 `SampleCollectionActivity`, and, for `isBiologicalChildOf`, from submitter tables and registries (#361).
 
 Submitter tables and `anvil_activity` are source evidence, which inference never reads (contract 1.2,
@@ -364,13 +364,11 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   `Attribution`: `source_type`, `rule_id`, and `activity_id` and `source` where a source gives them
   (decisions 3, 6).
 - `ActivityInput` gains:
-  - Provenance, as a claim carries it, so two edges of one source kind stay distinguishable
-    (decision 6): `source_type` (the existing slot, range `source_type_enum`); for an input evidence
-    states, the existing `source` slot (`ClaimSource`: name, dataset, table, column) **and** a `rule_id`
-    naming the mapping that turned that column or activity type into an activity, as an external claim carries both
-    today; for one inference reads, `rule_id` alone, naming the rule and header field or filename
-    convention it came from. Which kind
-    `anvil_activity` is — it is neither the submitter tables nor `anvil_file` — is #577's (split from #356).
+  - **Done (#580):** provenance, as `named_by` entries (`Attribution`, above): for a source evidence
+    states, its `source` (`ClaimSource`: name, dataset, table, column) **and** a `rule_id` naming the
+    mapping that turned that column or activity type into an activity; for inference, `rule_id` alone.
+    Which `source_type` `anvil_activity` is — it is neither the submitter tables nor `anvil_file` — is
+    #577's (split from #356).
   - `parent_key`: the parent's record key per `SOURCE_RECORD_KEYS`, set only when the parent resolves to
     a record of the child's dataset; its presence is what `parent_scope` means, so `parent_scope` is not a
     slot (decisions 2, #371). Named for the key rather than `parent_file_id` because HPRC's key is not a
@@ -379,9 +377,9 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
     an S3 or filesystem path — kept whether or not
     it resolves (decision 2); a name stays in `parent_file`.
   - A constraint: exactly one parent form per input — `parent_id`, or a file parent (`parent_file` or
-    `parent_ref`, with `parent_key` where it resolves) — and the form its activity's `parent` declares
-    (`rules/activities.yaml`: an identifier for `SequenceActivity` and the other sample steps; a file
-    otherwise). Today's schema requires `parent_file`, which an
+    `parent_ref`, with `parent_key` where it resolves) — and the `form` its role declares
+    (`rules/activities.yaml`: an identifier for `SequenceActivity`'s sample and the other sample steps' inputs;
+    a file otherwise). Today's schema requires `parent_file`, which an
     input a source names only by `file_id` does not have (#577).
   - `parent_id`: an `EntityIdentifier`, the alternative to a file parent for an activity whose input is
     a sample (decisions 1, 5).
@@ -397,8 +395,7 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
 - `parent_md5sum` is retired: #356 writes `parent_key` in its place.
 - New class `EntityIdentifier`: `id`, `namespace` (`identifier_namespace_enum`), `dataset` (set exactly
   when the namespace is `dataset_local`, and part of its identity), and the same provenance as
-  `ActivityInput` — `source_type`, plus `source` and `rule_id` for evidence or `rule_id` alone for inference
-  (decision 1).
+  an `ActivityInput`, a `named_by` list of `Attribution` (decision 1).
 - **Done (#580):** the verb (`relation`, `relation_enum`) is replaced by `GeneratedBy.activity` (range
   `activity_type_enum`, decision 5), and a source's run id is its `named_by` entry's `activity_id` (decision 7).
 - Evidence cannot state an edge yet: an `EvidenceRow` carries one classification slot and a `raw_value`,

@@ -281,7 +281,7 @@ class OutputRecord:
     entry_id: Any
     file_id: Any
     drs_uri: Any
-    # The step that made the file (#580), null where no source names a parent; emitted
+    # The step that made the file (#580), null where no parent resolves; emitted
     # rather than omitted so every row has one shape.
     generated_by: dict | None = None
 

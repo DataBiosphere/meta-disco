@@ -114,7 +114,7 @@ def generated_by(rule: EdgeRule, parent: dict, key: RecordKey) -> dict:
         "parent_kind": parent_kind_of(parent_name),
         "named_by": named_by,
     }
-    return {"activity": rule.activity, "named_by": named_by, "inputs": [used]}
+    return {"activity": rule.activity, "named_by": [dict(n) for n in named_by], "inputs": [used]}
 
 
 def matches(index: NameIndex, dataset_id: str, name: str) -> list[dict]:

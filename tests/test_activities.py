@@ -7,7 +7,7 @@ bundled file's rows: which dimensions a term passes is the file's to say.
 import pytest
 import yaml
 
-from meta_disco import activities
+from meta_disco import activities, schema_vocab
 from meta_disco.models import CLASSIFICATION_FIELDS
 from meta_disco.schema_vocab import activity_values
 
@@ -31,6 +31,11 @@ def _text(entries):
 
 def test_the_bundled_file_loads_and_declares_every_term_of_the_enum():
     assert set(activities.declarations()) == activity_values()
+
+
+def test_the_dimensions_an_input_can_pass_are_every_dimension_but_data_type():
+    """`passed_dimension_enum` is held to `CLASSIFICATION_FIELDS`, so a new dimension cannot fall out of `passes`."""
+    assert set(schema_vocab._enum_values("passed_dimension_enum")) == set(CLASSIFICATION_FIELDS) - {"data_type"}
 
 
 def test_passes_is_every_role_s_in_classification_fields_order():

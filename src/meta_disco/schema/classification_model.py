@@ -651,7 +651,7 @@ class ClassificationRecord(ConfiguredBaseModel):
     drs_uri: Optional[str] = Field(default=None, description="""The file's DRS URI: what a resolver dereferences to reach the bytes. Carried, never derived from `file_id` — thousands of records wrap a different object id, so a reconstructed URI resolves to the wrong file or to nothing (#433).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     dataset_title: Optional[str] = Field(default=None, description="""Title of the dataset the file belongs to.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     classifications: Classifications = Field(default=..., description="""The six classified dimensions for this file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
-    generated_by: Optional[GeneratedBy] = Field(default=None, description="""The step that made the file and the inputs it used, by role (ADR-0002 decisions 3, 6, #580); null where no source names a parent.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
+    generated_by: Optional[GeneratedBy] = Field(default=None, description="""The step that made the file and the inputs it used, by role (ADR-0002 decisions 3, 6, #580); null where no parent resolves.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
 
 
 class Classifications(ConfiguredBaseModel):

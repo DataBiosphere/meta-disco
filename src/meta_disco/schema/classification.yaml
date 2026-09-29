@@ -893,7 +893,7 @@ slots:
   generated_by:
     description: >-
       The step that made the file and the inputs it used, by role (ADR-0002 decisions 3,
-      6, #580); null where no source names a parent.
+      6, #580); null where no parent resolves.
     range: GeneratedBy
     inlined: true
 
