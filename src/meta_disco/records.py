@@ -281,7 +281,8 @@ class OutputRecord:
     entry_id: Any
     file_id: Any
     drs_uri: Any
-    # The step that made the file (#580), null where no parent resolves; emitted
+    # The step that made the file (#580), null where none is recorded (inference records one
+    # only where the parent resolves); emitted
     # rather than omitted so every row has one shape.
     generated_by: dict | None = None
 

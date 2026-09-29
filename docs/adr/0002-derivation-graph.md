@@ -112,7 +112,9 @@ the activity declares. The step and each input carry `named_by`, every source th
 sources are all listed: a `.tbi`'s file name and `anvil_activity` both name its indexing and its VCF. An
 *edge* in this record is one such input. Sources add inputs to the one step: a parent two sources name is
 one input they agree on, or, for a role
-that takes one, two inputs in conflict (decision 5). *Rejected (#580): one edge per parent, each naming
+that takes one, two inputs in conflict (decision 5). Sources that name different activities for one file are an **activity conflict**, listed
+for review, across which nothing is inherited; a specific activity and the generic `Activity` agree, since
+every term is an `Activity`. *Rejected (#580): one edge per parent, each naming
 the activity*, the shape #356 first wrote: three edges naming `AlignmentActivity` read as three
 alignments, and none said which input was the reads and which the reference.
 
@@ -257,9 +259,10 @@ declaration credited to the parent that reconciles with the child's own; contrac
 VCF takes `ILLUMINA`, and a VCF whose filename says `hifi` beside that CRAM is a `conflict` for a curator:
 a mislabelled file or a wrong edge, which must not be settled silently.
 
-**Parents that differ are mixed, not a conflict.** A child's parents across one activity — the pooled set of a
-role that takes many (decision 5) — are settled among themselves first, one declaration per activity; a
-child with two carrying activities has two, which reconcile with each other as any two declarations do:
+**Parents that differ are mixed, not a conflict.** A child has one activity (decision 3). Its parents in
+one input role — the pooled set of a role that takes many (decision 5) — are settled among themselves
+first, one declaration per role that passes the dimension; where two roles pass one dimension, the two
+declarations reconcile with each other as any two do (no declared activity does so today):
 parents that agree (4.4's sense, `is_a` nesting included) give the child one inherited declaration,
 naming how many parents and which; parents that differ give it a **mixed** declaration, which carries no
 value. A 1000G joint call over NovaSeq 6000 and HiSeq X CRAMs has no single `instrument_model`, and an
@@ -267,7 +270,7 @@ HPRC assembly built from HiFi, ONT and Hi-C reads no single `platform`: nobody i
 says nothing the slot stays `not_classified`, marked mixed, with nothing for a curator to answer; the report
 lists the parents' values. But a joint call whose filename says `NovaSeq 6000` claims one value for a
 lineage that has none, so the child declaring a value against mixed is a conflict, as is the child
-declaring `not_applicable` against it. A second carrying activity's value or `not_applicable` against mixed is
+declaring `not_applicable` against it. A second carrying role's value or `not_applicable` against mixed is
 a conflict the same way; two mixed declarations stay mixed (contract 4.9). Separately, the child
 contradicting a value its parents agree on is a conflict.
 

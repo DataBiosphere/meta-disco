@@ -1,8 +1,9 @@
 """Loads ``rules/activities.yaml``: what each activity takes in and passes on (#580).
 
 Its shape is the schema's ``ActivityDeclarations``, enforced by the generated model.
-The checks that need the whole file are here: every term declared once, roles unique
-within a term, and ``Activity`` passing nothing. Readers trust the result.
+The checks it cannot state are here: every term declared once, roles unique within a
+term, ``Activity`` passing nothing, and no role that can only be an identifier passing
+anything. Readers trust the result.
 """
 
 from __future__ import annotations
@@ -52,6 +53,9 @@ def load_activities(text: str | None = None) -> dict[str, ActivityDeclaration]:
         roles = [i.role for i in declaration.inputs]
         if len(set(roles)) != len(roles):
             raise ValueError(f"activity {term!r}: a role is named twice in {roles}")
+        for i in declaration.inputs:
+            if i.passes and "file" not in {str(f) for f in i.form}:
+                raise ValueError(f"activity {term!r}: role {i.role!r} is an identifier, which has nothing to pass")
         declared[term] = declaration
     missing = sorted(activity_values() - set(declared))
     if missing:

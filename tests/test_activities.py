@@ -60,6 +60,10 @@ def test_passes_is_every_role_s_in_classification_fields_order():
         (_every_term(IndexActivity=_entry("IndexActivity", notes="prose")), "notes"),
         (_every_term(IndexActivity=_entry("IndexActivity", [_input("a"), _input("a")])), "named twice"),
         (_every_term(Activity=_entry("Activity", [_input(passes=["platform"])])), "passes nothing"),
+        (
+            _every_term(IndexActivity=_entry("IndexActivity", [_input(form=["identifier"], passes=["platform"])])),
+            "nothing to pass",
+        ),
     ],
     ids=[
         "missing-term",
@@ -72,6 +76,7 @@ def test_passes_is_every_role_s_in_classification_fields_order():
         "unknown-key",
         "repeated-role",
         "unknown-step-passes",
+        "identifier-passes",
     ],
 )
 def test_the_loader_refuses(entries, message):

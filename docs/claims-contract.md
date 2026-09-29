@@ -247,11 +247,11 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 4.9 **A child inherits across a derivation edge** (ADR-0002, #355) — an `internal` one, which joins two
     files of one dataset. A parent is looked for only in the child's dataset; one missing there is
-    `external`, and nothing is inherited across it. For each activity that carries a dimension,
-    the child's parents across that activity settle their resolved answers among themselves and give the child
-    one declaration, credited to them, to which 4.2–4.6 apply as to inputs 1–4 — so a child with two
-    carrying activities (`VariantCallActivity` and `MergeActivity`) has two declarations, which reconcile with each other
-    as any two do:
+    `external`, and nothing is inherited across it. A child has one activity (its
+    `generated_by`); for each input role that passes a dimension, the child's parents in that role settle
+    their resolved answers among themselves and give the child one declaration, credited to them, to which
+    4.2–4.6 apply as to inputs 1–4 — so a dimension two roles pass (none today) has two declarations, which
+    reconcile with each other as any two do:
     - parents that agree (4.4) declare their value — for `reference_assembly` with its build's identity
       (base and version, not the parent's header observations), unless that differs among them, when the
       value goes without one — or `not_applicable` (which 4.6 then weighs);
