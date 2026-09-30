@@ -519,7 +519,7 @@ classes:
       `target` whose `target_key` equals `target_key_value` was made from `parent`,
       a `parent_key_type`". The envelope is an `EvidenceFileEnvelope`, as a slot
       evidence file's is; the lines differ, so the two are written under separate
-      roots and no reader of one ever meets the other.
+      roots, and the readers of each root read only that root.
 
       **It declares nothing**, as an `EvidenceRow` declares nothing: no activity, no
       role, no value, no status, no rule id. `raw_activity` is what the source calls
@@ -531,11 +531,12 @@ classes:
       generated files, is written as one line for each pair.
 
       **At least one of `parent` and `parent_source_identifier`.** A parent named by
-      a locator or by AnVIL's identifier is written as `parent`. One named by the
-      source's own identifier is written as the locator the source's own table
-      gives it, with the identifier kept as `parent_source_identifier`; when that
-      table has no row for it, the line carries the identifier alone, so the link
-      is still reported. `parent_key_type` is present exactly when `parent` is, and
+      a locator, by AnVIL's identifier or by a sample's identifier is written as
+      `parent`. One named by the source's own identifier is written as the locator
+      the source's own table gives it, with the identifier kept as
+      `parent_source_identifier`; when that table has no row for it, or rows naming
+      several locators, the line carries the identifier alone, so the link is
+      still reported. `parent_key_type` is present exactly when `parent` is, and
       `raw_activity_column` exactly when `raw_activity` is. gen-pydantic emits no
       class rules, so `lineage_evidence.check_row` enforces all three at write and at
       read.
@@ -550,8 +551,8 @@ classes:
         pattern: "^[^\\r\\n]+\\Z"
         description: >-
           The parent, in the form `parent_key_type` names. Written whether or not it
-          is one of the dataset's files: a parent outside the dataset is reported
-          by reconcile (#577), and dropping it here would hide it.
+          is one of the dataset's files: reconcile (#577) will report a parent
+          outside the dataset, and dropping it here would hide it.
       parent_key_type:
         range: lineage_parent_key_enum
         description: >-
@@ -567,8 +568,8 @@ classes:
         description: >-
           What the source calls the step, verbatim (contract 1.4), where the source
           names it — `anvil_activity`'s `activity_type`, e.g. `Indexing` or
-          `Quantificatioin: salmon`. The empty string is kept; a null cell is
-          omitted. No pattern and no enum, for `EvidenceRow.raw_value`'s reason.
+          `Quantificatioin: salmon`. The empty string is kept; a null or empty-list
+          cell is omitted. No pattern and no enum, for `EvidenceRow.raw_value`'s reason.
       activity_id:
         pattern: "^[^\\r\\n]+\\Z"
         description: >-

@@ -38,14 +38,14 @@ datasets:
 """,
     )
     activity, row, lookup = lineage_map.links
-    assert (activity.child_key, activity.parent_key, activity.raw_activity_cell, activity.activity_id_cell) == (
+    assert (activity.child_key, activity.parent_key_type, activity.raw_activity_cell, activity.activity_id_cell) == (
         "file_id",
         "file_id",
         "activity_type",
         "activity_id",
     )
-    assert (row.child_key, row.parent_key, row.lookup, row.raw_activity_cell) == ("drs_uri", "drs_uri", None, None)
-    assert lookup.parent_key is None
+    assert (row.child_key, row.parent_key_type, row.lookup, row.raw_activity_cell) == ("drs_uri", "drs_uri", None, None)
+    assert lookup.parent_key_type is None
     assert lookup.lookup == Lookup(table="file", identifier_column="file_id", locator_column="file_path")
     assert lineage_map.tables("D") == ["anvil_activity", "sample", "file"]
 

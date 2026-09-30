@@ -229,7 +229,7 @@ download-and-survey:
 	$(MAKE) download manifest-survey
 
 # The AnVIL slot map (#369): check it against the manifests on disk, or import
-# every dataset it names as one new generation of evidence files under
+# every dataset it names, each as a new generation of evidence files under
 # data/source_evidence/anvil/. Offline.
 check-slot-map:
 	uv run python scripts/import_anvil_evidence.py --check
@@ -247,7 +247,7 @@ import-anvil-published:
 	uv run python scripts/import_anvil_evidence.py --published $(ARGS)
 
 # The AnVIL lineage map (#583): which columns name a file and the parent it was made
-# from. Check it against the manifests on disk, or import every dataset it names as one
+# from. Check it against the manifests on disk, or import every dataset it names, each as a
 # new generation of lineage evidence under data/lineage_evidence/anvil/. Offline.
 check-lineage-map:
 	uv run python scripts/import_anvil_lineage.py --check

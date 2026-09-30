@@ -190,7 +190,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     answer carried across a derivation edge (4.9). How today's one instance meets 1.1 is #413.
 
     Lineage evidence is not an input kind either: it names a file's parent and the step that made it,
-    not a value (#583). Its lines carry `repository_activity` (AnVIL's `anvil_activity`) or
+    not a value (#583). Its files declare `repository_activity` (AnVIL's `anvil_activity`) or
     `repository_metadata` (a submitter's table), and nothing reads them until #577.
 
     **Kind 2 was retired by #424 and reinstated by #472 and #497.** The retirement argued that a

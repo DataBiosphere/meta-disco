@@ -156,7 +156,7 @@ class ColumnEntry:
 @dataclass(frozen=True)
 class SlotMap:
     """A loaded map: the catalog it was authored against, the kind of source it
-    describes (one of ``IMPORTER_SOURCE_TYPES``), and every column entry in it."""
+    describes (one of ``IMPORTER_SOURCE_TYPES`` less ``LINEAGE_ONLY_SOURCE_TYPES``), and every column entry in it."""
 
     catalog: str
     source_type: str

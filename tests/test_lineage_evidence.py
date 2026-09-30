@@ -1,6 +1,6 @@
 """Lineage evidence files (#583): the writer and reader agree, a line declares nothing,
-the rules the generated model drops are enforced both ways, and a lineage file never
-reaches a reader of slot evidence."""
+the rules the generated model drops are enforced both ways, a slot evidence file
+refuses the lineage-only kind, and the two kinds are written under separate roots."""
 
 import json
 

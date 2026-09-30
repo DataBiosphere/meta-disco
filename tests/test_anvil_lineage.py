@@ -56,7 +56,7 @@ def entities():
         activity(["nobody"], ["f1"], activity_id="a4"),
         activity(["f6"], used_samples=["S1"], activity_type="Sequencing", activity_id="a5"),
         ("sample", {"stats": drs(7), "cram": drs(6), "read_1": drs(9)}),
-        ("sample", {"stats": None, "cram": drs(6), "read_1": None}),
+        ("sample", {"stats": None, "cram": None, "read_1": None}),
         ("file", {"file_id": "IGVF_BAI", "file_path": drs(8), "derived_from": ["IGVF_BAM", "IGVF_GONE"]}),
         ("file", {"file_id": "IGVF_BAM", "file_path": drs(6), "derived_from": []}),
     ]
@@ -120,8 +120,9 @@ def test_a_submitter_row_is_one_line_per_mapped_pair(imported):
     ]
     assert got == [(drs(7), drs(6), "stats", "cram"), (drs(6), drs(9), "cram", "read_1")]
     (table,) = [t for t in imported.tables if t.table == "sample"]
-    # The second row's empty stats and read_1 cells are counted once each, not once per link.
-    assert table.no_value == {"stats": 1, "read_1": 1}
+    # The second row's empty cells are counted once each: cram is named by both links
+    # (parent of stats, child of read_1) and still counts once, not twice.
+    assert table.no_value == {"stats": 1, "cram": 1, "read_1": 1}
 
 
 def test_a_source_identifier_becomes_its_rows_locator_and_is_kept(imported):
@@ -247,7 +248,7 @@ def test_a_value_is_counted_once_per_row_however_many_lines_it_reaches(tmp_path)
         [
             *(anvil_file(n) for n in range(1, 5)),
             activity(["f2", "f3", "f4"], ["outside"]),
-            ("sample", {"stats": None, "cram": "not a drs uri", "read_1": drs(1)}),
+            ("sample", {"stats": drs(2), "cram": None, "read_1": "not a drs uri"}),
             ("sample", {"stats": drs(2), "cram": drs(1), "read_1": None}),
             ("file", {"file_id": "IGVF_BAI", "file_path": drs(3), "derived_from": ["IGVF_BAM"]}),
             ("file", {"file_id": "IGVF_BAM", "file_path": drs(1), "derived_from": []}),
@@ -258,5 +259,6 @@ def test_a_value_is_counted_once_per_row_however_many_lines_it_reaches(tmp_path)
     )
     tables = {t.table: t for t in run.tables}
     assert tables["anvil_activity"].parent_outside == {"used_file_id": 1}
-    # A bad parent cell is counted even on a row whose child cell is empty.
-    assert tables["sample"].not_value == {"cram": 1}
+    # read_1 is only ever a parent, of the empty cram cell: it is counted though the
+    # link's child is empty.
+    assert tables["sample"].not_value == {"read_1": 1}

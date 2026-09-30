@@ -80,14 +80,16 @@ EXTERNAL_SOURCE_TYPES = frozenset(
         SOURCE_WRANGLER_ANNOTATION,
     }
 )
-# The kinds an *importer* may write, which is narrower. A curator claim is legitimate
+# The kinds an *importer* may write: the external kinds less the curator's, plus the
+# lineage-only `repository_activity` (#583), which is no claim's source. A curator claim is legitimate
 # — a curator's decision is reviewed and cited like any other — but a curator does not
 # reach us as an evidence file: contract 1.6 and 1.7 say it "is unlike every other in
 # how it enters: as rules, not as evidence", and 1.7 makes a decision about a single
 # file a rule whose selection matches one file. So the envelope's vocabulary is these
 # four — the three value sources and, for lineage only, `repository_activity` (#583) —
-# and the format cannot express the one input the contract routes elsewhere (#421 review). Not derived by subtracting from EXTERNAL_SOURCE_TYPES: a kind added
-# there should not silently become writable to a file.
+# and the format cannot express the one input the contract routes elsewhere (#421
+# review). Not derived by subtracting from EXTERNAL_SOURCE_TYPES: a kind added there
+# should not silently become writable to a file.
 IMPORTER_SOURCE_TYPES = frozenset(
     {
         SOURCE_EXTERNAL_GROUND_TRUTH,

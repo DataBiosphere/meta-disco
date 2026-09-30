@@ -1195,7 +1195,7 @@ def read_envelope_from(path: Path, f: BinaryIO) -> EvidenceFileEnvelope:
     :func:`read_envelope` (which wants only that), :func:`iter_evidence` (which
     reads on from there) and ``lineage_evidence.iter_lineage`` (a lineage file has the
     same envelope, #583), so a file with no first line is refused in the same words
-    either way. ``f`` is a byte handle for the reason :func:`iter_evidence` opens one:
+    whichever reads it. ``f`` is a byte handle for the reason :func:`iter_evidence` opens one:
     a decode failure is reported as a malformed line, not raised from inside a file
     iterator.
     """

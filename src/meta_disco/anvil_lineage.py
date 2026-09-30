@@ -11,14 +11,14 @@ and translates nothing.
 child that is not among the dataset's own files (its ``anvil_file`` DRS URIs, or its
 ``file_id``s) is dropped and counted, as ``anvil_evidence`` drops a link outside the
 dataset. A parent is written whether or not it is one of the dataset's files — finding
-it is reconcile's (#577), which reports one it cannot find, and dropping it here would
+it is reconcile's (#577), which will report one it cannot find, and dropping it here would
 hide it. The count of such parents is reported, not acted on.
 
 **One lookup, the map's.** Where a parent column holds the source's own identifiers,
 the map names the table they are defined in (``lineage_map.Lookup``), and the importer
 reads that table once to find each identifier's locator. It writes the locator as the
 parent and keeps the identifier as ``parent_source_identifier``; an identifier with no
-row, or with rows naming two locators, is written with the identifier alone and
+row, or with rows naming two or more locators, is written with the identifier alone and
 counted. Nothing is looked up in our catalog or our classifications.
 
 **One line per (child, parent) pair**: a cell holding a list is spread, so an
@@ -164,8 +164,8 @@ def check(lineage_map: LineageMap, manifest_root: Path, catalog: str, datasets: 
     an identifier column's every non-empty value is a string or a list of them; a
     child ``file_id`` column holds at least one of the dataset's own ``file_id``s, so a
     column of some other identifier is caught (a parent column is not held to that,
-    since a parent outside the dataset is written). Every dataset is checked in one
-    pass, so a map edited in one sitting is answered in one run.
+    since a parent outside the dataset is written). Every chosen dataset is checked and
+    every problem returned, so a map edited in one sitting is answered in one run.
     """
     named = sidecar_datasets(manifest_root, catalog)
     known = lineage_map.datasets()
@@ -192,7 +192,7 @@ def _check_dataset(links: list[Link], dataset: str, path: Path) -> list[str]:
     wanted: dict[str, dict[str, str]] = defaultdict(dict)
     for link in links:
         wanted[link.table][link.child_column] = _LOCATOR if link.child_key == JOIN_KEY_DRS_URI else _IDENTIFIER
-        wanted[link.table][link.parent_column] = _LOCATOR if link.parent_key == JOIN_KEY_DRS_URI else _IDENTIFIER
+        wanted[link.table][link.parent_column] = _LOCATOR if link.parent_key_type == JOIN_KEY_DRS_URI else _IDENTIFIER
         for cell in (link.raw_activity_cell, link.activity_id_cell):
             if cell is not None:
                 wanted[link.table][cell] = _CELL
@@ -364,7 +364,7 @@ def _table_rows(
         counted: set[tuple[str, str, str]] = set()
         for link in links:
             children = _values(row, link.child_column, link.child_key == JOIN_KEY_DRS_URI, read, result)
-            parents = _values(row, link.parent_column, link.parent_key == JOIN_KEY_DRS_URI, read, result)
+            parents = _values(row, link.parent_column, link.parent_key_type == JOIN_KEY_DRS_URI, read, result)
             if not children or not parents:
                 continue
             raw_activity = None if link.raw_activity_cell is None else _raw(row.get(link.raw_activity_cell))
@@ -411,7 +411,7 @@ def _row(
 ) -> LineageRow:
     """One line: the parent as the map says the column holds it, found through the lookup where it names one."""
     source_identifier = None
-    parent_key: str | None = link.parent_key
+    parent_key: str | None = link.parent_key_type
     if link.lookup is not None:
         source_identifier = parent
         locators = lookups[link.lookup].get(parent, set())

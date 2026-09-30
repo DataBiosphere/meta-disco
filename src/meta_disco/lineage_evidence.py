@@ -59,7 +59,7 @@ _REFUSED_LINE_KEYS = {
     "value": "a lineage line maps nothing onto our vocabulary (contract 1.1, 1.3)",
     "status": "a status is a rule's to declare, never a source's (contract 3.6)",
     "claim_state": "a lineage line is an observation, not a claim",
-    "rule_id": "there is no rule at import time; the step reconcile builds cites one (#577)",
+    "rule_id": "there is no rule at import time; the step reconcile will build cites one (#577)",
     "tier": "imported evidence does not compete on the rule tiers (#391)",
     "parent_key": "the parent's record key is found by reconcile (#577); a line names the parent as the source did",
     "source_type": "one file is one kind of source, so it is on the envelope, not on every line",
