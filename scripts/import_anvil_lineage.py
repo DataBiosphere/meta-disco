@@ -24,6 +24,7 @@ from meta_disco.anvil_lineage import check, describe, import_all
 from meta_disco.deployments import PROD
 from meta_disco.lineage_evidence import DEFAULT_LINEAGE_EVIDENCE_ROOT
 from meta_disco.lineage_map import load_lineage_map
+from meta_disco.source_evidence import unfinished_imports
 
 
 def main() -> int:
@@ -62,6 +63,8 @@ def main() -> int:
     if args.check:
         return 0
 
+    for partial in unfinished_imports(args.lineage_root):
+        print(f"Unfinished import, not read (remove it by hand): {partial}", file=sys.stderr)
     imports = import_all(lineage_map, args.data_dir, catalog, args.service, args.lineage_root, args.dataset)
     for line in describe(imports):
         print(line)
