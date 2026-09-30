@@ -5,8 +5,9 @@ source's own words, and declares nothing. This table is the one step between tha
 observation and the step reconcile will build (#577): a lookup from what the line says
 to an activity of ``activity_type_enum`` and the role the parent takes in it, whose
 ``passes`` (``rules/activities.yaml``) say what the parent hands on. It is
-``value_map``'s counterpart for lineage (contract 3.9-3.12) and shares its YAML walk
-and append-only seeding (``yaml_rows``), nothing else.
+``value_map``'s counterpart for lineage (contract 3.9-3.12). It shares value_map's YAML
+walk and append-only seeding (``yaml_rows``), its report columns (``summaries``) and
+its id slugging (``manifest_survey.name_tokens``); it does not import ``value_map``.
 
 **The file** is ``rules/activity_map.yaml``, a mapping whose one key is ``rows``::
 
@@ -24,7 +25,7 @@ the raw ``data_type`` value the slot evidence of the *same* catalog, repository,
 dataset, table and kind of source wrote for the child and for the parent (IGVF's
 ``content_type``, #570). A source that writes no ``data_type`` for its lineage table
 (``anvil_activity``, T2T's sample tables) leaves both ``None``, as does a file the table
-gives two values. The lineage read is one catalog: files naming two are refused. Nothing is joined into one string, and every
+gives two values. Only the latest catalog is read (:func:`lineage_paths`). Nothing is joined into one string, and every
 part is compared exactly as the source wrote it: no casefolding, no stripping.
 
 **A row's match** names ``source_type`` and any others of the parts, each a string,
@@ -64,7 +65,7 @@ from .lineage_evidence import DEFAULT_LINEAGE_EVIDENCE_ROOT, LINEAGE_SOURCE_TYPE
 from .manifest_survey import name_tokens
 from .models import SOURCE_REPOSITORY_ACTIVITY, SOURCE_REPOSITORY_METADATA
 from .schema.classification_model import ActivityDeclaration, EvidenceFileEnvelope
-from .source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT, discover, iter_evidence, read_envelope
+from .source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT, discover, is_generation, iter_evidence, read_envelope
 from .summaries import ReportColumn, md_rows
 from .yaml_rows import (
     NULL_TAG,
@@ -303,20 +304,37 @@ def _data_types(slot_paths: list[Path]) -> dict[str, str]:
 
 
 def lineage_paths(lineage_root: Path, datasets: Iterable[str] | None = None) -> list[Path]:
-    """Every current lineage file, restricted to the envelopes naming one of ``datasets`` when given."""
-    paths = discover(lineage_root)
-    if datasets is None:
-        return paths
-    wanted = set(datasets)
-    return [p for p in paths if read_lineage_envelope(p).source.dataset in wanted]
+    """The current lineage files of the latest catalog, restricted to the envelopes naming one of ``datasets``.
+
+    Only the latest catalog is current: once a newer catalog is imported beside an older
+    one, the older is history, kept on disk and never read, as ``discover`` treats an
+    older generation of one dataset. The latest is the catalog (the envelope's target
+    ``version``) holding the newest generation stamp, which sorts as time; a catalog's
+    name does not (``anvil9`` against ``anvil16``, dev's ``anvil``).
+    """
+    wanted = set(datasets) if datasets is not None else None
+    by_catalog: dict[str, list[Path]] = {}
+    for path in discover(lineage_root):
+        envelope = read_lineage_envelope(path)
+        if wanted is None or envelope.source.dataset in wanted:
+            by_catalog.setdefault(str(envelope.target.version), []).append(path)
+    if not by_catalog:
+        return []
+    latest = max(by_catalog, key=lambda catalog: max(_stamp(p) for p in by_catalog[catalog]))
+    return by_catalog[latest]
+
+
+def _stamp(path: Path) -> str:
+    """The generation stamp a file sits under, or "" for a file outside the generation layout."""
+    return path.parent.name if is_generation(path.parent.name) else ""
 
 
 def keyed_lines(lineage_root: Path, evidence_root: Path, paths: Iterable[Path]) -> Iterator[KeyedLine]:
     """Every line of the lineage files ``paths`` (under ``lineage_root``) with its key, in file order.
 
-    The lineage is one catalog: files whose envelopes name more than one target
-    ``version`` raise before any line is read, and only slot files of that same catalog
-    are joined for the data types.
+    ``paths`` are one catalog, as :func:`lineage_paths` returns them: paths whose
+    envelopes name more than one target ``version`` raise before any line is read. Only
+    slot files of that same catalog are joined for the data types.
     """
     envelopes = [(path, read_lineage_envelope(path)) for path in paths]
     catalogs = sorted({str(envelope.target.version) for _, envelope in envelopes})

@@ -35,7 +35,7 @@ help:
 	@echo "  make import-anvil-lineage Import AnVIL's lineage (anvil_activity, sample rows, IGVF derived_from) as lineage evidence"
 	@echo "  make seed-activity-map  Append a seeded row to the activity map for every lineage step with no row (offline)"
 	@echo "  make seed-value-map     Append a seeded row to the value map for every evidence value with no row (offline)"
-	@echo "  make review-queue       Write docs/review-queue-report.md + review-queue.html: every evidence value no authored row reads (offline)"
+	@echo "  make review-queue       Write docs/review-queue-report.md + review-queue.html: every evidence value and lineage step no authored row reads (offline)"
 	@echo "  make unprocessable-report Report what a run could not classify, and why"
 	@echo "  make validation-report  Generate validation report against ground truth"
 	@echo "  make corpus-diff        Compare two corpus generations (snapshots by md5, runs by label; ARGS=--artifact ...)"

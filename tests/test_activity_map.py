@@ -37,6 +37,7 @@ from meta_disco.schema.classification_model import (
 from meta_disco.source_evidence import (
     EvidenceEntry,
     claim_source_for,
+    discover,
     evidence_file_path,
     generation_dir,
 )
@@ -368,24 +369,25 @@ def test_a_file_given_two_data_types_by_its_table_keys_with_none(roots):
     )
 
 
-def test_lineage_of_two_catalogs_is_refused_and_slot_files_of_another_catalog_are_not_joined(tmp_path, roots):
+def test_only_the_latest_catalog_is_read_and_slot_files_of_another_catalog_are_not_joined(tmp_path, roots):
     lineage, evidence = roots
     rows = [line("drs://i", "drs://a", "file_path", "derived_from", "drs_uri")]
-    write_lineage(lineage, "file", rows, source_type=SOURCE_REPOSITORY_METADATA, key="drs_uri")
-    # A slot file of another catalog gives the same file a data type; it is not read.
-    other = envelope("file", source_type=SOURCE_REPOSITORY_METADATA, key="drs_uri", version="anvil16")
-    source = claim_source_for(other.source, "content_type")
-    write_generation(evidence, "D", "file", [EvidenceEntry("data_type", "drs://i", "index", source)], envelope=other)
+    old = generation_dir(lineage, "anvil", "anvil9", "D", "20260101T000000Z")
+    new = generation_dir(lineage, "anvil", "anvil16", "D", "20260901T000000Z")
+    for directory, version in ((old, "anvil9"), (new, "anvil16")):
+        directory.mkdir(parents=True)
+        env = envelope("file", source_type=SOURCE_REPOSITORY_METADATA, key="drs_uri", version=version)
+        write_lineage_file(evidence_file_path(directory, "file"), env, rows)
+    # anvil16 is latest by its stamp, although "anvil9" sorts after it as text.
+    assert lineage_paths(lineage) == [evidence_file_path(new, "file")]
+    # A slot file of the older catalog gives the child a data type; it is not joined.
+    older = envelope("file", source_type=SOURCE_REPOSITORY_METADATA, key="drs_uri", version="anvil9")
+    source = claim_source_for(older.source, "content_type")
+    write_generation(evidence, "D", "file", [EvidenceEntry("data_type", "drs://i", "index", source)], envelope=older)
     (keyed,) = keyed_lines(lineage, evidence, lineage_paths(lineage))
     assert keyed.key[PARTS.index("child_data_type")] is None
-    two = tmp_path / "two"
-    write_lineage(two, "file", rows, source_type=SOURCE_REPOSITORY_METADATA, key="drs_uri")
-    directory = generation_dir(two, "anvil", "anvil16", "D", STAMP)
-    directory.mkdir(parents=True)
-    other_lineage = envelope("file", source_type=SOURCE_REPOSITORY_METADATA, key="drs_uri", version="anvil16")
-    write_lineage_file(evidence_file_path(directory, "file"), other_lineage, rows)
-    with pytest.raises(ValueError, match=re.escape("names 2 catalogs, ['anvil15', 'anvil16']")):
-        list(keyed_lines(two, evidence, lineage_paths(two)))
+    with pytest.raises(ValueError, match=re.escape("names 2 catalogs, ['anvil16', 'anvil9']")):
+        list(keyed_lines(lineage, evidence, discover(lineage)))
 
 
 def test_the_queue_has_a_group_for_every_lineage_source_type():
