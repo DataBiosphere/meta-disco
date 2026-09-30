@@ -3,6 +3,8 @@
 # `make seed-activity-map` appends a seeded row (no reason, declares nothing) per key no row
 # matches; `make review-queue` lists them. An authored row that covers seeded keys replaces
 # them: delete those rows, since no two rows may match one line.
+# A row is scoped by table, not by dataset: a dataset whose table shares a name and
+# columns with a row here (`participant`, `file`) matches that row unreviewed.
 rows:
   - id: activity.indexing
     match: {source_type: repository_activity, table: anvil_activity, raw_activity: Indexing, parent_column: used_file_id}
