@@ -795,8 +795,9 @@ def queue_groups(entries: list[QueueEntry], read: Iterable[str] = ()) -> list[tu
 
     A group listed only when not empty is listed too when its source type is in ``read``
     (evidence of it was read, all of it reviewed), so an empty group is told from an unread one. Every entry lands in a
-    group: an envelope's source type is one of ``IMPORTER_SOURCE_TYPES``, which a test holds
-    equal to SOURCE_PRECEDENCE's, and another test holds QUEUE_GROUP_TEXT to the same set.
+    group: a slot evidence envelope's source type is one of ``IMPORTER_SOURCE_TYPES`` less
+    ``LINEAGE_ONLY_SOURCE_TYPES`` (``source_evidence.require_slot_evidence_kind``), which a
+    test holds equal to SOURCE_PRECEDENCE's, and another test holds QUEUE_GROUP_TEXT to the same set.
     """
     groups = []
     for source_type, _ in SOURCE_PRECEDENCE:

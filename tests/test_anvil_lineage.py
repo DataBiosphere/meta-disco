@@ -213,3 +213,50 @@ datasets:
 @pytest.mark.skipif(not REAL_MANIFESTS.is_dir(), reason="the anvil15 manifests are not on disk")
 def test_the_bundled_map_agrees_with_the_anvil15_manifests():
     assert al.check(load_lineage_map(), REAL_MANIFESTS.parent.parent, CATALOG) == []
+
+
+def test_an_empty_step_cell_and_id_are_omitted_and_a_list_identifier_is_looked_up(tmp_path):
+    map_path = tmp_path / "map.yaml"
+    map_path.write_text(MAP)
+    write_dataset(
+        tmp_path / "m",
+        "D",
+        [
+            *(anvil_file(n) for n in range(1, 4)),
+            activity(["f2"], ["f1"], activity_type=[], activity_id=""),  # type: ignore[arg-type]
+            ("sample", {"stats": drs(2), "cram": drs(1), "read_1": None}),
+            ("file", {"file_id": ["IGVF_BAI"], "file_path": drs(3), "derived_from": ["IGVF_BAM"]}),
+            ("file", {"file_id": ["IGVF_BAM"], "file_path": drs(1), "derived_from": []}),
+        ],
+    )
+    (run,) = al.import_all(
+        load_lineage_map(map_path), tmp_path / "m", CATALOG, SERVICE, tmp_path / "lin", generation=STAMP
+    )
+    (line,) = lines(run, "anvil_activity")
+    assert "raw_activity" not in line and "activity_id" not in line
+    (found,) = lines(run, "file")
+    assert (found["parent"], found["parent_source_identifier"]) == (drs(1), "IGVF_BAM")
+
+
+def test_a_value_is_counted_once_per_row_however_many_lines_it_reaches(tmp_path):
+    map_path = tmp_path / "map.yaml"
+    map_path.write_text(MAP)
+    write_dataset(
+        tmp_path / "m",
+        "D",
+        [
+            *(anvil_file(n) for n in range(1, 5)),
+            activity(["f2", "f3", "f4"], ["outside"]),
+            ("sample", {"stats": None, "cram": "not a drs uri", "read_1": drs(1)}),
+            ("sample", {"stats": drs(2), "cram": drs(1), "read_1": None}),
+            ("file", {"file_id": "IGVF_BAI", "file_path": drs(3), "derived_from": ["IGVF_BAM"]}),
+            ("file", {"file_id": "IGVF_BAM", "file_path": drs(1), "derived_from": []}),
+        ],
+    )
+    (run,) = al.import_all(
+        load_lineage_map(map_path), tmp_path / "m", CATALOG, SERVICE, tmp_path / "lin", generation=STAMP
+    )
+    tables = {t.table: t for t in run.tables}
+    assert tables["anvil_activity"].parent_outside == {"used_file_id": 1}
+    # A bad parent cell is counted even on a row whose child cell is empty.
+    assert tables["sample"].not_value == {"cram": 1}

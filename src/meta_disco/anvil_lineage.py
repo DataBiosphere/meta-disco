@@ -87,10 +87,11 @@ class TableLineage:
 
     ``no_value`` counts rows whose cell held nothing; ``not_value`` rows whose cell held
     something that is not the key the map says (a non-DRS value in a locator column, a
-    non-string in an identifier column); ``child_outside`` children not among the
-    dataset's files, dropped; ``parent_outside`` parents not among them, written;
-    ``identifier_missing`` / ``identifier_several`` source identifiers the lookup table
-    has no row for, or rows with two locators for, written with the identifier alone.
+    non-string in an identifier column). The rest count values, each once per row:
+    ``child_outside`` children not among the dataset's files, dropped; ``parent_outside``
+    parents not among them, written; ``identifier_missing`` / ``identifier_several``
+    source identifiers the lookup table has no row for, or rows with two locators for,
+    written with the identifier alone.
     ``children`` is the distinct children that received a line.
     """
 
@@ -136,10 +137,18 @@ def cell_values(value: Any, locator: bool) -> list[str] | None:
 
 
 def _raw(value: Any) -> str | None:
-    """A cell as a line records it: a string verbatim, null omitted, anything else as its JSON."""
-    if value is None:
+    """A step cell as a line records it: a string verbatim, the empty string included; null
+    and the empty list omitted, as the slot importer omits them (``anvil_evidence._transcribe``),
+    since neither observes anything; anything else as its JSON."""
+    if value is None or value == []:
         return None
     return value if isinstance(value, str) else json.dumps(value)
+
+
+def _identifier(value: Any) -> str | None:
+    """A step's id as a line records it: ``_raw``'s, but the empty string is no id and is omitted."""
+    raw = _raw(value)
+    return raw or None
 
 
 # --- checking the map against the manifests -------------------------------------
@@ -244,9 +253,10 @@ def lookup_locators(path: Path, lookup: Lookup) -> dict[str, set[str]]:
     """Each source identifier in ``lookup.table``'s ``identifier_column``, to the locators its rows give it."""
     found: dict[str, set[str]] = {}
     for _table, row in iter_verbatim_entities(path, {lookup.table}):
-        identifier = row.get(lookup.identifier_column)
         locators = link_handles(row.get(lookup.locator_column))
-        if isinstance(identifier, str) and identifier and locators:
+        if not locators:
+            continue
+        for identifier in cell_values(row.get(lookup.identifier_column), locator=False) or []:
             found.setdefault(identifier, set()).update(locators)
     return found
 
@@ -296,6 +306,8 @@ def import_dataset(
     ``service``, the Azul service the manifests were pulled from, and its
     ``fetched_at`` the verbatim manifest's request time from the sidecar.
     """
+    if not lineage_map.tables(dataset):
+        raise ValueError(f"{dataset}: not in the lineage map")
     stamp = generation if generation is not None else new_generation()
     directory = generation_dir(lineage_root, REPOSITORY, catalog, dataset, stamp)
     path = manifest_path(manifest_root, catalog, dataset, FORMAT_VERBATIM)
@@ -304,9 +316,8 @@ def import_dataset(
         raise ValueError(f"{dataset}: the {catalog} sidecar records no {FORMAT_VERBATIM} requested_at")
     files = dataset_files(path)
     lookups = {
-        link.lookup: lookup_locators(path, link.lookup)
-        for link in lineage_map.dataset_links(dataset)
-        if link.lookup is not None
+        lookup: lookup_locators(path, lookup)
+        for lookup in {link.lookup for link in lineage_map.dataset_links(dataset) if link.lookup is not None}
     }
     target = EvidenceTarget(system=REPOSITORY, dataset=dataset, version=catalog)
     tables = []
@@ -348,25 +359,31 @@ def _table_rows(
         result.rows += 1
         # Each column read once per row, and counted once per row however many links name it.
         read: dict[str, list[str]] = {}
-        outside: set[tuple[str, str]] = set()
+        # (counter, column, value) already counted on this row: a value is counted once per
+        # row however many lines it reaches.
+        counted: set[tuple[str, str, str]] = set()
         for link in links:
             children = _values(row, link.child_column, link.child_key == JOIN_KEY_DRS_URI, read, result)
-            if not children:
-                continue
             parents = _values(row, link.parent_column, link.parent_key == JOIN_KEY_DRS_URI, read, result)
-            if not parents:
+            if not children or not parents:
                 continue
             raw_activity = None if link.raw_activity_cell is None else _raw(row.get(link.raw_activity_cell))
-            activity_id = None if link.activity_id_cell is None else _raw(row.get(link.activity_id_cell))
+            activity_id = None if link.activity_id_cell is None else _identifier(row.get(link.activity_id_cell))
             for child in children:
                 if not files.has(link.child_key, child):
-                    if (link.child_column, child) not in outside:
-                        outside.add((link.child_column, child))
-                        result.child_outside[link.child_column] += 1
+                    _count(result, "child_outside", link.child_column, child, counted)
                     continue
                 for parent in parents:
                     result.children.add(child)
-                    yield _row(link, child, parent, raw_activity, activity_id, files, lookups, result)
+                    yield _row(link, child, parent, raw_activity, activity_id, files, lookups, result, counted)
+
+
+def _count(result: TableLineage, counter: str, column: str, value: str, counted: set[tuple[str, str, str]]) -> None:
+    """Count ``value`` under ``column`` in ``result``'s ``counter``, once per row (``counted`` is the row's own)."""
+    key = (counter, column, value)
+    if key not in counted:
+        counted.add(key)
+        getattr(result, counter)[column] += 1
 
 
 def _values(row: dict, column: str, locator: bool, read: dict[str, list[str]], result: TableLineage) -> list[str]:
@@ -390,6 +407,7 @@ def _row(
     files: DatasetFiles,
     lookups: dict[Lookup, dict[str, set[str]]],
     result: TableLineage,
+    counted: set[tuple[str, str, str]],
 ) -> LineageRow:
     """One line: the parent as the map says the column holds it, found through the lookup where it names one."""
     source_identifier = None
@@ -401,10 +419,11 @@ def _row(
             (parent,) = locators
             parent_key = JOIN_KEY_DRS_URI
         else:
-            (result.identifier_missing if not locators else result.identifier_several)[link.parent_column] += 1
+            counter = "identifier_missing" if not locators else "identifier_several"
+            _count(result, counter, link.parent_column, parent, counted)
             parent_key = None
     if parent_key in (JOIN_KEY_DRS_URI, JOIN_KEY_FILE_ID) and not files.has(parent_key, parent):
-        result.parent_outside[link.parent_column] += 1
+        _count(result, "parent_outside", link.parent_column, parent, counted)
     return LineageRow(
         target_key_value=child,
         parent=parent if parent_key is not None else None,

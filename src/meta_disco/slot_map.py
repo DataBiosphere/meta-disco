@@ -38,8 +38,9 @@ by name: findings and reasoning belong in the pull request and on the issue, whe
 are read, not in a data file.
 
 **A map says what kind of source it describes.** The top-level ``source_type`` is one
-of ``IMPORTER_SOURCE_TYPES`` and becomes the envelope's ``source_type`` on every
-evidence file the importer writes from the map; it defaults to ``repository_metadata``,
+of ``IMPORTER_SOURCE_TYPES`` other than a lineage-only kind (``LINEAGE_ONLY_SOURCE_TYPES``,
+#583) and becomes the envelope's ``source_type`` on every evidence file the importer
+writes from the map; it defaults to ``repository_metadata``,
 a submitter's own table, and the published map (#497) declares ``published_value``. One
 map is one kind of source — a map that mixed the two would have no place to say which
 table is which.
@@ -83,7 +84,12 @@ from typing import Protocol
 import yaml
 
 from .manifest_survey import name_tokens
-from .models import CLASSIFICATION_FIELDS, SOURCE_REPOSITORY_METADATA, require_importer_source_type
+from .models import (
+    CLASSIFICATION_FIELDS,
+    LINEAGE_ONLY_SOURCE_TYPES,
+    SOURCE_REPOSITORY_METADATA,
+    require_importer_source_type,
+)
 
 # The three forms a source can take, by the key its mapping carries.
 SOURCE_CELL = "cell"
@@ -271,6 +277,10 @@ def load_slot_map(source: Readable | None = None) -> SlotMap:
     source_type = require_importer_source_type(
         document.get("source_type", SOURCE_REPOSITORY_METADATA), "source_type", _WHERE
     )
+    if source_type in LINEAGE_ONLY_SOURCE_TYPES:
+        raise ValueError(
+            f"{_WHERE}: source_type {source_type!r} is written only as lineage evidence, not by a slot map"
+        )
     datasets = document["datasets"]
     _expect_nonempty_mapping(datasets, _WHERE, "dataset")
     return SlotMap(catalog=catalog, source_type=source_type, entries=tuple(_entries(datasets)))
