@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Propagate metadata from parent files to index files.
 
-An index file's ``data_type`` is ``index``, from its extension. The rest of
-``CLASSIFICATION_FIELDS`` (``INHERITED_FIELDS``) describe the data it points into, so they are inherited from
+An index file's ``data_type`` is ``index``, from its extension. The dimensions
+``IndexActivity`` passes (``INHERITED_FIELDS``, from ``rules/activities.yaml``) describe the data it points into, so they are inherited from
 its parent, found by filename within a dataset. ``INDEX_TO_PARENT`` declares which
 index extensions have which parent extensions.
 
@@ -37,7 +37,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
-from meta_disco import code_rules, edges
+from meta_disco import activities, code_rules, edges
 from meta_disco.deployments import PROD
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
@@ -145,8 +145,9 @@ def unmatched_entry(record: dict, index_ext: str, candidates: list[str], reason:
 
 
 DATA_TYPE = "data_type"
-# The dimensions an index file takes from its parent: every one but its own kind.
-INHERITED_FIELDS = tuple(fld for fld in CLASSIFICATION_FIELDS if fld != DATA_TYPE)
+# The dimensions an index file takes from its parent: every one but its own kind, as
+# `IndexActivity` declares them (`rules/activities.yaml`, #580).
+INHERITED_FIELDS = activities.passes(activities.INDEXING)
 INDEX_DATA_TYPE = "index"  # a term in `data_type_enum`, and what an index file is
 
 # Written verbatim into a declined record's evidence, so it is read by someone deciding
@@ -175,7 +176,7 @@ def index_data_type_entry(index_ext: str) -> dict:
     describes the file itself, and is the one that must not be borrowed.
 
     Nothing is lost by dropping the borrowed value. What a matched file indexes is on
-    the record as ``derived_from`` — the verb, the parent's name and its record key,
+    the record as ``generated_by`` — the activity, the parent's name and its record key,
     which joins to its record — more than a copied category said. A declined row carries
     no edge (ADR-0002 decision 2), and never had a borrowed ``data_type`` to lose: it has
     no parent, which is what declined means.
@@ -248,7 +249,14 @@ def declined_record(record: dict, index_ext: str, reason: str) -> dict:
     # No edge: an edge exists only where the parent resolves (`meta_disco.edges`). The
     # names this index points at are worked out from its own, so an unresolved edge
     # would restate the file.
-    return OutputRecord.from_record(record, {fld: classifications[fld] for fld in CLASSIFICATION_FIELDS}).to_dict()
+    return OutputRecord.from_record(record, every_field(classifications)).to_dict()
+
+
+def every_field(classifications: dict[str, dict]) -> dict[str, dict]:
+    """Every slot, in field order; one ``IndexActivity`` does not pass is ``not_classified`` (#580)."""
+    return {
+        fld: classifications.get(fld) or build_field_entry(None, status=NOT_CLASSIFIED) for fld in CLASSIFICATION_FIELDS
+    }
 
 
 def load_classifications(*paths: Path, key: RecordKey) -> dict[str, dict[str, Any]]:
@@ -288,7 +296,7 @@ def load_classifications(*paths: Path, key: RecordKey) -> dict[str, dict[str, An
             # Per-field detail (the first is reference_assembly's build, #340)
             # rides along with the labels: an index record must not describe
             # its parent less precisely than the parent does.
-            "detail": {fld: field_detail(c, fld) for fld in CLASSIFICATION_FIELDS},
+            "detail": {fld: field_detail(c, fld) for fld in INHERITED_FIELDS},
         }
     return classifications
 
@@ -431,7 +439,7 @@ def propagate_to_index_files(
                 continue
 
             # The matched file's own name, not the candidate that found it: this reaches
-            # the row and the `derived_from` edge, which name the file as the catalog
+            # the row and its `generated_by`, which name the file as the catalog
             # spells it (#455).
             parent = parent_files[0]
             stats[index_ext]["matched"] += 1
@@ -466,9 +474,9 @@ def propagate_to_index_files(
                 "detail": parent_class.get("detail", {}),
             }
 
-            if result["data_modality"] not in _sentinels:
+            if result.get("data_modality", nc) not in _sentinels:
                 stats[index_ext]["with_modality"] += 1
-            if result["reference_assembly"] not in _sentinels:
+            if result.get("reference_assembly", nc) not in _sentinels:
                 stats[index_ext]["with_ref"] += 1
 
             results.append(result)
@@ -604,23 +612,21 @@ def propagate_to_index_files(
         parent = r["parent_record"]["file_name"]
         # Field entries share to_output_dict's builder (epic #116): `status`
         # carries the sentinel, `value` is None unless CLASSIFIED (Stage 3).
-        classifications = {}
-        for fld in CLASSIFICATION_FIELDS:
-            # `data_type` is the file's own kind and is never inherited (#437); the
-            # others are properties of the data the index points into, so they are.
-            if fld == DATA_TYPE:
-                classifications[fld] = index_data_type_entry(r["index_extension"])
-                continue
+        # `data_type` is the file's own kind and is never inherited (#437); the
+        # dimensions `IndexActivity` passes describe the data the index points into.
+        classifications = {DATA_TYPE: index_data_type_entry(r["index_extension"])}
+        for fld in INHERITED_FIELDS:
             label = r.get(fld)
             evidence = inherited_evidence(fld, label, parent, r["parent_row_found"])
             classifications[fld] = build_field_entry(label, evidence=evidence, detail=r["detail"].get(fld))
+        classifications = every_field(classifications)
         # The index file's own identity, not the parent's (#433): this row resolves to
         # this file's bytes. The parent is the edge's grounding, and nothing else.
         standard_results.append(
             OutputRecord.from_record(
                 r["record"],
                 classifications,
-                derived_from=[edges.name_edge(code_rules.INDEX_BY_NAME, r["parent_record"], key)],
+                generated_by=edges.generated_by(code_rules.INDEX_BY_NAME, r["parent_record"], key),
             ).to_dict()
         )
 

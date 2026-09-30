@@ -128,7 +128,10 @@ RECORDS = [
                 status="not_classified", evidence=[claim(code_rules.FETCH_FAILED.id, status="not_classified")]
             ),
         },
-        "derived_from": [{"relation": "index_of", "rule_id": code_rules.INDEX_BY_NAME.id}],
+        "generated_by": {
+            "activity": "IndexActivity",
+            "inputs": [{"named_by": [{"rule_id": code_rules.INDEX_BY_NAME.id}]}],
+        },
     },
 ]
 
@@ -262,7 +265,7 @@ def test_edge_rules_are_listed_and_counted_by_the_edges_they_stated(data):
 
 
 def test_a_run_from_before_edge_rules_is_still_read(tmp_path):
-    """A pre-#356 record carries one edge object and no `rule_id`: read, and counted for no edge rule."""
+    """A pre-#580 record carries `derived_from`, not `generated_by`: read, and counted for no edge rule."""
     legacy = {**RECORDS[0], "derived_from": {"relation": "index_of", "parent_file": "s.bam", "parent_md5sum": None}}
     run_dir = reconciled_run(tmp_path, [legacy])
     data = grr.build(*rule_files(tmp_path), iter_reconciled_records(run_dir), run_dir)

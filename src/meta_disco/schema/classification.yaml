@@ -25,6 +25,7 @@ prefixes:
   EFO: http://www.ebi.ac.uk/efo/EFO_
   OBI: http://purl.obolibrary.org/obo/OBI_
   EDAM: http://edamontology.org/
+  TerraCore: "https://datamodel.terra.bio/TerraCore#"
   MODAL: "https://datamodel.terra.bio/BioCoreTerms#"
   insdc.gca: "https://identifiers.org/insdc.gca:"
 default_prefix: anvil
@@ -42,8 +43,8 @@ classes:
     tree_root: true
     description: >-
       One classified file. `classifications` carries the file's identity (the
-      six dimension fields — what it is); derived_from lists typed edges to the
-      files it was derived from (where it came from; ADR-0002). Matches the
+      six dimension fields — what it is); generated_by names the step that made it
+      and the files it used (where it came from; ADR-0002). Matches the
       pipeline output shape.
     slots:
       - md5sum
@@ -55,7 +56,7 @@ classes:
       - drs_uri
       - dataset_title
       - classifications
-      - derived_from
+      - generated_by
 
   Classifications:
     description: >-
@@ -707,36 +708,130 @@ classes:
       status:
         required: false
 
-  DerivationEdge:
+  GeneratedBy:
     description: >-
-      Typed link from a derived file to one file it was derived from (ADR-0002). The
-      verb is `relation`; `parent_file` names the parent as the source wrote it, and
-      `parent_key` is the parent's record key where it resolves to exactly one record of
-      the child's dataset. An edge whose `parent_key` is set is `internal`, one without
-      it `external`; the scope is worked out from `parent_key`, not stored (decision 2).
-      `source_type` and `rule_id` say which source stated the edge, so two edges one
-      source kind states stay apart (decision 6). An edge exists only where a source
-      names a parent.
+      The one step that made a file and the inputs it used (PROV's `wasGeneratedBy` and
+      `used`, ADR-0002 decision 3, #580). `named_by` lists every source that named the
+      step; each input lists its own.
     slots:
-      - relation
+      - activity
+    attributes:
+      named_by:
+        range: Attribution
+        multivalued: true
+        inlined_as_list: true
+        required: true
+      inputs:
+        range: ActivityInput
+        multivalued: true
+        inlined_as_list: true
+        required: true
+        description: The inputs the step used, each in one of the roles its activity declares.
+
+  ActivityInput:
+    description: >-
+      One input a step used, in one role (PROV's `hadRole`). With `parent_key` it is
+      `internal`, without it `external` (ADR-0002 decision 2).
+    slots:
       - parent_file
       - parent_key
       - parent_kind
-      - source_type
-      - rule_id
+    attributes:
+      role:
+        required: true
+        description: One of the roles its activity declares in `rules/activities.yaml`.
+      named_by:
+        range: Attribution
+        multivalued: true
+        inlined_as_list: true
+        required: true
     slot_usage:
       parent_file:
         required: true
+
+  Attribution:
+    description: >-
+      One source that named a step or an input (ADR-0002 decision 6): sources that agree
+      are each listed.
+    slots:
+      - source_type
+      - rule_id
+      - activity_id
+      - source
+    slot_usage:
       source_type:
         required: true
-        description: >-
-          Kind of source that stated the edge: `filename_rule` for one inference
-          reads from the child's name.
       rule_id:
         required: true
         description: >-
-          The edge rule that stated the edge (`code_rules.EDGE_RULES`), naming the
-          convention or field it reads.
+          The rule or translation row that turned what the source says into this step or
+          input (`code_rules.EDGE_RULES` for inference's).
+
+  ActivityDeclarations:
+    description: >-
+      The shape of `rules/activities.yaml` (#580): per activity, its output and its input
+      roles. Read through the generated model by `meta_disco.activities`.
+    attributes:
+      activities:
+        range: ActivityDeclaration
+        multivalued: true
+        inlined_as_list: true
+        required: true
+
+  ActivityDeclaration:
+    description: One kind of step, its output, and its inputs by role.
+    attributes:
+      term:
+        range: activity_type_enum
+        required: true
+      output:
+        range: ActivityEnd
+        inlined: true
+        required: true
+        description: What the step makes.
+      inputs:
+        range: InputRole
+        multivalued: true
+        inlined_as_list: true
+        required: true
+        description: The step's input roles.
+      reason:
+        required: true
+        description: Why the step passes what it passes.
+
+  ActivityEnd:
+    description: An input or output of a step, a file or an identifier, and a file's kinds.
+    attributes:
+      form:
+        range: activity_form_enum
+        multivalued: true
+        required: true
+      kind:
+        range: data_type_enum
+        multivalued: true
+        description: >-
+          The `data_type` terms a file here may carry, dotted children included. Absent:
+          any kind.
+
+  InputRole:
+    is_a: ActivityEnd
+    description: One input role a kind of step declares, in `rules/activities.yaml`.
+    attributes:
+      role:
+        required: true
+        description: The part the input plays (`reads`, `reference`, `indexed`).
+      required:
+        range: boolean
+        required: true
+        description: Whether the step always has this input.
+      many:
+        range: boolean
+        required: true
+        description: Whether an output has several inputs in this role.
+      passes:
+        range: passed_dimension_enum
+        multivalued: true
+        description: "What the output takes from an input in this role. Absent: nothing."
 
 # =============================================================================
 # SLOTS
@@ -795,13 +890,12 @@ slots:
       The sequencing instrument's model, refining `platform` (#532): `Illumina NovaSeq
       6000` where `platform` says `ILLUMINA`. Not applicable wherever `platform` is not.
 
-  derived_from:
+  generated_by:
     description: >-
-      The file's derivation edges, one per parent per source that states it (ADR-0002
-      decision 3); null where no source names a parent.
-    range: DerivationEdge
-    multivalued: true
-    inlined_as_list: true
+      The step that made the file and the inputs it used, by role (ADR-0002 decisions 3,
+      6, #580); null where no step is recorded.
+    range: GeneratedBy
+    inlined: true
 
   # --- Classification sub-fields ---
   value:
@@ -913,16 +1007,21 @@ slots:
       or partial one. Absent whenever `join_key` is.
     range: boolean
 
-  # --- DerivationEdge sub-fields ---
-  relation:
-    description: The derivation verb.
-    range: relation_enum
+  # --- GeneratedBy and ActivityInput sub-fields ---
+  activity:
+    description: >-
+      The kind of step that made the file (`activity_type_enum`); what passes from each
+      input role is declared per term in `rules/activities.yaml`.
+    range: activity_type_enum
     required: true
+  activity_id:
+    description: >-
+      The source's own id for the step (`anvil_activity.activity_id`), where it gives one.
   parent_file:
     description: >-
-      The parent file's name: the matched record's own spelling where the edge resolves
-      (a file-name edge matches case-insensitively, so it may differ in case from the name
-      worked out from the child), otherwise as the source that states the edge wrote it.
+      The input file's name: the matched record's own spelling where the input resolves
+      (a file-name rule matches case-insensitively, so it may differ in case from the name
+      worked out from the child), otherwise as the source that names the input wrote it.
   parent_key:
     description: >-
       The parent's record key (`pipeline.SOURCE_RECORD_KEYS`: AnVIL's `file_id`, HPRC's
@@ -1375,16 +1474,104 @@ enums:
       not_classified:
         description: The slot settled `not_classified`.
 
-  relation_enum:
+  activity_type_enum:
     description: >-
-      Derivation verbs we can currently detect. subset_of / merged_from /
-      member_of are intentionally held back until detectable (data-model doc 8d).
+      The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its
+      released LinkML schema spells them, plus four of our own, each under the FSS term it
+      narrows. `meaning` is TerraCore's class,
+      else EDAM's operation for the same step; a near EDAM operation is a close mapping.
+      What each passes is in `rules/activities.yaml`.
     permissible_values:
-      index_of:
-      checksum_of:
-      summarizes:
-      lifted_over_from:
-      derived_from:   # generic fallback: related, verb unknown
+      Activity:
+        description: A step whose kind the source does not state; nothing passes across it.
+        meaning: TerraCore:Activity
+      SampleCollectionActivity:
+        description: >-
+          Taking a sample. Neither TerraCore nor EDAM has this class, so no id is recorded.
+        is_a: Activity
+      SampleTreatmentActivity:
+        is_a: Activity
+        meaning: TerraCore:SampleTreatmentActivity
+      SequenceActivity:
+        description: >-
+          Sequencing a sample into reads. TerraCore names the same class `SequencingActivity`.
+        is_a: Activity
+        meaning: TerraCore:SequencingActivity
+      AlignmentActivity:
+        is_a: Activity
+        meaning: TerraCore:AlignmentActivity
+        close_mappings:
+          - EDAM:operation_3198
+      VariantCallActivity:
+        is_a: Activity
+        meaning: TerraCore:VariantCallActivity
+        close_mappings:
+          - EDAM:operation_3227
+      ExpressionActivity:
+        description: >-
+          Quantifying expression. EDAM's RNA-Seq quantification is one kind of it, not the
+          same step.
+        is_a: Activity
+        close_mappings:
+          - EDAM:operation_3800
+      AnalysisActivity:
+        is_a: Activity
+        meaning: TerraCore:AnalysisActivity
+      ImageActivity:
+        description: >-
+          Making an image. Neither TerraCore nor EDAM has this class, so no id is recorded.
+        is_a: Activity
+      IndexActivity:
+        is_a: Activity
+        meaning: EDAM:operation_0227
+      ChecksumActivity:
+        description: >-
+          Computing a file's checksum. EDAM's only checksum operation is a molecular
+          sequence's (operation_3348), not a file's, so no id is recorded.
+        is_a: Activity
+      QualityControlActivity:
+        description: >-
+          A report on another file's content: samtools stats, mosdepth coverage. Our own
+          term, under FSS's AnalysisActivity, which is too broad to say what passes.
+        is_a: AnalysisActivity
+        close_mappings:
+          - EDAM:operation_3218
+      LiftoverActivity:
+        description: >-
+          Moving a file's coordinates to another reference. Our own term; neither
+          TerraCore nor EDAM has one.
+        is_a: AnalysisActivity
+      MergeActivity:
+        description: >-
+          Joining several files of one kind into one: window VCFs into a chromosome VCF,
+          FASTQs into one. Our own term; EDAM's Sequence merging (operation_0232) merges
+          sequences, not files.
+        is_a: Activity
+      AssemblyActivity:
+        description: >-
+          Assembling reads into sequences. Not an FSS term; EDAM's Sequence assembly is
+          the same step.
+        is_a: Activity
+        meaning: EDAM:operation_0310
+
+  activity_form_enum:
+    description: Whether an activity's input or output is a file we hold or an identifier (#580).
+    permissible_values:
+      file:
+      identifier:
+        description: A sample or donor identifier (ADR-0002 decision 1), which has no record.
+
+  passed_dimension_enum:
+    description: >-
+      The dimensions an activity's output can take from an input (#580): the six
+      classification dimensions but `data_type`, which names a file's own kind and never
+      passes (ADR-0002 decision 8: a VCF is not an alignment).
+    permissible_values:
+      data_modality:
+      platform:
+      reference_assembly:
+      assay_type:
+      instrument_model:
 
   parent_kind_enum:
     description: The kind of file a derivation edge points at.

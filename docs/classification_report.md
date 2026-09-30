@@ -185,7 +185,7 @@ in full:
   "file_id": "g-file-c",
   "drs_uri": "drs://golden/v2_g-object-c",
   "dataset_title": "GOLDEN_FIXTURE",
-  "derived_from": null,
+  "generated_by": null,
   "classifications": {
     "data_modality": {
       "value": "genomic",

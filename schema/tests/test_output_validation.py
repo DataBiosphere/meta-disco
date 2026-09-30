@@ -13,7 +13,7 @@ the reconcile stage writes them (#432), so a reconciled record is held to the sa
 ``ClassifyPipeline`` writes; ``standalone_output.json`` carries the four standalone
 ones, which until #465 reached no schema validation at all. Between them they also put
 the block only two producers emit in front of the schema as records they wrote:
-``derived_from`` (#450, #356), whose class was otherwise exercised only by dicts typed
+``generated_by`` (#450, #356, #580), whose class was otherwise exercised only by dicts typed
 by hand below. The root suite owns what this side cannot
 check: that the two fixtures' producer keys together equal ``producers.PRODUCERS``, and
 that each fixture is what a fresh run produces.
@@ -181,31 +181,52 @@ def test_output_entries_validate_against_schema(validator):
     assert not failures, "Producer output violates the classification schema:\n  " + "\n  ".join(failures)
 
 
-_EDGE = {
-    "relation": "index_of",
+_NAMED_BY = [{"source_type": "filename_rule", "rule_id": "index_by_name"}]
+_INPUT = {
+    "role": "indexed",
     "parent_file": "s.bam",
     "parent_key": "f-bam",
     "parent_kind": "alignment",
-    "source_type": "filename_rule",
-    "rule_id": "index_by_name",
+    "named_by": _NAMED_BY,
 }
+_STEP = {"activity": "IndexActivity", "named_by": _NAMED_BY}
 
 
-def test_a_populated_derivation_edge_validates(validator):
-    """An internal edge (its parent resolved, so `parent_key` is set) and an external one
-    (named, not resolved, so no `parent_key`), as a list (ADR-0002 decisions 2, 3).
+def _generated_by(*inputs, **step):
+    return {**_STEP, **step, "inputs": list(inputs)}
+
+
+def test_a_populated_generated_by_validates(validator):
+    """An internal input (resolved, so `parent_key` is set), an external one (named, not
+    resolved), two inputs, and a source's own step id (ADR-0002 decisions 2, 3, #580).
 
     The standalone fixture carries the internal one off the producers themselves (#465).
-    Nothing emits an external edge yet (#577 will); this case says the schema takes one.
+    Nothing emits an external input yet (#577 will); this case says the schema takes one.
     """
     _, record = next(_records_in(_GOLDEN))
-    external = {k: v for k, v in _EDGE.items() if k != "parent_key"}
-
+    external = {k: v for k, v in _INPUT.items() if k != "parent_key"}
+    cases = (
+        ("internal", _generated_by(_INPUT)),
+        ("external", _generated_by(external)),
+        ("two", _generated_by(_INPUT, external)),
+        ("two sources", _generated_by(_INPUT, named_by=[*_NAMED_BY, {**_NAMED_BY[0], "activity_id": "776a27ee"}])),
+    )
     failures = []
-    for label, edges in (("internal", [_EDGE]), ("external", [external]), ("two", [_EDGE, external])):
-        for result in validator.validate({**record, "derived_from": edges}, target_class="ClassificationRecord").results:
+    for label, step in cases:
+        for result in validator.validate({**record, "generated_by": step}, target_class="ClassificationRecord").results:
             failures.append(f"{label}: {result.severity}: {result.message}")
-    assert not failures, "A derivation edge violates the record schema:\n  " + "\n  ".join(failures)
+    assert not failures, "A generated_by violates the record schema:\n  " + "\n  ".join(failures)
+
+
+def test_a_step_naming_no_activity_type_is_refused(validator):
+    """`activity` is a term of `activity_type_enum` (#580); the verbs it replaced are not."""
+    _, record = next(_records_in(_GOLDEN))
+    report = validator.validate(
+        {**record, "generated_by": _generated_by(_INPUT, activity="index_of")}, target_class="ClassificationRecord"
+    )
+    assert any("index_of" in result.message for result in report.results), (
+        f"expected a failure citing the retired verb, got: {[r.message for r in report.results]}"
+    )
 
 
 def test_an_inferred_value_outside_its_dimensions_enum_is_refused(validator):
@@ -220,13 +241,20 @@ def test_an_inferred_value_outside_its_dimensions_enum_is_refused(validator):
     assert report.results, "an inferred data_modality of PACBIO passed the schema"
 
 
-@pytest.mark.parametrize("member", ["relation", "parent_file", "source_type", "rule_id"])
-def test_a_derivation_edge_missing_a_required_member_is_refused(validator, member):
-    """An edge names its verb, its parent and the source that stated it (ADR-0002): an edge
-    exists only where a source names a parent (decision 2), so there is no half-edge."""
+@pytest.mark.parametrize(
+    "member, step",
+    [
+        *((m, {k: v for k, v in _STEP.items() if k != m} | {"inputs": [_INPUT]}) for m in _STEP),
+        ("inputs", dict(_STEP)),
+        *((m, _generated_by({k: v for k, v in _INPUT.items() if k != m})) for m in ("role", "parent_file", "named_by")),
+        *((m, _generated_by(_INPUT, named_by=[{k: v for k, v in _NAMED_BY[0].items() if k != m}])) for m in _NAMED_BY[0]),
+    ],
+)
+def test_a_generated_by_missing_a_required_member_is_refused(validator, member, step):
+    """A step names its activity and its inputs, and each input its role, its parent and
+    the source that named it (ADR-0002 decision 2, #580): there is no half-step."""
     _, record = next(_records_in(_GOLDEN))
-    edge = {k: v for k, v in _EDGE.items() if k != member}
-    report = validator.validate({**record, "derived_from": [edge]}, target_class="ClassificationRecord")
+    report = validator.validate({**record, "generated_by": step}, target_class="ClassificationRecord")
     # Assert it fails *because of* the missing member, as this file's other negative cases
     # do. The base record is a real fixture row, so a regression elsewhere in it would
     # invalidate the record itself and leave a bare `assert report.results` green while
@@ -239,7 +267,7 @@ def test_a_derivation_edge_missing_a_required_member_is_refused(validator, membe
 def test_output_records_validate_against_schema(validator):
     # Whole-record gate (#134): every record from both fixtures — all eleven producers
     # (#465) — validates against ClassificationRecord, exercising the `classifications`
-    # container end to end, and with it the `derived_from` edges those records carry.
+    # container end to end, and with it the `generated_by` those records carry.
     failures = []
     checked = 0
     for label, record in _fixture_records():
@@ -255,16 +283,17 @@ def test_output_records_validate_against_schema(validator):
 # What the whole-record gate above actually reaches depends on what the fixtures carry,
 # and they are regenerated from inputs. This says what those inputs have to keep
 # producing: without it a regeneration from parent-free inputs would quietly take
-# `DerivationEdge` back out of the gate — the state #465 found and closed.
+# `GeneratedBy` back out of the gate — the state #465 found and closed.
 
 
-def test_a_producers_derivation_edge_reaches_the_gate():
-    """Some fixture record carries each edge a producer states from a name: `index_of`
-    (the index producer) and `checksum_of` (the catch-all), each with its `parent_key`."""
-    edges = [edge for _, record in _fixture_records() for edge in record.get("derived_from") or []]
-    assert edges, f"no fixture record carries a derivation edge; regenerate with `{_REGEN}`"
-    assert {e["relation"] for e in edges if e.get("parent_key")} >= {"index_of", "checksum_of"}, (
-        "no fixture record carries an index_of and a checksum_of edge grounded by parent_key"
+def test_a_producers_generated_by_reaches_the_gate():
+    """Some fixture record carries each step a producer states from a name: `IndexActivity`
+    (the index producer) and `ChecksumActivity` (the catch-all), each input with its `parent_key`."""
+    steps = [record["generated_by"] for _, record in _fixture_records() if record.get("generated_by")]
+    assert steps, f"no fixture record carries a generated_by; regenerate with `{_REGEN}`"
+    grounded = {s["activity"] for s in steps if all(i.get("parent_key") for i in s["inputs"])}
+    assert grounded >= {"IndexActivity", "ChecksumActivity"}, (
+        "no fixture record carries an IndexActivity and a ChecksumActivity grounded by parent_key"
     )
 
 

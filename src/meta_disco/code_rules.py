@@ -32,8 +32,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from . import activities
 from .models import (
-    CLASSIFICATION_FIELDS,
     SOURCE_CONTENT_READ,
     SOURCE_CONTIG_DETECTION,
     SOURCE_DERIVATION_INHERITANCE,
@@ -97,14 +97,16 @@ class CodeMarker:
 class EdgeRule:
     """A rule that states a derivation edge from the child's own name (ADR-0002).
 
-    ``relation`` is the verb it states, a term of ``relation_enum``. ``reads`` says how the
+    ``activity`` and ``role`` are the step it states and the parent's part in it (#580).
+    ``reads`` says how the
     parent's name is worked out from the child's, and ``rationale`` why that names the
     parent. Its ``source_type`` is ``filename_rule``: both edge rules read the name.
     """
 
     id: str
     module: str
-    relation: str
+    activity: str
+    role: str
     source_type: str
     reads: str
     rationale: str
@@ -272,10 +274,10 @@ INHERITED_FROM_PARENT = CodeRule(
     basis=BASIS_PARENT_FILE,
     source_type=SOURCE_DERIVATION_INHERITANCE,
     reads="the matched parent file's resolved classification",
-    sets=tuple(fld for fld in CLASSIFICATION_FIELDS if fld != "data_type"),
+    sets=activities.passes(activities.INDEXING),
     rationale=(
         "An index describes the data it points into, so it takes its parent's answer for "
-        "every dimension but data_type, including a status and a conflict. It is copied, "
+        "each dimension IndexActivity passes (rules/activities.yaml), including a status and a conflict. It is copied, "
         "not weighed in resolution; folding it into make_claim is #413."
     ),
 )
@@ -298,7 +300,8 @@ CODE_RULES = (
 INDEX_BY_NAME = EdgeRule(
     id="index_by_name",
     module=INDEX_PRODUCER,
-    relation="index_of",
+    activity=activities.INDEXING,
+    role="indexed",
     source_type=SOURCE_FILENAME_RULE,
     reads=(
         "the index file's name: the name without its index extension (sample.bam.bai -> "
@@ -314,7 +317,8 @@ INDEX_BY_NAME = EdgeRule(
 CHECKSUM_BY_NAME = EdgeRule(
     id="checksum_by_name",
     module=EDGES,
-    relation="checksum_of",
+    activity=activities.CHECKSUM,
+    role="checked",
     source_type=SOURCE_FILENAME_RULE,
     reads=(
         "the name of a file whose extension EXTENSION_MAP calls a checksum, less that "
