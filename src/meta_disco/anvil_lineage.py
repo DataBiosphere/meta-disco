@@ -32,16 +32,15 @@ in the slot root's layout: ``anvil/<catalog>/<dataset>/<generation>/<table>.ndjs
 from __future__ import annotations
 
 import json
-import shutil
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .anvil_evidence import chosen_datasets, verbatim_manifest
 from .azul_manifest import (
     ANVIL_FILE_HANDLE_COLUMNS,
-    FORMAT_COMPACT,
     FORMAT_VERBATIM,
     REPOSITORY,
     VERBATIM_FILE,
@@ -63,7 +62,7 @@ from .schema.classification_model import (
     LineageParentKeyEnum,
     LineageRow,
 )
-from .source_evidence import evidence_file_path, generation_dir, new_generation, staging_dir
+from .source_evidence import evidence_file_path, generation_dir, new_generation, staged_generation
 
 
 @dataclass(frozen=True)
@@ -74,8 +73,12 @@ class DatasetFiles:
     file_ids: frozenset[str]
 
     def has(self, key: str, value: str) -> bool:
-        """Whether ``value``, a ``key`` (``drs_uri`` or ``file_id``), is one of these files."""
-        return value in (self.drs_uris if key == JOIN_KEY_DRS_URI else self.file_ids)
+        """Whether ``value``, a ``key`` (``drs_uri`` or ``file_id``), is one of these files; any other key raises."""
+        if key == JOIN_KEY_DRS_URI:
+            return value in self.drs_uris
+        if key == JOIN_KEY_FILE_ID:
+            return value in self.file_ids
+        raise ValueError(f"{key!r} names no file of the dataset")
 
 
 @dataclass
@@ -114,22 +117,17 @@ class DatasetLineage:
     tables: list[TableLineage]
 
 
-def chosen_datasets(lineage_map: LineageMap, datasets: list[str] | None) -> list[str]:
-    """The map's datasets, or ``datasets`` each once in order — not checked against the map."""
-    return lineage_map.datasets() if datasets is None else list(dict.fromkeys(datasets))
-
-
 # --- reading a cell ------------------------------------------------------------
 
 
-def cell_values(value: Any, key: str) -> list[str] | None:
-    """The values one cell holds as ``key``: None when it holds nothing, ``[]`` when it holds something else.
+def cell_values(value: Any, locator: bool) -> list[str] | None:
+    """The values one cell holds: None when it holds nothing, ``[]`` when it holds something else.
 
-    A locator (``drs_uri``) is a ``drs://`` URI or a list of them, per
-    ``azul_manifest.link_handles``. Any other key is an identifier: a non-empty string
-    or a list of them. Null, the empty string and the empty list hold nothing.
+    A ``locator`` cell holds a ``drs://`` URI or a list of them, per
+    ``azul_manifest.link_handles``; any other holds identifiers, a non-empty string or a
+    list of them. Null, the empty string and the empty list hold nothing.
     """
-    if key == JOIN_KEY_DRS_URI:
+    if locator:
         return link_handles(value)
     if value is None or value == "" or value == []:
         return None
@@ -163,72 +161,69 @@ def check(lineage_map: LineageMap, manifest_root: Path, catalog: str, datasets: 
     named = sidecar_datasets(manifest_root, catalog)
     known = lineage_map.datasets()
     problems: list[str] = []
-    for dataset in chosen_datasets(lineage_map, datasets):
+    for dataset in chosen_datasets(known, datasets):
         if dataset not in known:
             problems.append(f"{dataset}: not in the lineage map")
             continue
-        if dataset not in named:
-            problems.append(f"{dataset}: not a dataset the {catalog} sidecar names")
+        path = verbatim_manifest(manifest_root, catalog, dataset, named)
+        if isinstance(path, str):
+            problems.append(path)
             continue
-        path = manifest_path(manifest_root, catalog, dataset, FORMAT_VERBATIM)
-        if not path.is_file():
-            compact = manifest_path(manifest_root, catalog, dataset, FORMAT_COMPACT)
-            problems.append(
-                f"{dataset}: only the compact manifest is on disk ({compact}); no verbatim manifest at {path}"
-                if compact.is_file()
-                else f"{dataset}: no verbatim manifest at {path}"
-            )
-            continue
-        problems += _check_dataset(lineage_map, dataset, path)
+        problems += _check_dataset(lineage_map.dataset_links(dataset), dataset, path)
     return problems
 
 
-def _check_dataset(lineage_map: LineageMap, dataset: str, path: Path) -> list[str]:
-    links = [link for table in lineage_map.tables(dataset) for link in lineage_map.table_links(dataset, table)]
-    # (table, column) -> what the map says it holds: a key, or "identifier" for a
-    # lookup's source column, "cell" for a step's cell.
-    wanted: dict[tuple[str, str], str] = {}
+# What the map says a column holds, for the check: a locator, an identifier, or a
+# step's cell (whose value is transcribed whatever it is, so it is checked for presence only).
+_LOCATOR, _IDENTIFIER, _CELL = "locator", "identifier", "cell"
+
+
+def _check_dataset(links: list[Link], dataset: str, path: Path) -> list[str]:
+    """``check``'s per-dataset half, in one pass over the manifest (``anvil_file`` rows included)."""
+    wanted: dict[str, dict[str, str]] = defaultdict(dict)
     for link in links:
-        wanted[(link.table, link.child_column)] = link.child_key
-        wanted[(link.table, link.parent_column)] = link.parent_key or "identifier"
+        wanted[link.table][link.child_column] = _LOCATOR if link.child_key == JOIN_KEY_DRS_URI else _IDENTIFIER
+        wanted[link.table][link.parent_column] = _LOCATOR if link.parent_key == JOIN_KEY_DRS_URI else _IDENTIFIER
         for cell in (link.raw_activity_cell, link.activity_id_cell):
             if cell is not None:
-                wanted[(link.table, cell)] = "cell"
+                wanted[link.table][cell] = _CELL
         if link.lookup is not None:
-            wanted[(link.lookup.table, link.lookup.identifier_column)] = "identifier"
-            wanted[(link.lookup.table, link.lookup.locator_column)] = JOIN_KEY_DRS_URI
-    child_file_id_columns = {(link.table, link.child_column) for link in links if link.child_key == JOIN_KEY_FILE_ID}
-    tables = {table for table, _ in wanted}
-    files = dataset_files(path)
+            wanted[link.lookup.table][link.lookup.identifier_column] = _IDENTIFIER
+            wanted[link.lookup.table][link.lookup.locator_column] = _LOCATOR
+    child_file_ids = {(link.table, link.child_column) for link in links if link.child_key == JOIN_KEY_FILE_ID}
+    file_ids: set[str] = set()
+    child_values: dict[tuple[str, str], set[str]] = defaultdict(set)
     rows: Counter = Counter()
-    seen: dict[str, set[str]] = {table: set() for table in tables}
+    seen: dict[str, set[str]] = defaultdict(set)
     wrong: dict[tuple[str, str], Any] = {}
-    ours: set[tuple[str, str]] = set()
-    for table, row in iter_verbatim_entities(path, tables):
+    for table, row in iter_verbatim_entities(path, {*wanted, VERBATIM_FILE}):
+        if table == VERBATIM_FILE:
+            if isinstance(row.get("file_id"), str):
+                file_ids.add(row["file_id"])
+            if table not in wanted:
+                continue
         rows[table] += 1
         seen[table].update(row)
-        for (t, column), holds in wanted.items():
-            if t != table or holds == "cell" or (t, column) in wrong:
+        for column, holds in wanted[table].items():
+            if holds == _CELL or (table, column) in wrong:
                 continue
-            values = cell_values(row.get(column), JOIN_KEY_DRS_URI if holds == JOIN_KEY_DRS_URI else JOIN_KEY_FILE_ID)
+            values = cell_values(row.get(column), holds == _LOCATOR)
             if values == []:
-                wrong[(t, column)] = row[column]
-            elif values and (t, column) in child_file_id_columns and any(v in files.file_ids for v in values):
-                ours.add((t, column))
+                wrong[(table, column)] = row[column]
+            elif values and (table, column) in child_file_ids:
+                child_values[(table, column)].update(values)
     problems = []
-    for table in sorted(tables):
+    for table in sorted(wanted):
         if not rows[table]:
             problems.append(f"{dataset}/{table}: no row of this type in the manifest")
             continue
-        for (t, column), holds in sorted(wanted.items()):
-            if t != table:
-                continue
+        for column, holds in sorted(wanted[table].items()):
             if column not in seen[table]:
                 problems.append(f"{dataset}/{table}/{column}: no row carries this column")
-            elif (t, column) in wrong:
-                kind = "a DRS URI or a list of them" if holds == JOIN_KEY_DRS_URI else "a string or a list of them"
-                problems.append(f"{dataset}/{table}/{column}: holds {wrong[(t, column)]!r}, not {kind}")
-            elif (t, column) in child_file_id_columns and (t, column) not in ours:
+            elif (table, column) in wrong:
+                kind = "a DRS URI or a list of them" if holds == _LOCATOR else "a string or a list of them"
+                problems.append(f"{dataset}/{table}/{column}: holds {wrong[(table, column)]!r}, not {kind}")
+            elif (table, column) in child_file_ids and not child_values[(table, column)] & file_ids:
                 problems.append(f"{dataset}/{table}/{column}: holds no file_id of this dataset's anvil_file rows")
     return problems
 
@@ -273,7 +268,7 @@ def import_all(
     Raises before writing anything if a named dataset is not in the map.
     """
     known = lineage_map.datasets()
-    chosen = chosen_datasets(lineage_map, datasets)
+    chosen = chosen_datasets(known, datasets)
     unknown = [d for d in chosen if d not in known]
     if unknown:
         raise ValueError(f"not in the lineage map: {unknown}")
@@ -303,11 +298,6 @@ def import_dataset(
     """
     stamp = generation if generation is not None else new_generation()
     directory = generation_dir(lineage_root, REPOSITORY, catalog, dataset, stamp)
-    if directory.exists():
-        raise FileExistsError(f"{directory}: generation already written — an import never overwrites one")
-    staging = staging_dir(directory)
-    if staging.exists():
-        raise FileExistsError(f"{staging}: an unfinished import; remove it by hand before importing again")
     path = manifest_path(manifest_root, catalog, dataset, FORMAT_VERBATIM)
     fetched_at = sidecar_requested_at(manifest_root, catalog, dataset, FORMAT_VERBATIM)
     if fetched_at is None:
@@ -315,13 +305,12 @@ def import_dataset(
     files = dataset_files(path)
     lookups = {
         link.lookup: lookup_locators(path, link.lookup)
-        for table in lineage_map.tables(dataset)
-        for link in lineage_map.table_links(dataset, table)
+        for link in lineage_map.dataset_links(dataset)
         if link.lookup is not None
     }
     target = EvidenceTarget(system=REPOSITORY, dataset=dataset, version=catalog)
     tables = []
-    try:
+    with staged_generation(directory) as staging:
         for table in lineage_map.tables(dataset):
             links = lineage_map.table_links(dataset, table)
             child_key = links[0].child_key
@@ -343,10 +332,6 @@ def import_dataset(
                     f"files, or no row named a parent; the map disagrees with {catalog} here"
                 )
             tables.append(result)
-    except BaseException:
-        shutil.rmtree(staging, ignore_errors=True)
-        raise
-    staging.rename(directory)
     return DatasetLineage(dataset=dataset, generation=stamp, directory=directory, tables=tables)
 
 
@@ -365,10 +350,10 @@ def _table_rows(
         read: dict[str, list[str]] = {}
         outside: set[tuple[str, str]] = set()
         for link in links:
-            children = _values(row, link.child_column, link.child_key, read, result)
+            children = _values(row, link.child_column, link.child_key == JOIN_KEY_DRS_URI, read, result)
             if not children:
                 continue
-            parents = _values(row, link.parent_column, link.parent_key or JOIN_KEY_FILE_ID, read, result)
+            parents = _values(row, link.parent_column, link.parent_key == JOIN_KEY_DRS_URI, read, result)
             if not parents:
                 continue
             raw_activity = None if link.raw_activity_cell is None else _raw(row.get(link.raw_activity_cell))
@@ -384,10 +369,10 @@ def _table_rows(
                     yield _row(link, child, parent, raw_activity, activity_id, files, lookups, result)
 
 
-def _values(row: dict, column: str, key: str, read: dict[str, list[str]], result: TableLineage) -> list[str]:
-    """``column``'s values as ``key`` (``cell_values``), counting an empty or wrong cell once per row."""
+def _values(row: dict, column: str, locator: bool, read: dict[str, list[str]], result: TableLineage) -> list[str]:
+    """``column``'s values (``cell_values``), counting an empty or wrong cell once per row."""
     if column not in read:
-        values = cell_values(row.get(column), key)
+        values = cell_values(row.get(column), locator)
         if values is None:
             result.no_value[column] += 1
         elif not values:

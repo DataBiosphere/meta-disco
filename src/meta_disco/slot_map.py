@@ -216,24 +216,31 @@ def published_slot_map_resource():
     return files(f"{__package__}.sources") / "anvil_published_slot_map.yaml"
 
 
-class _UniqueKeyLoader(yaml.SafeLoader):
+def unique_key_loader(label: str, hint: str = "") -> type[yaml.SafeLoader]:
     """A YAML loader that refuses a duplicate mapping key instead of keeping the last.
 
-    PyYAML's default silently takes the later value, so a column listed twice under one
-    table would drop one of them without a word. Refused naming the key and the line.
+    PyYAML's default silently takes the later value, so an entry listed twice would drop
+    one of them without a word. Refused naming ``label``, the key and both lines, with
+    ``hint`` after. Shared by the slot map and the lineage map (#583).
     """
 
-    def construct_mapping(self, node, deep=False):
-        seen: dict = {}
-        for key_node, _value_node in node.value:
-            key = self.construct_object(key_node, deep=deep)
-            if key in seen:
-                raise ValueError(
-                    f"slot map line {key_node.start_mark.line + 1}: duplicate key {key!r} "
-                    f"(first at line {seen[key] + 1}) — one entry per column, table and dataset"
-                )
-            seen[key] = key_node.start_mark.line
-        return super().construct_mapping(node, deep=deep)
+    class UniqueKeyLoader(yaml.SafeLoader):
+        def construct_mapping(self, node, deep=False):
+            seen: dict = {}
+            for key_node, _value_node in node.value:
+                key = self.construct_object(key_node, deep=deep)
+                if key in seen:
+                    raise ValueError(
+                        f"{label} line {key_node.start_mark.line + 1}: duplicate key {key!r} "
+                        f"(first at line {seen[key] + 1}){hint}"
+                    )
+                seen[key] = key_node.start_mark.line
+            return super().construct_mapping(node, deep=deep)
+
+    return UniqueKeyLoader
+
+
+_UniqueKeyLoader = unique_key_loader(_WHERE, " — one entry per column, table and dataset")
 
 
 def load_slot_map(source: Readable | None = None) -> SlotMap:

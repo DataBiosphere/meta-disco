@@ -19,7 +19,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from meta_disco.anvil_lineage import check, chosen_datasets, describe, import_all
+from meta_disco.anvil_evidence import chosen_datasets
+from meta_disco.anvil_lineage import check, describe, import_all
 from meta_disco.deployments import PROD
 from meta_disco.lineage_evidence import DEFAULT_LINEAGE_EVIDENCE_ROOT
 from meta_disco.lineage_map import load_lineage_map
@@ -55,7 +56,7 @@ def main() -> int:
         for line in problems:
             print(f"  {line}", file=sys.stderr)
         return 1
-    checked = chosen_datasets(lineage_map, args.dataset)
+    checked = chosen_datasets(lineage_map.datasets(), args.dataset)
     links = sum(1 for link in lineage_map.links if link.dataset in checked)
     print(f"Lineage map checked against {catalog}: {links} links across {len(checked)} dataset(s).")
     if args.check:

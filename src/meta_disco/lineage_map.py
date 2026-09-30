@@ -56,7 +56,7 @@ from .models import (
     SOURCE_REPOSITORY_ACTIVITY,
     SOURCE_REPOSITORY_METADATA,
 )
-from .slot_map import NO_NOTES, NOTES, Readable
+from .slot_map import NO_NOTES, NOTES, Readable, unique_key_loader
 
 KEY_BIOSAMPLE_ID = "biosample_id"
 # What a child column may hold: a file, by locator or by AnVIL's identifier. A parent
@@ -115,6 +115,9 @@ class LineageMap:
     def table_links(self, dataset: str, table: str) -> list[Link]:
         return [link for link in self.links if link.dataset == dataset and link.table == table]
 
+    def dataset_links(self, dataset: str) -> list[Link]:
+        return [link for link in self.links if link.dataset == dataset]
+
 
 def source_type_of(table: str) -> str:
     """The kind of source a table's lines are: ``repository_activity`` for ``anvil_activity``, else ``repository_metadata``."""
@@ -126,17 +129,7 @@ def default_lineage_map_resource():
     return files(f"{__package__}.sources") / "anvil_lineage_map.yaml"
 
 
-class _UniqueKeyLoader(yaml.SafeLoader):
-    """Refuses a repeated key, which PyYAML would silently keep the last of."""
-
-    def construct_mapping(self, node, deep=False):
-        seen: set = set()
-        for key_node, _value in node.value:
-            key = self.construct_object(key_node, deep=deep)
-            if key in seen:
-                raise ValueError(f"{_WHERE} line {key_node.start_mark.line + 1}: key {key!r} given twice")
-            seen.add(key)
-        return super().construct_mapping(node, deep=deep)
+_UniqueKeyLoader = unique_key_loader(_WHERE)
 
 
 def load_lineage_map(source: Readable | None = None) -> LineageMap:

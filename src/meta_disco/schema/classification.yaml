@@ -535,9 +535,10 @@ classes:
       source's own identifier is written as the locator the source's own table
       gives it, with the identifier kept as `parent_source_identifier`; when that
       table has no row for it, the line carries the identifier alone, so the link
-      is still reported. `parent_key_type` is present exactly when `parent` is.
-      gen-pydantic emits no class rules, so `lineage_evidence` enforces both at
-      write and at read.
+      is still reported. `parent_key_type` is present exactly when `parent` is, and
+      `raw_activity_column` exactly when `raw_activity` is. gen-pydantic emits no
+      class rules, so `lineage_evidence.check_row` enforces all three at write and at
+      read.
     attributes:
       target_key_value:
         required: true

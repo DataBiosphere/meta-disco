@@ -117,7 +117,9 @@ decision no one can review (#421).
 import json
 import os
 import re
+import shutil
 from collections.abc import Iterable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -514,6 +516,30 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
     require_scoped_target(envelope, "evidence file envelope")
     require_slot_evidence_kind(envelope, "evidence file envelope")
     parse_iso_datetime(envelope.fetched_at, "envelope fetched_at", "evidence file envelope")
+    name = path.name
+    # The four facts a row's source must agree with, flattened once for the file.
+    # They are the whole of the envelope's source — only `column` varies per row, and
+    # a row's column is what it is compared against itself, so it cannot disagree.
+    # Taken from `claim_source_for` rather than read off the envelope directly, so the
+    # writer's notion of "the same source" stays the reader's own.
+    expected = claim_source_for(envelope.source, None)
+    expected_facts = (expected.name, expected.url, expected.dataset, expected.table)
+    return write_ndjson(
+        path,
+        envelope,
+        (_evidence_line(expected_facts, envelope.source, entry, name, n) for n, entry in enumerate(entries, start=1)),
+    )
+
+
+def write_ndjson(path: Path, envelope: EvidenceFileEnvelope, lines: Iterable[dict]) -> int:
+    """Write ``envelope`` on line 1 and each of ``lines`` after it, atomically; return how many lines.
+
+    The one write path for an evidence file of either kind (``write_evidence_file``, and
+    ``lineage_evidence.write_lineage_file`` for #583): the caller checks its own lines as
+    it yields them, and this owns the file. Null envelope members are omitted, not
+    written out: a source either has a dataset or does not, and the schema reads an
+    absent one the same way.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     # A name unique to this writer, not `<name>.tmp`. Two importers writing one path
     # shared that name: both wrote, one renamed, the other's rename hit a file that
@@ -529,31 +555,44 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
     # (#369, #394). A crash leaves a `.tmp` behind under a unique name; `discover`
     # looks for `*.ndjson`, so no run reads it.
     tmp = path.with_name(f"{path.name}.{os.getpid()}.{uuid4().hex[:8]}.tmp")
-    name = path.name
-    # The four facts a row's source must agree with, flattened once for the file.
-    # They are the whole of the envelope's source — only `column` varies per row, and
-    # a row's column is what it is compared against itself, so it cannot disagree.
-    # Taken from `claim_source_for` rather than read off the envelope directly, so the
-    # writer's notion of "the same source" stays the reader's own.
-    expected = claim_source_for(envelope.source, None)
-    expected_facts = (expected.name, expected.url, expected.dataset, expected.table)
-
     written = 0
     try:
         with tmp.open("w", encoding="utf-8", buffering=_WRITE_BUFFER_BYTES) as f:
-            # Null members are omitted, not written out: a source either has a
-            # dataset or does not, and the schema reads an absent one the same way.
             f.write(_encode({ENVELOPE_KEY: envelope.model_dump(exclude_none=True)}))
             f.write("\n")
-            for entry in entries:
+            for line in lines:
                 written += 1
-                f.write(_encode(_evidence_line(expected_facts, envelope.source, entry, name, written)))
+                f.write(_encode(line))
                 f.write("\n")
         tmp.replace(path)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
     return written
+
+
+@contextmanager
+def staged_generation(directory: Path) -> Iterator[Path]:
+    """Yield the staging directory a generation is written to, and rename it to ``directory`` on success.
+
+    A generation exists whole or not at all: ``directory`` must not exist (an import
+    never writes over another), nor may a leftover ``<stamp>.partial`` from a killed
+    import, which a person removes by hand. Any failure inside the block — a bad row, a
+    full disk, an interrupt — removes the staging directory before the error
+    propagates. Shared by the slot importer (``anvil_evidence``) and the lineage
+    importer (``anvil_lineage``, #583).
+    """
+    if directory.exists():
+        raise FileExistsError(f"{directory}: generation already written — an import never overwrites one")
+    staging = staging_dir(directory)
+    if staging.exists():
+        raise FileExistsError(f"{staging}: an unfinished import; remove it by hand before importing again")
+    try:
+        yield staging
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    staging.rename(directory)
 
 
 def list_cell(raw_value: str) -> list[str] | None:
@@ -621,13 +660,13 @@ def iter_evidence(path: Path) -> Iterator[EvidenceEntry]:
         # `EvidenceEntry` around it.
         by_column: dict[str | None, ClaimSource] = {}
         for n, raw in enumerate(f, start=2):
-            line = _decode(raw, _where(name, _READING, n))
+            line = decode_line(raw, _where(name, _READING, n))
             if line.isspace():
                 continue
             yield _entry_from_line(name, n, line, envelope_source, by_column)
 
 
-def _decode(raw: bytes, where: str) -> str:
+def decode_line(raw: bytes, where: str) -> str:
     """One line of an evidence file as text, or a ``ValueError`` naming it.
 
     An evidence file is written by another process, so a truncated write or a source that
@@ -1172,7 +1211,7 @@ def read_envelope_from(path: Path, f: BinaryIO) -> EvidenceFileEnvelope:
             f"{path.name} line 1: no line break in the first {_MAX_ENVELOPE_BYTES} bytes — "
             "an evidence file is one envelope and one row per line, not a single JSON document"
         )
-    first = _decode(raw, f"{path.name} line 1")
+    first = decode_line(raw, f"{path.name} line 1")
     if not first.strip():
         raise ValueError(f"{path.name}: line 1 must be the {ENVELOPE_KEY} envelope, and this file starts empty")
     return _envelope_from_line(path, first)

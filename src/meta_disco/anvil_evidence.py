@@ -35,7 +35,6 @@ holds each map to AnVIL's published table (``PUBLISHED_TABLE``, contract 7.12), 
 from __future__ import annotations
 
 import json
-import shutil
 from collections import Counter
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -66,7 +65,7 @@ from .source_evidence import (
     evidence_file_path,
     generation_dir,
     new_generation,
-    staging_dir,
+    staged_generation,
     write_evidence_file,
 )
 
@@ -87,9 +86,36 @@ def evidence_dir(slot_map: SlotMap) -> str:
     return directory
 
 
-def _chosen_datasets(slot_map: SlotMap, datasets: list[str] | None) -> list[str]:
-    """The map's datasets, or ``datasets`` each once in order — not checked against the map."""
-    return slot_map.datasets() if datasets is None else list(dict.fromkeys(datasets))
+def chosen_datasets(mapped: list[str], datasets: list[str] | None) -> list[str]:
+    """A map's datasets (``mapped``), or ``datasets`` each once in order — not checked against the map.
+
+    Shared with the lineage importer (``anvil_lineage``, #583).
+    """
+    return mapped if datasets is None else list(dict.fromkeys(datasets))
+
+
+def verbatim_manifest(manifest_root: Path, catalog: str, dataset: str, named: dict) -> Path | str:
+    """The dataset's verbatim manifest, or why an importer cannot read it.
+
+    ``named`` is the catalog's sidecar datasets (``sidecar_datasets``). Returns the path
+    when the sidecar names the dataset and its verbatim manifest is on disk; otherwise
+    one line, a string, saying which: not named, only the compact manifest (which
+    is Azul's join and not a source an importer reads), or no manifest at all. Shared
+    with the lineage importer (``anvil_lineage``, #583), so both refuse the same state in
+    the same words.
+    """
+    if dataset not in named:
+        return f"{dataset}: not a dataset the {catalog} sidecar names"
+    path = manifest_path(manifest_root, catalog, dataset, FORMAT_VERBATIM)
+    if path.is_file():
+        return path
+    compact = manifest_path(manifest_root, catalog, dataset, FORMAT_COMPACT)
+    if compact.is_file():
+        return (
+            f"{dataset}: only the compact manifest is on disk ({compact}), which is Azul's join and not a "
+            f"source this importer reads; no verbatim manifest at {path}"
+        )
+    return f"{dataset}: no verbatim manifest at {path}"
 
 
 @dataclass
@@ -151,24 +177,15 @@ def check(slot_map: SlotMap, manifest_root: Path, catalog: str, datasets: list[s
     """
     named = sidecar_datasets(manifest_root, catalog)
     known = slot_map.datasets()
-    chosen = _chosen_datasets(slot_map, datasets)
+    chosen = chosen_datasets(known, datasets)
     problems = _check_kind(slot_map, set(chosen))
     for dataset in chosen:
         if dataset not in known:
             problems.append(f"{dataset}: not in the slot map")
             continue
-        if dataset not in named:
-            problems.append(f"{dataset}: not a dataset the {catalog} sidecar names")
-            continue
-        path = manifest_path(manifest_root, catalog, dataset, FORMAT_VERBATIM)
-        if not path.is_file():
-            compact = manifest_path(manifest_root, catalog, dataset, FORMAT_COMPACT)
-            problems.append(
-                f"{dataset}: only the compact manifest is on disk ({compact}), which is Azul's join and not a "
-                f"source this importer reads; no verbatim manifest at {path}"
-                if compact.is_file()
-                else f"{dataset}: no verbatim manifest at {path}"
-            )
+        path = verbatim_manifest(manifest_root, catalog, dataset, named)
+        if isinstance(path, str):
+            problems.append(path)
             continue
         problems += _check_dataset(slot_map, dataset, path)
     return problems
@@ -264,7 +281,7 @@ def import_all(
     times it is named. Raises before writing anything if a named dataset is not in the map.
     """
     known = slot_map.datasets()
-    chosen = _chosen_datasets(slot_map, datasets)
+    chosen = chosen_datasets(known, datasets)
     unknown = [d for d in chosen if d not in known]
     if unknown:
         raise ValueError(f"not in the slot map: {unknown}")
@@ -314,11 +331,6 @@ def import_dataset(
         raise ValueError("; ".join(problems))
     stamp = generation if generation is not None else new_generation()
     directory = generation_dir(evidence_root, evidence_dir(slot_map), catalog, dataset, stamp)
-    if directory.exists():
-        raise FileExistsError(f"{directory}: generation already written — an import never overwrites one")
-    staging = staging_dir(directory)
-    if staging.exists():
-        raise FileExistsError(f"{staging}: an unfinished import; remove it by hand before importing again")
     path = manifest_path(manifest_root, catalog, dataset, FORMAT_VERBATIM)
     # When the *source* was fetched — the manifest's request time, not the import's. A
     # sidecar that cannot say is refused: an evidence file must record it, and inventing
@@ -339,7 +351,7 @@ def import_dataset(
     target_key = JoinKeyEnum(JOIN_KEY_DRS_URI)
     fetched = fetched_at.isoformat()
     tables = []
-    try:
+    with staged_generation(directory) as staging:
         for table in slot_map.tables(dataset):
             file_source = EvidenceFileSource(repository=REPOSITORY, dataset=dataset, table=table, url=service)
             envelope = EvidenceFileEnvelope(
@@ -360,10 +372,6 @@ def import_dataset(
                     f"dataset's files, or every mapped cell was null; the map disagrees with {catalog} here"
                 )
             tables.append(result)
-    except BaseException:
-        shutil.rmtree(staging, ignore_errors=True)
-        raise
-    staging.rename(directory)
     return DatasetImport(dataset=dataset, generation=stamp, directory=directory, tables=tables)
 
 

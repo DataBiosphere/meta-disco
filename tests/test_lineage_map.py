@@ -89,7 +89,7 @@ def test_a_harmonized_table_other_than_anvil_activity_is_refused(tmp_path):
 
 
 def test_a_repeated_key_is_refused(tmp_path):
-    with pytest.raises(ValueError, match="given twice"):
+    with pytest.raises(ValueError, match="duplicate key 't'"):
         load(tmp_path, "catalog: anvil15\ndatasets:\n  D:\n    t: []\n    t: []\n")
 
 

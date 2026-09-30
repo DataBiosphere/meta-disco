@@ -28,10 +28,8 @@ and at read: at least one of ``parent`` and ``parent_source_identifier``;
 from __future__ import annotations
 
 import json
-import os
 from collections.abc import Iterable, Iterator
 from pathlib import Path
-from uuid import uuid4
 
 from pydantic import ValidationError
 
@@ -39,11 +37,12 @@ from .models import SOURCE_REPOSITORY_ACTIVITY, SOURCE_REPOSITORY_METADATA
 from .schema.classification_model import EvidenceFileEnvelope, LineageRow
 from .source_evidence import (
     DEFAULT_SOURCE_EVIDENCE_ROOT,
-    ENVELOPE_KEY,
     EVIDENCE_FILE_SUFFIX,
+    decode_line,
     parse_iso_datetime,
     read_envelope_from,
     require_scoped_target,
+    write_ndjson,
 )
 
 DEFAULT_LINEAGE_EVIDENCE_ROOT = DEFAULT_SOURCE_EVIDENCE_ROOT.parent / "lineage_evidence"
@@ -64,8 +63,6 @@ _REFUSED_LINE_KEYS = {
     "parent_key": "the parent's record key is found by reconcile (#577); a line names the parent as the source did",
     "source_type": "one file is one kind of source, so it is on the envelope, not on every line",
 }
-
-_encode = json.JSONEncoder(separators=(",", ":")).encode
 
 
 def check_row(row: LineageRow, where: str) -> None:
@@ -90,34 +87,22 @@ def _check_envelope(envelope: EvidenceFileEnvelope, where: str) -> None:
 def write_lineage_file(path: Path, envelope: EvidenceFileEnvelope, rows: Iterable[LineageRow]) -> int:
     """Write one lineage file, streaming; return the number of lines after the envelope.
 
-    Written to a temporary name and renamed into place only once every row is out, as
-    ``source_evidence.write_evidence_file`` does, so a failure part-way leaves no half
-    file under the name ``discover`` reads. Every row is checked (:func:`check_row`)
-    as it is written, so this cannot write a file :func:`iter_lineage` refuses.
+    Written through ``source_evidence.write_ndjson``, the slot writer's own path: to a
+    temporary name, renamed into place only once every row is out. Every row is checked
+    (:func:`check_row`) as it is written, so this cannot write a file :func:`iter_lineage`
+    refuses.
     """
     if path.suffix != EVIDENCE_FILE_SUFFIX:
         raise ValueError(f"{path.name}: a lineage file must end in {EVIDENCE_FILE_SUFFIX}, or discover never finds it")
     _check_envelope(envelope, "lineage file envelope")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f"{path.name}.{os.getpid()}.{uuid4().hex[:8]}.tmp")
-    written = 0
-    try:
-        with tmp.open("w", encoding="utf-8", buffering=1 << 20) as f:
-            f.write(_encode({ENVELOPE_KEY: envelope.model_dump(exclude_none=True)}))
-            f.write("\n")
-            for row in rows:
-                written += 1
-                where = f"{path.name} row {written}"
-                if not isinstance(row, LineageRow):
-                    raise ValueError(f"{where}: is a {type(row).__name__}, not a LineageRow")
-                check_row(row, where)
-                f.write(_encode(row.model_dump(exclude_none=True)))
-                f.write("\n")
-        tmp.replace(path)
-    except BaseException:
-        tmp.unlink(missing_ok=True)
-        raise
-    return written
+    return write_ndjson(path, envelope, (_line(row, f"{path.name} row {n}") for n, row in enumerate(rows, start=1)))
+
+
+def _line(row: LineageRow, where: str) -> dict:
+    if not isinstance(row, LineageRow):
+        raise ValueError(f"{where}: is a {type(row).__name__}, not a LineageRow")
+    check_row(row, where)
+    return row.model_dump(exclude_none=True)
 
 
 def read_lineage_envelope(path: Path) -> EvidenceFileEnvelope:
@@ -139,10 +124,7 @@ def iter_lineage(path: Path) -> Iterator[LineageRow]:
         _check_envelope(read_envelope_from(path, f), f"{path.name} line 1")
         for n, raw in enumerate(f, start=2):
             where = f"{path.name} line {n}"
-            try:
-                line = raw.decode("utf-8")
-            except UnicodeDecodeError as exc:
-                raise ValueError(f"{where}: not valid UTF-8: {exc}") from None
+            line = decode_line(raw, where)
             if line.isspace():
                 continue
             try:
@@ -151,8 +133,9 @@ def iter_lineage(path: Path) -> Iterator[LineageRow]:
                 raise ValueError(f"{where}: not JSON: {exc!r}") from None
             if not isinstance(block, dict):
                 raise ValueError(f"{where}: is {type(block).__name__}, not an object")
-            for key in sorted(set(block) & set(_REFUSED_LINE_KEYS)):
-                raise ValueError(f"{where}: carries {key!r} — {_REFUSED_LINE_KEYS[key]}")
+            refused = next((key for key in sorted(block) if key in _REFUSED_LINE_KEYS), None)
+            if refused is not None:
+                raise ValueError(f"{where}: carries {refused!r} — {_REFUSED_LINE_KEYS[refused]}")
             try:
                 row = LineageRow.model_validate(block)
             except ValidationError as exc:
