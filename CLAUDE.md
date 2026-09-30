@@ -212,6 +212,14 @@ evidence}` entry — plus the controlled vocabulary:
     `make review-queue` writes the unauthored values, grouped by source type, to
     `docs/review-queue-report.md` and `docs/review-queue.html` (#524). `claims_from` builds a line's
     claims through `make_claim`; reconcile is its one caller in a run.
+  - **The activity translation table** is `rules/activity_map.yaml`, loaded by `activity_map.py`
+    (#584): a lineage line's step, as an activity of `activities.yaml` and the role its parent takes.
+    A row's `match` names `source_type` and any of the line's other parts (`table`, `raw_activity`,
+    the child and parent columns, and the raw `data_type` the same table's slot evidence gives the
+    child and the parent), each exact, `null`, or a list; **no two rows may match one line**, so
+    authoring a row that covers seeded keys means deleting those seeded rows, or the table will not load. It shares its YAML walk and
+    append-only seeding with `value_map` (`yaml_rows`). `make seed-activity-map` seeds it and
+    `make review-queue` lists its unauthored rows; nothing in a run or in reconcile reads it until #577.
   - `run_all_classifications` calls `report_evidence_files` and never `iter_evidence`,
     so no evidence reaches inference and a run with evidence files present writes the
     same inference output as one without. Recording which catalog a run enhances is
