@@ -535,6 +535,10 @@ class SourceTypeEnum(str, Enum):
     """
     A table the submitter wrote, carried by the repository — an AnVIL verbatim manifest's submitter table.
     """
+    repository_activity = "repository_activity"
+    """
+    The repository's own record of a step — AnVIL's `anvil_activity` table, whose columns are FSS's and the same in every dataset (#583): which files and samples a step used, which files it generated, and what the source calls the step. It says how a file was made, not what a file is, so it is written only as lineage evidence (`LineageRow`), never as slot evidence.
+    """
     published_value = "published_value"
     """
     The value the repository's own system of record publishes for the file (#497) — AnVIL's harmonized `anvil_file` columns, today read as the verbatim manifest copies that TDR table (claims contract 7.12). Distinct from `repository_metadata` so a reader of a conflict can tell the repository's official value from a submitter's opinion.
@@ -557,6 +561,10 @@ Listed rather than derived because LinkML has no enum-subset construct that `gen
     As in `source_type_enum`.
     """
     repository_metadata = "repository_metadata"
+    """
+    As in `source_type_enum`.
+    """
+    repository_activity = "repository_activity"
     """
     As in `source_type_enum`.
     """
@@ -617,6 +625,24 @@ Measured on the AnVIL corpus, 708,088 records. The keys differ enormously in how
     archive_accession = "archive_accession"
     """
     Sequence-archive run accession (ENA, SRA). Not a field of the input record but a fact classification *derives*, read from a fastq's read headers — accessions appear in no input file name at all. A claim from an archive can be attached only by this, which is why the join runs after inference rather than over the input corpus.
+    """
+
+
+class LineageParentKeyEnum(str, Enum):
+    """
+    What kind of value a `LineageRow`'s `parent` is (#583). A locator says where a file is; an identifier says which file or sample.
+    """
+    drs_uri = "drs_uri"
+    """
+    A locator, the DRS URI, as a submitter table's file-link column holds it.
+    """
+    file_id = "file_id"
+    """
+    AnVIL's own file identifier, as `anvil_activity`'s `used_file_id` holds it.
+    """
+    biosample_id = "biosample_id"
+    """
+    A sample's identifier, as `anvil_activity`'s `used_biosample_id` holds it. A sample is not a file; reconcile builds no input from one (#577, #582).
     """
 
 
@@ -1094,7 +1120,7 @@ class EvidenceRow(ConfiguredBaseModel):
 No pattern and no enum, deliberately: a source's spellings are its own, a value our vocabulary has no word for is the review queue's input rather than an error (contract 3.7), and an empty cell is something the source published, whose meaning is a rule's to decide.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'Evidence']} })
     field: str = Field(default=..., description="""The slot this row speaks to, spelled `field` on the wire and in the code (contract 2.1). One of the six classification dimensions.
 Pinned by pattern rather than by an enum because the dimension names are slot *names* in this schema and not a vocabulary it declares; `test_the_row_field_pattern_lists_every_dimension` holds it to `CLASSIFICATION_FIELDS`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow']} })
-    target_key_value: str = Field(default=..., description="""The value to match against the envelope's `target_key`, already in the target's value space — the importer owns the mapping between its own key and the target's. Empty is refused: a row with nothing to match on can attach to no file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow']} })
+    target_key_value: str = Field(default=..., description="""The value to match against the envelope's `target_key`, already in the target's value space — the importer owns the mapping between its own key and the target's. Empty is refused: a row with nothing to match on can attach to no file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'LineageRow']} })
     column: Optional[str] = Field(default=None, description="""The column the raw value was read from. The one member of the source that varies within a file — repository, dataset, table and url are on the envelope — and absent for a source whose table has no columns to name.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceRow']} })
 
     @field_validator('field')
@@ -1133,6 +1159,117 @@ Pinned by pattern rather than by an enum because the dimension names are slot *n
                     raise ValueError(err_msg)
         elif isinstance(v, str) and not pattern.match(v):
             err_msg = f"Invalid column format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+
+class LineageRow(ConfiguredBaseModel):
+    """
+    One line of a lineage evidence file after the envelope (#583): a source saying one file was made from one parent. It reads \"the row in the envelope's `target` whose `target_key` equals `target_key_value` was made from `parent`, a `parent_key_type`\". The envelope is an `EvidenceFileEnvelope`, as a slot evidence file's is; the lines differ, so the two are written under separate roots, and the readers of each root read only that root.
+    **It declares nothing**, as an `EvidenceRow` declares nothing: no activity, no role, no value, no status, no rule id. `raw_activity` is what the source calls the step, verbatim; which activity and role that means is the activity translation table's (#584), and finding the parent among our files is reconcile's (#577).
+    One line per (child, parent) pair: a source row naming two parents, or two generated files, is written as one line for each pair.
+    **At least one of `parent` and `parent_source_identifier`.** A parent named by a locator, by AnVIL's identifier or by a sample's identifier is written as `parent`. One named by the source's own identifier is written as the locator the source's own table gives it, with the identifier kept as `parent_source_identifier`; when that table has no row for it, or rows naming several locators, the line carries the identifier alone, so the link is still reported. `parent_key_type` is present exactly when `parent` is, and `raw_activity_column` exactly when `raw_activity` is. gen-pydantic emits no class rules, so `lineage_evidence.check_row` enforces all three at write and at read.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    target_key_value: str = Field(default=..., description="""The child, as the envelope's `target_key` names it: AnVIL's `file_id` for `anvil_activity`, the DRS URI for a submitter table.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'LineageRow']} })
+    parent: Optional[str] = Field(default=None, description="""The parent, in the form `parent_key_type` names. Written whether or not it is one of the dataset's files: reconcile (#577) will report a parent outside the dataset, and dropping it here would hide it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
+    parent_key_type: Optional[LineageParentKeyEnum] = Field(default=None, description="""Which kind of value `parent` is. Named `_type` because `ActivityInput.parent_key` is a value, the parent's record key.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
+    parent_source_identifier: Optional[str] = Field(default=None, description="""The source's own identifier for the parent, where the source named the parent by one (IGVF's `derived_from` accessions), kept beside the locator the importer found for it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
+    raw_activity: Optional[str] = Field(default=None, description="""What the source calls the step, verbatim (contract 1.4), where the source names it — `anvil_activity`'s `activity_type`, e.g. `Indexing` or `Quantificatioin: salmon`. The empty string is kept; a null or empty-list cell is omitted. No pattern and no enum, for `EvidenceRow.raw_value`'s reason.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
+    activity_id: Optional[str] = Field(default=None, description="""The source's id for the step, where it has one (`anvil_activity`'s `activity_id`), so lines from one step can be told apart from another's.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow', 'Attribution']} })
+    child_column: str = Field(default=..., description="""The column the child was read from.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
+    parent_column: str = Field(default=..., description="""The column the parent (or its source identifier) was read from.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
+    raw_activity_column: Optional[str] = Field(default=None, description="""The column `raw_activity` was read from; present exactly when it is.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
+
+    @field_validator('target_key_value')
+    def pattern_target_key_value(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid target_key_value format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid target_key_value format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('parent')
+    def pattern_parent(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid parent format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid parent format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('parent_source_identifier')
+    def pattern_parent_source_identifier(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid parent_source_identifier format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid parent_source_identifier format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('activity_id')
+    def pattern_activity_id(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid activity_id format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid activity_id format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('child_column')
+    def pattern_child_column(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid child_column format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid child_column format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('parent_column')
+    def pattern_parent_column(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid parent_column format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid parent_column format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('raw_activity_column')
+    def pattern_raw_activity_column(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid raw_activity_column format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid raw_activity_column format: {v}"
             raise ValueError(err_msg)
         return v
 
@@ -1282,7 +1419,7 @@ class Attribution(ConfiguredBaseModel):
 
     source_type: SourceTypeEnum = Field(default=..., description="""Kind of source that produced this claim (provenance, #90; populated on every claim by #392) — see `source_type_enum` for the kinds. Absent on a synthetic marker and on the note left by a failed fetch or input contract, neither of which is a claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
     rule_id: str = Field(default=..., description="""The rule or translation row that turned what the source says into this step or input (`code_rules.EDGE_RULES` for inference's).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
-    activity_id: Optional[str] = Field(default=None, description="""The source's own id for the step (`anvil_activity.activity_id`), where it gives one.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Attribution']} })
+    activity_id: Optional[str] = Field(default=None, description="""The source's own id for the step (`anvil_activity.activity_id`), where it gives one.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow', 'Attribution']} })
     source: Optional[ClaimSource] = Field(default=None, description="""The external source that produced this claim, for a claim that is not from one of our rules. Absent on a rule or content claim, which carries `rule_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
 
 
@@ -1354,6 +1491,7 @@ ClaimSource.model_rebuild()
 EvidenceFileSource.model_rebuild()
 EvidenceTarget.model_rebuild()
 EvidenceRow.model_rebuild()
+LineageRow.model_rebuild()
 EvidenceFileEnvelope.model_rebuild()
 Evidence.model_rebuild()
 GeneratedBy.model_rebuild()

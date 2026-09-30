@@ -38,8 +38,9 @@ by name: findings and reasoning belong in the pull request and on the issue, whe
 are read, not in a data file.
 
 **A map says what kind of source it describes.** The top-level ``source_type`` is one
-of ``IMPORTER_SOURCE_TYPES`` and becomes the envelope's ``source_type`` on every
-evidence file the importer writes from the map; it defaults to ``repository_metadata``,
+of ``IMPORTER_SOURCE_TYPES`` other than a lineage-only kind (``LINEAGE_ONLY_SOURCE_TYPES``,
+#583) and becomes the envelope's ``source_type`` on every evidence file the importer
+writes from the map; it defaults to ``repository_metadata``,
 a submitter's own table, and the published map (#497) declares ``published_value``. One
 map is one kind of source — a map that mixed the two would have no place to say which
 table is which.
@@ -83,7 +84,12 @@ from typing import Protocol
 import yaml
 
 from .manifest_survey import name_tokens
-from .models import CLASSIFICATION_FIELDS, SOURCE_REPOSITORY_METADATA, require_importer_source_type
+from .models import (
+    CLASSIFICATION_FIELDS,
+    LINEAGE_ONLY_SOURCE_TYPES,
+    SOURCE_REPOSITORY_METADATA,
+    require_importer_source_type,
+)
 
 # The three forms a source can take, by the key its mapping carries.
 SOURCE_CELL = "cell"
@@ -150,7 +156,7 @@ class ColumnEntry:
 @dataclass(frozen=True)
 class SlotMap:
     """A loaded map: the catalog it was authored against, the kind of source it
-    describes (one of ``IMPORTER_SOURCE_TYPES``), and every column entry in it."""
+    describes (one of ``IMPORTER_SOURCE_TYPES`` less ``LINEAGE_ONLY_SOURCE_TYPES``), and every column entry in it."""
 
     catalog: str
     source_type: str
@@ -216,24 +222,31 @@ def published_slot_map_resource():
     return files(f"{__package__}.sources") / "anvil_published_slot_map.yaml"
 
 
-class _UniqueKeyLoader(yaml.SafeLoader):
+def unique_key_loader(label: str, hint: str = "") -> type[yaml.SafeLoader]:
     """A YAML loader that refuses a duplicate mapping key instead of keeping the last.
 
-    PyYAML's default silently takes the later value, so a column listed twice under one
-    table would drop one of them without a word. Refused naming the key and the line.
+    PyYAML's default silently takes the later value, so an entry listed twice would drop
+    one of them without a word. Refused naming ``label``, the key and both lines, with
+    ``hint`` after. Shared by the slot map and the lineage map (#583).
     """
 
-    def construct_mapping(self, node, deep=False):
-        seen: dict = {}
-        for key_node, _value_node in node.value:
-            key = self.construct_object(key_node, deep=deep)
-            if key in seen:
-                raise ValueError(
-                    f"slot map line {key_node.start_mark.line + 1}: duplicate key {key!r} "
-                    f"(first at line {seen[key] + 1}) — one entry per column, table and dataset"
-                )
-            seen[key] = key_node.start_mark.line
-        return super().construct_mapping(node, deep=deep)
+    class UniqueKeyLoader(yaml.SafeLoader):
+        def construct_mapping(self, node, deep=False):
+            seen: dict = {}
+            for key_node, _value_node in node.value:
+                key = self.construct_object(key_node, deep=deep)
+                if key in seen:
+                    raise ValueError(
+                        f"{label} line {key_node.start_mark.line + 1}: duplicate key {key!r} "
+                        f"(first at line {seen[key] + 1}){hint}"
+                    )
+                seen[key] = key_node.start_mark.line
+            return super().construct_mapping(node, deep=deep)
+
+    return UniqueKeyLoader
+
+
+_UniqueKeyLoader = unique_key_loader(_WHERE, " — one entry per column, table and dataset")
 
 
 def load_slot_map(source: Readable | None = None) -> SlotMap:
@@ -264,6 +277,10 @@ def load_slot_map(source: Readable | None = None) -> SlotMap:
     source_type = require_importer_source_type(
         document.get("source_type", SOURCE_REPOSITORY_METADATA), "source_type", _WHERE
     )
+    if source_type in LINEAGE_ONLY_SOURCE_TYPES:
+        raise ValueError(
+            f"{_WHERE}: source_type {source_type!r} is written only as lineage evidence, not by a slot map"
+        )
     datasets = document["datasets"]
     _expect_nonempty_mapping(datasets, _WHERE, "dataset")
     return SlotMap(catalog=catalog, source_type=source_type, entries=tuple(_entries(datasets)))

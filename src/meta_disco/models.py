@@ -52,6 +52,10 @@ SOURCE_REPOSITORY_METADATA = "repository_metadata"
 # What the repository's system of record publishes for the file, as distinct from a
 # submitter's table (`repository_metadata`); contract 4.1 kind 2, 7.12 (#497).
 SOURCE_PUBLISHED_VALUE = "published_value"
+# The repository's own record of a step, AnVIL's `anvil_activity` (#583). Written only
+# as lineage evidence, never as slot evidence: it says how a file was made, not what a
+# file is, so it has no place in SOURCE_PRECEDENCE and makes no claim.
+SOURCE_REPOSITORY_ACTIVITY = "repository_activity"
 SOURCE_WRANGLER_ANNOTATION = "wrangler_annotation"
 # The importer sources in the order a delivered value is credited to them, each with its
 # short name in the reports: what the repository publishes, then what its submitters
@@ -76,21 +80,29 @@ EXTERNAL_SOURCE_TYPES = frozenset(
         SOURCE_WRANGLER_ANNOTATION,
     }
 )
-# The kinds an *importer* may write, which is narrower. A curator claim is legitimate
+# The kinds an *importer* may write: the external kinds less the curator's, plus the
+# lineage-only `repository_activity` (#583), which is no claim's source. A curator claim is legitimate
 # — a curator's decision is reviewed and cited like any other — but a curator does not
 # reach us as an evidence file: contract 1.6 and 1.7 say it "is unlike every other in
 # how it enters: as rules, not as evidence", and 1.7 makes a decision about a single
 # file a rule whose selection matches one file. So the envelope's vocabulary is these
-# three, and the format cannot express the one input the contract routes elsewhere
-# (#421 review). Not derived by subtracting from EXTERNAL_SOURCE_TYPES: a kind added
-# there should not silently become writable to a file.
+# four — the three value sources and, for lineage only, `repository_activity` (#583) —
+# and the format cannot express the one input the contract routes elsewhere (#421
+# review). Not derived by subtracting from EXTERNAL_SOURCE_TYPES: a kind added there
+# should not silently become writable to a file.
 IMPORTER_SOURCE_TYPES = frozenset(
     {
         SOURCE_EXTERNAL_GROUND_TRUTH,
         SOURCE_REPOSITORY_METADATA,
+        SOURCE_REPOSITORY_ACTIVITY,
         SOURCE_PUBLISHED_VALUE,
     }
 )
+# The importer kinds that write lineage evidence only (#583). A slot evidence file may
+# not declare one (`source_evidence.write_evidence_file` refuses it), so the kinds a
+# slot evidence file can carry — the ones SOURCE_PRECEDENCE credits and the review
+# queue groups by — are IMPORTER_SOURCE_TYPES less these.
+LINEAGE_ONLY_SOURCE_TYPES = frozenset({SOURCE_REPOSITORY_ACTIVITY})
 SOURCE_TYPES = frozenset(
     {
         SOURCE_FILENAME_RULE,
@@ -100,6 +112,7 @@ SOURCE_TYPES = frozenset(
         SOURCE_DERIVATION_INHERITANCE,
         SOURCE_EXTERNAL_GROUND_TRUTH,
         SOURCE_REPOSITORY_METADATA,
+        SOURCE_REPOSITORY_ACTIVITY,
         SOURCE_PUBLISHED_VALUE,
         SOURCE_WRANGLER_ANNOTATION,
     }

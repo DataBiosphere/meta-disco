@@ -189,6 +189,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     Inherited results (`SOURCE_DERIVATION_INHERITANCE`) are not a sixth kind: they are a parent's resolved
     answer carried across a derivation edge (4.9). How today's one instance meets 1.1 is #413.
 
+    Lineage evidence is not an input kind either: it names a file's parent and the step that made it,
+    not a value (#583). Its files declare `repository_activity` (AnVIL's `anvil_activity`) or
+    `repository_metadata` (a submitter's table), and nothing reads them until #577.
+
     **Kind 2 was retired by #424 and reinstated by #472 and #497.** The retirement argued that a
     target's current state is not an input to producing it. It is an input once the circularity it
     feared cannot happen: our output goes to a separate table set (#444) and the repository's own tables
@@ -446,8 +450,9 @@ importer's half is built — 7.12 is enforced (below), and the published importe
 - **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move. 4.9 is now that clause for what an inherited value declares; how the index path builds it is still #413's.
 - **4.9 is not built** (ADR-0002). Its one instance is the index producer's, built as the 1.1 entry above
   describes. Inference writes the `IndexActivity` and `ChecksumActivity` edges a file's name states, each by the
-  parent's record key and only where the parent resolves (#356); no other step's edge is emitted, and the
-  edges the source tables state wait for #577 (#363). The `checksum_file` rule still stamps the dimensions
+  parent's record key and only where the parent resolves (#356); no other step's edge is emitted. The
+  links the source tables state are imported as lineage evidence (#583) and read by nothing yet: translating
+  them is #584 and building a file's step from them at reconcile is #577 (#363). The `checksum_file` rule still stamps the dimensions
   `ChecksumActivity` carries `not_applicable`, which 4.6 would turn into a conflict once 4.9 is built.
   6.6's inheritance clause is true vacuously until then; when 4.9 is built, the `--no-evidence` help in
   `reconcile.main` ("concludes what inference did") changes with it.

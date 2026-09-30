@@ -1,0 +1,173 @@
+# The AnVIL lineage map (#583). Shape and rules: src/meta_disco/lineage_map.py.
+# A table with nothing to map is absent. anvil_activity's columns are FSS's and the
+# same in every dataset, so one anchor serves each dataset that has the table.
+catalog: anvil15
+datasets:
+  ANVIL_1000G_high_coverage_2019:
+    anvil_activity: &fss_activity
+      - child: {column: generated_file_id, key: file_id}
+        parent: {column: used_file_id, key: file_id}
+        raw_activity: {cell: activity_type}
+        activity_id: {cell: activity_id}
+      - child: {column: generated_file_id, key: file_id}
+        parent: {column: used_biosample_id, key: biosample_id}
+        raw_activity: {cell: activity_type}
+        activity_id: {cell: activity_id}
+  ANVIL_1000G_PRIMED_data_model:
+    anvil_activity: *fss_activity
+  AnVIL_ENCORE_293T:
+    anvil_activity: *fss_activity
+  AnVIL_ENCORE_RS293:
+    anvil_activity: *fss_activity
+  ANVIL_HPRC:
+    anvil_activity: *fss_activity
+  AnVIL_HPRC_R2:
+    anvil_activity: *fss_activity
+  AnVIL_IGVF_Mouse_R1:
+    anvil_activity: *fss_activity
+    file:
+      - child: {column: file_path}
+        parent: {column: derived_from, table: file, identifier_column: file_id, locator_column: file_path}
+  AnVIL_MAGE:
+    anvil_activity: *fss_activity
+  ANVIL_nhp_dGTEx_V1:
+    anvil_activity: *fss_activity
+  ANVIL_T2T:
+    anvil_activity: *fss_activity
+    participant:
+      - {child: {column: samtools_stats}, parent: {column: cram}}
+      - {child: {column: mosdepth_global_dist}, parent: {column: cram}}
+      - {child: {column: mosdepth_regions_bed}, parent: {column: cram}}
+      - {child: {column: mosdepth_regions_dist}, parent: {column: cram}}
+      - {child: {column: mosdepth_summary}, parent: {column: cram}}
+      - {child: {column: cram_index}, parent: {column: cram}}
+      - {child: {column: mosdepth_regions_bed_idx}, parent: {column: mosdepth_regions_bed}}
+      - {child: {column: cram}, parent: {column: read_1_fastq}}
+      - {child: {column: cram}, parent: {column: read_2_fastq}}
+  ANVIL_T2T_CHRY:
+    anvil_activity: *fss_activity
+    1KGP_CHM13v2_sample:
+      - {child: {column: full_samtools_stats}, parent: {column: cram}}
+      - {child: {column: chrx_samtools_stats}, parent: {column: cram}}
+      - {child: {column: chry_samtools_stats}, parent: {column: cram}}
+      - {child: {column: mosdepth_global_dist}, parent: {column: cram}}
+      - {child: {column: mosdepth_regions_bed}, parent: {column: cram}}
+      - {child: {column: mosdepth_regions_dist}, parent: {column: cram}}
+      - {child: {column: mosdepth_summary}, parent: {column: cram}}
+      - {child: {column: cram_index}, parent: {column: cram}}
+      - {child: {column: mosdepth_regions_index}, parent: {column: mosdepth_regions_bed}}
+      - {child: {column: chr1_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr1_hcvcf_index}, parent: {column: chr1_hcvcf_gz}}
+      - {child: {column: chr2_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr2_hcvcf_index}, parent: {column: chr2_hcvcf_gz}}
+      - {child: {column: chr3_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr3_hcvcf_index}, parent: {column: chr3_hcvcf_gz}}
+      - {child: {column: chr4_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr4_hcvcf_index}, parent: {column: chr4_hcvcf_gz}}
+      - {child: {column: chr5_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr5_hcvcf_index}, parent: {column: chr5_hcvcf_gz}}
+      - {child: {column: chr6_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr6_hcvcf_index}, parent: {column: chr6_hcvcf_gz}}
+      - {child: {column: chr7_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr7_hcvcf_index}, parent: {column: chr7_hcvcf_gz}}
+      - {child: {column: chr8_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr8_hcvcf_index}, parent: {column: chr8_hcvcf_gz}}
+      - {child: {column: chr9_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr9_hcvcf_index}, parent: {column: chr9_hcvcf_gz}}
+      - {child: {column: chr10_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr10_hcvcf_index}, parent: {column: chr10_hcvcf_gz}}
+      - {child: {column: chr11_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr11_hcvcf_index}, parent: {column: chr11_hcvcf_gz}}
+      - {child: {column: chr12_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr12_hcvcf_index}, parent: {column: chr12_hcvcf_gz}}
+      - {child: {column: chr13_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr13_hcvcf_index}, parent: {column: chr13_hcvcf_gz}}
+      - {child: {column: chr14_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr14_hcvcf_index}, parent: {column: chr14_hcvcf_gz}}
+      - {child: {column: chr15_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr15_hcvcf_index}, parent: {column: chr15_hcvcf_gz}}
+      - {child: {column: chr16_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr16_hcvcf_index}, parent: {column: chr16_hcvcf_gz}}
+      - {child: {column: chr17_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr17_hcvcf_index}, parent: {column: chr17_hcvcf_gz}}
+      - {child: {column: chr18_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr18_hcvcf_index}, parent: {column: chr18_hcvcf_gz}}
+      - {child: {column: chr19_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr19_hcvcf_index}, parent: {column: chr19_hcvcf_gz}}
+      - {child: {column: chr20_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr20_hcvcf_index}, parent: {column: chr20_hcvcf_gz}}
+      - {child: {column: chr21_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr21_hcvcf_index}, parent: {column: chr21_hcvcf_gz}}
+      - {child: {column: chr22_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr22_hcvcf_index}, parent: {column: chr22_hcvcf_gz}}
+      - {child: {column: xx_x_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: xx_x_hcvcf_index}, parent: {column: xx_x_hcvcf_gz}}
+      - {child: {column: xy_x_nonpar_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: xy_x_nonpar_hcvcf_index}, parent: {column: xy_x_nonpar_hcvcf_gz}}
+      - {child: {column: xy_x_par_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: xy_x_par_hcvcf_index}, parent: {column: xy_x_par_hcvcf_gz}}
+      - {child: {column: xy_y_nonpar_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: xy_y_nonpar_hcvcf_index}, parent: {column: xy_y_nonpar_hcvcf_gz}}
+    SGDP_CHM13v2_sample: &sgdp_sample
+      - {child: {column: full_samtools_stats}, parent: {column: cram}}
+      - {child: {column: mosdepth_global_dist}, parent: {column: cram}}
+      - {child: {column: mosdepth_regions_bed}, parent: {column: cram}}
+      - {child: {column: mosdepth_regions_dist}, parent: {column: cram}}
+      - {child: {column: mosdepth_summary}, parent: {column: cram}}
+      - {child: {column: cram_index}, parent: {column: cram}}
+      - {child: {column: mosdepth_regions_index}, parent: {column: mosdepth_regions_bed}}
+      - {child: {column: cram}, parent: {column: read_1_fastq}}
+      - {child: {column: cram}, parent: {column: read_2_fastq}}
+      - {child: {column: chr1_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr1_hcvcf_index}, parent: {column: chr1_hcvcf_gz}}
+      - {child: {column: chr2_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr2_hcvcf_index}, parent: {column: chr2_hcvcf_gz}}
+      - {child: {column: chr3_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr3_hcvcf_index}, parent: {column: chr3_hcvcf_gz}}
+      - {child: {column: chr4_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr4_hcvcf_index}, parent: {column: chr4_hcvcf_gz}}
+      - {child: {column: chr5_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr5_hcvcf_index}, parent: {column: chr5_hcvcf_gz}}
+      - {child: {column: chr6_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr6_hcvcf_index}, parent: {column: chr6_hcvcf_gz}}
+      - {child: {column: chr7_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr7_hcvcf_index}, parent: {column: chr7_hcvcf_gz}}
+      - {child: {column: chr8_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr8_hcvcf_index}, parent: {column: chr8_hcvcf_gz}}
+      - {child: {column: chr9_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr9_hcvcf_index}, parent: {column: chr9_hcvcf_gz}}
+      - {child: {column: chr10_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr10_hcvcf_index}, parent: {column: chr10_hcvcf_gz}}
+      - {child: {column: chr11_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr11_hcvcf_index}, parent: {column: chr11_hcvcf_gz}}
+      - {child: {column: chr12_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr12_hcvcf_index}, parent: {column: chr12_hcvcf_gz}}
+      - {child: {column: chr13_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr13_hcvcf_index}, parent: {column: chr13_hcvcf_gz}}
+      - {child: {column: chr14_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr14_hcvcf_index}, parent: {column: chr14_hcvcf_gz}}
+      - {child: {column: chr15_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr15_hcvcf_index}, parent: {column: chr15_hcvcf_gz}}
+      - {child: {column: chr16_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr16_hcvcf_index}, parent: {column: chr16_hcvcf_gz}}
+      - {child: {column: chr17_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr17_hcvcf_index}, parent: {column: chr17_hcvcf_gz}}
+      - {child: {column: chr18_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr18_hcvcf_index}, parent: {column: chr18_hcvcf_gz}}
+      - {child: {column: chr19_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr19_hcvcf_index}, parent: {column: chr19_hcvcf_gz}}
+      - {child: {column: chr20_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr20_hcvcf_index}, parent: {column: chr20_hcvcf_gz}}
+      - {child: {column: chr21_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr21_hcvcf_index}, parent: {column: chr21_hcvcf_gz}}
+      - {child: {column: chr22_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: chr22_hcvcf_index}, parent: {column: chr22_hcvcf_gz}}
+      - {child: {column: xx_x_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: xx_x_hcvcf_index}, parent: {column: xx_x_hcvcf_gz}}
+      - {child: {column: xy_x_nonpar_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: xy_x_nonpar_hcvcf_index}, parent: {column: xy_x_nonpar_hcvcf_gz}}
+      - {child: {column: xy_x_par_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: xy_x_par_hcvcf_index}, parent: {column: xy_x_par_hcvcf_gz}}
+      - {child: {column: xy_y_nonpar_hcvcf_gz}, parent: {column: cram}}
+      - {child: {column: xy_y_nonpar_hcvcf_index}, parent: {column: xy_y_nonpar_hcvcf_gz}}
+    SGDP_GRCh38_sample: *sgdp_sample

@@ -327,3 +327,12 @@ class TestTheBundledPublishedMap:
         publishes is the other, and the submitter map does not reach into it. Pinned by
         `anvil_evidence.check` too; this is the bundled map holding to it."""
         assert not [e for e in load_slot_map().entries if e.table == PUBLISHED_TABLE]
+
+
+def test_a_slot_map_may_not_declare_a_lineage_only_kind(tmp_path):
+    path = tmp_path / "map.yaml"
+    path.write_text(
+        "catalog: anvil15\nsource_type: repository_activity\ndatasets:\n  D:\n    t:\n      c:\n        platform:\n          - {cell: p}\n"
+    )
+    with pytest.raises(ValueError, match="written only as lineage evidence"):
+        load_slot_map(path)

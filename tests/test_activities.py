@@ -86,5 +86,5 @@ def test_the_loader_refuses(entries, message):
 
 def test_the_loader_refuses_a_key_given_twice():
     text = _text(_every_term()) + "- term: Activity\n  reason: a\n  reason: b\n"
-    with pytest.raises(ValueError, match="given twice"):
+    with pytest.raises(ValueError, match="duplicate key"):
         activities.load_activities(text)

@@ -27,7 +27,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from meta_disco.anvil_evidence import _chosen_datasets, check, describe, import_all
+from meta_disco.anvil_evidence import check, chosen_datasets, describe, import_all
 from meta_disco.deployments import PROD
 from meta_disco.slot_map import load_slot_map, published_slot_map_resource
 from meta_disco.source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT
@@ -66,7 +66,7 @@ def main() -> int:
         for line in problems:
             print(f"  {line}", file=sys.stderr)
         return 1
-    checked = _chosen_datasets(slot_map, args.dataset)
+    checked = chosen_datasets(slot_map.datasets(), args.dataset)
     entries = sum(1 for e in slot_map.entries if e.dataset in checked)
     print(f"Slot map checked against {catalog}: {entries} column entries across {len(checked)} dataset(s).")
     if args.check:

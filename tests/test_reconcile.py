@@ -881,11 +881,12 @@ def test_the_artifact_names_the_translation_table_it_was_built_from(tmp_path, ru
     assert result["value_map_sha256"] == table.digest and len(table.digest) == 64
 
 
-def test_every_importer_source_type_has_a_place_in_the_precedence():
-    from meta_disco.models import IMPORTER_SOURCE_TYPES
+def test_every_slot_evidence_source_type_has_a_place_in_the_precedence():
+    """Every kind a slot evidence file can declare; a lineage-only kind has no value to credit (#583)."""
+    from meta_disco.models import IMPORTER_SOURCE_TYPES, LINEAGE_ONLY_SOURCE_TYPES
     from meta_disco.reconcile import SOURCE_PRECEDENCE
 
-    assert {t for t, _ in SOURCE_PRECEDENCE} == set(IMPORTER_SOURCE_TYPES)
+    assert {t for t, _ in SOURCE_PRECEDENCE} == set(IMPORTER_SOURCE_TYPES - LINEAGE_ONLY_SOURCE_TYPES)
 
 
 def test_the_report_lists_each_conflict_by_its_competing_values(tmp_path, run, evidence, table):

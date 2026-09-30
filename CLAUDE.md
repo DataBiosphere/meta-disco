@@ -175,7 +175,7 @@ evidence}` entry — plus the controlled vocabulary:
     `make import-anvil-published`, under `anvil_published/`, #497). A map's top-level
     `source_type` is the label its evidence carries and decides its directory
     (`anvil_evidence.EVIDENCE_DIRS`). Line 1 is the envelope, naming both sides of the
-    join and the source's kind (`source_type`, one of `IMPORTER_SOURCE_TYPES`, constant
+    join and the source's kind (`source_type`, one of `IMPORTER_SOURCE_TYPES` less the lineage-only kinds, constant
     for the file. `wrangler_annotation` is deliberately not among them: a curator
     enters as rules, not as evidence, per contract 1.6/1.7). The envelope's shape lives
     in the LinkML schema (`EvidenceFileEnvelope` and its two parts in
@@ -184,6 +184,15 @@ evidence}` entry — plus the controlled vocabulary:
     committed, and held to the schema by the drift test. `source_evidence` imports
     those classes as they are; the one rule the generator drops (a `file_name` key
     needs a target dataset) is a function there, not a subclass.
+  - **Lineage evidence** (#583) is a second kind of evidence file: the same envelope, but each
+    line a `LineageRow` (a child, its parent — a DRS URI, `file_id` or sample id, with the source's
+    own identifier kept where the importer looked the locator up — and the source's `raw_activity`),
+    written by `lineage_evidence` under its **own root**, `data/lineage_evidence/`, because every
+    reader of `data/source_evidence/` takes each file there as slot lines. The importer is
+    `anvil_lineage`, driven by `sources/anvil_lineage_map.yaml` (`make check-lineage-map` /
+    `make import-anvil-lineage`). A line declares no activity or role (#584 translates) and the
+    parent is not resolved (#577 does). `repository_activity` (`anvil_activity`) is an importer kind
+    written only as lineage (`models.LINEAGE_ONLY_SOURCE_TYPES`); a slot evidence file refuses it.
   - **Every repository has exactly one published source** (contract 7.12), declared in
     `pipeline.PUBLISHED_TABLES` beside the record keys, each repository's own entry in
     its module (`azul_manifest.PUBLISHED_TABLE`); `anvil_evidence.check` holds both maps to it

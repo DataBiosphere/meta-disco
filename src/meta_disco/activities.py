@@ -16,23 +16,14 @@ import yaml
 from .models import CLASSIFICATION_FIELDS
 from .schema.classification_model import ActivityDeclaration, ActivityDeclarations
 from .schema_vocab import activity_values
+from .slot_map import unique_key_loader
 
 UNKNOWN = "Activity"
 INDEXING = "IndexActivity"
 CHECKSUM = "ChecksumActivity"
 
 
-class _UniqueKeyLoader(yaml.SafeLoader):
-    """Refuses a repeated key, which PyYAML would silently keep the last of."""
-
-    def construct_mapping(self, node, deep=False):
-        seen: set = set()
-        for key_node, _value in node.value:
-            key = self.construct_object(key_node, deep=deep)
-            if key in seen:
-                raise ValueError(f"activities file line {key_node.start_mark.line + 1}: key {key!r} given twice")
-            seen.add(key)
-        return super().construct_mapping(node, deep=deep)
+_UniqueKeyLoader = unique_key_loader("activities file")
 
 
 def default_activities_resource():
