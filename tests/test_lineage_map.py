@@ -73,6 +73,10 @@ def test_the_kind_of_source_follows_from_the_table():
             "- {child: {column: a}, parent: {column: b}}\n      - {child: {column: c, key: file_id}, parent: {column: b}}",
             "one table is one file",
         ),
+        (
+            "- {child: {column: a}, parent: {column: b}}\n      - {child: {column: c}, parent: {column: b, key: file_id}}",
+            "column 'b' is read as drs_uri and as file_id",
+        ),
     ],
 )
 def test_a_malformed_link_is_refused_naming_it(tmp_path, entry, message):

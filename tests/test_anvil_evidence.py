@@ -7,19 +7,11 @@ import json
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import pytest
 
 from meta_disco import anvil_evidence as ae
-from meta_disco.azul_manifest import (
-    FORMAT_COMPACT,
-    FORMAT_VERBATIM,
-    load_sidecar,
-    manifest_dir,
-    manifest_path,
-    save_sidecar,
-)
+from meta_disco.azul_manifest import FORMAT_COMPACT, FORMAT_VERBATIM, manifest_path
 from meta_disco.deployments import PROD
 from meta_disco.models import JOIN_KEY_DRS_URI, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
 from meta_disco.slot_map import load_slot_map, published_slot_map_resource

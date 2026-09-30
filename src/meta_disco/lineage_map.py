@@ -169,8 +169,23 @@ def load_lineage_map(source: Readable | None = None) -> LineageMap:
             pairs = [(link.child_column, link.parent_column) for link in table_links]
             if len(set(pairs)) != len(pairs):
                 raise ValueError(f"{at}: a (child, parent) column pair is listed twice")
+            _refuse_two_readings(table_links, at)
             links += table_links
     return LineageMap(catalog=catalog, links=tuple(links))
+
+
+def _refuse_two_readings(links: list[Link], at: str) -> None:
+    """Refuse a column read two ways within one table: as a locator in one link and an identifier in another.
+
+    The importer reads each column once per row, so a second reading would be silently
+    ignored; and a column holds one kind of value, whichever link names it.
+    """
+    readings: dict[str, str] = {}
+    for link in links:
+        parent = "a source identifier" if link.lookup is not None else str(link.parent_key)
+        for column, reading in ((link.child_column, link.child_key), (link.parent_column, parent)):
+            if readings.setdefault(column, reading) != reading:
+                raise ValueError(f"{at}: column {column!r} is read as {readings[column]} and as {reading}")
 
 
 def _link(dataset: str, table: str, entry: object, at: str) -> Link:

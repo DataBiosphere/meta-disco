@@ -85,8 +85,8 @@ EXTERNAL_SOURCE_TYPES = frozenset(
 # reach us as an evidence file: contract 1.6 and 1.7 say it "is unlike every other in
 # how it enters: as rules, not as evidence", and 1.7 makes a decision about a single
 # file a rule whose selection matches one file. So the envelope's vocabulary is these
-# three, and the format cannot express the one input the contract routes elsewhere
-# (#421 review). Not derived by subtracting from EXTERNAL_SOURCE_TYPES: a kind added
+# four — the three value sources and, for lineage only, `repository_activity` (#583) —
+# and the format cannot express the one input the contract routes elsewhere (#421 review). Not derived by subtracting from EXTERNAL_SOURCE_TYPES: a kind added
 # there should not silently become writable to a file.
 IMPORTER_SOURCE_TYPES = frozenset(
     {

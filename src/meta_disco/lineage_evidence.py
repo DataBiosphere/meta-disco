@@ -1,8 +1,9 @@
-"""Lineage evidence files: a source saying one file was made from another (#583).
+"""Lineage evidence files: a source saying a file was made from a parent (#583).
 
 A slot evidence file (``source_evidence``) says what a source wrote about one of a
 file's six dimensions. A lineage evidence file says what a source wrote about how a
-file was made: this file, from that parent, in a step the source calls this. The
+file was made: this file, from that parent — another file, or a sample
+(``parent_key_type: biosample_id``) — in a step the source calls this. The
 envelope on line 1 is the same ``EvidenceFileEnvelope``; every later line is a
 ``LineageRow``, the class the schema declares and gen-pydantic emits, used as it is.
 
