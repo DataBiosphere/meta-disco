@@ -129,6 +129,7 @@ from pydantic import TypeAdapter, ValidationError
 from .models import (
     CLASSIFICATION_FIELDS,
     JOIN_KEY_FILE_NAME,
+    LINEAGE_ONLY_SOURCE_TYPES,
     SOURCE_PUBLISHED_VALUE,
     ClaimSource,
     optional_str,
@@ -188,7 +189,7 @@ _encode = json.JSONEncoder(separators=(",", ":")).encode
 # so across a multi-gigabyte sequential write; a megabyte is one per 8,300.
 _WRITE_BUFFER_BYTES = 1 << 20
 
-# How far `read_envelope` will read looking for the end of line 1. See `_read_envelope`.
+# How far `read_envelope` will read looking for the end of line 1. See `read_envelope_from`.
 _MAX_ENVELOPE_BYTES = 1 << 20
 
 # What each side calls the row it is refusing (`_where`). A writer counts rows,
@@ -280,6 +281,22 @@ def claim_source_for(source: EvidenceFileSource, column: str | None) -> ClaimSou
     return ClaimSource(
         name=source.repository, url=source.url, dataset=source.dataset, table=source.table, column=column
     )
+
+
+def require_slot_evidence_kind(envelope: EvidenceFileEnvelope, where: str) -> None:
+    """Refuse a slot evidence envelope declaring a lineage-only kind (``LINEAGE_ONLY_SOURCE_TYPES``, #583).
+
+    ``repository_activity`` is an importer kind, so the envelope model takes it, but it
+    says how a file was made and not what a file is: its lines are ``LineageRow``s,
+    written by ``lineage_evidence`` under their own root. Checked where slot lines are
+    written and read, so a slot file cannot carry a kind that ``SOURCE_PRECEDENCE`` has
+    no place for.
+    """
+    if envelope.source_type in LINEAGE_ONLY_SOURCE_TYPES:
+        raise ValueError(
+            f"{where}: source_type {envelope.source_type!r} is written only as lineage evidence "
+            "(lineage_evidence), never as slot evidence"
+        )
 
 
 def require_scoped_target(envelope: EvidenceFileEnvelope, where: str) -> None:
@@ -495,6 +512,7 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
             f"a {path.suffix or 'suffixless'} file is written but never discovered"
         )
     require_scoped_target(envelope, "evidence file envelope")
+    require_slot_evidence_kind(envelope, "evidence file envelope")
     parse_iso_datetime(envelope.fetched_at, "envelope fetched_at", "evidence file envelope")
     path.parent.mkdir(parents=True, exist_ok=True)
     # A name unique to this writer, not `<name>.tmp`. Two importers writing one path
@@ -568,7 +586,7 @@ def read_envelope(path: Path) -> EvidenceFileEnvelope:
     1 is absent or is not an envelope.
     """
     with path.open("rb") as f:
-        return _read_envelope(path, f)
+        return read_envelope_from(path, f)
 
 
 def iter_evidence(path: Path) -> Iterator[EvidenceEntry]:
@@ -591,7 +609,9 @@ def iter_evidence(path: Path) -> Iterator[EvidenceEntry]:
     """
     name = path.name
     with path.open("rb") as f:
-        envelope_source = _read_envelope(path, f).source
+        envelope = read_envelope_from(path, f)
+        require_slot_evidence_kind(envelope, f"{name} line 1")
+        envelope_source = envelope.source
         # One `ClaimSource` per column for the whole file, as the writer keeps one per
         # column (`write_evidence_file`). The envelope's members are constant and only
         # `column` varies, so rebuilding it per line rebuilt and re-validated the same
@@ -1129,12 +1149,13 @@ def _check_entry(where: str, field: Any, target_key_value: Any, raw_value: Any) 
         )
 
 
-def _read_envelope(path: Path, f: BinaryIO) -> EvidenceFileEnvelope:
+def read_envelope_from(path: Path, f: BinaryIO) -> EvidenceFileEnvelope:
     """Consume line 1 of an open evidence file as its envelope.
 
     The one place an evidence file's first line is turned into provenance, shared by
-    :func:`read_envelope` (which wants only that) and :func:`iter_evidence` (which
-    reads on from there), so a file with no first line is refused in the same words
+    :func:`read_envelope` (which wants only that), :func:`iter_evidence` (which
+    reads on from there) and ``lineage_evidence.iter_lineage`` (a lineage file has the
+    same envelope, #583), so a file with no first line is refused in the same words
     either way. ``f`` is a byte handle for the reason :func:`iter_evidence` opens one:
     a decode failure is reported as a malformed line, not raised from inside a file
     iterator.

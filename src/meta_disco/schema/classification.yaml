@@ -512,6 +512,79 @@ classes:
           the envelope — and absent for a source whose table has no columns to
           name.
 
+  LineageRow:
+    description: >-
+      One line of a lineage evidence file after the envelope (#583): a source saying
+      one file was made from one parent. It reads "the row in the envelope's
+      `target` whose `target_key` equals `target_key_value` was made from `parent`,
+      a `parent_key_type`". The envelope is an `EvidenceFileEnvelope`, as a slot
+      evidence file's is; the lines differ, so the two are written under separate
+      roots and no reader of one ever meets the other.
+
+      **It declares nothing**, as an `EvidenceRow` declares nothing: no activity, no
+      role, no value, no status, no rule id. `raw_activity` is what the source calls
+      the step, verbatim; which activity and role that means is the activity
+      translation table's (#584), and finding the parent among our files is
+      reconcile's (#577).
+
+      One line per (child, parent) pair: a source row naming two parents, or two
+      generated files, is written as one line for each pair.
+
+      **At least one of `parent` and `parent_source_identifier`.** A parent named by
+      a locator or by AnVIL's identifier is written as `parent`. One named by the
+      source's own identifier is written as the locator the source's own table
+      gives it, with the identifier kept as `parent_source_identifier`; when that
+      table has no row for it, the line carries the identifier alone, so the link
+      is still reported. `parent_key_type` is present exactly when `parent` is.
+      gen-pydantic emits no class rules, so `lineage_evidence` enforces both at
+      write and at read.
+    attributes:
+      target_key_value:
+        required: true
+        pattern: "^[^\\r\\n]+\\Z"
+        description: >-
+          The child, as the envelope's `target_key` names it: AnVIL's `file_id` for
+          `anvil_activity`, the DRS URI for a submitter table.
+      parent:
+        pattern: "^[^\\r\\n]+\\Z"
+        description: >-
+          The parent, in the form `parent_key_type` names. Written whether or not it
+          is one of the dataset's files: a parent outside the dataset is reported
+          by reconcile (#577), and dropping it here would hide it.
+      parent_key_type:
+        range: lineage_parent_key_enum
+        description: >-
+          Which kind of value `parent` is. Named `_type` because
+          `ActivityInput.parent_key` is a value, the parent's record key.
+      parent_source_identifier:
+        pattern: "^[^\\r\\n]+\\Z"
+        description: >-
+          The source's own identifier for the parent, where the source named the
+          parent by one (IGVF's `derived_from` accessions), kept beside the locator
+          the importer found for it.
+      raw_activity:
+        description: >-
+          What the source calls the step, verbatim (contract 1.4), where the source
+          names it — `anvil_activity`'s `activity_type`, e.g. `Indexing` or
+          `Quantificatioin: salmon`. The empty string is kept; a null cell is
+          omitted. No pattern and no enum, for `EvidenceRow.raw_value`'s reason.
+      activity_id:
+        pattern: "^[^\\r\\n]+\\Z"
+        description: >-
+          The source's id for the step, where it has one (`anvil_activity`'s
+          `activity_id`), so lines from one step can be told apart from another's.
+      child_column:
+        required: true
+        pattern: "^[^\\r\\n]+\\Z"
+        description: The column the child was read from.
+      parent_column:
+        required: true
+        pattern: "^[^\\r\\n]+\\Z"
+        description: The column the parent (or its source identifier) was read from.
+      raw_activity_column:
+        pattern: "^[^\\r\\n]+\\Z"
+        description: The column `raw_activity` was read from; present exactly when it is.
+
   EvidenceFileEnvelope:
     description: >-
       What an evidence file records once, for every row in it (issue #401, amended
@@ -1623,6 +1696,13 @@ enums:
         description: >-
           A table the submitter wrote, carried by the repository — an AnVIL verbatim
           manifest's submitter table.
+      repository_activity:
+        description: >-
+          The repository's own record of a step — AnVIL's `anvil_activity` table, whose
+          columns are FSS's and the same in every dataset (#583): which files and
+          samples a step used, which files it generated, and what the source calls
+          the step. It says how a file was made, not what a file is, so it is written
+          only as lineage evidence (`LineageRow`), never as slot evidence.
       published_value:
         description: >-
           The value the repository's own system of record publishes for the file
@@ -1660,6 +1740,8 @@ enums:
       external_ground_truth:
         description: As in `source_type_enum`.
       repository_metadata:
+        description: As in `source_type_enum`.
+      repository_activity:
         description: As in `source_type_enum`.
       published_value:
         description: As in `source_type_enum`.
@@ -1745,6 +1827,20 @@ enums:
           headers — accessions appear in no input file name at all. A claim from
           an archive can be attached only by this, which is why the join runs
           after inference rather than over the input corpus.
+
+  lineage_parent_key_enum:
+    description: >-
+      What kind of value a `LineageRow`'s `parent` is (#583). A locator says where a
+      file is; an identifier says which file or sample.
+    permissible_values:
+      drs_uri:
+        description: A locator, the DRS URI, as a submitter table's file-link column holds it.
+      file_id:
+        description: AnVIL's own file identifier, as `anvil_activity`'s `used_file_id` holds it.
+      biosample_id:
+        description: >-
+          A sample's identifier, as `anvil_activity`'s `used_biosample_id` holds it. A
+          sample is not a file; reconcile builds no input from one (#577, #582).
 
   evidence_marker_enum:
     description: >-
