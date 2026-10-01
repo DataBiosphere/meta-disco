@@ -390,6 +390,45 @@ def test_only_the_latest_catalog_is_read_and_slot_files_of_another_catalog_are_n
         list(keyed_lines(lineage, evidence, discover(lineage)))
 
 
+def test_a_sample_parent_gets_no_data_type_even_where_its_id_names_a_file(roots):
+    """The parent's type is looked up only when the parent is keyed as the table keys its files."""
+    lineage, evidence = roots
+    write_lineage(
+        lineage,
+        "sample",
+        [line("drs://c", "S1", "cram", "sample_id", key="biosample_id")],
+        source_type=SOURCE_REPOSITORY_METADATA,
+        key="drs_uri",
+    )
+    write_slots(evidence, "sample", [("drs://c", "alignments"), ("S1", "reads")])
+    (keyed,) = keyed_lines(lineage, evidence, lineage_paths(lineage))
+    assert (keyed.key[PARTS.index("child_data_type")], keyed.key[PARTS.index("parent_data_type")]) == (
+        "alignments",
+        None,
+    )
+
+
+def test_the_dataset_filter_reads_only_the_named_datasets(roots):
+    lineage, evidence = roots
+    write_lineage(lineage, "anvil_activity", [activity_line("c1", "p1", "Indexing")], dataset="D")
+    write_lineage(lineage, "anvil_activity", [activity_line("c2", "p2", "Checksum")], dataset="E")
+    assert {k.dataset for k in keyed_lines(lineage, evidence, lineage_paths(lineage))} == {"D", "E"}
+    only_d = list(keyed_lines(lineage, evidence, lineage_paths(lineage, ["D"])))
+    assert [(k.dataset, k.key[PARTS.index("raw_activity")]) for k in only_d] == [("D", "Indexing")]
+
+
+def test_an_empty_and_an_absent_activity_word_seed_two_rows_with_distinct_ids(tmp_path, roots):
+    lineage, evidence = roots
+    write_lineage(lineage, "anvil_activity", [activity_line("c1", "p1", ""), line("c2", "p2")])
+    path = table_file(tmp_path, "rows:\n")
+    added = seed(path, lineage, evidence).rows_added
+    assert len(added) == 2 and len(set(added)) == 2
+    assert sorted(added)[0] == "activity.anvil_activity_generated_file_id_used_file_id"
+    assert sorted(added)[1].startswith("activity.anvil_activity_generated_file_id_used_file_id_")
+    words = {next(iter(row.match["raw_activity"])) for row in load_activity_map(path).rows}
+    assert words == {"", None}
+
+
 def test_the_queue_has_a_group_for_every_lineage_source_type():
     """So an entry of a new lineage kind cannot fall out of both reports unlisted."""
     assert set(QUEUE_GROUP_TEXT) == LINEAGE_SOURCE_TYPES
