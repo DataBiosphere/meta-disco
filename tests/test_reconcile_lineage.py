@@ -312,3 +312,36 @@ def test_a_file_whose_only_step_is_generic_gets_none_and_is_counted(tmp_path, ro
     assert rows["s.report.txt"]["generated_by"] is None
     assert report["lineage"]["generic_only"] == {DATASET: 1}
     assert report["lineage"]["conflicts"] == {}
+
+
+def test_ac4_a_name_and_a_table_naming_different_activities_are_an_activity_conflict(tmp_path, roots):
+    evidence, lineage = roots
+    sample_lines(lineage, sample_line(2, 1, "stats", "cram"))
+    rows, report = go(
+        tmp_path, [rec(1, "a.vcf.gz"), rec(2, "a.vcf.gz.tbi", "index", name_edge(1, "a.vcf.gz"))], evidence
+    )
+    assert rows["a.vcf.gz.tbi"]["generated_by"] is None
+    (example,) = report["lineage"]["conflicts"][DATASET]["activity"]["examples"]
+    assert [s["said"] for s in example["said"]] == ["IndexActivity", "QualityControlActivity"]
+
+
+def test_another_catalogs_lineage_is_not_read(tmp_path, roots):
+    evidence, lineage = roots
+    write_lineage(
+        lineage, "anvil_activity", [activity_line("file-2", "file-1", "Indexing")], dataset=DATASET, version="anvil14"
+    )
+    rows, report = go(tmp_path, [rec(1, "a.vcf.gz"), rec(2, "a.vcf.gz.tbi")], evidence)
+    assert rows["a.vcf.gz.tbi"]["generated_by"] is None
+    assert report["lineage"]["sources"] == {} and report["lineage_files"] == []
+
+
+def test_a_misfit_two_inputs_show_is_counted_once_for_its_file(tmp_path, roots):
+    evidence, lineage = roots
+    sample_lines(lineage, sample_line(3, 1, "cram", "r1"), sample_line(3, 2, "cram", "r2"))
+    _, report = go(
+        tmp_path,
+        [rec(1, "a.bam", "alignments"), rec(2, "b.bam", "alignments"), rec(3, "s.cram", "alignments")],
+        evidence,
+    )
+    found = {(m["problem"], m["detail"]): m["files"] for m in report["lineage"]["misfits"]}
+    assert found[("input kind (reads)", "alignments")] == 1

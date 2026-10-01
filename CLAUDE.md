@@ -240,9 +240,11 @@ evidence}` entry — plus the controlled vocabulary:
     parent resolved within the child's dataset by `file_id` / `drs_uri`, and merged with
     inference's own step by `edges.merge_steps` into the reconciled `generated_by`. A lineage
     source is cited by its activity-map row id and a `ClaimSource`. An unresolved parent gives no
-    input and a conflict (two activities, or two parents in a role that takes one) gives no
+    input and a conflict (two activities; two parents in a role that takes one; a generic `Activity`
+    beside a specific one naming another parent) gives no
     `generated_by`; both are counted in the report's `lineage` block, never written on a record. A
-    sample parent waits for #582. Inference's own `generated_by` stays as it was.
+    sample parent waits for #582. A file whose only steps are generic gets none, counted as
+    `generic_only`. The inference artifact's `generated_by` is never changed.
   - **No output record carries what a repository publishes** (#513). The `published`
     block (#424) and `make published-comparison` are deleted: the published values are
     input kind 2, written by the published importer as evidence (contract 7.1, 7.12,

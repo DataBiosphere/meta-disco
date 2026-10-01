@@ -37,7 +37,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .activity_map import ActivityMap, Row, keyed_lines, lineage_paths
+from .activity_map import ActivityMap, Row, generation_stamp, keyed_lines
 from .edges import LineageStep, lineage_attribution, parent_kind_of
 from .lineage_evidence import read_lineage_envelope
 from .output_utils import relative_to
@@ -111,19 +111,28 @@ class LineageJoin:
     files: list[str] = field(default_factory=list)
 
 
+def latest_catalog(paths: list[Path]) -> list[Path]:
+    """The ``paths`` of the catalog holding the newest generation stamp, as ``activity_map.lineage_paths`` chooses it."""
+    by_catalog: dict[str, list[Path]] = defaultdict(list)
+    for path in paths:
+        by_catalog[str(read_lineage_envelope(path).target.version)].append(path)
+    if not by_catalog:
+        return []
+    return by_catalog[max(by_catalog, key=lambda c: max(generation_stamp(p) for p in by_catalog[c]))]
+
+
 def translate_lineage(
     lineage_root: Path, evidence_root: Path, repository: str, catalog: str | None, table: ActivityMap
 ) -> PendingLineage:
     """Read and translate every lineage line that :func:`applies` to the run; see the module docstring, step 1.
 
-    Where the input names no catalog, only the latest catalog's lineage is read
-    (``activity_map.lineage_paths``): lineage is read one catalog at a time.
+    Where the input names no catalog, only the latest catalog's lineage about this
+    repository is read (:func:`latest_catalog`): lineage is read one catalog at a time.
     """
     pending = PendingLineage()
     paths = [p for p in discover(lineage_root) if applies(read_lineage_envelope(p).target, repository, catalog)]
     if catalog is None:
-        latest = set(lineage_paths(lineage_root))
-        paths = [p for p in paths if p in latest]
+        paths = latest_catalog(paths)
     pending.files = [relative_to(p, lineage_root) for p in paths]
     for keyed in keyed_lines(lineage_root, evidence_root, paths):
         envelope, line = keyed.envelope, keyed.line

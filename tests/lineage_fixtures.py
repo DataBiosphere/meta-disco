@@ -49,6 +49,7 @@ def activity_line(child, parent, raw_activity, parent_column="used_file_id"):
 
 
 def write_lineage(root, table, rows, dataset="D", **envelope_kw):
-    directory = generation_dir(root, "anvil", "anvil15", dataset, STAMP)
+    """One lineage file in the generation layout, under the envelope's catalog version (``anvil15`` by default)."""
+    directory = generation_dir(root, "anvil", envelope_kw.get("version", "anvil15"), dataset, STAMP)
     directory.mkdir(parents=True, exist_ok=True)
     write_lineage_file(evidence_file_path(directory, table), envelope(table, dataset=dataset, **envelope_kw), rows)

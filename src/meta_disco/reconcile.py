@@ -1,5 +1,9 @@
 """Reconcile: a stored inference run plus source evidence, settled by agreement (#432).
 
+Beside the slots, reconcile builds each file's ``generated_by`` from the imported lineage
+(#577): :mod:`reconcile_lineage` translates and resolves it, sharing the records scan
+below, and ``edges.merge_steps`` merges it with inference's own step.
+
 The stage after inference (contract 6.1): **infer → reconcile**. Reading the sources is
 the join below, reconcile's first step, and its per-source counts are a line of the
 report (6.7). Reconcile reads a stored run and never
@@ -742,7 +746,10 @@ class Report:
         """Count one record's settled step: who named it, a conflict with who said what, or how it misfits.
 
         ``steps`` are the record's lineage steps, whose parents' ``data_type`` the misfit
-        check reads; an input only inference names has none, so its kind is not judged.
+        check reads; an input only inference names has none, so its kind is not judged. A
+        parent's ``data_type`` is inference's, read in the records scan, while the child's is
+        the reconciled one: the parents are not reconciled before the scan. A misfit is
+        counted once per file, however many inputs show it.
         """
         dataset = str(reconciled.get("dataset_title") or "")
         step = reconciled.get("generated_by")
@@ -767,7 +774,7 @@ class Report:
         self.steps[dataset]["+".join(sorted({n["source_type"] for n in step["named_by"]}))] += 1
         child_kind = reconciled["classifications"]["data_type"].get("value")
         kinds = {s.parent_key: s.parent_data_type for s in steps}
-        for problem, detail in misfits(step, child_kind, kinds):
+        for problem, detail in dict.fromkeys(misfits(step, child_kind, kinds)):
             self.misfits[(dataset, step["activity"], problem, detail)] += 1
 
     @staticmethod
@@ -1081,7 +1088,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--no-evidence",
         action="store_true",
-        help="Exclude all source evidence: the reconciled artifact then concludes what inference did (6.6)",
+        help="Exclude all source evidence and lineage (--lineage-root is then not read): the reconciled "
+        "artifact concludes what inference did (6.6)",
     )
     args = parser.parse_args(argv)
     # A run's output root is prod's until a deployment names its own (#480), so the latest

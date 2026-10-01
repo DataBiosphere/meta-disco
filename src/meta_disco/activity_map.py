@@ -329,12 +329,12 @@ def lineage_paths(lineage_root: Path, datasets: Iterable[str] | None = None) -> 
         return []
     # The latest catalog is chosen over every dataset first, so a dataset the latest
     # catalog lacks is not read from an older one.
-    latest = max(by_catalog, key=lambda catalog: max(_stamp(p) for p, _ in by_catalog[catalog]))
+    latest = max(by_catalog, key=lambda catalog: max(generation_stamp(p) for p, _ in by_catalog[catalog]))
     wanted = set(datasets) if datasets is not None else None
     return [p for p, dataset in by_catalog[latest] if wanted is None or dataset in wanted]
 
 
-def _stamp(path: Path) -> str:
+def generation_stamp(path: Path) -> str:
     """The generation stamp a file sits under, or "" for a file outside the generation layout."""
     return path.parent.name if is_generation(path.parent.name) else ""
 

@@ -190,7 +190,8 @@ def lineage_attribution(source_type: str, row_id: str, source: ClaimSource, acti
 
 @dataclass(frozen=True)
 class StepConflict:
-    """Why a file's sources give no one step: two activities, or two parents in a role that takes one.
+    """Why a file's sources give no one step: two activities; two parents in a role that takes one; or, beside a
+    specific activity, a generic ``Activity`` step whose parent no specific source names (in the generic step's role).
 
     ``said`` is who said what: per source, the activity (an activity conflict) or the
     parent's name (an edge conflict), with the source's attribution.
@@ -253,23 +254,22 @@ def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[
         return None, None
     if activity is None:
         return None, StepConflict(ACTIVITY_CONFLICT, None, _distinct((s.activity, s.attribution) for s in said))
-    if activity != activities.UNKNOWN:
-        specific = [s for s in said if s.activity != activities.UNKNOWN]
-        named = {s.parent_key: s for s in specific}
-        for s in said:
-            if s.activity != activities.UNKNOWN:
-                continue
-            if s.parent_key not in named:
-                return None, StepConflict(
-                    EDGE_CONFLICT,
-                    s.role,
-                    _distinct([(s.parent_file, s.attribution), *((o.parent_file, o.attribution) for o in specific)]),
-                )
-        # A generic step whose parent matches stands in that parent's input, as another of its sources.
-        said = [
-            s if s.activity != activities.UNKNOWN else replace(named[s.parent_key], attribution=s.attribution)
-            for s in said
-        ]
+    # Beside a specific activity (the generic-only case returned above), a generic step must match a parent.
+    specific = [s for s in said if s.activity != activities.UNKNOWN]
+    named = {s.parent_key: s for s in specific}
+    for s in said:
+        if s.activity != activities.UNKNOWN:
+            continue
+        if s.parent_key not in named:
+            return None, StepConflict(
+                EDGE_CONFLICT,
+                s.role,
+                _distinct([(s.parent_file, s.attribution), *((o.parent_file, o.attribution) for o in specific)]),
+            )
+    # A generic step whose parent matches stands in that parent's input, as another of its sources.
+    said = [
+        s if s.activity != activities.UNKNOWN else replace(named[s.parent_key], attribution=s.attribution) for s in said
+    ]
     declared = {i.role: i for i in activities.declarations()[activity].inputs}
     for role in dict.fromkeys(s.role for s in said):
         in_role = [s for s in said if s.role == role]
