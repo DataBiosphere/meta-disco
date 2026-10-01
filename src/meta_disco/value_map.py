@@ -49,16 +49,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import os
-import re
 import sys
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from functools import cached_property
 from importlib.resources import files
 from pathlib import Path
-from typing import Any
-from uuid import uuid4
 
 import yaml
 
@@ -83,7 +79,20 @@ from .source_evidence import (
     list_cell,
     read_envelope,
 )
-from .summaries import md_code, md_table
+from .summaries import ReportColumn, md_rows
+from .yaml_rows import (
+    fresh_id,
+    generation_name,
+    mapping,
+    open_rows,
+    parse_rows,
+    read_reason,
+    read_seeded_from,
+    replace_checked,
+    row_indent,
+    row_text,
+    scalar,
+)
 
 Key = frozenset[str]
 """A normalized match key: one element for a scalar cell, several for a list cell."""
@@ -101,9 +110,6 @@ _REFUSED_ROW_KEYS = {
 }
 _FIELDS = frozenset(CLASSIFICATION_FIELDS)
 _WHERE = "value map"
-_STR_TAG = "tag:yaml.org,2002:str"
-_NULL_TAG = "tag:yaml.org,2002:null"
-_ROW_DASH = re.compile(r"^( *)- ", re.MULTILINE)
 
 
 def default_value_map_resource():
@@ -235,42 +241,9 @@ def load_value_map(path: Path | None = None) -> ValueMap:
     """
     resource = path if path is not None else default_value_map_resource()
     text = resource.read_text(encoding="utf-8")
-    return ValueMap(rows=tuple(_rows(_parse(text))), digest=hashlib.sha256(text.encode("utf-8")).hexdigest())
-
-
-def _parse(text: str) -> list[yaml.Node]:
-    """The row nodes of the document, checked down to the top-level shape."""
-    root = yaml.compose(text, Loader=yaml.SafeLoader)
-    if root is None:
-        raise ValueError(f"{_WHERE}: the document is empty; it needs a `rows` key")
-    document = _mapping(root, _WHERE)
-    if set(document) != {"rows"}:
-        raise ValueError(f"{_WHERE}: top-level keys are {sorted(document)}, expected exactly ['rows']")
-    rows_node = document["rows"]
-    if rows_node.tag == _NULL_TAG:
-        return []
-    if not isinstance(rows_node, yaml.SequenceNode):
-        raise ValueError(f"{_WHERE}: `rows` is not a list (line {rows_node.start_mark.line + 1})")
-    return list(rows_node.value)
-
-
-def _mapping(node: yaml.Node, at: str) -> dict[str, yaml.Node]:
-    """A mapping node's entries by string key, refusing anything else and any key given twice."""
-    if not isinstance(node, yaml.MappingNode):
-        raise ValueError(f"{at}: expected a mapping, got {_kind(node)} (line {node.start_mark.line + 1})")
-    entries: dict[str, yaml.Node] = {}
-    for key_node, value_node in node.value:
-        key = _scalar(key_node, at)
-        if key in entries:
-            raise ValueError(f"{at}: key {key!r} given twice (line {key_node.start_mark.line + 1})")
-        entries[key] = value_node
-    return entries
-
-
-def _scalar(node: yaml.Node, at: str) -> str:
-    if not isinstance(node, yaml.ScalarNode) or node.tag != _STR_TAG:
-        raise ValueError(f"{at}: expected a string, got {_kind(node)} (line {node.start_mark.line + 1})")
-    return node.value
+    return ValueMap(
+        rows=tuple(_rows(parse_rows(text, _WHERE))), digest=hashlib.sha256(text.encode("utf-8")).hexdigest()
+    )
 
 
 def _string_or_list(node: yaml.Node, at: str) -> str | tuple[str, ...]:
@@ -285,14 +258,8 @@ def _string_or_list(node: yaml.Node, at: str) -> str | tuple[str, ...]:
             raise ValueError(
                 f'{at}: an empty list matches nothing — no evidence line carries one; quote "[]" for that text'
             )
-        return tuple(_scalar(item, at) for item in node.value)
-    return _scalar(node, at)
-
-
-def _kind(node: yaml.Node) -> str:
-    if isinstance(node, yaml.ScalarNode):
-        return f"{node.tag.rsplit(':', 1)[-1]} {node.value!r}"
-    return type(node).__name__.replace("Node", "").lower()
+        return tuple(scalar(item, at) for item in node.value)
+    return scalar(node, at)
 
 
 def _rows(nodes: list[yaml.Node]) -> Iterator[Row]:
@@ -308,10 +275,10 @@ def _rows(nodes: list[yaml.Node]) -> Iterator[Row]:
 
 def _row(node: yaml.Node, n: int) -> Row:
     at = f"{_WHERE} row {n}"
-    entries = _mapping(node, at)
+    entries = mapping(node, at)
     if "id" not in entries:
         raise ValueError(f"{at}: missing id")
-    id = _scalar(entries["id"], at)
+    id = scalar(entries["id"], at)
     at = f"{_WHERE} row {id!r}"
     for key, why in _REFUSED_ROW_KEYS.items():
         if key in entries:
@@ -329,20 +296,20 @@ def _row(node: yaml.Node, n: int) -> Row:
             "the slot prefix is what keeps row ids apart from rule ids"
         )
     scope = _scope(entries["scope"], at) if "scope" in entries else None
-    reason = _reason(entries["reason"], at) if "reason" in entries else None
+    reason = read_reason(entries["reason"], at) if "reason" in entries else None
     declares = _declares(entries.get("declares"), at, reason is not None)
-    seeded_from = _seeded_from(entries["seeded_from"], at) if "seeded_from" in entries else ()
+    seeded_from = read_seeded_from(entries["seeded_from"], at) if "seeded_from" in entries else ()
     return Row(id, slot, value, alternates, scope, declares, reason, seeded_from)
 
 
 def _match(node: yaml.Node, at: str) -> tuple[str, str | tuple[str, ...], tuple[str | tuple[str, ...], ...]]:
-    entries = _mapping(node, f"{at} match")
+    entries = mapping(node, f"{at} match")
     unknown = set(entries) - MATCH_KEYS
     if unknown:
         raise ValueError(f"{at}: match has unknown keys {sorted(unknown)}; it has {sorted(MATCH_KEYS)}")
     if {"slot", "value"} - set(entries):
         raise ValueError(f"{at}: match needs `slot` and `value`")
-    slot = _scalar(entries["slot"], at)
+    slot = scalar(entries["slot"], at)
     if slot not in _FIELDS:
         raise ValueError(f"{at}: match slot {slot!r} is not one of {sorted(_FIELDS)}")
     value = _string_or_list(entries["value"], f"{at} match value")
@@ -356,7 +323,7 @@ def _match(node: yaml.Node, at: str) -> tuple[str, str | tuple[str, ...], tuple[
 
 
 def _scope(node: yaml.Node, at: str) -> Scope:
-    entries = _mapping(node, f"{at} scope")
+    entries = mapping(node, f"{at} scope")
     unknown = set(entries) - SCOPE_KEYS
     if unknown:
         raise ValueError(f"{at}: scope has unknown keys {sorted(unknown)}; it is a source, or a source and dataset")
@@ -369,20 +336,13 @@ def _scope(node: yaml.Node, at: str) -> Scope:
 
 def _identifier(node: yaml.Node, at: str) -> str:
     """A scope member, held to ``required_str`` — the check ``ClaimSource`` puts on the provenance a scoped row must equal."""
-    text = _scalar(node, at)
+    text = scalar(node, at)
     if not text.strip():
         raise ValueError(f"{at}: {text!r} is not an identifier — a scope names a source or dataset evidence can carry")
     try:
         return required_str(text, "identifier", at)
     except ValueError as exc:
         raise ValueError(f"{at}: {text!r} is not an identifier — {exc}") from exc
-
-
-def _reason(node: yaml.Node, at: str) -> str:
-    reason = _scalar(node, f"{at} reason")
-    if not reason.strip():
-        raise ValueError(f"{at}: reason is empty — an authored row records why; a seeded row has no `reason` key")
-    return reason
 
 
 def _declares(node: yaml.Node | None, at: str, authored: bool) -> Mapping[str, str]:
@@ -396,10 +356,10 @@ def _declares(node: yaml.Node | None, at: str, authored: bool) -> Mapping[str, s
     if not authored:
         raise ValueError(f"{at}: declares something but has no reason — a seeded row declares nothing (contract 3.11)")
     declares: dict[str, str] = {}
-    for slot, value_node in _mapping(node, f"{at} declares").items():
+    for slot, value_node in mapping(node, f"{at} declares").items():
         if slot not in _FIELDS:
             raise ValueError(f"{at}: declares {slot!r}, which is not a slot; slots are {sorted(_FIELDS)}")
-        term = _scalar(value_node, f"{at} declares {slot}")
+        term = scalar(value_node, f"{at} declares {slot}")
         if term not in AUTHORABLE_STATUSES and not value_in_vocabulary(slot, term):
             raise ValueError(
                 f"{at}: declares {slot}: {term!r}, which is not a term of {slot}'s vocabulary "
@@ -407,12 +367,6 @@ def _declares(node: yaml.Node | None, at: str, authored: bool) -> Mapping[str, s
             )
         declares[slot] = term
     return declares
-
-
-def _seeded_from(node: yaml.Node, at: str) -> tuple[str, ...]:
-    if not isinstance(node, yaml.SequenceNode):
-        raise ValueError(f"{at}: seeded_from is not a list (line {node.start_mark.line + 1})")
-    return tuple(_scalar(item, f"{at} seeded_from") for item in node.value)
 
 
 # --- claims -----------------------------------------------------------------------
@@ -504,7 +458,7 @@ def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None =
     paths = _current_paths(evidence_root, datasets)
     lines_scanned = 0
     for path in paths:
-        where = _generation_name(evidence_root, path)
+        where = generation_name(evidence_root, path)
         for entry in iter_evidence(path):
             lines_scanned += 1
             if table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset) is not None:
@@ -519,14 +473,8 @@ def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None =
     if not seen:
         return SeedResult(len(paths), lines_scanned, ())
     ids = {row.id for row in table.rows}
-    if not table.rows:
-        # `rows: []`, `rows: null` and their multi-line spellings load as an empty table,
-        # but a block item cannot follow any of them, so the empty value is cut out by
-        # its source marks, leaving the bare key (and any comment after the value).
-        start, end = _empty_rows_span(text)
-        after = text[end:].lstrip(" \t")
-        text = text[:start].rstrip(" \t") + ("  " if after.startswith("#") else "") + after
-    indent = _row_indent(text)
+    indent = row_indent(text)
+    new_text = open_rows(text, _WHERE, not table.rows)
     added: list[str] = []
     block = []
     for (slot, key), found in sorted(seen.items(), key=lambda kv: (kv[0][0], sorted(kv[0][1]))):
@@ -534,74 +482,30 @@ def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None =
         ids.add(id)
         added.append(id)
         block.append(_row_text(id, slot, found, indent))
-    new_text = text if text.endswith("\n") or not text else text + "\n"
     # Written beside the table and renamed over it only once it loads, as
     # `write_evidence_file` does: an interrupted write or a table that would not load
     # leaves the original untouched rather than truncated or half-replaced.
-    tmp = table_path.with_name(f"{table_path.name}.{os.getpid()}.{uuid4().hex[:8]}.tmp")
-    try:
-        tmp.write_text(new_text + "".join(block), encoding="utf-8")
-        reloaded = load_value_map(tmp)
-        if len(reloaded.rows) != len(table.rows) + len(added):
-            raise ValueError(f"reloaded {len(reloaded.rows)} rows, expected {len(table.rows) + len(added)}")
-        tmp.replace(table_path)
-    except Exception as exc:
-        tmp.unlink(missing_ok=True)
-        raise ValueError(
-            f"{_WHERE}: seeding {table_path} produced a table that does not load; left unchanged: {exc}"
-        ) from exc
+    replace_checked(
+        table_path,
+        new_text + "".join(block),
+        lambda p: len(load_value_map(p).rows),
+        len(table.rows) + len(added),
+        _WHERE,
+    )
     return SeedResult(len(paths), lines_scanned, tuple(added))
 
 
-def _generation_name(root: Path, path: Path) -> str:
-    try:
-        return path.parent.relative_to(root).as_posix()
-    except ValueError:
-        return path.parent.as_posix()
-
-
-def _empty_rows_span(text: str) -> tuple[int, int]:
-    """The character span of the empty ``rows`` value in ``text``, whatever spelling it took (``[]``, ``null``, ``[\n]``)."""
-    root = yaml.compose(text, Loader=yaml.SafeLoader)
-    rows_node = _mapping(root, _WHERE)["rows"]
-    return rows_node.start_mark.index, rows_node.end_mark.index
-
-
-def _row_indent(text: str) -> str:
-    """The indentation of the existing row items, or two spaces where there are none."""
-    found = _ROW_DASH.search(text)
-    return found.group(1) if found else "  "
-
-
 def _fresh_id(candidate: str, key: Key, taken: set[str]) -> str:
-    """``candidate``, or ``candidate_<digest>`` where another key already slugged to it (``a-b`` and ``a_b``).
-
-    The digest is of the key, so the id a key gets does not depend on how many others
-    collided before it — the same scan on a fresh table mints the same ids. Six hex
-    characters, extended one at a time while the result is taken, so a table that
-    already holds the short form still gets an unused id.
-    """
-    if candidate not in taken:
-        return candidate
-    digest = hashlib.sha1(repr(sorted(key)).encode()).hexdigest()
-    for n in range(6, len(digest) + 1):
-        if (id := f"{candidate}_{digest[:n]}") not in taken:
-            return id
-    raise ValueError(
-        f"{_WHERE}: no unused id for {candidate!r} — the table already holds every digest of {sorted(key)}"
-    )
+    """``candidate``, or a digest-suffixed id where another key already slugged to it (``yaml_rows.fresh_id``)."""
+    return fresh_id(candidate, repr(sorted(key)), taken, _WHERE)
 
 
 def _row_text(id: str, slot: str, found: _Seen, indent: str) -> str:
-    """One seeded row as YAML, emitted by PyYAML so every escape is the library's, indented under the others."""
+    """One seeded row as YAML, indented under the others."""
     match: dict = {"slot": slot, "value": found.value}
     if found.alternates:
         match["alternates"] = found.alternates
-    row = {"id": id, "match": match, "seeded_from": found.seeded_from}
-    # ASCII-only output: PyYAML then escapes every non-ASCII and non-printable character
-    # itself, and what it writes reads back to the same string.
-    text = yaml.safe_dump([row], sort_keys=False, allow_unicode=False, default_flow_style=None, width=10**6)
-    return "".join(f"{indent}{line}\n" for line in text.splitlines())
+    return row_text({"id": id, "match": match, "seeded_from": found.seeded_from}, indent)
 
 
 @dataclass(frozen=True)
@@ -716,16 +620,6 @@ QUEUE_GROUP_TEXT = {
 }
 
 
-@dataclass(frozen=True)
-class ReportColumn:
-    """One column of a rendered table. ``kind`` says how a renderer shows it: ``num`` right-aligned,
-    ``catalog`` text a source wrote (shown so it cannot render as markup), ``plain`` our own words."""
-
-    header: str
-    kind: str
-    cell: Callable[[Any], str]
-
-
 QUEUE_COLUMNS = (
     ReportColumn("files", "num", lambda e: f"{e.files:,}"),
     # The raw value as its Python ``repr``: quoted, with every non-printable character and
@@ -780,14 +674,6 @@ MAPPINGS_INTRO = (
 def by_slot(items, slot_of) -> list[tuple[str, list]]:
     """``items`` split by slot, in CLASSIFICATION_FIELDS order, each keeping its order; empty slots left out."""
     return [(slot, group) for slot in CLASSIFICATION_FIELDS if (group := [i for i in items if slot_of(i) == slot])]
-
-
-def md_rows(columns, items) -> list[str]:
-    """``items`` as a markdown table over ``columns``; a non-empty catalog cell is a code span."""
-    return md_table(
-        [c.header for c in columns],
-        [[md_code(v) if c.kind == "catalog" and v else v for c in columns for v in (c.cell(i),)] for i in items],
-    )
 
 
 def queue_groups(entries: list[QueueEntry], read: Iterable[str] = ()) -> list[tuple[str, str, list[QueueEntry]]]:

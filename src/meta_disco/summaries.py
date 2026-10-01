@@ -2,7 +2,9 @@
 
 import json
 import re
-from typing import Literal
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Any, Literal
 
 from .models import field_label, field_value
 
@@ -225,4 +227,22 @@ def print_fastq_summary(classifications: list[dict]):
             ("Paired-end", "is_paired_end"),
             ("Archive", "archive_accession"),
         ],
+    )
+
+
+@dataclass(frozen=True)
+class ReportColumn:
+    """One column of a rendered table. ``kind`` says how a renderer shows it: ``num`` right-aligned,
+    ``catalog`` text a source wrote (shown so it cannot render as markup), ``plain`` our own words."""
+
+    header: str
+    kind: str
+    cell: Callable[[Any], str]
+
+
+def md_rows(columns, items) -> list[str]:
+    """``items`` as a markdown table over ``columns`` (:class:`ReportColumn`); a non-empty catalog cell is a code span."""
+    return md_table(
+        [c.header for c in columns],
+        [[md_code(v) if c.kind == "catalog" and v else v for c in columns for v in (c.cell(i),)] for i in items],
     )

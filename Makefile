@@ -1,4 +1,4 @@
-.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published check-lineage-map import-anvil-lineage seed-value-map review-queue corpus-diff reconcile reconcile-report rules-report all-reports download-hprc validate-hprc clean help
+.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published check-lineage-map import-anvil-lineage seed-activity-map seed-value-map review-queue corpus-diff reconcile reconcile-report rules-report all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -33,8 +33,9 @@ help:
 	@echo "  make import-anvil-published Import AnVIL's published anvil_file columns as a generation of evidence files"
 	@echo "  make check-lineage-map  Check the AnVIL lineage map against the manifests on disk (offline)"
 	@echo "  make import-anvil-lineage Import AnVIL's lineage (anvil_activity, sample rows, IGVF derived_from) as lineage evidence"
+	@echo "  make seed-activity-map  Append a seeded row to the activity map for every lineage step with no row (offline)"
 	@echo "  make seed-value-map     Append a seeded row to the value map for every evidence value with no row (offline)"
-	@echo "  make review-queue       Write docs/review-queue-report.md + review-queue.html: every evidence value no authored row reads (offline)"
+	@echo "  make review-queue       Write docs/review-queue-report.md + review-queue.html: every evidence value and lineage step no authored row reads (offline)"
 	@echo "  make unprocessable-report Report what a run could not classify, and why"
 	@echo "  make validation-report  Generate validation report against ground truth"
 	@echo "  make corpus-diff        Compare two corpus generations (snapshots by md5, runs by label; ARGS=--artifact ...)"
@@ -255,6 +256,11 @@ check-lineage-map:
 import-anvil-lineage:
 	uv run python scripts/import_anvil_lineage.py $(ARGS)
 
+# The activity translation table (#584; src/meta_disco/activity_map.py): seed it from the
+# current lineage evidence; `make review-queue` lists its unauthored rows. Offline.
+seed-activity-map:
+	uv run python scripts/activity_map.py $(ARGS) seed
+
 # The value translation table (#414; src/meta_disco/value_map.py). Seed it from the
 # current evidence, or list its review queue; `ARGS="--dataset X"` scans one dataset.
 # Both offline.
@@ -262,8 +268,9 @@ seed-value-map:
 	uv run python scripts/value_map.py $(ARGS) seed
 
 # The review queue (#524) is a report: written to docs/review-queue-report.md and the static page
-# docs/review-queue.html, grouped by published and submitter sources. `scripts/value_map.py
-# queue` still prints the same markdown to the terminal.
+# docs/review-queue.html, grouped by published and submitter sources, then the lineage steps
+# the activity map (#584) does not name yet. `scripts/value_map.py queue` and
+# `scripts/activity_map.py queue` still print their parts to the terminal.
 review-queue:
 	uv run python scripts/generate_review_queue.py $(ARGS)
 
