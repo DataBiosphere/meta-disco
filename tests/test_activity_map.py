@@ -380,6 +380,12 @@ def test_only_the_latest_catalog_is_read_and_slot_files_of_another_catalog_are_n
         write_lineage_file(evidence_file_path(directory, "file"), env, rows)
     # anvil16 is latest by its stamp, although "anvil9" sorts after it as text.
     assert lineage_paths(lineage) == [evidence_file_path(new, "file")]
+    # A dataset only the older catalog holds is not read from it.
+    gone = generation_dir(lineage, "anvil", "anvil9", "Gone", "20260101T000000Z")
+    gone.mkdir(parents=True)
+    env = envelope("file", source_type=SOURCE_REPOSITORY_METADATA, key="drs_uri", version="anvil9", dataset="Gone")
+    write_lineage_file(evidence_file_path(gone, "file"), env, rows)
+    assert lineage_paths(lineage, ["Gone"]) == []
     # A slot file of the older catalog gives the child a data type; it is not joined.
     older = envelope("file", source_type=SOURCE_REPOSITORY_METADATA, key="drs_uri", version="anvil9")
     source = claim_source_for(older.source, "content_type")

@@ -312,16 +312,17 @@ def lineage_paths(lineage_root: Path, datasets: Iterable[str] | None = None) -> 
     ``version``) holding the newest generation stamp, which sorts as time; a catalog's
     name does not (``anvil9`` against ``anvil16``, dev's ``anvil``).
     """
-    wanted = set(datasets) if datasets is not None else None
-    by_catalog: dict[str, list[Path]] = {}
+    by_catalog: dict[str, list[tuple[Path, str | None]]] = {}
     for path in discover(lineage_root):
         envelope = read_lineage_envelope(path)
-        if wanted is None or envelope.source.dataset in wanted:
-            by_catalog.setdefault(str(envelope.target.version), []).append(path)
+        by_catalog.setdefault(str(envelope.target.version), []).append((path, envelope.source.dataset))
     if not by_catalog:
         return []
-    latest = max(by_catalog, key=lambda catalog: max(_stamp(p) for p in by_catalog[catalog]))
-    return by_catalog[latest]
+    # The latest catalog is chosen over every dataset first, so a dataset the latest
+    # catalog lacks is not read from an older one.
+    latest = max(by_catalog, key=lambda catalog: max(_stamp(p) for p, _ in by_catalog[catalog]))
+    wanted = set(datasets) if datasets is not None else None
+    return [p for p, dataset in by_catalog[latest] if wanted is None or dataset in wanted]
 
 
 def _stamp(path: Path) -> str:
