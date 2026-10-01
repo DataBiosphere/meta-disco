@@ -33,6 +33,10 @@ rows:
     match: {source_type: repository_metadata, table: sample, child_column: stats, parent_column: cram}
     declares: {activity: QualityControlActivity, role: reported_on}
     reason: A report on the row's CRAM.
+  - id: activity.unknown
+    match: {source_type: repository_activity, table: anvil_activity, raw_activity: Unknown, parent_column: used_file_id}
+    declares: {activity: Activity, role: input}
+    reason: The step is not known.
   - id: activity.align
     match: {source_type: repository_metadata, table: sample, child_column: cram, parent_column: [r1, r2]}
     declares: {activity: AlignmentActivity, role: reads}
@@ -230,7 +234,7 @@ def test_lines_that_give_no_step_are_counted_by_why(tmp_path, roots):
             raw_activity="Sequencing",
             raw_activity_column="activity_type",
         ),  # a sample parent, out of scope (#582)
-        activity_line("file-2", "file-1", "Unknown"),  # no authored row
+        activity_line("file-2", "file-1", "Mystery"),  # no authored row
         activity_line("file-8", "file-1", "Indexing"),  # the child is no file of the run
     )
     rows, report = go(tmp_path, [rec(1, "a.vcf.gz"), rec(2, "a.vcf.gz.tbi")], evidence)
@@ -299,3 +303,12 @@ def test_a_parent_that_is_the_child_and_a_child_two_records_carry_give_no_step(t
     assert all(r["generated_by"] is None for r in rows.values())
     counts = report["lineage"]["sources"][SOURCE_REPOSITORY_METADATA][DATASET]
     assert (counts["parent_is_child"], counts["child_several_match"]) == (1, 1)
+
+
+def test_a_file_whose_only_step_is_generic_gets_none_and_is_counted(tmp_path, roots):
+    evidence, lineage = roots
+    activity_lines(lineage, activity_line("file-2", "file-1", "Unknown"))
+    rows, report = go(tmp_path, [rec(1, "s.cram"), rec(2, "s.report.txt")], evidence)
+    assert rows["s.report.txt"]["generated_by"] is None
+    assert report["lineage"]["generic_only"] == {DATASET: 1}
+    assert report["lineage"]["conflicts"] == {}

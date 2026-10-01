@@ -52,7 +52,7 @@ from pathlib import Path
 
 from .activity_map import ActivityMap, load_activity_map
 from .deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS
-from .edges import LineageStep, StepConflict, merge_steps, misfits
+from .edges import LineageStep, StepConflict, generic_only, merge_steps, misfits
 from .lineage_evidence import DEFAULT_LINEAGE_EVIDENCE_ROOT
 from .models import (
     CLASSIFICATION_FIELDS,
@@ -677,6 +677,9 @@ class Report:
         default_factory=lambda: defaultdict(lambda: defaultdict(lambda: {"files": 0, "examples": []}))
     )
     misfits: Counter = field(default_factory=Counter)
+    # Per dataset, the files whose only step is the generic `Activity`, written as no
+    # `generated_by` until reviewed (`edges.merge_steps`).
+    generic_only: Counter = field(default_factory=Counter)
     # Per (dataset, slot), the source types whose evidence speaks to it: only those are
     # scored there.
     _covering: dict[tuple[str, str], tuple[str, ...]] = field(default_factory=dict)
@@ -743,6 +746,9 @@ class Report:
         """
         dataset = str(reconciled.get("dataset_title") or "")
         step = reconciled.get("generated_by")
+        if step is None and conflict is None and generic_only(None, steps):
+            self.generic_only[dataset] += 1
+            return
         if conflict is not None:
             tally = self.step_conflicts[dataset][conflict.kind]
             tally["files"] += 1
@@ -876,6 +882,7 @@ class Report:
                     dataset: {kind: dict(tally) for kind, tally in sorted(per_kind.items())}
                     for dataset, per_kind in sorted(self.step_conflicts.items())
                 },
+                "generic_only": dict(sorted(self.generic_only.items())),
                 "misfits": [
                     {"dataset": d, "activity": a, "problem": p, "detail": x, "files": n}
                     for (d, a, p, x), n in sorted(self.misfits.items())

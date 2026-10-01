@@ -11,6 +11,7 @@ from meta_disco.edges import (
     ACTIVITY_CONFLICT,
     EDGE_CONFLICT,
     LineageStep,
+    generic_only,
     merge_steps,
     misfits,
 )
@@ -225,3 +226,10 @@ def test_a_generic_step_naming_another_parent_is_an_edge_conflict():
     assert step is None and conflict is not None
     assert (conflict.kind, conflict.role) == (EDGE_CONFLICT, "input")
     assert conflict.said == (("other.bam", ROW), ("a.vcf.gz", NAME))
+
+
+def test_a_file_whose_only_steps_are_generic_gets_no_step_and_no_conflict():
+    generic = LineageStep("Activity", "input", "k", "a.cram", "alignment", ROW)
+    assert merge_steps(None, [generic]) == (None, None)
+    assert generic_only(None, [generic])
+    assert not generic_only(inferred_index("k", "a.cram"), [generic])

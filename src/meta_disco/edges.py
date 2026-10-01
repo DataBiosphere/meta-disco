@@ -235,7 +235,10 @@ def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[
     takes one input, name the same parent. Beside a specific activity, a generic step's parent
     must be one a specific source names: it then adds its attribution to that input, and a
     parent no specific source names is an edge conflict in its role — never an input in a role
-    the activity does not declare. Agreeing sources of one input are listed together
+    the activity does not declare. A file whose only steps are generic gets no ``generated_by``
+    and no conflict: such a link is held back until an activity-map row naming ``Activity`` is
+    reviewed against what it links (:func:`generic_only` tells the caller to count it).
+    Agreeing sources of one input are listed together
     in its ``named_by``, and of the step in the step's; a role that takes several inputs
     keeps one input per parent. A conflict is returned, never settled: the file then gets no
     ``generated_by``. Attributions are listed inference's first, then in the order
@@ -246,6 +249,8 @@ def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[
     if not said:
         return None, None
     activity = activities.agreed(s.activity for s in said)
+    if activity == activities.UNKNOWN:
+        return None, None
     if activity is None:
         return None, StepConflict(ACTIVITY_CONFLICT, None, _distinct((s.activity, s.attribution) for s in said))
     if activity != activities.UNKNOWN:
@@ -285,6 +290,12 @@ def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[
         used["named_by"] = list(_distinct([*used["named_by"], s.attribution]))
     step_named_by = _distinct([*((inferred or {}).get("named_by") or []), *(s.attribution for s in lineage)])
     return {"activity": activity, "named_by": list(step_named_by), "inputs": list(inputs.values())}, None
+
+
+def generic_only(inferred: dict | None, lineage: Iterable[LineageStep]) -> bool:
+    """Whether every source's step for a file is the generic ``Activity``: :func:`merge_steps` writes none for it."""
+    activities_named = [s.activity for s in [*inferred_steps(inferred), *lineage]]
+    return bool(activities_named) and all(a == activities.UNKNOWN for a in activities_named)
 
 
 def _distinct(items):

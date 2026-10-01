@@ -215,6 +215,7 @@
               ? table(['dataset', 'kind', 'files', 'e.g.'], L.conflicts.map(c => [shown(c.dataset), c.kind, {text: n(c.files), cls: 'num'},
                   c.examples.slice(0, 2).map(e => `${e.file_name}: ${said(e)}`).join(' | ')]))
               : '<p>None: wherever two sources named a file\'s step, they agreed.</p>')
+          + `<p><strong>Generic only:</strong> ${n(L.generic_only)} files whose only step is the generic <code>Activity</code> get no <code>generated_by</code> until an activity-map row naming it is reviewed.</p>`
           + '<h3>Steps that do not fit their activity</h3>'
           + (L.misfits.length
               ? table(['dataset', 'activity', 'problem', 'detail', 'files'], L.misfits.map(m => [shown(m.dataset), m.activity, m.problem, m.detail, {text: n(m.files), cls: 'num'}]))

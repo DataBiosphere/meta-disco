@@ -335,7 +335,14 @@ def lineage_rows(report: dict) -> dict | None:
         for dataset, per in sorted(lineage["conflicts"].items())
         for kind, c in sorted(per.items())
     ]
-    return {"sources": sources, "steps": steps, "conflicts": conflicts, "misfits": lineage["misfits"]}
+    return {
+        "sources": sources,
+        "steps": steps,
+        "conflicts": conflicts,
+        "misfits": lineage["misfits"],
+        # Written before the generic-only count: none to show.
+        "generic_only": sum(lineage.get("generic_only", {}).values()),
+    }
 
 
 def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
@@ -749,6 +756,11 @@ def _lineage_section(lineage: dict | None) -> list[str]:
                 ],
             ),
         ]
+    lines += [
+        "",
+        f"**Generic only:** {_n(lineage['generic_only'])} files whose only step is the generic `Activity` "
+        "(the step not known) get no `generated_by` until an activity-map row naming it is reviewed.",
+    ]
     lines += ["", "### Steps that do not fit their activity", ""]
     if not lineage["misfits"]:
         lines.append("None.")
