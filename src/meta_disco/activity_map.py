@@ -51,6 +51,7 @@ applying it is #577. The seeder and review queue read the lineage files through
 from __future__ import annotations
 
 import argparse
+import hashlib
 import itertools
 import sys
 from collections.abc import Iterable, Iterator, Mapping
@@ -64,7 +65,7 @@ from .activities import declarations
 from .lineage_evidence import DEFAULT_LINEAGE_EVIDENCE_ROOT, LINEAGE_SOURCE_TYPES, iter_lineage, read_lineage_envelope
 from .manifest_survey import name_tokens
 from .models import SOURCE_REPOSITORY_ACTIVITY, SOURCE_REPOSITORY_METADATA
-from .schema.classification_model import ActivityDeclaration, EvidenceFileEnvelope
+from .schema.classification_model import ActivityDeclaration, EvidenceFileEnvelope, LineageRow
 from .source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT, discover, is_generation, iter_evidence, read_envelope
 from .summaries import ReportColumn, md_rows
 from .yaml_rows import (
@@ -131,6 +132,9 @@ class ActivityMap:
     """A loaded table and its selection index: per set of named parts, the rows by each value tuple they match."""
 
     rows: tuple[Row, ...]
+    # The sha256 of the text the table was loaded from, so an artifact built from it can
+    # say which table that was; None for a table built in memory.
+    digest: str | None = None
     _index: dict[tuple[str, ...], dict[tuple[Value, ...], Row]] = field(default_factory=dict, init=False, repr=False)
     _selected: dict[LineKey, Row | None] = field(default_factory=dict, init=False, repr=False)
 
@@ -188,7 +192,7 @@ def load_activity_map(
             raise ValueError(f"{_WHERE}: row {n} repeats id {row.id!r} (first at row {seen_ids[row.id]})")
         seen_ids[row.id] = n
         rows.append(row)
-    return ActivityMap(rows=tuple(rows))
+    return ActivityMap(rows=tuple(rows), digest=hashlib.sha256(text.encode("utf-8")).hexdigest())
 
 
 def _row(node: yaml.Node, n: int, declared: Mapping[str, ActivityDeclaration]) -> Row:
@@ -272,11 +276,16 @@ def _declares(
 
 @dataclass(frozen=True)
 class KeyedLine:
-    """One lineage line's key, with the dataset and generation directory it was read from."""
+    """One lineage line and its key, with its file's envelope and the generation directory it was read from."""
 
     key: LineKey
-    dataset: str
+    line: LineageRow
+    envelope: EvidenceFileEnvelope
     generation: str
+
+    @property
+    def dataset(self) -> str:
+        return str(self.envelope.source.dataset)
 
 
 def _slot_identity(envelope: EvidenceFileEnvelope) -> tuple:
@@ -320,12 +329,12 @@ def lineage_paths(lineage_root: Path, datasets: Iterable[str] | None = None) -> 
         return []
     # The latest catalog is chosen over every dataset first, so a dataset the latest
     # catalog lacks is not read from an older one.
-    latest = max(by_catalog, key=lambda catalog: max(_stamp(p) for p, _ in by_catalog[catalog]))
+    latest = max(by_catalog, key=lambda catalog: max(generation_stamp(p) for p, _ in by_catalog[catalog]))
     wanted = set(datasets) if datasets is not None else None
     return [p for p, dataset in by_catalog[latest] if wanted is None or dataset in wanted]
 
 
-def _stamp(path: Path) -> str:
+def generation_stamp(path: Path) -> str:
     """The generation stamp a file sits under, or "" for a file outside the generation layout."""
     return path.parent.name if is_generation(path.parent.name) else ""
 
@@ -364,7 +373,7 @@ def keyed_lines(lineage_root: Path, evidence_root: Path, paths: Iterable[Path]) 
                 types.get(line.target_key_value),
                 parent_type,
             )
-            yield KeyedLine(key, str(envelope.source.dataset), generation)
+            yield KeyedLine(key, line, envelope, generation)
 
 
 # --- seeding ----------------------------------------------------------------------
@@ -516,7 +525,8 @@ QUEUE_COLUMNS = (
 )
 
 
-def _matched(row: Row) -> str:
+def describe_match(row: Row) -> str:
+    """A row's match parts in order, each part's values as written (``none`` for null), for a report."""
     return "; ".join(
         f"{part}: " + " · ".join(repr(v) if v is not None else "none" for v in sorted(row.match[part], key=_sort_key))
         for part in PARTS
@@ -527,7 +537,7 @@ def _matched(row: Row) -> str:
 MAPPING_COLUMNS = (
     ReportColumn("lines", "num", lambda m: f"{m.lines:,}"),
     ReportColumn("rule", "plain", lambda m: m.row.id),
-    ReportColumn("matches", "catalog", lambda m: _matched(m.row)),
+    ReportColumn("matches", "catalog", lambda m: describe_match(m.row)),
     ReportColumn("declares", "plain", lambda m: f"{m.row.activity} / {m.row.role}"),
     ReportColumn("reason", "plain", lambda m: " ".join((m.row.reason or "").split())),
 )

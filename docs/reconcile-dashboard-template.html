@@ -89,6 +89,13 @@
     or more than one, is not used.</p>
   <div class="scroll" id="evidence"></div>
 
+  <h2>Lineage: how each file was made</h2>
+  <p class="note">Each lineage line says a file was made from a parent, in the source's words (#583). Reconcile
+    translates it through the activity map (#584), finds the parent in the child's dataset, and merges every source's
+    step for a file into its <code>generated_by</code> (#577). Only <em>resolved</em> lines give a step. Over the whole
+    run.</p>
+  <div class="scroll" id="lineage"></div>
+
   <script type="module">
     // Data injected by scripts/generate_reconcile_report.py; every table is precomputed there.
     const DATA = RECONCILE_DATA_PLACEHOLDER;
@@ -188,6 +195,32 @@
           + `<details><summary>Evidence files read (${ev.length})</summary>`
           + '<p class="note"><em>offered</em>: values read from the table; <em>matched</em>: found their file; <em>unmatched</em>: found no file; <em>ambiguous</em>: found more than one file.</p>'
           + evidenceTable(ev) + '</details>';
+    }
+
+    {
+      const L = DATA.lineage;
+      const el = document.getElementById('lineage');
+      if (L === null) {
+        el.innerHTML = "<p>This run's report predates lineage at reconcile (#577).</p>";
+      } else {
+        const said = e => e.said.map(s => `${s.by.source_type} (${s.by.rule_id}): ${s.said}`).join('; ');
+        el.innerHTML = (L.sources.length
+            ? table(['source type', 'dataset', ...DATA.lineage_columns],
+                L.sources.map(r => [r.source_type, shown(r.dataset), ...DATA.lineage_columns.map(k => ({text: n(r[k]), cls: 'num'}))]))
+            : '<p>No lineage was read.</p>')
+          + '<h3>Who named each file\'s step</h3>'
+          + table(['dataset', 'named by', 'files'], L.steps.map(r => [shown(r.dataset), r.named_by, {text: n(r.files), cls: 'num'}]))
+          + '<h3>Conflicts</h3>'
+          + (L.conflicts.length
+              ? table(['dataset', 'kind', 'files', 'e.g.'], L.conflicts.map(c => [shown(c.dataset), c.kind, {text: n(c.files), cls: 'num'},
+                  c.examples.slice(0, 2).map(e => `${e.file_name}: ${said(e)}`).join(' | ')]))
+              : '<p>None: wherever two sources named a file\'s step, they agreed.</p>')
+          + `<p><strong>Generic only:</strong> ${n(L.generic_only)} files whose only step is the generic <code>Activity</code> get no <code>generated_by</code> until an activity-map row naming it is reviewed.</p>`
+          + '<h3>Steps that do not fit their activity</h3>'
+          + (L.misfits.length
+              ? table(['dataset', 'activity', 'problem', 'detail', 'files'], L.misfits.map(m => [shown(m.dataset), m.activity, m.problem, m.detail, {text: n(m.files), cls: 'num'}]))
+              : '<p>None.</p>');
+      }
     }
 
     // To one decimal, rounded down, so a dataset short of every file never reads 100%.

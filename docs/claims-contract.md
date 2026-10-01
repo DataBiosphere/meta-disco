@@ -191,7 +191,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
     Lineage evidence is not an input kind either: it names a file's parent and the step that made it,
     not a value (#583). Its files declare `repository_activity` (AnVIL's `anvil_activity`) or
-    `repository_metadata` (a submitter's table), and nothing reads them until #577.
+    `repository_metadata` (a submitter's table); reconcile reads them to build each file's step (#577).
 
     **Kind 2 was retired by #424 and reinstated by #472 and #497.** The retirement argued that a
     target's current state is not an input to producing it. It is an input once the circularity it
@@ -451,8 +451,8 @@ importer's half is built — 7.12 is enforced (below), and the published importe
 - **4.9 is not built** (ADR-0002). Its one instance is the index producer's, built as the 1.1 entry above
   describes. Inference writes the `IndexActivity` and `ChecksumActivity` edges a file's name states, each by the
   parent's record key and only where the parent resolves (#356); no other step's edge is emitted. The
-  links the source tables state are imported as lineage evidence (#583) and read by nothing yet: translating
-  them is #584 and building a file's step from them at reconcile is #577 (#363). The `checksum_file` rule still stamps the dimensions
+  links the source tables state are imported as lineage evidence (#583), translated by the activity map
+  (#584) and built into each reconciled file's step at reconcile (#577); nothing passes across them yet (#571). The `checksum_file` rule still stamps the dimensions
   `ChecksumActivity` carries `not_applicable`, which 4.6 would turn into a conflict once 4.9 is built.
   6.6's inheritance clause is true vacuously until then; when 4.9 is built, the `--no-evidence` help in
   `reconcile.main` ("concludes what inference did") changes with it.

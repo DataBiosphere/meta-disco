@@ -8,6 +8,7 @@ anything. Readers trust the result.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from functools import cache
 from importlib.resources import files
 
@@ -71,3 +72,15 @@ def declarations() -> dict[str, ActivityDeclaration]:
 def passes(term: str) -> tuple[str, ...]:
     """The dimensions an output of ``term`` takes from any of its inputs, in ``CLASSIFICATION_FIELDS`` order."""
     return _passes(declarations()[term])
+
+
+def agreed(terms: Iterable[str]) -> str | None:
+    """The activity every one of ``terms`` agrees on, or None where two disagree.
+
+    The generic :data:`UNKNOWN` (``Activity``, the step not known) agrees with any: the
+    agreed activity is the one specific term named, or ``UNKNOWN`` where only it is.
+    """
+    specific = {t for t in terms if t != UNKNOWN}
+    if len(specific) > 1:
+        return None
+    return next(iter(specific), UNKNOWN)

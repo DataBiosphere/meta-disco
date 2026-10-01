@@ -36,7 +36,8 @@ For each claim carrying a ``rule_id``, per rule:
 
 Markers are counted in a table of their own: the ``code_rules.MARKERS`` a producer writes
 as a ``rule_id``, and the engine's two placeholders written as ``marker``. So are the edge
-rules (``code_rules.EDGE_RULES``, #356), which state a derivation edge rather than claim a
+rules (``code_rules.EDGE_RULES``, #356) and the authored rows of ``rules/activity_map.yaml``
+(#584, applied at reconcile by #577), which state a derivation step rather than claim a
 field, counted by the inputs a record's ``generated_by`` carries under their ``rule_id``. An id or marker
 the run carries and nothing declares (a rule retired since the run, say) is listed rather
 than dropped.
@@ -62,6 +63,7 @@ from pathlib import Path
 import yaml
 
 from meta_disco import code_rules
+from meta_disco.activity_map import default_activity_map_resource, describe_match, load_activity_map
 from meta_disco.output_utils import find_latest_run, iter_reconciled_records
 from meta_disco.reconcile import declaration
 from meta_disco.rule_engine import CONFLICT_MARKER, CONTENT_TIER, NOT_CLASSIFIED_MARKER
@@ -148,8 +150,10 @@ KEY = [
 DASHBOARD_KEY = [*KEY, ("Highlighted", "a rule that gave no answer for any file this time.")]
 MARKERS_NOTE = "Not rules. Each is a reason a field of a file was left without an answer."
 EDGE_RULES_NOTE = (
-    "Rules that say which file a file was made from, rather than giving a field an answer. Each names the "
-    "parent from the file's own name, and only where exactly one file of the dataset carries that name."
+    "Rules that say which file a file was made from, rather than giving a field an answer. The code rules name "
+    "the parent from the file's own name, and only where exactly one file of the dataset carries that name. The "
+    "activity-map rows (#584) translate what a source table says about a step, and reconcile resolves the "
+    "parent that table names (#577). Counted by the inputs of the reconciled `generated_by` that cite them."
 )
 UNDECLARED_HEAD = "Rule names with no rule behind them"
 UNDECLARED_NOTE = (
@@ -426,7 +430,30 @@ def run_date(name: str) -> str | None:
     return f"{when.day} {when:%B %Y}"
 
 
-def build(rules_path: Path | None, value_map_path: Path | None, records, run_dir: Path) -> dict:
+def activity_map_rows(path: Path | None) -> list[dict]:
+    """The authored rows of ``rules/activity_map.yaml``, as edge rules: each states a step a source table names.
+
+    A seeded row declares no step, so no ``generated_by`` cites it and it is left out.
+    """
+    defined_in = str(path) if path else "src/meta_disco/rules/" + Path(str(default_activity_map_resource())).name
+    return [
+        {
+            "id": row.id,
+            "activity": f"{row.activity} / {row.role}",
+            "defined_in": defined_in,
+            "reads": describe_match(row),
+            # The match values are a source's own words (catalog text), so the markdown code-spans them.
+            "reads_is_catalog": True,
+            "rationale": " ".join((row.reason or "").split()),
+        }
+        for row in load_activity_map(path).rows
+        if row.authored
+    ]
+
+
+def build(
+    rules_path: Path | None, value_map_path: Path | None, records, run_dir: Path, activity_map_path: Path | None = None
+) -> dict:
     """The report's data. A path left None reads the bundled file."""
     if set(PLACEHOLDER_MARKERS) != marker_values():
         raise ReportError(f"the schema's markers {sorted(marker_values())} are not the ones worded here")
@@ -437,6 +464,7 @@ def build(rules_path: Path | None, value_map_path: Path | None, records, run_dir
         {"id": e.id, "activity": e.activity, "defined_in": e.module, "reads": e.reads, "rationale": e.rationale}
         for e in code_rules.EDGE_RULES
     ]
+    edge_rules += activity_map_rows(activity_map_path)
     # A marker's or edge rule's id among them too: a rule named `fetch_failed` would take the marker's counts.
     ids = [r["id"] for r in rules]
     others = [*(m["id"] for m in markers), *(e["id"] for e in edge_rules)]
@@ -565,7 +593,7 @@ def render_markdown(data: dict) -> str:
                 md_code(e["id"]),
                 md_code(e["activity"]),
                 _n(e["files"]),
-                e["reads"],
+                md_code(e["reads"]) if e.get("reads_is_catalog") else e["reads"],
                 e["rationale"],
                 md_code(e["defined_in"]),
             ]
@@ -612,12 +640,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run-dir", type=Path, help="Reconciled run directory (default: latest under output/anvil)")
     parser.add_argument("--rules", type=Path, help="Rule file (default: the bundled unified_rules.yaml)")
     parser.add_argument("--value-map", type=Path, help="Translation table (default: the bundled value_map.yaml)")
+    parser.add_argument("--activity-map", type=Path, help="Activity map (default: the bundled activity_map.yaml)")
     parser.add_argument("--markdown", type=Path, default=PROJECT_ROOT / "docs" / "rules-report.md")
     parser.add_argument("--html", type=Path, default=PROJECT_ROOT / "docs" / "rules-dashboard.html")
     args = parser.parse_args(argv)
     try:
         run_dir = args.run_dir or find_latest_run(Path("output/anvil"))
-        data = build(args.rules, args.value_map, iter_reconciled_records(run_dir), run_dir)
+        data = build(args.rules, args.value_map, iter_reconciled_records(run_dir), run_dir, args.activity_map)
     except (ReportError, FileNotFoundError, ValueError) as exc:
         print(f"rules-report: {exc}", file=sys.stderr)
         return 1
