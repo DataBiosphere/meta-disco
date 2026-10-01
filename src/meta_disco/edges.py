@@ -13,16 +13,23 @@ one) only for a source that names the parent independently of the child: a heade
 table row. Here the name is worked out from the child's own — its name less a suffix, or
 with the suffix replaced (``sample.bai`` -> ``sample.bam``) — so an unresolved edge would
 restate what the child's name, extension and ``data_type`` already say.
+
+**Merging every source's step** (#577) is here too: reconcile hands :func:`merge_steps`
+inference's step and the steps the source tables state (``reconcile_lineage``), and it
+returns the one ``generated_by`` they agree on, or the conflict that prevents one.
+:func:`misfits` flags a step that does not fit its activity's declaration.
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable
+from dataclasses import dataclass, replace
 
-from . import code_rules
+from . import activities, code_rules
 from .code_rules import EdgeRule
 from .file_name import EXTENSION_MAP, FileName
+from .models import ClaimSource
 from .pipeline import RecordKey, input_key_value
 
 # The `EXTENSION_MAP` category of a checksum file's extension. The extension decides
@@ -143,3 +150,176 @@ def checksum_generated_by(record: dict, name: FileName, index: NameIndex, key: R
     if parent is None:
         return None
     return generated_by(code_rules.CHECKSUM_BY_NAME, parent, key)
+
+
+# --- merging every source's step (#577) ------------------------------------------------
+
+
+@dataclass(frozen=True)
+class LineageStep:
+    """One source's step for one child, as one input: a resolved lineage line, or one input of inference's step.
+
+    ``parent_kind`` is the parent's ``parent_kind_enum`` term, read off its name as inference
+    reads it (:func:`parent_kind_of`); ``parent_data_type`` its inferred ``data_type``,
+    which :func:`misfits` judges against the role's declared kinds, None where not known.
+    ``attribution`` is the ``Attribution`` the source gets, from :func:`lineage_attribution`
+    for a lineage line.
+    """
+
+    activity: str
+    role: str
+    parent_key: str
+    parent_file: str
+    parent_kind: str | None
+    attribution: dict
+    parent_data_type: str | None = None
+
+
+def lineage_attribution(source_type: str, row_id: str, source: ClaimSource, activity_id: str | None) -> dict:
+    """How a lineage source is cited: its kind, the activity-map row that translated its words, and where it said it.
+
+    ``source`` is a ``ClaimSource`` — the dataset, table and the column the parent was read
+    from — the shape a value claim cites its source in (contract 3.8).
+    """
+    attribution: dict = {"source_type": source_type, "rule_id": row_id}
+    if activity_id is not None:
+        attribution["activity_id"] = activity_id
+    attribution["source"] = source.to_dict()
+    return attribution
+
+
+@dataclass(frozen=True)
+class StepConflict:
+    """Why a file's sources give no one step: two activities, or two parents in a role that takes one.
+
+    ``said`` is who said what: per source, the activity (an activity conflict) or the
+    parent's name (an edge conflict), with the source's attribution.
+    """
+
+    kind: str
+    role: str | None
+    said: tuple[tuple[str, dict], ...]
+
+
+ACTIVITY_CONFLICT = "activity"
+EDGE_CONFLICT = "edge"
+
+
+def inferred_steps(step: dict | None) -> list[LineageStep]:
+    """Inference's ``generated_by`` as one :class:`LineageStep` per input and attribution, in order.
+
+    An input naming no source of its own is attributed to the step's sources, so it is not lost.
+    """
+    if step is None:
+        return []
+    return [
+        LineageStep(
+            step["activity"],
+            used["role"],
+            used["parent_key"],
+            used["parent_file"],
+            used.get("parent_kind"),
+            attribution,
+        )
+        for used in step["inputs"]
+        for attribution in used.get("named_by") or step.get("named_by") or []
+    ]
+
+
+def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[dict | None, StepConflict | None]:
+    """The one ``generated_by`` every source's step for a file agrees on, or the conflict that prevents one.
+
+    ``inferred`` is the step inference wrote from the child's name (or None); ``lineage``
+    the steps the source tables state. Sources agree when their activities agree
+    (``activities.agreed``: the generic ``Activity`` agrees with any) and, in a role that
+    takes one input, name the same parent. Beside a specific activity, a generic step's parent
+    must be one a specific source names: it then adds its attribution to that input, and a
+    parent no specific source names is an edge conflict in its role — never an input in a role
+    the activity does not declare. Agreeing sources of one input are listed together
+    in its ``named_by``, and of the step in the step's; a role that takes several inputs
+    keeps one input per parent. A conflict is returned, never settled: the file then gets no
+    ``generated_by``. Attributions are listed inference's first, then in the order
+    ``lineage`` gives them, each once.
+    """
+    lineage = list(lineage)
+    said = [*inferred_steps(inferred), *lineage]
+    if not said:
+        return None, None
+    activity = activities.agreed(s.activity for s in said)
+    if activity is None:
+        return None, StepConflict(ACTIVITY_CONFLICT, None, _distinct((s.activity, s.attribution) for s in said))
+    if activity != activities.UNKNOWN:
+        specific = [s for s in said if s.activity != activities.UNKNOWN]
+        named = {s.parent_key: s for s in specific}
+        for s in said:
+            if s.activity != activities.UNKNOWN:
+                continue
+            if s.parent_key not in named:
+                return None, StepConflict(
+                    EDGE_CONFLICT,
+                    s.role,
+                    _distinct([(s.parent_file, s.attribution), *((o.parent_file, o.attribution) for o in specific)]),
+                )
+        # A generic step whose parent matches stands in that parent's input, as another of its sources.
+        said = [
+            s if s.activity != activities.UNKNOWN else replace(named[s.parent_key], attribution=s.attribution)
+            for s in said
+        ]
+    declared = {i.role: i for i in activities.declarations()[activity].inputs}
+    for role in dict.fromkeys(s.role for s in said):
+        in_role = [s for s in said if s.role == role]
+        if len({s.parent_key for s in in_role}) > 1 and role in declared and not declared[role].many:
+            return None, StepConflict(EDGE_CONFLICT, role, _distinct((s.parent_file, s.attribution) for s in in_role))
+    inputs: dict[tuple[str, str], dict] = {}
+    for s in said:
+        used = inputs.setdefault(
+            (s.role, s.parent_key),
+            {
+                "role": s.role,
+                "parent_file": s.parent_file,
+                "parent_key": s.parent_key,
+                "parent_kind": s.parent_kind,
+                "named_by": [],
+            },
+        )
+        used["named_by"] = list(_distinct([*used["named_by"], s.attribution]))
+    step_named_by = _distinct([*((inferred or {}).get("named_by") or []), *(s.attribution for s in lineage)])
+    return {"activity": activity, "named_by": list(step_named_by), "inputs": list(inputs.values())}, None
+
+
+def _distinct(items):
+    """``items`` in order, each once (dicts compare by value, so a list, not a set)."""
+    out: list = []
+    for item in items:
+        if item not in out:
+            out.append(item)
+    return tuple(out)
+
+
+def _outside(kind: str | None, allowed: set[str]) -> bool:
+    """Whether a known ``data_type`` ``kind`` falls outside ``allowed``, judged by its top term: the dotted path is the vocabulary's hierarchy."""
+    return bool(allowed) and kind is not None and kind.split(".")[0] not in allowed
+
+
+def misfits(step: dict, child_kind: str | None, parent_kinds: dict[str, str | None]) -> list[tuple[str, str]]:
+    """How a step does not fit its activity's declaration, as ``(problem, detail)`` pairs; flagged, never refused.
+
+    ``child_kind`` is the child's ``data_type`` value and ``parent_kinds`` each input's
+    by its ``parent_key``; a kind is judged by its top term (``annotations.coverage`` is
+    ``annotations``), and an unknown one (None, or a key ``parent_kinds`` lacks) is not
+    judged. A one-input role given several parents is not here: :func:`merge_steps` returns
+    it as an edge conflict.
+    """
+    declaration = activities.declarations()[step["activity"]]
+    roles = {r.role: r for r in declaration.inputs}
+    found: list[tuple[str, str]] = []
+    if _outside(child_kind, {str(k) for k in declaration.output.kind or ()}):
+        found.append(("output kind", str(child_kind)))
+    present = {used["role"] for used in step["inputs"]}
+    found += [("required role missing", r.role) for r in declaration.inputs if r.required and r.role not in present]
+    for used in step["inputs"]:
+        role = roles.get(used["role"])
+        kind = parent_kinds.get(used["parent_key"])
+        if role is not None and _outside(kind, {str(k) for k in role.kind or ()}):
+            found.append((f"input kind ({used['role']})", str(kind)))
+    return found

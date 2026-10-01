@@ -220,3 +220,11 @@ def row_identities(run_dir: Path, key: str) -> RowIdentities:
         else:
             first_source[value] = fname
     return RowIdentities(total_rows, without_key, duplicates)
+
+
+def relative_to(path: Path, root: Path) -> str:
+    """``path`` relative to ``root`` where it lies under it, else as given: how a report names a file it read."""
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)

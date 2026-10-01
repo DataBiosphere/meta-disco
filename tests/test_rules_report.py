@@ -7,6 +7,7 @@ import pytest
 import yaml
 
 from meta_disco import code_rules
+from meta_disco.activity_map import load_activity_map
 from meta_disco.models import SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
 from meta_disco.output_utils import (
     CLASSIFICATION_FILES,
@@ -259,7 +260,8 @@ def test_the_bundled_rules_all_get_a_row_and_a_basis():
 
 def test_edge_rules_are_listed_and_counted_by_the_edges_they_stated(data):
     rows = by_id(data)
-    assert [e["id"] for e in data["edge_rules"]] == [r.id for r in code_rules.EDGE_RULES]
+    authored = [row.id for row in load_activity_map().rows if row.authored]
+    assert [e["id"] for e in data["edge_rules"]] == [r.id for r in code_rules.EDGE_RULES] + authored
     assert (rows[code_rules.INDEX_BY_NAME.id]["files"], rows[code_rules.CHECKSUM_BY_NAME.id]["files"]) == (1, 0)
     assert rows[code_rules.INDEX_BY_NAME.id]["datasets"] == {"STUDY_B": 1}
 

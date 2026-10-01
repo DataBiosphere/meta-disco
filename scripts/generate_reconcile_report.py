@@ -38,6 +38,7 @@ from meta_disco.reconcile import (
     SOURCE_PRECEDENCE,
     fill_category,
 )
+from meta_disco.reconcile_lineage import OUTCOMES
 from meta_disco.summaries import embed_json, md_code, md_table
 
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -305,6 +306,38 @@ def provenance(report: dict) -> dict:
     }
 
 
+LINEAGE_COLUMNS = ("offered", *OUTCOMES)
+
+
+def lineage_rows(report: dict) -> dict | None:
+    """The lineage section (#577) as tables over the whole run, or None for a report written before it.
+
+    ``sources``: per source type and dataset, the lines offered and what became of them;
+    ``steps``: per dataset, the files whose ``generated_by`` each combination of source
+    types named; ``conflicts``: per dataset and kind, the files and the first few with who
+    said what; ``misfits``: the steps that do not fit their activity's declaration.
+    """
+    lineage = report.get("lineage")
+    if lineage is None:
+        return None
+    sources = [
+        {"source_type": source_type, "dataset": dataset, **{k: counts.get(k, 0) for k in LINEAGE_COLUMNS}}
+        for source_type, per_dataset in sorted(lineage["sources"].items())
+        for dataset, counts in sorted(per_dataset.items())
+    ]
+    steps = [
+        {"dataset": dataset, "named_by": named_by, "files": files}
+        for dataset, per in sorted(lineage["steps"].items())
+        for named_by, files in sorted(per.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
+    conflicts = [
+        {"dataset": dataset, "kind": kind, "files": c["files"], "examples": c["examples"]}
+        for dataset, per in sorted(lineage["conflicts"].items())
+        for kind, c in sorted(per.items())
+    ]
+    return {"sources": sources, "steps": steps, "conflicts": conflicts, "misfits": lineage["misfits"]}
+
+
 def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
     """The payload ``reconcile-dashboard-template.html`` reads, and the markdown renders: the tables precomputed.
 
@@ -349,6 +382,8 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
         "values": {slot: values_matrix(report, slot) for slot in CLASSIFICATION_FIELDS},
         "values_change": values_change(report, previous) if previous else None,
         "values_new_dimensions": new_dimensions(report, previous) if previous else [],
+        "lineage": lineage_rows(report),
+        "lineage_columns": list(LINEAGE_COLUMNS),
     }
 
 
@@ -629,6 +664,7 @@ def render_markdown(data: dict) -> str:
             "",
             "</details>",
         ]
+    lines += ["", *_lineage_section(data["lineage"])]
     lines += ["", "## Per dataset", ""]
     for scope in data["datasets"]:
         name = scope["name"]
@@ -643,6 +679,99 @@ def render_markdown(data: dict) -> str:
             lines += ["", *_conflict_table(scope["conflict_rows"], with_dataset=False)]
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _said(example: dict) -> str:
+    """Who said what in one conflict example; what a source said (a file name or an activity) is catalog text, so a code span."""
+    return "; ".join(
+        f"{s['by']['source_type']} ({s['by']['rule_id']}): {md_code(str(s['said']))}" for s in example["said"]
+    )
+
+
+def _lineage_section(lineage: dict | None) -> list[str]:
+    """The lineage section (#577): what became of each source's lines, who named each step, conflicts, misfits."""
+    lines = [
+        "## Lineage: how each file was made",
+        "",
+        "Each lineage line says a file was made from a parent, in the source's words (#583). Reconcile translates "
+        "it through the activity map (#584), finds the parent in the child's dataset, and merges every source's "
+        "step for a file into its `generated_by` (#577). *untranslated*: no authored activity-map row reads the "
+        "line (the [review queue](review-queue-report.md) lists them); *sample_parent*: the parent is a sample, "
+        "which becomes an input later (#582); *not_in_dataset* / *several_match*: no file, or more than one, of "
+        "the child's dataset is the parent; *child_not_in_run*: the run holds no file for the child. Only "
+        "*resolved* lines give a step.",
+        "",
+    ]
+    if lineage is None:
+        return [*lines, "This run's report predates lineage at reconcile (#577): run `make reconcile` again."]
+    if not lineage["sources"]:
+        lines.append("No lineage was read.")
+    else:
+        lines += md_table(
+            ["source type", "dataset", *LINEAGE_COLUMNS],
+            [
+                [md_code(r["source_type"]), md_code(shown(r["dataset"]))] + [_n(r[k]) for k in LINEAGE_COLUMNS]
+                for r in lineage["sources"]
+            ],
+        )
+    lines += [
+        "",
+        "### Who named each file's step",
+        "",
+        "Files with a `generated_by`, by the kinds of source that named it: `filename_rule` is inference's name "
+        "rule; two kinds joined by `+` agreed on the step.",
+        "",
+        *md_table(
+            ["dataset", "named by", "files"],
+            [[md_code(shown(r["dataset"])), md_code(r["named_by"]), _n(r["files"])] for r in lineage["steps"]],
+        ),
+        "",
+        "### Conflicts",
+        "",
+    ]
+    if not lineage["conflicts"]:
+        lines.append("None: wherever two sources named a file's step, they agreed.")
+    else:
+        lines += [
+            "A file whose sources name two activities, or two parents in a role that takes one, gets no "
+            "`generated_by`; the first few are listed with who said what.",
+            "",
+            *md_table(
+                ["dataset", "kind", "files", "e.g."],
+                [
+                    [
+                        md_code(shown(c["dataset"])),
+                        c["kind"],
+                        _n(c["files"]),
+                        "<br>".join(f"{md_code(str(e['file_name']))}: {_said(e)}" for e in c["examples"][:2]),
+                    ]
+                    for c in lineage["conflicts"]
+                ],
+            ),
+        ]
+    lines += ["", "### Steps that do not fit their activity", ""]
+    if not lineage["misfits"]:
+        lines.append("None.")
+    else:
+        lines += [
+            "Flagged only: the step is still written. *required role missing* counts the steps that cannot pass "
+            "what that role would (an alignment with no `reference` input cannot pass its reference assembly).",
+            "",
+            *md_table(
+                ["dataset", "activity", "problem", "detail", "files"],
+                [
+                    [
+                        md_code(shown(m["dataset"])),
+                        md_code(m["activity"]),
+                        m["problem"],
+                        md_code(m["detail"]),
+                        _n(m["files"]),
+                    ]
+                    for m in lineage["misfits"]
+                ],
+            ),
+        ]
+    return lines
 
 
 def render_html(data: dict, template: str) -> str:

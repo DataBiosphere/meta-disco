@@ -219,7 +219,7 @@ evidence}` entry — plus the controlled vocabulary:
     child and the parent), each exact, `null`, or a list; **no two rows may match one line**, so
     authoring a row that covers seeded keys means deleting those seeded rows, or the table will not load. It shares its YAML walk and
     append-only seeding with `value_map` (`yaml_rows`). `make seed-activity-map` seeds it and
-    `make review-queue` lists its unauthored rows; nothing in a run or in reconcile reads it until #577.
+    `make review-queue` lists its unauthored rows; reconcile applies it (#577), and no classification run reads it.
   - `run_all_classifications` calls `report_evidence_files` and never `iter_evidence`,
     so no evidence reaches inference and a run with evidence files present writes the
     same inference output as one without. Recording which catalog a run enhances is
@@ -235,6 +235,14 @@ evidence}` entry — plus the controlled vocabulary:
     computed in the report and never stored on a record. The per-slot attribution is
     stored on the record, as `credited_to` (`reconcile.credited_to`, contract 6.10, #552). `corpus_diff` must be told
     which artifact it compares (`--artifact inference|reconciled`).
+  - **Reconcile builds each file's step from the lineage too** (#577, `reconcile_lineage`): the
+    lineage files of the run's catalog, translated through the activity map, each child and file
+    parent resolved within the child's dataset by `file_id` / `drs_uri`, and merged with
+    inference's own step by `edges.merge_steps` into the reconciled `generated_by`. A lineage
+    source is cited by its activity-map row id and a `ClaimSource`. An unresolved parent gives no
+    input and a conflict (two activities, or two parents in a role that takes one) gives no
+    `generated_by`; both are counted in the report's `lineage` block, never written on a record. A
+    sample parent waits for #582. Inference's own `generated_by` stays as it was.
   - **No output record carries what a repository publishes** (#513). The `published`
     block (#424) and `make published-comparison` are deleted: the published values are
     input kind 2, written by the published importer as evidence (contract 7.1, 7.12,

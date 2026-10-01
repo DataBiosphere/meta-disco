@@ -302,3 +302,57 @@ def test_a_previous_report_without_per_value_counts_is_compared_without_them(tmp
     code, md, _ = render(tmp_path, "--run-dir", str(later), "--previous", str(conflicted))
     assert code == 0
     assert "predates the per-value counts (#545)" in md
+
+
+def lineage_report(**lineage) -> dict:
+    base = {"sources": {}, "steps": {}, "conflicts": {}, "misfits": []}
+    return {"lineage": {**base, **lineage}}
+
+
+def test_the_lineage_section_lists_each_sources_lines_who_named_each_step_conflicts_and_misfits():
+    by = {"source_type": "repository_activity", "rule_id": "activity.indexing"}
+    report = lineage_report(
+        sources={"repository_activity": {DATASET: {"offered": 3, "resolved": 2, "untranslated": 1}}},
+        steps={DATASET: {"filename_rule+repository_activity": 2}},
+        conflicts={
+            DATASET: {
+                "edge": {
+                    "files": 1,
+                    "examples": [{"file_name": "a.tbi", "role": "indexed", "said": [{"said": "b.vcf.gz", "by": by}]}],
+                }
+            }
+        },
+        misfits=[
+            {
+                "dataset": DATASET,
+                "activity": "AlignmentActivity",
+                "problem": "required role missing",
+                "detail": "reference",
+                "files": 4,
+            }
+        ],
+    )
+    rows = rr.lineage_rows(report)
+    assert rows is not None
+    (source,) = rows["sources"]
+    assert (source["offered"], source["resolved"], source["untranslated"], source["several_match"]) == (3, 2, 1, 0)
+    md = "\n".join(rr._lineage_section(rows))
+    assert f"| `repository_activity` | `{DATASET}` | 3 | 2 | 0 | 0 | 1 | 0 | 0 |" in md
+    assert f"| `{DATASET}` | `filename_rule+repository_activity` | 2 |" in md
+    assert "`a.tbi`: repository_activity (activity.indexing): `b.vcf.gz`" in md
+    assert f"| `{DATASET}` | `AlignmentActivity` | required role missing | `reference` | 4 |" in md
+
+
+def test_a_report_written_before_lineage_says_so_and_one_with_no_conflicts_says_none():
+    assert rr.lineage_rows({}) is None
+    assert "predates lineage at reconcile (#577)" in "\n".join(rr._lineage_section(None))
+    rows = rr.lineage_rows(lineage_report(sources={"repository_activity": {DATASET: {"offered": 1, "resolved": 1}}}))
+    md = "\n".join(rr._lineage_section(rows))
+    assert "None: wherever two sources named a file's step, they agreed." in md
+
+
+def test_the_dashboard_carries_the_lineage_section(tmp_path, conflicted):
+    code, md, html = render(tmp_path, "--run-dir", str(conflicted), "--no-previous")
+    assert code == 0
+    assert "## Lineage: how each file was made" in md and "No lineage was read." in md
+    assert '"lineage": {"sources": []' in html or '"lineage":{"sources":[]' in html

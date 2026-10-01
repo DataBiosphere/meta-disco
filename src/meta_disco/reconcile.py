@@ -50,7 +50,10 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .activity_map import ActivityMap, load_activity_map
 from .deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS
+from .edges import LineageStep, StepConflict, merge_steps, misfits
+from .lineage_evidence import DEFAULT_LINEAGE_EVIDENCE_ROOT
 from .models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
@@ -69,9 +72,11 @@ from .output_utils import (
     iter_records,
     iter_run_files,
     reconciled_name,
+    relative_to,
     write_reconciled_file,
 )
 from .pipeline import ANVIL_REPOSITORY, PUBLISHED_TABLES, RecordKey, is_key_value, load_envelope, record_key
+from .reconcile_lineage import Carrier, Locator, PendingLineage, applies, resolve_lineage, translate_lineage
 from .records import JOIN_KEY_OUTPUT_FIELDS
 from .rule_engine import CONFLICT_MARKER, make_claim
 from .schema.classification_model import EvidenceFileEnvelope
@@ -298,7 +303,7 @@ class EvidenceFile:
     def identity(self, root: Path) -> dict:
         """What names the file: where it is, what kind of source it is, and which dataset and version."""
         return {
-            "path": _relative(self.path, root),
+            "path": relative_to(self.path, root),
             "source_type": self.source_type,
             "dataset": self.dataset,
             "source_version": self.envelope.source_version,
@@ -318,13 +323,6 @@ class EvidenceFile:
             "unmatched_examples": self.unmatched_examples,
             "ambiguous_examples": self.ambiguous_examples,
         }
-
-
-def _relative(path: Path, root: Path) -> str:
-    try:
-        return str(path.relative_to(root))
-    except ValueError:
-        return str(path)
 
 
 def select_evidence(
@@ -350,7 +348,7 @@ def select_evidence(
         if envelope.target.system != repository:
             skipped.append({"path": status.path, "target_system": envelope.target.system})
             continue
-        if catalog is not None and envelope.target.version != catalog:
+        if not applies(envelope.target, repository, catalog):
             continue
         key = str(envelope.target_key)
         if key not in JOIN_KEY_OUTPUT_FIELDS:
@@ -384,6 +382,8 @@ class Joined:
     """The join's result: per record identity, per slot, what the sources said."""
 
     slots: dict[str, dict[str, SlotEvidence]]
+    # Per locator the caller asked for besides the evidence's (``extra``), every record carrying it.
+    carriers: dict[_Key, list[Carrier]]
     # Per source type, the (dataset, slot) pairs its evidence speaks to: a line's field,
     # and every slot a row it selected declares (3.10). Dataset None for a file scoped to
     # no dataset, which speaks to that slot in every dataset.
@@ -392,10 +392,12 @@ class Joined:
 
 # A key a line is matched by: the output-row field, the dataset the envelope scopes the
 # join to (None when it names none), and the value.
-_Key = tuple[str, str | None, str]
+_Key = Locator
 
 
-def join(evidence: list[EvidenceFile], run_dir: Path, key: RecordKey, table: ValueMap) -> Joined:
+def join(
+    evidence: list[EvidenceFile], run_dir: Path, key: RecordKey, table: ValueMap, extra: set[_Key] | None = None
+) -> Joined:
     """Attach each evidence line whose key value exactly one record carries to that record, and translate it.
 
     The join runs within the envelope's target dataset when it names one — the scope
@@ -405,7 +407,9 @@ def join(evidence: list[EvidenceFile], run_dir: Path, key: RecordKey, table: Val
     few such keys per file. ``evidence`` is updated in place with each file's counts.
 
     The evidence is read into memory first — it is small beside the run — and then one
-    pass over the run's records finds which records carry each key. Refuses
+    pass over the run's records finds which records carry each key — and each of ``extra``,
+    the lineage pass's locators (``reconcile_lineage``), so the run is scanned once for both.
+    Refuses
     (``ReconcileError``) a carrying record with no usable record key, which it could not
     name, and an evidence file none of whose lines matched, an empty one included
     (contract 5.3).
@@ -417,31 +421,9 @@ def join(evidence: list[EvidenceFile], run_dir: Path, key: RecordKey, table: Val
             ev.offered += 1
             wanted[(ev.record_field, ev.dataset, entry.target_key_value)].append((n, entry))
             coverage[ev.source_type].add((ev.dataset, entry.field))
-    # The (field, dataset) scopes to look up, grouped by the dataset they need, so a
-    # record is looked up only under its own dataset's scopes and the unscoped ones.
-    scopes: dict[str | None, set[str]] = defaultdict(set)
-    for ev in evidence:
-        scopes[ev.dataset].add(ev.record_field)
-    unscoped = tuple(scopes.pop(None, ()))
-
-    carriers: dict[_Key, list[str]] = defaultdict(list)
-    if wanted:
-        for record in iter_records(run_dir):
-            title = record.get("dataset_title")
-            scoped = [(f, title) for f in scopes.get(title, ())] if isinstance(title, str) else []
-            for record_field, dataset in scoped + [(f, None) for f in unscoped]:
-                value = record.get(record_field)
-                if not is_key_value(value):
-                    continue
-                found = (record_field, dataset, value)
-                if found in wanted:
-                    identity = record.get(key.output_field)
-                    if not is_key_value(identity):
-                        raise ReconcileError(
-                            f"a record carrying {record_field}={value!r} has no usable {key.output_field}, "
-                            "the run's record key; it cannot be named"
-                        )
-                    carriers[found].append(identity)
+    extra = extra or set()
+    found_by_key = _carriers(run_dir, key, set(wanted) | extra)
+    carriers = {k: [c.key for c in found] for k, found in found_by_key.items() if k in wanted}
 
     slots: dict[str, dict[str, SlotEvidence]] = defaultdict(lambda: defaultdict(SlotEvidence))
     for wanted_key, lines in wanted.items():
@@ -471,7 +453,43 @@ def join(evidence: list[EvidenceFile], run_dir: Path, key: RecordKey, table: Val
                 f"silence is not success (contract 5.3), and an evidence file with no lines is silent too"
             )
 
-    return Joined(slots=slots, coverage=dict(coverage))
+    return Joined(slots=slots, carriers={k: v for k, v in found_by_key.items() if k in extra}, coverage=dict(coverage))
+
+
+def _carriers(run_dir: Path, key: RecordKey, wanted: set[_Key]) -> dict[_Key, list[Carrier]]:
+    """Every record carrying each of ``wanted``, from one pass over the run's records.
+
+    A key scoped to a dataset is looked for only among that dataset's records (by
+    ``dataset_title``), an unscoped one (dataset None) among all. Refuses
+    (``ReconcileError``) a carrying record with no usable record key, which could not be named.
+    """
+    found: dict[_Key, list[Carrier]] = defaultdict(list)
+    if not wanted:
+        return found
+    # The (field, dataset) scopes to look up, grouped by the dataset they need, so a
+    # record is looked up only under its own dataset's scopes and the unscoped ones.
+    scopes: dict[str | None, set[str]] = defaultdict(set)
+    for record_field, dataset, _ in wanted:
+        scopes[dataset].add(record_field)
+    unscoped = tuple(scopes.pop(None, ()))
+    for record in iter_records(run_dir):
+        title = record.get("dataset_title")
+        scoped = [(f, title) for f in scopes.get(title, ())] if isinstance(title, str) else []
+        for record_field, dataset in scoped + [(f, None) for f in unscoped]:
+            value = record.get(record_field)
+            if not is_key_value(value):
+                continue
+            at = (record_field, dataset, value)
+            if at in wanted:
+                identity = record.get(key.output_field)
+                if not is_key_value(identity):
+                    raise ReconcileError(
+                        f"a record carrying {record_field}={value!r} has no usable {key.output_field}, "
+                        "the run's record key; it cannot be named"
+                    )
+                data_type = (record.get("classifications") or {}).get("data_type") or {}
+                found[at].append(Carrier(identity, str(record.get("file_name") or ""), data_type.get("value")))
+    return found
 
 
 def _translate(
@@ -569,6 +587,10 @@ def credited_to(settled: dict, said: SlotEvidence) -> str:
 def reconcile_record(record: dict, record_slots: dict[str, SlotEvidence]) -> dict:
     """The reconciled record for one inference record: same identity, each slot settled.
 
+    Its ``generated_by`` is not settled here: :func:`reconcile_run` merges inference's step
+    with the record's lineage steps (``edges.merge_steps``) after this returns, where the
+    lineage pass's result is in hand.
+
     Each slot keeps inference's evidence as it is, adds the source claims after it, and
     gains ``inferred`` (what inference concluded, which its evidence alone cannot rebuild
     without re-running tier resolution), ``use`` and ``credited_to`` (where the answer is
@@ -644,6 +666,17 @@ class Report:
     # has none (`conflict`, `not_applicable`, `not_classified`): what a dataset holds, not
     # how it was filled (#545). Like `slots`, each dataset's counts sum to its file count.
     values: dict = field(default_factory=lambda: defaultdict(lambda: defaultdict(Counter)))
+    # The lineage pass (#577): per source type and dataset, what became of its lines
+    # (`reconcile_lineage.OUTCOMES`); per dataset, the files whose `generated_by` each
+    # combination of source types named; per dataset and conflict kind, the files and the
+    # first few with who said what; per (dataset, activity, problem, detail), the steps that
+    # do not fit their declaration (`edges.misfits`).
+    lineage_counts: dict = field(default_factory=dict)
+    steps: dict = field(default_factory=lambda: defaultdict(Counter))
+    step_conflicts: dict = field(
+        default_factory=lambda: defaultdict(lambda: defaultdict(lambda: {"files": 0, "examples": []}))
+    )
+    misfits: Counter = field(default_factory=Counter)
     # Per (dataset, slot), the source types whose evidence speaks to it: only those are
     # scored there.
     _covering: dict[tuple[str, str], tuple[str, ...]] = field(default_factory=dict)
@@ -701,6 +734,35 @@ class Report:
                     published_silent = True
             if published_silent and settled["status"] == CLASSIFIED:
                 self.added_over_published[dataset][slot] += 1
+
+    def add_step(self, reconciled: dict, conflict: StepConflict | None, steps: list[LineageStep]) -> None:
+        """Count one record's settled step: who named it, a conflict with who said what, or how it misfits.
+
+        ``steps`` are the record's lineage steps, whose parents' ``data_type`` the misfit
+        check reads; an input only inference names has none, so its kind is not judged.
+        """
+        dataset = str(reconciled.get("dataset_title") or "")
+        step = reconciled.get("generated_by")
+        if conflict is not None:
+            tally = self.step_conflicts[dataset][conflict.kind]
+            tally["files"] += 1
+            examples = tally["examples"]
+            if len(examples) < MAX_EXAMPLES:
+                examples.append(
+                    {
+                        "file_name": reconciled.get("file_name"),
+                        "role": conflict.role,
+                        "said": [{"said": what, "by": by} for what, by in conflict.said],
+                    }
+                )
+            return
+        if not step:
+            return
+        self.steps[dataset]["+".join(sorted({n["source_type"] for n in step["named_by"]}))] += 1
+        child_kind = reconciled["classifications"]["data_type"].get("value")
+        kinds = {s.parent_key: s.parent_data_type for s in steps}
+        for problem, detail in misfits(step, child_kind, kinds):
+            self.misfits[(dataset, step["activity"], problem, detail)] += 1
 
     @staticmethod
     def _competing(settled: dict, said: SlotEvidence, own: str | None) -> tuple[tuple[str, tuple[str, ...]], ...]:
@@ -807,6 +869,18 @@ class Report:
                 }
                 for dataset, per_slot in sorted(self.conflicts.items())
             },
+            "lineage": {
+                "sources": plain(self.lineage_counts),
+                "steps": plain(self.steps),
+                "conflicts": {
+                    dataset: {kind: dict(tally) for kind, tally in sorted(per_kind.items())}
+                    for dataset, per_kind in sorted(self.step_conflicts.items())
+                },
+                "misfits": [
+                    {"dataset": d, "activity": a, "problem": p, "detail": x, "files": n}
+                    for (d, a, p, x), n in sorted(self.misfits.items())
+                ],
+            },
             "coverage": {
                 source_type: {
                     dataset or EVERY_DATASET: sorted(slot for d, slot in pairs if d == dataset)
@@ -825,6 +899,8 @@ def reconcile_run(
     metadata: Path,
     evidence_root: Path | None = DEFAULT_SOURCE_EVIDENCE_ROOT,
     table: ValueMap | None = None,
+    lineage_root: Path | None = None,
+    activity_table: ActivityMap | None = None,
 ) -> dict:
     """Reconcile one stored run into ``<run>/reconciled/`` and return its report; ``evidence_root=None`` excludes all evidence.
 
@@ -833,9 +909,17 @@ def reconcile_run(
     reconciled artifact recoverable: untouched, or moved aside as ``reconciled.replaced`` if
     the process dies between the two renames of the swap, and restored by the next run. No request is made and no written byte depends on the
     clock — the evidence report printed on the way in shows file ages, and nothing
-    written does — so the same run, evidence, translation table and input paths write the
-    same bytes (criterion 16); the table's sha256 is in the envelope and the report. The report echoes the input path as given and evidence paths
+    written does — so the same run, evidence, lineage, translation table, activity map and
+    input paths write the same bytes (criterion 16); both tables' sha256 are in the envelope
+    and the report. The report echoes the input path as given and evidence paths
     relative to ``evidence_root``.
+
+    Lineage (#577, :mod:`reconcile_lineage`) is read from ``lineage_root``, by default the
+    ``lineage_evidence`` directory beside ``evidence_root``, translated through
+    ``activity_table`` (the bundled activity map by default), and merged per record with
+    inference's own step (``edges.merge_steps``) into the reconciled ``generated_by``. A
+    record no lineage names keeps inference's step as it is. ``evidence_root=None``
+    excludes lineage too.
     """
     if not run_dir.is_dir():
         raise ReconcileError(f"run directory not found: {run_dir}")
@@ -852,15 +936,23 @@ def reconcile_run(
     repository = envelope["repository"]
     catalog = envelope.get("catalog")
     table = table if table is not None else load_value_map()
+    activity_table = activity_table if activity_table is not None else load_activity_map()
 
     if evidence_root is None:
         applicable, skipped = [], []
+        pending = PendingLineage()
     else:
         statuses = report_evidence_files(evidence_root)
         require_one_published_source(statuses, PUBLISHED_TABLES)
         applicable, skipped = select_evidence(statuses, repository, catalog)
-    joined = join(applicable, run_dir, key, table)
-    report = Report(coverage=joined.coverage, published_slots=published_slots(repository))
+        if lineage_root is None:
+            lineage_root = evidence_root.parent / DEFAULT_LINEAGE_EVIDENCE_ROOT.name
+        pending = translate_lineage(lineage_root, evidence_root, repository, catalog, activity_table)
+    joined = join(applicable, run_dir, key, table, extra=pending.wanted)
+    lineage = resolve_lineage(pending, joined.carriers)
+    report = Report(
+        coverage=joined.coverage, published_slots=published_slots(repository), lineage_counts=lineage.counts
+    )
 
     root = evidence_root or Path()
     header = {
@@ -871,6 +963,8 @@ def reconcile_run(
         "evidence_excluded": evidence_root is None,
         "evidence": [ev.identity(root) for ev in applicable],
         "value_map_sha256": table.digest,
+        "activity_map_sha256": activity_table.digest,
+        "lineage_files": lineage.files,
     }
 
     # Every row must carry its own record key: joined evidence is keyed by it, so a row
@@ -894,7 +988,11 @@ def reconcile_run(
             seen.add(identity)
             record_slots = joined.slots.get(identity, {})
             reconciled = reconcile_record(record, record_slots)
+            conflict = None
+            if identity in lineage.steps:
+                reconciled["generated_by"], conflict = merge_steps(record.get("generated_by"), lineage.steps[identity])
             report.add(reconciled, record_slots)
+            report.add_step(reconciled, conflict, lineage.steps.get(identity, []))
             yield reconciled
 
     if staging.exists():
@@ -906,7 +1004,7 @@ def reconcile_run(
     full_report = {
         **header,
         "evidence": [ev.summary(root) for ev in applicable],
-        "skipped_evidence": [{**s, "path": _relative(s["path"], root)} for s in skipped],
+        "skipped_evidence": [{**s, "path": relative_to(s["path"], root)} for s in skipped],
         **report.to_dict(),
     }
     (staging / REPORT_FILE).write_text(json.dumps(full_report, indent=2, sort_keys=True) + "\n")
@@ -968,6 +1066,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--evidence-root", type=Path, default=DEFAULT_SOURCE_EVIDENCE_ROOT)
     parser.add_argument(
+        "--lineage-root",
+        type=Path,
+        default=None,
+        help="Lineage evidence (default: lineage_evidence beside the evidence root)",
+    )
+    parser.add_argument(
         "--no-evidence",
         action="store_true",
         help="Exclude all source evidence: the reconciled artifact then concludes what inference did (6.6)",
@@ -982,7 +1086,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         run_dir = args.run or find_latest_run(Path("output/anvil"))
         metadata = args.metadata or DEPLOYMENTS[args.deployment].input_file
-        report = reconcile_run(run_dir, metadata, None if args.no_evidence else args.evidence_root)
+        report = reconcile_run(
+            run_dir, metadata, None if args.no_evidence else args.evidence_root, lineage_root=args.lineage_root
+        )
     except (ReconcileError, ValueError, FileNotFoundError) as exc:
         print(f"reconcile refused: {exc}", file=sys.stderr)
         return 1

@@ -41,45 +41,8 @@ from meta_disco.source_evidence import (
     evidence_file_path,
     generation_dir,
 )
+from tests.lineage_fixtures import STAMP, activity_line, envelope, line, write_lineage
 from tests.test_value_map import imported_segments, write_generation
-
-STAMP = "20260930T062532Z"
-
-
-def envelope(table, source_type=SOURCE_REPOSITORY_ACTIVITY, dataset="D", key="file_id", version="anvil15"):
-    return EvidenceFileEnvelope(
-        source=EvidenceFileSource(repository="anvil", dataset=dataset, table=table, url="https://azul.test"),
-        source_type=ImporterSourceTypeEnum(source_type),
-        source_version=version,
-        source_key=key,
-        target=EvidenceTarget(system="anvil", dataset=dataset, version=version),
-        target_key=JoinKeyEnum(key),
-        fetched_at="2026-09-03T21:45:47",
-    )
-
-
-def line(child, parent, child_column="generated_file_id", parent_column="used_file_id", key="file_id", **more):
-    members = {
-        "target_key_value": child,
-        "parent": parent,
-        "parent_key_type": key,
-        "child_column": child_column,
-        "parent_column": parent_column,
-        **more,
-    }
-    return LineageRow.model_validate(members)
-
-
-def activity_line(child, parent, raw_activity, parent_column="used_file_id"):
-    return line(
-        child, parent, parent_column=parent_column, raw_activity=raw_activity, raw_activity_column="activity_type"
-    )
-
-
-def write_lineage(root, table, rows, dataset="D", **envelope_kw):
-    directory = generation_dir(root, "anvil", "anvil15", dataset, STAMP)
-    directory.mkdir(parents=True, exist_ok=True)
-    write_lineage_file(evidence_file_path(directory, table), envelope(table, dataset=dataset, **envelope_kw), rows)
 
 
 def write_slots(root, table, data_types, dataset="D", source_type=SOURCE_REPOSITORY_METADATA, key="drs_uri"):
@@ -217,14 +180,20 @@ def test_ac3_the_review_queue_lists_what_no_authored_row_reads(tmp_path, roots):
     assert "Unknown" in page and "Authored activity mappings" in page
 
 
-def test_ac4_nothing_but_the_review_queue_imports_the_table():
+def test_ac4_only_reconcile_and_the_reports_import_the_table():
     """Inference output is unchanged because no classification code reaches the module: of every module and
-    script but its own entry point, only the review-queue report imports it, and it writes only its two files."""
+    script but its own entry point, only reconcile's lineage pass (#577), which writes its own artifact, and the
+    review-queue and rules reports import it."""
     sources = [*Path("src/meta_disco").rglob("*.py"), *Path("scripts").rglob("*.py")]
     importers = sorted(
         str(p) for p in sources if p.name != "activity_map.py" and "activity_map" in imported_segments(p)
     )
-    assert importers == ["scripts/generate_review_queue.py"], importers
+    assert importers == [
+        "scripts/generate_review_queue.py",
+        "scripts/generate_rules_report.py",
+        "src/meta_disco/reconcile.py",
+        "src/meta_disco/reconcile_lineage.py",
+    ], importers
 
 
 # --- matching ----------------------------------------------------------------------
