@@ -448,15 +448,12 @@ importer's half is built — 7.12 is enforced (below), and the published importe
 (7.1, today through the verbatim manifest, 7.12) and transcribes verbatim (7.3, #497, #421) — and what 7.1,
 7.2, 7.10 and 7.13 say about claims, comparison and delivery is the reconcile stage's (#432), which is built. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. A declared term is checked against its slot's vocabulary when the translation table loads (`value_map`, #414) — on authored rows, per 3.11; no runtime constructor checks it. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in each place below:
 
-- **4.9 is built at reconcile, and reaches only the steps reconcile builds** (#571). Inference writes the
-  `IndexActivity` and `ChecksumActivity` edges a file's name states, each by the parent's record key and only
-  where the parent resolves (#356); the links the source tables state are imported as lineage evidence
-  (#583), translated by the activity map (#584) and merged into each reconciled file's step (#577); and
-  reconcile carries each parent's settled answer across that step (`reconcile_inherit`). So nothing is
-  inherited across a link that gives no step: a sample parent (#582), a parent no file or two files of the
-  dataset carry, a step conflict, or a step only the generic `Activity` names. Inference's own output carries
-  none of it: an index or checksum file's carried dimensions are `not_classified` there, and filled at
-  reconcile.
+- **4.9 does not reach every derivation edge.** It is built at reconcile (#571, `reconcile_inherit`) and
+  crosses only a reconciled file's step: the edges inference writes from a file's name (#356) and the links
+  the source tables state (#583, #584), merged into that step (#577). Nothing is inherited across a link that
+  gives no step: a sample parent (#582), a parent no file or two files of the dataset carry, a step
+  conflict, or a step only the generic `Activity` names. Nor does the inference artifact carry any of it: an
+  index or checksum file's carried dimensions are `not_classified` there, and filled only at reconcile.
 - **The slot maps and their importer exist for AnVIL only** (#369, #497): `slot_map` loads
   `sources/anvil_slot_map.yaml` (kind 3) and `sources/anvil_published_slot_map.yaml` (kind 2),
   `anvil_evidence` writes generations of evidence files under `data/source_evidence/anvil/` and

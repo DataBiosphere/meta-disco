@@ -411,17 +411,18 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   `ActivityDeclarations`; `meta_disco.activities` reads it through the generated pydantic model, so it is
   checked as it loads, and its readers trust it; `INHERITED_FIELDS` and the index producer's code rule read the
   `IndexActivity` entry.
-- An inherited claim (decision 8) carries `inherited_from`: a list, one entry per contributing parent, of
-  `{activity, parent_key, value | status | state}` — so the parents a declaration is credited to, and the
-  values a mixed one stands for, are on the record rather than re-joined from the parents'.
-- Mixed is a new `claim_state_enum` value, `mixed`: a claim with no value and no status, and the one state
-  that takes part in resolution, as 4.9 says. Alone or beside another mixed declaration it leaves the slot
-  `not_classified`; against a value or `not_applicable` from any other declaration — the child's own, or
-  another activity's inherited one — the slot is `conflict`.
-- `credited_to_enum` and `reconcile.SLOT_CATEGORIES` gain a category for a slot filled by inheritance,
-  and the conflict kinds one for a child against its parent, so the reconcile report counts neither as a
-  source (contract 6.10). The report also needs a way to list a mixed dimension with its parents' values,
-  and an edge conflict with the parents each source named.
+- **Done (#571):** an inherited claim (decision 8) carries the step it crossed — `activity`, the input
+  `parent_role` and the parents' record keys, `parent_keys` — so the parents a declaration is credited to
+  are on the record. The values a mixed one stands for are not: they are on the parents' own records,
+  which those keys join to.
+- **Done (#571):** mixed is a `claim_state_enum` value, `mixed`: a claim with no value and no status, and
+  the one state that takes part in resolution, as 4.9 says. Alone or beside another mixed declaration it
+  leaves the slot `not_classified`; against a value or `not_applicable` from any other declaration — the
+  child's own, or another role's inherited one — the slot is `conflict`.
+- **Done (#571):** `credited_to_enum` and `reconcile.SLOT_CATEGORIES` gain `inherited`, so the report counts
+  an inherited fill apart from every source (contract 6.10). A child against its parent takes the existing
+  conflict kinds, and the conflict listing names `derivation_inheritance` with what it declared, `mixed`
+  included; the report's `inheritance` block counts what each role gave. Edge conflicts are listed by #577.
 - An `edges.jsonl` row is its own class, not a `GeneratedBy`: its child is a record key or an
   `EntityIdentifier`, because a `SampleCollectionActivity`'s child, a sample, and `isBiologicalChildOf`'s, a donor, have no record to sit on; its parent carries the
   same fields as an `ActivityInput`'s — `parent_key`, `parent_file`, `parent_ref`, or `parent_id` — and its
