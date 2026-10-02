@@ -326,17 +326,18 @@ concern where it matters: the dimensions that describe the file itself (`data_ty
 
 *Rejected: the child's own evidence wins a contradiction.* It would settle a disagreement nobody reviewed.
 
-**Today's case.** The index producer's inheritance (`classify_index_files.INHERITED_FIELDS`) is the
-`IndexActivity` row of the table (read from `rules/activities.yaml` since #580), built the way the contract's "What is not true yet" entry on 1.1 describes.
-How that path moves under 4.9 is #413's. That producer used to write the edge decision 2 rejects, an
-index edge naming no parent on an index file it took no parent for (`declined_record`, #438, ~15K
-files); #356 removed it, and `anvil_activity`, which names most of those parents, gives them theirs (#577).
+**How it was built (#571).** Reconcile carries every row of the table across each file's step
+(`reconcile_inherit`), and the index producer's own copy of its parent's answer, built outside
+`make_claim`, is gone (#413): it writes the index's kind and the `IndexActivity` edge and nothing
+more. That producer used to write the edge decision 2 rejects, an index edge naming no parent on an
+index file it took no parent for (`declined_record`, #438, ~15K files); #356 removed it, and
+`anvil_activity`, which names most of those parents, gives them theirs (#577).
 
-The `checksum_file` rule contradicts the `ChecksumActivity` row: it stamps all five lineage dimensions
-`not_applicable`, which 4.6 would make a conflict against every inherited value (~14K `.md5` files). A
-checksum is a companion like an index, not a special case, so when 4.9 is built that rule keeps only
-`data_type: checksum` and drops the five statuses — the correction #437 made to the index rule. It also
-shrinks what the engine's same-tier `not_applicable` exception protects (#511).
+The `checksum_file` rule contradicted the `ChecksumActivity` row: it stamped all five lineage
+dimensions `not_applicable`, which 4.6 would have made a conflict against every inherited value (~14K
+`.md5` files). A checksum is a companion like an index, not a special case, so #571 left that rule
+only `data_type: checksum` — the correction #437 made to the index rule. It also shrinks what the
+engine's same-tier `not_applicable` exception protects (#511).
 
 ## What this supersedes
 

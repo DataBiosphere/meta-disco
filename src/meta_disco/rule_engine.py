@@ -17,6 +17,7 @@ from .models import (
     EXTERNAL_SOURCE_TYPES,
     MIXED,
     NO_VOCABULARY_TERM,
+    NOT_APPLICABLE,
     NOT_CLASSIFIED,
     SOURCE_DERIVATION_INHERITANCE,
     SOURCE_FILENAME_RULE,
@@ -273,6 +274,12 @@ def make_claim(
             raise ValueError(f"inherited claim from {producer!r} must name its parents' record keys in parent_keys")
         if tier is not None:
             raise ValueError(f"inherited claim from {producer!r} carries a tier, but it never competes on the tiers")
+        # Contract 4.9: parents give a value, `not_applicable`, or `mixed`, and nothing else.
+        if status not in (None, NOT_APPLICABLE) or state not in (None, MIXED):
+            raise ValueError(
+                f"inherited claim from {producer!r} declares status={status!r} state={state!r}; an inherited "
+                f"claim declares a value, {NOT_APPLICABLE!r}, or the state {MIXED!r}"
+            )
     elif activity is not None or parent_role is not None or parent_keys is not None:
         raise ValueError(
             f"claim from {producer!r} names an activity, parent_role or parent_keys, which only an inherited "

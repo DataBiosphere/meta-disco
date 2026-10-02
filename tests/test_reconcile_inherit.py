@@ -389,6 +389,8 @@ def test_an_inherited_claim_names_its_step_and_carries_no_tier():
         pytest.param({"activity": None}, id="no activity"),
         pytest.param({"parent_role": ""}, id="no role"),
         pytest.param({"tier": 1}, id="a tier"),
+        pytest.param({"value": None, "status": "not_classified"}, id="not_classified is no inheritance"),
+        pytest.param({"value": None, "state": "unmapped"}, id="a state other than mixed"),
     ],
 )
 def test_an_inherited_claim_that_does_not_name_its_step_is_refused(overrides):

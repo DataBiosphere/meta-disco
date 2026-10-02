@@ -580,7 +580,7 @@ Listed rather than derived because LinkML has no enum-subset construct that `gen
 
 class ClaimStateEnum(str, Enum):
     """
-    Why a claim that consulted a source produced no vocabulary value (issue #392). Each state was observed in the spike over three real producers on `AnVIL_HPRC_R2`. None of them declares a value, so none competes in resolution — except `mixed`, an inherited claim's, which reconcile weighs (contract 4.9). `mapped` is not a member: a claim that mapped carries a `value`, and `not_applicable` / `not_classified` remain statuses, unchanged.
+    Why a claim that consulted a source produced no vocabulary value (issue #392). The first three (`unmapped`, `no_vocabulary_term`, `declined`) were observed in the spike over three real producers on `AnVIL_HPRC_R2`; none of them declares a value, so none competes in resolution. `mixed` was added for inheritance (contract 4.9, #571): an inherited claim's only, and reconcile weighs it. `mapped` is not a member: a claim that mapped carries a `value`, and `not_applicable` / `not_classified` remain statuses, unchanged.
     """
     unmapped = "unmapped"
     """
