@@ -327,6 +327,28 @@ def test_a_claim_that_declares_no_answer_is_not_counted(tmp_path):
     assert (rows[inherited]["files"], rows[inherited]["claims"], rows[inherited]["won"]) == (0, 0, 0)
 
 
+def test_an_inherited_claim_is_judged_against_the_reconciled_slot_and_mixed_counts_as_fired(tmp_path):
+    """Made at reconcile (#571): won where the reconciled slot took its value, never against inference's."""
+    inherited = code_rules.INHERITED_FROM_PARENT.id
+
+    def passed(**declared):
+        c = {"rule_id": inherited, "reason": "r", "source_type": "derivation_inheritance", **declared}
+        return {**c, "activity": "IndexActivity", "parent_role": "indexed", "parent_keys": ["p"]}
+
+    rows = run_of(
+        tmp_path,
+        # Inference said nothing; the slot took the inherited value.
+        {
+            "platform": slot(
+                "ILLUMINA", evidence=[passed(value="ILLUMINA")], inferred={"value": None, "status": "not_classified"}
+            )
+        },
+        # The parents disagreed: fired, not won.
+        {"platform": slot(status="not_classified", evidence=[passed(claim_state="mixed")])},
+    )
+    assert (rows[inherited]["files"], rows[inherited]["claims"], rows[inherited]["won"]) == (2, 2, 1)
+
+
 def test_a_rule_written_with_an_alias_is_shown_expanded(tmp_path):
     value_map = rule_files(tmp_path)[1]
     rules = tmp_path / "aliased_rules.yaml"

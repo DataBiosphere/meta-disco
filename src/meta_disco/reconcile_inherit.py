@@ -60,12 +60,16 @@ Build = tuple["str | None", "str | None"]
 class Settled:
     """One record's settled answer per carried slot (``activities.carried()``), and its reference build.
 
-    ``build`` is the record's own inferred build where its ``reference_assembly`` answer is
-    the one inference gave, else that of the inherited declaration it took (:func:`build_for`).
+    ``build`` goes with the settled ``reference_assembly`` answer, as the record writes it:
+    inference's own build where the answer is inference's, else that of the inherited
+    declaration that gave the value (:func:`reference_build`). ``inferred`` is inference's
+    own ``reference_assembly`` answer and build, which a child's answer is judged against
+    once its inherited declarations are weighed in.
     """
 
     answers: dict[str, Answer]
     build: Build | None = None
+    inferred: tuple[Answer, Build | None] | None = None
 
 
 class Interner:
@@ -78,10 +82,12 @@ class Interner:
     def __call__(self, value):
         return self._values.setdefault(value, value)
 
-    def settled(self, answers: dict[str, Answer], build: Build | None) -> Settled:
-        pattern = (tuple(answers.items()), build)
+    def settled(
+        self, answers: dict[str, Answer], build: Build | None, inferred: tuple[Answer, Build | None] | None
+    ) -> Settled:
+        pattern = (tuple(answers.items()), build, inferred)
         if pattern not in self._settled:
-            self._settled[pattern] = Settled(answers, build)
+            self._settled[pattern] = Settled(answers, build, inferred)
         return self._settled[pattern]
 
 
@@ -125,16 +131,25 @@ class Inherited:
         )
 
 
-def build_for(value: str | None, own: Build | None, inherited: list[Inherited]) -> Build | None:
-    """The build a settled ``reference_assembly`` value carries: the record's own, else an inherited one's.
-
-    ``own`` is the record's inferred build, given only where the value is inference's own;
-    otherwise the build of the inherited declaration that declared the value, if any. One
-    rule for the graph (what a child passes on) and the record (what it writes).
-    """
-    if own is not None:
-        return own
+def build_for(value: str | None, inherited: list[Inherited]) -> Build | None:
+    """The build of the inherited declaration that declared ``value``, if one did."""
     return next((i.build for i in inherited if i.declared == value), None)
+
+
+def reference_build(
+    answer: Answer, inferred: tuple[Answer, Build | None] | None, inherited: list[Inherited]
+) -> Build | None:
+    """The build a settled ``reference_assembly`` answer carries, as the record writes it.
+
+    None unless classified. Where the answer is inference's own, inference's build, which
+    may be None: a file passes on only the build its record shows. Otherwise the build of
+    the inherited declaration that gave the value (:func:`build_for`).
+    """
+    if answer[0] != CLASSIFIED:
+        return None
+    if inferred is not None and answer == inferred[0]:
+        return inferred[1]
+    return build_for(answer[1], inherited)
 
 
 def build_detail(build: Build | None) -> dict:
@@ -242,14 +257,13 @@ def inherit(
         for slot, inherited in by_slot.items():
             answer = resolve(key, slot, inherited)
             if slot == REFERENCE_ASSEMBLY:
-                mine = own.build if answer == own.answers.get(slot) else None
-                build = build_for(answer[1], mine, inherited) if answer[0] == CLASSIFIED else None
+                build = reference_build(answer, own.inferred, inherited)
             answers[slot] = answer
         if by_slot:
             result.declarations[key] = by_slot
         if outcomes:
             result.outcomes[key] = intern(tuple(outcomes))
-        return intern.settled(answers, build)
+        return intern.settled(answers, build, own.inferred)
 
     for start in steps:
         if start in final:

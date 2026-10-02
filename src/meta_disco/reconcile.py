@@ -98,6 +98,7 @@ from .reconcile_inherit import (
     build_detail,
     build_for,
     inherit,
+    reference_build,
 )
 from .reconcile_lineage import Carrier, Locator, PendingLineage, applies, resolve_lineage, translate_lineage
 from .records import JOIN_KEY_OUTPUT_FIELDS
@@ -710,7 +711,7 @@ def reconcile_record(
         if (status, value) == (inferred["status"], inferred["value"]):
             settled.update(field_detail(record, slot))
         elif status == CLASSIFIED:
-            settled.update(build_detail(build_for(value, None, passed)))
+            settled.update(build_detail(build_for(value, passed)))
         classifications[slot] = settled
     out["classifications"] = classifications
     return out
@@ -1046,7 +1047,7 @@ class _Graph:
         classifications = record.get("classifications") or {}
         answers: dict[str, tuple[str, str | None]] = {}
         own = []
-        build = None
+        build = inferred_reference = None
         for slot in self.carried:
             entry = classifications.get(slot) or {}
             said = record_slots.get(slot, NO_EVIDENCE)
@@ -1055,11 +1056,14 @@ class _Graph:
             unreviewed = SOURCE_PUBLISHED_VALUE in said.unreviewed
             answers[slot] = self.intern(settle(slot, inference_conflict, declared, False, unreviewed))
             own.append(self.intern((inference_conflict, declared, unreviewed)))
-            if slot == REFERENCE_ASSEMBLY and answers[slot] == (inferred["status"], inferred["value"]):
+            if slot == REFERENCE_ASSEMBLY and inferred["status"] == CLASSIFIED:
                 detail = field_detail(record, slot).get("build")
-                if isinstance(detail, dict) and answers[slot][0] == CLASSIFIED:
-                    build = self.intern((detail.get("base"), detail.get("version")))
-        self.base[identity] = self.intern.settled(answers, build)
+                own_build = (
+                    self.intern((detail.get("base"), detail.get("version"))) if isinstance(detail, dict) else None
+                )
+                inferred_reference = self.intern(((inferred["status"], inferred["value"]), own_build))
+                build = reference_build(answers[slot], inferred_reference, [])
+        self.base[identity] = self.intern.settled(answers, build, inferred_reference)
         if step is not None:
             self.steps[identity] = Step.of(step, self.intern)
             self.own[identity] = self.intern(tuple(own))

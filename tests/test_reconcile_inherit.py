@@ -417,3 +417,23 @@ def test_two_roles_that_agree_are_not_mixed_in_either_pass():
     assert graph.resolve("file-1", "data_modality", passed) == (CLASSIFIED, "genomic")
     written = reconcile_record(row, {}, {"data_modality": passed})
     assert slot(written, "data_modality")["value"] == "genomic"
+
+
+def test_a_file_passes_on_only_the_build_its_record_shows(tmp_path, roots):
+    """A VCF whose own GRCh38 has no build passes none to its `.tbi`, though its CRAM has one."""
+    evidence, lineage = roots
+    sample_lines(lineage, sample_line(2, 1, "vcf", "cram"))
+    build = {"base": "GRCh38", "version": "p14"}
+    rows, _ = go(
+        tmp_path,
+        [
+            rec(1, "s.cram", reference_assembly="GRCh38", build=build),
+            rec(2, "s.vcf.gz", reference_assembly="GRCh38"),
+            rec(3, "s.vcf.gz.tbi", generated_by=index_of(2, "s.vcf.gz")),
+        ],
+        evidence,
+    )
+    assert "build" not in slot(rows["s.vcf.gz"], "reference_assembly")
+    entry = slot(rows["s.vcf.gz.tbi"], "reference_assembly")
+    assert (entry["value"], entry["credited_to"]) == ("GRCh38", INHERITED)
+    assert "build" not in entry

@@ -64,6 +64,7 @@ import yaml
 
 from meta_disco import code_rules
 from meta_disco.activity_map import default_activity_map_resource, describe_match, load_activity_map
+from meta_disco.models import MIXED, SOURCE_DERIVATION_INHERITANCE
 from meta_disco.output_utils import find_latest_run, iter_reconciled_records
 from meta_disco.reconcile import declaration
 from meta_disco.rule_engine import CONFLICT_MARKER, CONTENT_TIER, NOT_CLASSIFIED_MARKER
@@ -359,8 +360,10 @@ def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict
 
     For a rule or a translation row, only a claim that declares something counts: a value,
     or ``not_applicable`` (``reconcile.declaration``). One that declares ``not_classified``
-    or copies a ``conflict`` gave the file no answer, as the index producer's
-    ``inherited_from_parent`` does for a parent with none. A marker is counted wherever it
+    gave the file no answer. An inherited claim (``inherited_from_parent``, made at
+    reconcile, #571) is judged against the reconciled slot, as a translation row is, not
+    against inference's answer; one in state ``mixed`` declares nothing yet counts as
+    fired, since it takes part in resolution, and never wins. A marker is counted wherever it
     appears, since recording no answer is what a marker does. An id in neither set (one
     nothing declares) is counted like a marker and never judged as having won. An edge
     rule is counted by the inputs records' ``generated_by`` carries under its ``rule_id``.
@@ -380,12 +383,15 @@ def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict
                     continue
                 judged = key in mapping_ids or key in rule_ids
                 claimed = declaration(claim) if judged else None
-                if judged and claimed is None:
+                inherited = claim.get("source_type") == SOURCE_DERIVATION_INHERITANCE and "parent_keys" in claim
+                if judged and claimed is None and not (inherited and claim.get("claim_state") == MIXED):
                     continue
                 stats[key].claims += 1
                 fired.add(key)
                 if key in mapping_ids:
                     stats[key].source_types[claim.get("source_type")] += 1
+                    answer = slot
+                elif inherited:
                     answer = slot
                 elif key in rule_ids:
                     if "inferred" not in slot:
