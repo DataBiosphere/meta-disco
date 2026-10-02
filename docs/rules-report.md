@@ -99,7 +99,7 @@ Every rule meta-disco uses to describe a file, such as "a .bam file holds alignm
 | `rgfa_stable_rank_reference` | code | content | 4 | Segments at stable rank 0 are the backbone that defines the graph's coordinate system, so a graph that has them is a reference pangenome (pangenome.reference). | general | 10 | 10 | 10 | `ANVIL_HPRC` 6; `AnVIL_HPRC_R2` 4 |
 | `tar_inner_format` | code | content | 4 | A container has no format of its own (#245), so it takes its contents'. A GenomicsDB member layout is a variant store (genomic, variants); otherwise the archive takes what the rules resolve for its dominant recognized member extension. | general | 124,564 | 249,162 | 124,564 | `ANVIL_T2T_CHRY` 93,180; `ANVIL_T2T` 31,155; `ANVIL_HPRC` 163; and 2 more |
 | `index_by_extension` | code | extension |  | An index file is an index whatever it indexes, and its extension says so, with or without a parent (#437). The YAML rule index_file says the same for an index this producer misses. | general | 224,726 | 224,726 | 224,726 | `ANVIL_T2T` 116,300; `ANVIL_T2T_CHRY` 98,144; `ANVIL_1000G_high_coverage_2019` 6,454; and 6 more |
-| `inherited_from_parent` | code | parent_file |  | A file's step passes what its activity declares for each input role (rules/activities.yaml): an index or QC report takes what its one parent says, a VCF what its alignments say. Parents that agree give their value; parents that differ give mixed; a parent not_classified or in conflict gives nothing (contract 4.9). The claim is weighed with the file's own (4.2-4.6). | general | 359,004 | 969,687 | 359,004 | `ANVIL_T2T_CHRY` 212,681; `ANVIL_T2T` 135,441; `ANVIL_1000G_high_coverage_2019` 6,454; and 8 more |
+| `inherited_from_parent` | code | parent_file |  | A file's step passes what its activity declares for each input role (rules/activities.yaml), from the parents in that role. Parents that agree give their value; parents that differ give mixed; a parent not_classified or in conflict gives nothing (contract 4.9). The claim is weighed with the file's own (4.2-4.6). | general | 359,004 | 969,687 | 359,004 | `ANVIL_T2T_CHRY` 212,681; `ANVIL_T2T` 135,441; `ANVIL_1000G_high_coverage_2019` 6,454; and 8 more |
 
 ## Translation rows
 
@@ -2112,7 +2112,7 @@ data_modality, platform, reference_assembly, assay_type, instrument_model
 Rationale:
 
 ```text
-A file's step passes what its activity declares for each input role (rules/activities.yaml): an index or QC report takes what its one parent says, a VCF what its alignments say. Parents that agree give their value; parents that differ give mixed; a parent not_classified or in conflict gives nothing (contract 4.9). The claim is weighed with the file's own (4.2-4.6).
+A file's step passes what its activity declares for each input role (rules/activities.yaml), from the parents in that role. Parents that agree give their value; parents that differ give mixed; a parent not_classified or in conflict gives nothing (contract 4.9). The claim is weighed with the file's own (4.2-4.6).
 ```
 
 ### `assay_type.hi_c`

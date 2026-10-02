@@ -278,8 +278,8 @@ INHERITED_FROM_PARENT = CodeRule(
     reads="the settled answers, at reconcile, of the parents in one input role of the file's generated_by",
     sets=activities.carried(),
     rationale=(
-        "A file's step passes what its activity declares for each input role (rules/activities.yaml): "
-        "an index or QC report takes what its one parent says, a VCF what its alignments say. "
+        "A file's step passes what its activity declares for each input role (rules/activities.yaml), "
+        "from the parents in that role. "
         "Parents that agree give their value; parents that differ give mixed; a parent not_classified or "
         "in conflict gives nothing (contract 4.9). The claim is weighed with the file's own (4.2-4.6)."
     ),

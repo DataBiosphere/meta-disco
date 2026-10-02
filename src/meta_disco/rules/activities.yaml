@@ -97,11 +97,9 @@ activities:
         required: true
         many: false
     reason: >-
-      A checksum is a hash of one file's bytes and holds no data the dimensions could
-      describe, so it takes nothing from that file (#596, amending ADR-0002 decision 8):
-      the `checksum_file` rule makes them `not_applicable`. The step is still the link to
-      the file it checks. An index differs: it points into coordinates on its file's
-      reference, so it takes every dimension but its own kind.
+      A checksum is a hash of its file's bytes, so it takes nothing from it, and the step
+      is the link (ADR-0002 decision 8, amended by #596). For an `.md5`, the `checksum_file`
+      rule makes the dimensions `not_applicable`.
   - term: QualityControlActivity
     output: {form: [file], kind: [qc_report, annotations]}
     inputs:

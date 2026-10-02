@@ -58,7 +58,7 @@ from pathlib import Path
 
 import pytest
 
-from meta_disco import schema_vocab
+from meta_disco import activities, schema_vocab
 from meta_disco.evidence import BedSignals, SegmentTag
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.models import (
@@ -644,15 +644,18 @@ def build_reconciled_output(pipeline_output: dict, standalone: dict) -> dict:
         if step is None:
             return {}
         role = step["inputs"][0]["role"]
+        # Only the slots that role passes take a declaration, as reconcile gives them (a
+        # checksum's role passes none, #596).
+        passes = activities.role_passes(step["activity"]).get(role, ())
         parents = tuple(i["parent_key"] for i in step["inputs"])
 
         def one(declared: str, build=None) -> list[Inherited]:
             return [Inherited(step["activity"], role, parents, declared, build)]
 
-        passed = {"data_modality": one("genomic"), "assay_type": one("mixed")}
+        made = {"data_modality": one("genomic"), "assay_type": one("mixed")}
         if skip != "reference_assembly":
-            passed["reference_assembly"] = one("GRCh38", ("GRCh38", "p14"))
-        return passed
+            made["reference_assembly"] = one("GRCh38", ("GRCh38", "p14"))
+        return {slot: declared for slot, declared in made.items() if slot in passes}
 
     reconciled: dict = {}
     for producer, payload in sorted({**pipeline_output, **standalone}.items()):

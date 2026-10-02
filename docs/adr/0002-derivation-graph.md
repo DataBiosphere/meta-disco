@@ -349,7 +349,7 @@ on the bullets concerned).
 
 | June doc | what it said | now |
 |---|---|---|
-| §1 point (3); §3's `not_applicable` for a `.bai`; §7's opening; §7b; §8c's "descriptive ⇒ `not_applicable`"; §9 item 3 | a companion's lineage dimensions are `not_applicable`, reached only through the link | inherited across the edge (decision 8) |
+| §1 point (3); §3's `not_applicable` for a `.bai`; §7's opening; §7b; §8c's "descriptive ⇒ `not_applicable`"; §9 item 3 | a companion's lineage dimensions are `not_applicable`, reached only through the link | an index's: inherited across the edge (decision 8). A checksum's: still `not_applicable`, reached through the link (#596) |
 | §4a's edge with no parent; §4b; §6 Levels 1–2; §9 items 4 (its `parent_md5sum`), 5 | grounding by md5; an edge may name no parent | grounding by record key; no parent named, no edge (decision 2) |
 | §1 point (1); §3's "not values copied onto this file"; §5a–5c; §6 Level 3; §9 item 7; §10 "Confirmed" on materialization and query time | store a pointer, never a copy; follow at query time | copy, as a declaration that reconciles (decision 8, contract 4.9) |
 | §1 point (4); §7a; §9 item 8 | read the reference from the file first, inherit second | both are declarations; contradiction is a conflict (decision 8) |

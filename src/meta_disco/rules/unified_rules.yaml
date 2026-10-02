@@ -196,6 +196,10 @@ rules:
   # and `platform` explicitly to be reconsidered. This is that reconsideration: the
   # dimensions a parent supplies all behave alike now, and none is stamped.
   #
+  # Contrast `checksum_file` below, which stamps all five `not_applicable`: a checksum is
+  # a hash of bytes with no coordinate space, while an index indexes coordinates into
+  # its file's reference (#596).
+  #
   # They *do* apply to an index file. Reconcile shows it by carrying `genomic` /
   # `CHM13` / `ILLUMINA` / `WGS` across the index's edge from its parent (#571);
   # a `.bai` that has a reference assembly but no data modality was never coherent.
@@ -225,12 +229,9 @@ rules:
   # `data_type_enum`, and stamping the dimension `not_applicable` asserted the file
   # has no kind when the vocabulary has a word for its kind.
   #
-  # The other five are `not_applicable`: a checksum is a hash of a file's bytes and
-  # holds no biological data, and AnVIL publishes none for it. #571 briefly let it
-  # inherit its file's dimensions instead; #596 reversed that, and `ChecksumActivity`
-  # passes nothing, so this cannot conflict with an inherited value. Unlike an index,
-  # which points into coordinates on its file's reference, a checksum has nothing the
-  # dimensions could describe.
+  # The other five are `not_applicable`: a checksum is a hash of a file's bytes. An
+  # `.md5` whose step is `ChecksumActivity` inherits nothing to meet this, since that
+  # activity passes nothing (ADR-0002 decision 8, amended by #596).
   # ---------------------------------------------------------------------------
   - id: checksum_file
     tier: 2

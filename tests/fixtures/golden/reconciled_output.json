@@ -1452,7 +1452,7 @@
       {
         "classifications": {
           "assay_type": {
-            "credited_to": "conflict_sources",
+            "credited_to": "not_applicable",
             "evidence": [
               {
                 "reason": "Checksum file \u2014 a checksum, and no data of its own",
@@ -1460,29 +1460,18 @@
                 "source_type": "filename_rule",
                 "status": "not_applicable",
                 "tier": 2
-              },
-              {
-                "activity": "ChecksumActivity",
-                "claim_state": "mixed",
-                "parent_keys": [
-                  "g-file-5"
-                ],
-                "parent_role": "checked",
-                "reason": "Inherited across ChecksumActivity: its checked input(s) disagree",
-                "rule_id": "inherited_from_parent",
-                "source_type": "derivation_inheritance"
               }
             ],
             "inferred": {
               "status": "not_applicable",
               "value": null
             },
-            "status": "conflict",
-            "use": "published",
+            "status": "not_applicable",
+            "use": "meta_disco",
             "value": null
           },
           "data_modality": {
-            "credited_to": "conflict_sources",
+            "credited_to": "not_applicable",
             "evidence": [
               {
                 "reason": "Checksum file \u2014 a checksum, and no data of its own",
@@ -1490,25 +1479,14 @@
                 "source_type": "filename_rule",
                 "status": "not_applicable",
                 "tier": 2
-              },
-              {
-                "activity": "ChecksumActivity",
-                "parent_keys": [
-                  "g-file-5"
-                ],
-                "parent_role": "checked",
-                "reason": "Inherited across ChecksumActivity: its checked input(s) say genomic",
-                "rule_id": "inherited_from_parent",
-                "source_type": "derivation_inheritance",
-                "value": "genomic"
               }
             ],
             "inferred": {
               "status": "not_applicable",
               "value": null
             },
-            "status": "conflict",
-            "use": "published",
+            "status": "not_applicable",
+            "use": "meta_disco",
             "value": null
           },
           "data_type": {
