@@ -54,7 +54,8 @@ exclusions are structural. Three are enforced by the loader:
   an ``index`` (#437) and the column says so in its own name. Its ``reference_assembly``
   is the payload's and stays.
 - A **checksum column** (:data:`CHECKSUM_SUFFIXES`) takes no slot at all: a checksum
-  holds no data, so every dimension is ``not_applicable`` (the ``checksum_file`` rule,
+  holds no data, so its ``data_type`` is ``checksum`` and every carried dimension is
+  ``not_applicable`` (the ``checksum_file`` rule,
   #596), and a source value for one would only conflict with it.
 - An **entity-shaped name token** (:data:`ENTITY_TOKENS`) describes a row, not a file. A
   table keyed by ``interval_id`` with chromosome and start columns is one row per
@@ -106,7 +107,8 @@ _NAME_FORMS = frozenset({SOURCE_TABLE_NAME, SOURCE_COLUMN_NAME})
 # source, name or cell (its own name already says what it is), and keeps the payload's
 # `reference_assembly`.
 DERIVATIVE_SUFFIXES = frozenset({"index", "idx", "bai", "crai", "tbi", "csi", "fai", "gzi", "md5"})
-# The derivative suffixes that name a checksum, which takes no slot from any source (#596).
+# The derivative suffixes that name a checksum, which takes no slot from any source (#596):
+# its own `data_type` is `checksum` and its carried dimensions are `not_applicable`.
 CHECKSUM_SUFFIXES = frozenset({"md5"})
 
 # Name tokens that describe what a *row* is rather than what its files are. Only the
@@ -372,7 +374,7 @@ def _source(slot: str, item: object, table: str, column: str, at: str) -> SlotSo
     if excluded == CHECKSUM:
         raise ValueError(
             f"{at}: {column!r} is a checksum column (suffixes {sorted(CHECKSUM_SUFFIXES)}), which holds no data, so "
-            f"it takes no slot: every dimension of a checksum is not_applicable (#596)"
+            f"it takes no slot: a checksum's data_type is checksum and its carried dimensions are not_applicable (#596)"
         )
     if excluded == DERIVATIVE:
         raise ValueError(

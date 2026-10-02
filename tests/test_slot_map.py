@@ -219,9 +219,10 @@ def test_a_derivative_column_takes_no_data_type_but_keeps_its_reference(tmp_path
     assert entry.is_derivative
 
 
-@pytest.mark.parametrize("slot", ["reference_assembly", "data_modality", "platform", "data_type"])
+@pytest.mark.parametrize("slot", CLASSIFICATION_FIELDS)
 def test_a_checksum_column_takes_no_slot(tmp_path, slot):
-    """A checksum holds no data: every dimension is not_applicable (#596), so no source speaks for one."""
+    """A checksum holds no data (#596): its data_type is checksum and its carried dimensions are
+    not_applicable, so no source speaks for any slot of one."""
     text = f"catalog: c\ndatasets:\n  D:\n    GRCh38_alignments:\n      cram_md5:\n        {slot}:\n          - {{table_name: GRCh38}}\n"
     refuses(tmp_path, text, "'cram_md5' is a checksum column")
 
