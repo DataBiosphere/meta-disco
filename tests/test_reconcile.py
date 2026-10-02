@@ -31,8 +31,10 @@ from meta_disco.models import (
 from meta_disco.output_utils import RECONCILED_DIR, iter_reconciled_records
 from meta_disco.pipeline import PUBLISHED_TABLES
 from meta_disco.reconcile import (
+    FILLED_GROUPS,
     REPORT_FILE,
     SLOT_CATEGORIES,
+    UNFILLED_CATEGORIES,
     USE_META_DISCO,
     USE_PUBLISHED,
     ReconcileError,
@@ -912,6 +914,12 @@ def test_the_report_lists_each_conflict_by_its_competing_values(tmp_path, run, e
     assert {c for per_slot in result["slots"].values() for counts in per_slot.values() for c in counts} <= set(
         SLOT_CATEGORIES
     )
+
+
+def test_every_slot_category_is_filled_in_one_group_or_unfilled():
+    """A category added here must be placed, or the report's completeness silently miscounts it."""
+    grouped = [c for categories in FILLED_GROUPS.values() for c in categories]
+    assert sorted([*grouped, *UNFILLED_CATEGORIES]) == sorted(SLOT_CATEGORIES)
 
 
 def test_an_inference_conflict_lists_its_competing_values_or_none_when_inherited():

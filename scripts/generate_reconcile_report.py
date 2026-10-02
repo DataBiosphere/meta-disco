@@ -33,6 +33,7 @@ from meta_disco.output_utils import RECONCILED_DIR, find_latest_run, list_runs
 from meta_disco.reconcile import (
     CONFLICT_CATEGORIES,
     EVERY_DATASET,
+    FILLED_GROUPS,
     INFERENCE,
     REPORT_FILE,
     SLOT_CATEGORIES,
@@ -179,6 +180,18 @@ def headline(report: dict, dataset: str | None = None) -> list[dict]:
     return rows
 
 
+def totals(rows: list[dict]) -> dict:
+    """:func:`headline`'s rows summed over the dimensions: each category's count, added over published, filled over inference."""
+    counts = {c: sum(r["counts"][c] for r in rows) for c in SLOT_CATEGORIES}
+    return {"counts": counts, ADDED: sum(r[ADDED] for r in rows), FILLED_OVER: sum(r[FILLED_OVER] for r in rows)}
+
+
+def completeness(counts: dict[str, int]) -> dict[str, int]:
+    """Each of ``FILLED_GROUPS``'s slot count, in its order, then ``filled``: their sum."""
+    groups = {group: sum(counts[c] for c in categories) for group, categories in FILLED_GROUPS.items()}
+    return {**groups, "filled": sum(groups.values())}
+
+
 def conflict_rows(report: dict, dataset: str | None = None) -> list[dict]:
     """Every distinct set of competing values, most files first."""
     rows: list[dict] = [
@@ -224,7 +237,7 @@ def values_matrix(report: dict, slot: str) -> dict:
     ``values`` are the slot's values, most files first; ``statuses`` the
     :data:`VALUE_STATUSES` present in the run. A table's columns are the two in that order,
     and a row's counts, keyed by both, sum to its dataset's files. *Has a value* is the share
-    with a value; *determined* adds ``not_applicable``, a slot settled as having no value.
+    with a value; *filled* adds ``not_applicable``, a slot settled as having no value.
     """
     per_dataset = {d: report["values"].get(d, {}).get(slot, {}) for d in sorted(report["files"])}
     totals: dict[str, int] = {}
@@ -249,7 +262,7 @@ def _values_row(name: str, counts: dict[str, int], values: list[str], statuses: 
         "counts": {c: counts.get(c, 0) for c in (*values, *statuses)},
         "files": files,
         "has_value": valued / files if files else 0.0,
-        "determined": (valued + counts.get(NOT_APPLICABLE, 0)) / files if files else 0.0,
+        "filled": (valued + counts.get(NOT_APPLICABLE, 0)) / files if files else 0.0,
     }
 
 
@@ -381,11 +394,14 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
         files = sum(report["files"].get(d, 0) for d in _datasets(report, dataset))
         rows = headline(report, dataset)
         conflicts = sum(r["conflicts"] for r in rows)
+        summed = totals(rows)
         slots = files * len(rows)
         old = previous if previous and (dataset is None or dataset in previous["files"]) else None
         return {
             "files": files,
             "headline": rows,
+            "totals": summed,
+            "completeness": completeness(summed["counts"]),
             "conflicts": conflicts,
             "slots": slots,
             "conflict_rate": conflicts / slots if slots else 0.0,
@@ -402,6 +418,7 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
         "skipped_evidence": len(report.get("skipped_evidence", [])),
         "columns": [{"key": c, "label": label(c)} for c in cols],
         "conflict_categories": list(CONFLICT_CATEGORIES),
+        "filled_groups": [{"key": g, "label": g.replace("_", " ")} for g in FILLED_GROUPS],
         "all": ALL,
         "run": scope(None),
         "datasets": [{"name": dataset, **scope(dataset)} for dataset in sorted(report["files"])],
@@ -426,17 +443,42 @@ def _signed(value: int) -> str:
     return "0" if value == 0 else f"{value:+,}"
 
 
-def _headline_table(rows: list[dict], cols: list[dict], fmt=_n) -> list[str]:
+def _headline_table(rows: list[dict], cols: list[dict], fmt=_n, scope: dict | None = None) -> list[str]:
+    """The per-dimension table; with ``scope``, closed by its totals and each total's share of its slots."""
     header = ["dimension", *(c["label"] for c in cols), "added over published", "filled over inference"]
-    body = [
-        [r["dimension"], *(fmt(r["counts"][c["key"]]) for c in cols), fmt(r[ADDED]), fmt(r[FILLED_OVER])] for r in rows
-    ]
+
+    def cells(r: dict, f) -> list[str]:
+        return [*(f(r["counts"][c["key"]]) for c in cols), f(r[ADDED]), f(r[FILLED_OVER])]
+
+    body = [[r["dimension"], *cells(r, fmt)] for r in rows]
+    if scope is not None:
+        body += [
+            ["**all dimensions**", *(f"**{v}**" for v in cells(scope["totals"], _n))],
+            ["**% of slots**", *(f"**{v}**" for v in cells(scope["totals"], lambda v: _of_slots(v, scope["slots"])))],
+        ]
     return md_table(header, body, align="right")
 
 
 def _pct(share: float) -> str:
     """A share to one decimal, rounded down, so a dataset short of every file never reads 100%."""
     return "100%" if share >= 1 else f"{math.floor(share * 1000) / 10:.1f}%"
+
+
+def _of_slots(count: int, slots: int) -> str:
+    """``count``'s share of ``slots`` by :func:`_pct`, but "<0.1%" where a non-zero count would read 0.0%."""
+    if count and count < slots / 1000:
+        return "<0.1%"
+    return _pct(count / slots) if slots else "0.0%"
+
+
+def _completeness_table(scope: dict) -> list[str]:
+    c, slots = scope["completeness"], scope["slots"]
+    body = [[group.replace("_", " "), _n(c[group]), _of_slots(c[group], slots)] for group in FILLED_GROUPS]
+    body += [
+        ["**filled**", f"**{_n(c['filled'])}**", f"**{_of_slots(c['filled'], slots)}**"],
+        ["**all slots**", f"**{_n(slots)}**", "**100%**"],
+    ]
+    return md_table(["", "slots", "% of all slots"], body, align="right")
 
 
 def _grouped(matrix: dict) -> tuple[dict, dict[str, list[str]]]:
@@ -467,7 +509,7 @@ def _grouped(matrix: dict) -> tuple[dict, dict[str, list[str]]]:
 
 def _values_table(matrix: dict) -> list[str]:
     columns = [*matrix["values"], *matrix["statuses"]]
-    header = ["dataset", *(md_code(c) for c in columns), "files", "has a value", "determined"]
+    header = ["dataset", *(md_code(c) for c in columns), "files", "has a value", "filled"]
 
     def cells(row: dict, name: str) -> list[str]:
         return [
@@ -475,7 +517,7 @@ def _values_table(matrix: dict) -> list[str]:
             *(_n(row["counts"][c]) if row["counts"][c] else "·" for c in columns),
             _n(row["files"]),
             _pct(row["has_value"]),
-            _pct(row["determined"]),
+            _pct(row["filled"]),
         ]
 
     body = [cells(r, md_code(shown(r["dataset"]))) for r in matrix["rows"]]
@@ -489,7 +531,7 @@ def _values_section(values: dict[str, dict]) -> list[str]:
         "",
         "What each dataset holds, per dimension: every file counted once, under its reconciled value or, "
         "where it has none, its status (#545). *Has a value* is the share of the dataset's files with a value; "
-        "*determined* adds `not_applicable`, a slot settled as having no value.",
+        "*filled* adds `not_applicable`, a slot settled as having no value.",
         "",
     ]
     for slot in CLASSIFICATION_FIELDS:
@@ -592,7 +634,18 @@ def render_markdown(data: dict) -> str:
         "supplied one (a value, or not applicable): gaps inference alone would have left empty. For example, "
         "`ANVIL_T2T_CHRY` files whose reference assembly only the submitter's table names.",
         "",
-        *_headline_table(whole["headline"], cols),
+        *_headline_table(whole["headline"], cols, scope=whole),
+        "",
+        "**How complete the metadata is.** A slot is one file in one dimension. It is *filled* when it settled "
+        "with a value or as not applicable, which is an answer (the dimension does not apply to the file), unlike "
+        "not classified. A filled slot is counted once, by where its answer is credited: *original*, a source's "
+        "value spelled exactly as the term its translation row declares (the *published* and *submitter* columns "
+        "above); *mapped*, one spelled differently that its row translates (the *harmonized* columns); "
+        "*inferred*, inference's, where no source declared it; *inherited*, only the file's parents' across its "
+        "`generated_by`; *not applicable*, which is not credited to any input. A slot not classified, published "
+        "unreviewed or in conflict is not filled.",
+        "",
+        *_completeness_table(whole),
         "",
         "## Conflict rate",
         "",
@@ -703,7 +756,9 @@ def render_markdown(data: dict) -> str:
             "",
             f"{scope['files']:,} files.",
             "",
-            *_headline_table(scope["headline"], cols),
+            *_headline_table(scope["headline"], cols, scope=scope),
+            "",
+            *_completeness_table(scope),
         ]
         if scope["conflict_rows"]:
             lines += ["", *_conflict_table(scope["conflict_rows"], with_dataset=False)]
