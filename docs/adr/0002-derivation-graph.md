@@ -141,7 +141,7 @@ decision 1 rejects.
 *Amended by #580.* A step is named by its **activity**, not by a verb between two files. The
 vocabulary is `activity_type_enum`: AnVIL FSS's `ActivityTypes`, spelled as FSS's released LinkML schema
 spells them (`DataBiosphere/biocore-data-model`, `AnVILDataSubmissionFindabilitySubsetSchema.linkml.yaml`),
-plus four of our own. FSS's values spreadsheet spells three differently (`VariantCallingActivity`,
+plus four of our own (five since #595 added `CoverageActivity`). FSS's values spreadsheet spells three differently (`VariantCallingActivity`,
 `ImagingActivity`, `IndexingActivity`); the schema a submission is validated against wins. A term's `meaning` is the Terra
 Interoperability Model's class where it has one, else EDAM's operation where EDAM defines the same step.
 TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `generated_file_id` are PROV's
@@ -155,7 +155,8 @@ TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `gener
 | `QualityControlActivity` (ours, under `AnalysisActivity`) | QC report ← the file it reports on | submitter same-row (T2T `samtools_stats`, `mosdepth_*` → `cram`) | `summarizes` |
 | `AlignmentActivity` | alignment ← reads | submitter same-row, `@PG`, `anvil_activity` (ENCORE `Alignment: STAR`) | `aligned_from` |
 | `VariantCallActivity` | variants ← alignments or gVCFs | VCF caller command lines, submitter same-row (1000G `cram` → `gvcf`) | `called_from` |
-| `MergeActivity` (ours) | merged file ← shards | headers and filenames (T2T chromosome VCF ← window VCFs) | `merged_from` |
+| `MergeActivity` (ours) | merged file ← shards | headers and filenames (T2T chromosome VCF ← window VCFs), `anvil_activity` (ENCORE `Merger: multiple FASTQ files`, #595) | `merged_from` |
+| `CoverageActivity` (ours, under `AnalysisActivity`; #595) | coverage track ← the alignment it covers | `anvil_activity` (ENCORE `Track: bedGraphToBigWig`) | — |
 | `LiftoverActivity` (ours, under `AnalysisActivity`) | lifted file ← the file it was lifted from | a source naming the parent (schema changes, `source_assembly`) | `lifted_over_from` |
 | `AssemblyActivity` (ours) | assembly ← reads | HPRC assembly sample sheets, where the output resolves to a held assembly (Open) | `assembled_from` |
 | `SequenceActivity` | reads ← sample id | `anvil_activity` `Sequencing`, submitter tables (#357) | `sample_of`, for reads |
@@ -163,11 +164,12 @@ TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `gener
 | `Activity` | related, step unknown | IGVF `file.derived_from` between content types no term names, `anvil_activity` `Unknown` | `derived_from` |
 
 FSS's other types (`SampleCollectionActivity`, `SampleTreatmentActivity`, `ExpressionActivity`,
-`AnalysisActivity`, `ImageActivity`) are in the vocabulary, though no translation row maps a source's
-value to one yet; ENCORE's `anvil_activity` rows (`Quantificatioin: salmon`, `DifferentialExpression:
-deseq2`, `AlternativeSplicing: rMATS`) state expression and analysis steps that such rows would map. A
+`AnalysisActivity`, `ImageActivity`) are in the vocabulary, though when this ADR was written no
+translation row mapped a source's value to one; ENCORE's `anvil_activity` rows (`Quantificatioin: salmon`,
+`DifferentialExpression: deseq2`, `AlternativeSplicing: rMATS`) state expression and analysis steps that
+such rows would map. (Amended by #595: `Quantificatioin: salmon` now maps to `ExpressionActivity`.) A
 source's raw `activity_type` reaches a term through translation rows, as a raw value does (contract
-3.9). Those rows land with the import that first reads `activity_type` (#577).
+3.9); those rows are the activity map's, `rules/activity_map.yaml` (#584).
 
 **Not activities.** `aligned_to` is dropped: the reference is the `reference` input of an
 `AlignmentActivity` (decision 3). A donor's parents are a family tie, not a step: no processing step
@@ -285,15 +287,16 @@ CRAM merged from NovaSeq and HiSeq reads makes its VCF mixed too. One parent wit
 
 **What each step carries.** The dimensions split by whether the step keeps them. `data_type` never
 carries: a VCF is not an alignment. Each activity's `passes` in `rules/activities.yaml` is the
-authority, and this table is its reading when #580 wrote it.
+authority, and this table is its reading when #580 wrote it, amended where a row says so.
 
 | activity | `data_modality` | `assay_type` | `platform` | `instrument_model` | `reference_assembly` |
 |---|---|---|---|---|---|
-| `IndexActivity`, `QualityControlActivity`, `MergeActivity`, `VariantCallActivity` | yes | yes | yes | yes | yes |
+| `IndexActivity`, `QualityControlActivity`, `CoverageActivity` (amended by #595), `MergeActivity`, `VariantCallActivity` | yes | yes | yes | yes | yes |
 | `AlignmentActivity` | yes, from `reads` | yes, from `reads` | yes, from `reads` | yes, from `reads` | from its `reference` input only, not from the reads |
 | `LiftoverActivity` | yes | yes | yes | yes | **no** — liftover changes it |
 | `AssemblyActivity` | yes | yes | yes | yes | **no** — an assembly is its own reference |
-| `Activity`, `ChecksumActivity` (amended by #596), `SequenceActivity`, `SampleCollectionActivity`, `SampleTreatmentActivity`, `ImageActivity`, `ExpressionActivity`, `AnalysisActivity` | no | no | no | no | no |
+| `ExpressionActivity` (amended by #595) | yes | yes | yes | yes | **no** — quantified against a transcriptome |
+| `Activity`, `ChecksumActivity` (amended by #596), `SequenceActivity`, `SampleCollectionActivity`, `SampleTreatmentActivity`, `ImageActivity`, `AnalysisActivity` | no | no | no | no | no |
 
 - Carrying `reference_assembly` carries the build's identity — `ReferenceBuild.base` and `version` —
   so a child describes its reference as precisely as its parents agree on it. The build's observations
@@ -305,10 +308,12 @@ authority, and this table is its reading when #580 wrote it.
 - `Activity` is the step not known, so nothing is known to carry. `SequenceActivity`,
   `SampleCollectionActivity`, `SampleTreatmentActivity` and `ImageActivity` have a sample identifier as
   input, which has no dimensions.
-- `ExpressionActivity` and `AnalysisActivity` carry nothing until someone decides what they keep. Whether a
-  quantification keeps its reads' reference depends on the tool (salmon quantifies against a
-  transcriptome), and `AnalysisActivity` covers steps too different to share one answer. A narrower term
-  under one declares its own, as `QualityControlActivity` and `LiftoverActivity` do.
+- `AnalysisActivity` carries nothing until someone decides what it keeps: it covers steps too different
+  to share one answer. A narrower term under it declares its own, as `QualityControlActivity` and
+  `LiftoverActivity` do.
+- `ExpressionActivity` never carries the reference (amended by #595): the one quantifier mapped to it,
+  salmon, quantifies reads against a transcriptome, and `rules/activities.yaml` gives why. Counting genome
+  alignments, which would keep their reference, needs a narrower term of its own.
 - Where the child reads a carried dimension itself — a VCF's `##contig` lines state its reference —
   inheriting it is a cross-check: agreement confirms the value, and a contradiction exposes a wrong edge.
   This supersedes the June doc's 7a (see [What this supersedes](#what-this-supersedes)).

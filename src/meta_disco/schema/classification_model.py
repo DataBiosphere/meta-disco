@@ -421,7 +421,7 @@ class CreditedToEnum(str, Enum):
 
 class ActivityTypeEnum(str, Enum):
     """
-    The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its released LinkML schema spells them, plus four of our own, each under the FSS term it narrows. `meaning` is TerraCore's class, else EDAM's operation for the same step; a near EDAM operation is a close mapping. What each passes is in `rules/activities.yaml`.
+    The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its released LinkML schema spells them, plus five of our own, each under the FSS term it narrows. `meaning` is TerraCore's class, else EDAM's operation for the same step; a near EDAM operation is a close mapping. What each passes is in `rules/activities.yaml`.
     """
     Activity = "Activity"
     """
@@ -455,6 +455,10 @@ class ActivityTypeEnum(str, Enum):
     QualityControlActivity = "QualityControlActivity"
     """
     A report on another file's content: samtools stats, mosdepth coverage. Our own term, under FSS's AnalysisActivity, which is too broad to say what passes.
+    """
+    CoverageActivity = "CoverageActivity"
+    """
+    The read coverage of one alignment file at each position, as a signal track: ENCORE's per-strand STAR signal bigWigs (#595). Our own term, under FSS's AnalysisActivity; it is not a report on the file, so not QualityControlActivity.
     """
     LiftoverActivity = "LiftoverActivity"
     """
