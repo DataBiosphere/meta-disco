@@ -9,7 +9,7 @@ import pytest
 
 from meta_disco.models import SOURCE_REPOSITORY_METADATA
 from meta_disco.output_utils import RECONCILED_DIR
-from meta_disco.reconcile import REPORT_FILE
+from meta_disco.reconcile import FILLED_GROUPS, REPORT_FILE, UNFILLED_CATEGORIES
 from meta_disco.summaries import md_code
 from tests.run_fixtures import write_run
 from tests.test_reconcile import DATASET, TABLE, drs, go, published, record, write_evidence
@@ -176,6 +176,44 @@ def test_a_dataset_titled_like_the_whole_run_does_not_replace_it(conflicted):
     assert [(scope["name"], scope["files"]) for scope in data["datasets"]] == [(rr.ALL, 3), (DATASET, 3)]
 
 
+def test_the_headline_closes_with_each_columns_total_and_its_share_of_the_slots(conflicted):
+    data = rr.dashboard_data(rr.load_report(conflicted), None, Path("report.json"))
+    whole = data["run"]
+    counts = whole["totals"]["counts"]
+    for category, total in counts.items():
+        assert total == sum(r["counts"][category] for r in whole["headline"])
+    assert sum(counts.values()) == whole["slots"]
+    md = rr.render_markdown(data)
+    shares = next(line for line in md.splitlines() if line.startswith("| **% of slots** |"))
+    keys = [*(c["key"] for c in data["columns"])]
+    expected = [counts[k] for k in keys] + [whole["totals"][rr.ADDED], whole["totals"][rr.FILLED_OVER]]
+    assert shares.strip("| ").split(" | ")[1:] == [f"**{rr._of_slots(v, whole['slots'])}**" for v in expected]
+
+
+def test_completeness_counts_each_filled_slot_once_and_nothing_else(conflicted):
+    data = rr.dashboard_data(rr.load_report(conflicted), None, Path("report.json"))
+    for scope in (data["run"], *data["datasets"]):
+        c, counts = scope["completeness"], scope["totals"]["counts"]
+        assert c["filled"] == sum(c[group] for group in FILLED_GROUPS)
+        assert c["filled"] + sum(counts[k] for k in UNFILLED_CATEGORIES) == scope["slots"]
+    md = rr.render_markdown(data)
+    filled = data["run"]["completeness"]["filled"]
+    assert f"| **filled** | **{filled:,}** | **{rr._of_slots(filled, data['run']['slots'])}** |" in md
+
+
+def test_the_completeness_filled_count_is_the_values_tables_filled_summed_over_the_dimensions(conflicted):
+    """Two counts of one thing, from the slot categories and from the per-value counts: they must agree."""
+    data = rr.dashboard_data(rr.load_report(conflicted), None, Path("report.json"))
+    filled = sum(m["total"]["filled"] * m["total"]["files"] for m in data["values"].values())
+    assert round(filled) == data["run"]["completeness"]["filled"] > 0
+
+
+def test_a_share_too_small_to_show_is_not_shown_as_zero():
+    assert rr._of_slots(0, 100) == "0.0%" and rr._of_slots(5, 0) == "0.0%"
+    assert rr._of_slots(1, 10_000) == "<0.1%" and rr._of_slots(1, 1_000) == "0.1%"
+    assert rr._of_slots(1, 8) == "12.5%" and rr._of_slots(8, 8) == "100%"
+
+
 def test_catalog_text_is_a_code_span_in_the_markdown():
     """Pages renders the markdown through Jekyll: a value holding a link, an image or HTML must show literally."""
     row = {"dataset": "<b>D</b>", "dimension": "platform", "kind": "conflict_sources", "files": 1}
@@ -222,19 +260,19 @@ def test_each_dimensions_values_are_shown_per_dataset(tmp_path, conflicted):
     assert (matrix["values"], matrix["statuses"]) == (["PACBIO"], ["not_classified"])
     (row,) = matrix["rows"]
     assert (row["counts"], row["files"]) == ({"PACBIO": 1, "not_classified": 2}, 3)
-    assert (round(row["has_value"], 3), round(row["determined"], 3)) == (0.333, 0.333)
+    assert (round(row["has_value"], 3), round(row["filled"], 3)) == (0.333, 0.333)
     assert "## Values by dataset" in md and "### platform" in md
-    assert "| dataset | `PACBIO` | `not_classified` | files | has a value | determined |" in md
+    assert "| dataset | `PACBIO` | `not_classified` | files | has a value | filled |" in md
     assert "Values by dataset" in html and '"values_change": null' in html
 
 
-def test_determined_counts_not_applicable_and_has_a_value_does_not():
+def test_filled_counts_not_applicable_and_has_a_value_does_not():
     report = {
         "files": {"D": 4},
         "values": {"D": {"reference_assembly": {"GRCh38": 1, "not_applicable": 2, "conflict": 1}}},
     }
     (row,) = rr.values_matrix(report, "reference_assembly")["rows"]
-    assert (row["has_value"], row["determined"]) == (0.25, 0.75)
+    assert (row["has_value"], row["filled"]) == (0.25, 0.75)
     matrix = rr.values_matrix(report, "reference_assembly")
     assert (matrix["values"], matrix["statuses"]) == (["GRCh38"], ["conflict", "not_applicable"])
 
@@ -260,7 +298,7 @@ def test_a_wide_slot_with_no_dotted_terms_is_not_grouped(monkeypatch):
     monkeypatch.setattr(rr, "MARKDOWN_VALUE_COLUMNS", 2)
     md = "\n".join(rr._values_section({slot: rr.values_matrix(report, slot) for slot in rr.CLASSIFICATION_FIELDS}))
     assert "top-level term" not in md
-    assert "| dataset | `Revio` | `PromethION` | `Illumina NovaSeq 6000` | files | has a value | determined |" in md
+    assert "| dataset | `Revio` | `PromethION` | `Illumina NovaSeq 6000` | files | has a value | filled |" in md
 
 
 def test_a_report_without_per_value_counts_is_refused_unless_only_compared_against(conflicted):

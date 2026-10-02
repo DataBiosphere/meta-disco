@@ -188,6 +188,22 @@ SLOT_CATEGORIES = (
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
 )
+# SLOT_CATEGORIES split by whether the slot is filled: settled with a value, or as
+# not_applicable (an answer: the dimension does not apply to the file). The filled ones are
+# grouped by where the answer is credited: a source's value, which reaches a slot only
+# through an authored translation row, spelled exactly as the term the row declares
+# (original) or spelled differently (mapped);
+# inference's, where no source declared it (inferred); only the file's parents' (inherited);
+# and not_applicable, which is not credited to any input. Between them the groups and
+# UNFILLED_CATEGORIES hold every category once.
+FILLED_GROUPS = {
+    "original": tuple(fill_category(name, harmonized=False) for _, name in SOURCE_PRECEDENCE),
+    "mapped": tuple(fill_category(name, harmonized=True) for _, name in SOURCE_PRECEDENCE),
+    "inferred": (FILLED_BY_INFERENCE,),
+    "inherited": (INHERITED,),
+    "not_applicable": (NOT_APPLICABLE,),
+}
+UNFILLED_CATEGORIES = (*CONFLICT_CATEGORIES, PUBLISHED_UNREVIEWED, NOT_CLASSIFIED)
 
 # Each repository's published slot map, whose columns are the slots its published source
 # speaks to (#497). Read for those slots rather than inferred from the evidence, whose
