@@ -28,7 +28,7 @@ Every rule meta-disco uses to describe a file, such as "a .bam file holds alignm
 | rule | kind | basis | tier | rationale | dataset | files | claims | won | datasets |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `index_file` | yaml | extension | 1 | Index file — an index; what it indexes is the parent's to say | general | 0 | 0 | 0 |  |
-| `checksum_file` | yaml | extension | 2 | Checksum file — a checksum, and no data of its own | general | 14,233 | 85,398 | 14,233 | `ANVIL_1000G_high_coverage_2019` 13,008; `ANVIL_HPRC` 759; `AnVIL_HPRC_R2` 466 |
+| `checksum_file` | yaml | extension | 2 | Checksum file — a checksum; what it describes is the checked file's to say | general | 14,233 | 14,233 | 14,233 | `ANVIL_1000G_high_coverage_2019` 13,008; `ANVIL_HPRC` 759; `AnVIL_HPRC_R2` 466 |
 | `log_file` | yaml | extension | 2 | Log file — a log, and no data of its own | general | 3,637 | 21,822 | 3,637 | `ANVIL_1000G_PRIMED_data_model` 2,852; `ANVIL_HPRC` 785 |
 | `variant_default_genomic` | yaml | extension | 1 | VCF files contain variant calls (genomic data) | general | 204,149 | 408,298 | 204,149 | `ANVIL_T2T` 109,863; `ANVIL_T2T_CHRY` 90,618; `ANVIL_1000G_high_coverage_2019` 3,252; and 6 more |
 | `plink_genomic` | yaml | extension | 1 | PLINK files contain genotype data (genomic) | general | 8,562 | 17,124 | 8,562 | `ANVIL_1000G_PRIMED_data_model` 8,562 |
@@ -99,7 +99,7 @@ Every rule meta-disco uses to describe a file, such as "a .bam file holds alignm
 | `rgfa_stable_rank_reference` | code | content | 4 | Segments at stable rank 0 are the backbone that defines the graph's coordinate system, so a graph that has them is a reference pangenome (pangenome.reference). | general | 10 | 10 | 10 | `ANVIL_HPRC` 6; `AnVIL_HPRC_R2` 4 |
 | `tar_inner_format` | code | content | 4 | A container has no format of its own (#245), so it takes its contents'. A GenomicsDB member layout is a variant store (genomic, variants); otherwise the archive takes what the rules resolve for its dominant recognized member extension. | general | 124,564 | 249,162 | 124,564 | `ANVIL_T2T_CHRY` 93,180; `ANVIL_T2T` 31,155; `ANVIL_HPRC` 163; and 2 more |
 | `index_by_extension` | code | extension |  | An index file is an index whatever it indexes, and its extension says so, with or without a parent (#437). The YAML rule index_file says the same for an index this producer misses. | general | 224,726 | 224,726 | 224,726 | `ANVIL_T2T` 116,300; `ANVIL_T2T_CHRY` 98,144; `ANVIL_1000G_high_coverage_2019` 6,454; and 6 more |
-| `inherited_from_parent` | code | parent_file |  | An index describes the data it points into, so it takes its parent's answer for each dimension IndexActivity passes (rules/activities.yaml), including a status and a conflict. It is copied, not weighed in resolution; folding it into make_claim is #413. | general | 209,608 | 424,983 | 209,608 | `ANVIL_T2T` 116,089; `ANVIL_T2T_CHRY` 83,278; `ANVIL_1000G_high_coverage_2019` 6,454; and 5 more |
+| `inherited_from_parent` | code | parent_file |  | A file's step passes what its activity declares for each input role (rules/activities.yaml): an index, checksum or QC report takes what its one parent says, a VCF what its alignments say. Parents that agree give their value; parents that differ give mixed; a parent not_classified or in conflict gives nothing (contract 4.9). The claim is weighed with the file's own (4.2-4.6). | general | 373,078 | 1,037,615 | 94,417 | `ANVIL_T2T_CHRY` 212,681; `ANVIL_T2T` 135,441; `ANVIL_1000G_high_coverage_2019` 19,362; and 8 more |
 
 ## Translation rows
 
@@ -108,14 +108,14 @@ Every rule meta-disco uses to describe a file, such as "a .bam file holds alignm
 | `assay_type.hi_c` | Hi-C measures chromatin contacts, which MODAL's `3D contact maps` names (#563); the modality is the information measured, not the use HPRC puts it to (scaffolding). The vocabulary has no assay term for it yet (#399), so nothing is declared for assay_type. `hic` is the table-name span of the same data. | general |  | 3,770 | 6,772 | 3,770 | `AnVIL_HPRC_R2` 3,002; `ANVIL_HPRC` 768 | repository_metadata 6,772 |
 | `assay_type.isoseq` |  | general | yes | 0 | 0 | 0 |  |  |
 | `assay_type.single_nucleus_atac_seq` | IGVF's `file.assay_titles`. Single-nucleus ATAC-seq: our own term, under EFO's sc/snATAC-seq, which has no single-nucleus child (#533). ATAC-seq measures open chromatin. In AnVIL_IGVF_Mouse_R1 the value is on the reads (FASTQ) and seqspec files of the ATAC half of a SHARE-seq experiment. | general |  | 10 | 20 | 10 | `AnVIL_IGVF_Mouse_R1` 10 | repository_metadata 20 |
-| `assay_type.single_nucleus_atac_seq+single_nucleus_rna_sequencing_assay` | IGVF's `file.assay_titles`. Both assays of one SHARE-seq experiment: IGVF's analysis sets that carry the pair (IGVFDS5339UKYM, IGVFDS5530HYKI) give `preferred_assay_titles: ["SHARE-seq"]`, EFO:0022962. Nothing is declared for data_modality. The value is the analysis set's label, on every file of the set, and each file holds one half: the count matrices and kallisto outputs are RNA, the fragment files ATAC. Any one modality would be wrong for some of them, and the vocabulary holds one per file, so each file's own evidence decides. Scoped to this dataset: the two titles alone do not name the protocol, since another joint assay (10x Multiome for one) could carry the same pair, so elsewhere the value selects no row and is queued. | source anvil, dataset AnVIL_IGVF_Mouse_R1 |  | 12 | 12 | 12 | `AnVIL_IGVF_Mouse_R1` 12 | repository_metadata 12 |
+| `assay_type.single_nucleus_atac_seq+single_nucleus_rna_sequencing_assay` | IGVF's `file.assay_titles`. Both assays of one SHARE-seq experiment: IGVF's analysis sets that carry the pair (IGVFDS5339UKYM, IGVFDS5530HYKI) give `preferred_assay_titles: ["SHARE-seq"]`, EFO:0022962. Nothing is declared for data_modality. The value is the analysis set's label, on every file of the set, and each file holds one half: the count matrices and kallisto outputs are RNA, the fragment files ATAC. Any one modality would be wrong for some of them, and the vocabulary holds one per file, so each file's own evidence decides. Scoped to this dataset: the two titles alone do not name the protocol, since another joint assay (10x Multiome for one) could carry the same pair, so elsewhere the value selects no row and is queued. | source anvil, dataset AnVIL_IGVF_Mouse_R1 |  | 12 | 12 | 10 | `AnVIL_IGVF_Mouse_R1` 12 | repository_metadata 12 |
 | `assay_type.single_nucleus_rna_sequencing_assay` | IGVF's `file.assay_titles`. Single-nucleus RNA sequencing, EFO:0009809 (#533); RNA-seq measures the transcriptome. | general |  | 6,733 | 13,466 | 6,733 | `AnVIL_IGVF_Mouse_R1` 6,733 | repository_metadata 13,466 |
 | `assay_type.wgs` | Whole-genome sequencing, spelled as our term; a WGS library is genomic DNA. | general |  | 12,426 | 24,852 | 12,426 | `ANVIL_1000G_high_coverage_2019` 9,603; `AnVIL_HPRC_R2` 2,817; `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` 6 | repository_metadata 24,852 |
 | `data_modality.genomic_hprc_r2` | The `library_source` column's SRA value. It names the molecule sequenced, not the information measured: SRA files WGS, bisulfite, ATAC, ChIP and Hi-C alike under GENOMIC, because each sequences DNA, so it is no evidence of a MODAL modality (#563). Hi-C arrived under it here (the `hic` table). Scoped to the datasets whose library_source columns carry it: elsewhere the value selects no row, and so enters the review queue rather than being declined unreviewed. Measured on run 20260927_225823: none of the 5,619 files it reached here depended on it alone for data_modality. | source anvil, dataset AnVIL_HPRC_R2 |  | 0 | 0 | 0 |  |  |
 | `data_modality.genomic_1000g_high_coverage` | The `sample` table's `library_source` column, the same SRA value as `data_modality.genomic_hprc_r2`, for the same reason. Measured on run 20260927_225823: none of the 9,603 files it reached depended on it alone for data_modality. | source anvil, dataset ANVIL_1000G_high_coverage_2019 |  | 0 | 0 | 0 |  |  |
 | `data_modality.methylation` | The `ont_methylation` table-name span; its files are bigwig methylation tracks. | general |  | 462 | 462 | 462 | `AnVIL_HPRC_R2` 462 | repository_metadata 462 |
 | `data_modality.single_nucleus_atac_seq` | AnVIL's published `anvil_file.data_modality`, which carries IGVF's assay titles. Single-nucleus ATAC-seq: our own term, under EFO's sc/snATAC-seq, which has no single-nucleus child (#533). ATAC-seq measures open chromatin. In AnVIL_IGVF_Mouse_R1 the value is on the reads (FASTQ) and seqspec files of the ATAC half of a SHARE-seq experiment. | general |  | 10 | 20 | 10 | `AnVIL_IGVF_Mouse_R1` 10 | published_value 20 |
-| `data_modality.single_nucleus_atac_seq+single_nucleus_rna_sequencing_assay` | AnVIL's published `anvil_file.data_modality`, which carries IGVF's assay titles. Both assays of one SHARE-seq experiment: IGVF's analysis sets that carry the pair (IGVFDS5339UKYM, IGVFDS5530HYKI) give `preferred_assay_titles: ["SHARE-seq"]`, EFO:0022962. Nothing is declared for data_modality. The value is the analysis set's label, on every file of the set, and each file holds one half: the count matrices and kallisto outputs are RNA, the fragment files ATAC. Any one modality would be wrong for some of them, and the vocabulary holds one per file, so each file's own evidence decides. Scoped to this dataset: the two titles alone do not name the protocol, since another joint assay (10x Multiome for one) could carry the same pair, so elsewhere the value selects no row and is queued. | source anvil, dataset AnVIL_IGVF_Mouse_R1 |  | 12 | 12 | 12 | `AnVIL_IGVF_Mouse_R1` 12 | published_value 12 |
+| `data_modality.single_nucleus_atac_seq+single_nucleus_rna_sequencing_assay` | AnVIL's published `anvil_file.data_modality`, which carries IGVF's assay titles. Both assays of one SHARE-seq experiment: IGVF's analysis sets that carry the pair (IGVFDS5339UKYM, IGVFDS5530HYKI) give `preferred_assay_titles: ["SHARE-seq"]`, EFO:0022962. Nothing is declared for data_modality. The value is the analysis set's label, on every file of the set, and each file holds one half: the count matrices and kallisto outputs are RNA, the fragment files ATAC. Any one modality would be wrong for some of them, and the vocabulary holds one per file, so each file's own evidence decides. Scoped to this dataset: the two titles alone do not name the protocol, since another joint assay (10x Multiome for one) could carry the same pair, so elsewhere the value selects no row and is queued. | source anvil, dataset AnVIL_IGVF_Mouse_R1 |  | 12 | 12 | 10 | `AnVIL_IGVF_Mouse_R1` 12 | published_value 12 |
 | `data_modality.single_nucleus_rna_sequencing_assay` | AnVIL's published `anvil_file.data_modality`, which carries IGVF's assay titles. Single-nucleus RNA sequencing, EFO:0009809 (#533); RNA-seq measures the transcriptome. | general |  | 6,733 | 13,466 | 6,733 | `AnVIL_IGVF_Mouse_R1` 6,733 | published_value 13,466 |
 | `data_modality.transcriptomic` |  | general | yes | 0 | 0 | 0 |  |  |
 | `data_type.alignments` |  | general | yes | 0 | 0 | 0 |  |  |
@@ -176,7 +176,7 @@ Not rules. Each is a reason a field of a file was left without an answer.
 | `input_validation` | rule_id | 0 | The input record broke the input contract, so every dimension is not_classified (#161). |
 | `no_matching_parent_in_dataset` | rule_id | 52 | An index file for which no file in its dataset carries a candidate parent name (#438). |
 | `ambiguous_parent_in_dataset` | rule_id | 15,006 | An index file for which more than one file in its dataset carries the parent name (#438). |
-| `not_classified` | marker | 461,407 | No rule gave this field an answer. |
+| `not_classified` | marker | 475,640 | No rule gave this field an answer. |
 | `conflict` | marker | 8 | Equally strong rules gave different answers, so the field is marked as a conflict. |
 
 ## Edge rules
@@ -241,18 +241,12 @@ Then:
 
 ```yaml
 data_type: checksum
-status:
-  data_modality: not_applicable
-  reference_assembly: not_applicable
-  assay_type: not_applicable
-  platform: not_applicable
-  instrument_model: not_applicable
 ```
 
 Rationale:
 
 ```text
-Checksum file — a checksum, and no data of its own
+Checksum file — a checksum; what it describes is the checked file's to say
 ```
 
 ### `log_file`
@@ -2095,12 +2089,12 @@ An index file is an index whatever it indexes, and its extension says so, with o
 
 ### `inherited_from_parent`
 
-code, basis parent_file, in `scripts/classify_index_files.py`
+code, basis parent_file, in `src/meta_disco/reconcile_inherit.py`
 
 Reads:
 
 ```text
-the matched parent file's resolved classification
+the settled answers, at reconcile, of the parents in one input role of the file's generated_by
 ```
 
 Sets:
@@ -2112,7 +2106,7 @@ data_modality, platform, reference_assembly, assay_type, instrument_model
 Rationale:
 
 ```text
-An index describes the data it points into, so it takes its parent's answer for each dimension IndexActivity passes (rules/activities.yaml), including a status and a conflict. It is copied, not weighed in resolution; folding it into make_claim is #413.
+A file's step passes what its activity declares for each input role (rules/activities.yaml): an index, checksum or QC report takes what its one parent says, a VCF what its alignments say. Parents that agree give their value; parents that differ give mixed; a parent not_classified or in conflict gives nothing (contract 4.9). The claim is weighed with the file's own (4.2-4.6).
 ```
 
 ### `assay_type.hi_c`
