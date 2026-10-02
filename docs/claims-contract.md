@@ -85,10 +85,11 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     Such a name is *also* slot evidence, and the map declares which span of it speaks to which slot
     (#369). Measured on files inference can read it is an agreeing input, which 4.4 records; where
     inference has a content ceiling, or a source's tables carry no metadata values at all — the T2T
-    datasets, 85% of the corpus — it is the only signal there is. Two exclusions are structural, read
+    datasets, 85% of the corpus — it is the only signal there is. Three exclusions are structural, read
     off the source's own naming and enforced by the map's loader: an **entity-shaped** token
-    (`interval`) describes a row, not its files, and a **derivative** column (`*_index`, `*_bai`,
-    `*_md5`) carries no `data_type` of its own payload while keeping the payload's `reference_assembly`.
+    (`interval`) describes a row, not its files; a **derivative** column (`*_index`, `*_bai`)
+    carries no `data_type` of its own payload while keeping the payload's `reference_assembly`; and a
+    **checksum** column (`*_md5`) takes no slot at all, since a checksum holds no data (#596).
     `docs/interpreting-submitter-tables.md` is the companion reference: what shapes these tables
     come in, why, and what each is worth.
 
@@ -453,12 +454,13 @@ importer's half is built — 7.12 is enforced (below), and the published importe
   the source tables state (#583, #584), merged into that step (#577). Nothing is inherited across a link that
   gives no step: a sample parent (#582), a parent no file or two files of the dataset carry, a step
   conflict, or a step only the generic `Activity` names. Nor does the inference artifact carry any of it: an
-  index or checksum file's carried dimensions are `not_classified` there, and filled only at reconcile.
+  index file's carried dimensions are `not_classified` there, and filled only at reconcile. (A checksum's
+  are `not_applicable`: `ChecksumActivity` passes nothing, #596.)
 - **The slot maps and their importer exist for AnVIL only** (#369, #497): `slot_map` loads
   `sources/anvil_slot_map.yaml` (kind 3) and `sources/anvil_published_slot_map.yaml` (kind 2),
   `anvil_evidence` writes generations of evidence files under `data/source_evidence/anvil/` and
   `.../anvil_published/`, and `source_evidence.discover` reads the newest per dataset. So 2.4's
-  absence-is-the-statement half, 2.5's generations and 2.8's two exclusions are enforced for that one
+  absence-is-the-statement half, 2.5's generations and 2.8's three exclusions are enforced for that one
   repository, and 7.12 at the map for AnVIL and at the run for every repository; that a map was
   authored from nothing a run concluded is
   not enforceable, and a test greps each file for the strings that would say otherwise. No other source

@@ -289,11 +289,11 @@ authority, and this table is its reading when #580 wrote it.
 
 | activity | `data_modality` | `assay_type` | `platform` | `instrument_model` | `reference_assembly` |
 |---|---|---|---|---|---|
-| `IndexActivity`, `ChecksumActivity`, `QualityControlActivity`, `MergeActivity`, `VariantCallActivity` | yes | yes | yes | yes | yes |
+| `IndexActivity`, `QualityControlActivity`, `MergeActivity`, `VariantCallActivity` | yes | yes | yes | yes | yes |
 | `AlignmentActivity` | yes, from `reads` | yes, from `reads` | yes, from `reads` | yes, from `reads` | from its `reference` input only, not from the reads |
 | `LiftoverActivity` | yes | yes | yes | yes | **no** — liftover changes it |
 | `AssemblyActivity` | yes | yes | yes | yes | **no** — an assembly is its own reference |
-| `Activity`, `SequenceActivity`, `SampleCollectionActivity`, `SampleTreatmentActivity`, `ImageActivity`, `ExpressionActivity`, `AnalysisActivity` | no | no | no | no | no |
+| `Activity`, `ChecksumActivity` (amended by #596), `SequenceActivity`, `SampleCollectionActivity`, `SampleTreatmentActivity`, `ImageActivity`, `ExpressionActivity`, `AnalysisActivity` | no | no | no | no | no |
 
 - Carrying `reference_assembly` carries the build's identity — `ReferenceBuild.base` and `version` —
   so a child describes its reference as precisely as its parents agree on it. The build's observations
@@ -333,11 +333,14 @@ more. That producer used to write the edge decision 2 rejects, an index edge nam
 index file it took no parent for (`declined_record`, #438, ~15K files); #356 removed it, and
 `anvil_activity`, which names most of those parents, gives them theirs (#577).
 
-The `checksum_file` rule contradicted the `ChecksumActivity` row: it stamped all five lineage
-dimensions `not_applicable`, which 4.6 would have made a conflict against every inherited value (~14K
-`.md5` files). A checksum is a companion like an index, not a special case, so #571 left that rule
-only `data_type: checksum` — the correction #437 made to the index rule. It also shrinks what the
-engine's same-tier `not_applicable` exception protects (#511).
+**Amended (#596): a checksum passes nothing.** #571 first treated a checksum as a companion like an
+index: `ChecksumActivity` passed all five dimensions, and the `checksum_file` rule dropped its
+`not_applicable`. That made 14,074 `.md5` files say what their file says (`genomic`, a platform, a
+reference), which is not true of a hash of bytes. AnVIL publishes none of it, and the `auxiliary_inert`
+consistency rule forbids it. An index differs because it points into coordinates on its file's
+reference, so the dimensions apply to it; a checksum has nothing they could describe. So
+`ChecksumActivity` passes nothing, `checksum_file` makes the five `not_applicable` again, and the step
+stays as the link from a checksum to its file.
 
 ## What this supersedes
 
@@ -346,7 +349,7 @@ on the bullets concerned).
 
 | June doc | what it said | now |
 |---|---|---|
-| §1 point (3); §3's `not_applicable` for a `.bai`; §7's opening; §7b; §8c's "descriptive ⇒ `not_applicable`"; §9 item 3 | a companion's lineage dimensions are `not_applicable`, reached only through the link | inherited across the edge (decision 8) |
+| §1 point (3); §3's `not_applicable` for a `.bai`; §7's opening; §7b; §8c's "descriptive ⇒ `not_applicable`"; §9 item 3 | a companion's lineage dimensions are `not_applicable`, reached only through the link | an index's: inherited across the edge (decision 8). A checksum's: still `not_applicable`, reached through the link (#596) |
 | §4a's edge with no parent; §4b; §6 Levels 1–2; §9 items 4 (its `parent_md5sum`), 5 | grounding by md5; an edge may name no parent | grounding by record key; no parent named, no edge (decision 2) |
 | §1 point (1); §3's "not values copied onto this file"; §5a–5c; §6 Level 3; §9 item 7; §10 "Confirmed" on materialization and query time | store a pointer, never a copy; follow at query time | copy, as a declaration that reconciles (decision 8, contract 4.9) |
 | §1 point (4); §7a; §9 item 8 | read the reference from the file first, inherit second | both are declarations; contradiction is a conflict (decision 8) |

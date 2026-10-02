@@ -34,7 +34,7 @@ This document is about that second group — descriptive-content files. (We keep
 companion file.") The open question (#109) is what our five dimensions should even
 *mean* for them.
 
-> **Superseded by ADR-0002** (decision 8): points (1) and (3). A companion inherits its parent's lineage dimensions
+> **Superseded by ADR-0002** (decision 8): points (1) and (3). An index inherits its parent's lineage dimensions (a checksum's stay `not_applicable`, #596)
 > across an `internal` edge (nothing crosses an `external` one), as a declaration that reconciles (contract 4.9). Point (2) stands; (4) is superseded as 7a is.
 
 The decision recorded here is fourfold: **(1)** separate a file's *identity* from
@@ -77,8 +77,8 @@ resolution also corrects `data_type`, which *shouldn't* be `not_applicable` — 
 
 ## 3. Core assumption: identity and origin are two different questions
 
-> **Superseded by ADR-0002** (decision 8), in part: the two questions stay separate, but a companion's lineage
-> dimensions are inherited onto its record, credited to the parent, not left `not_applicable` beside a link.
+> **Superseded by ADR-0002** (decision 8), in part: the two questions stay separate, but an index's lineage
+> dimensions are inherited onto its record (a checksum's stay `not_applicable`, #596), credited to the parent, not left `not_applicable` beside a link.
 
 The mistake is treating it as one question with one answer. There are two
 questions, they have different answers, and they should be stored in different
@@ -433,7 +433,7 @@ That framing drops straight into the provenance model of #90 (authority =
 ## 7. Why `reference_assembly` is the odd one out
 
 > **Superseded by ADR-0002** (decision 8), in part: the opening's "the other contextual fields are
-> `not_applicable`. That is correct" no longer holds for a companion, which inherits them.
+> `not_applicable`. That is correct" no longer holds for an index, which inherits them (a checksum keeps them `not_applicable`, #596).
 
 The post-#106 state leaves `reference_assembly` open while the other contextual
 fields are `not_applicable`. That is **correct** — it just was never explained.
@@ -507,8 +507,8 @@ fails for them — there is nothing in the file to read.
 
 ### 7b. `not_applicable` vs "open" — a real distinction
 
-> **Superseded by ADR-0002** (decision 8), in part: a companion's `data_modality`, `assay_type`, `platform` and
-> `instrument_model` — an index's, a checksum's — are inherited, not `not_applicable`. The distinction between `not_applicable` and open stands.
+> **Superseded by ADR-0002** (decision 8), in part: an index's `data_modality`, `assay_type`, `platform` and
+> `instrument_model` are inherited, not `not_applicable`. A checksum's stay `not_applicable` (#596). The distinction between `not_applicable` and open stands.
 
 `not_applicable` is a strong claim: *this field has no meaning for this file.*
 That is true for `assay_type` on a `.bai` — an index has no assay, full stop.
@@ -600,7 +600,7 @@ parent_kind                    ∈ { alignment, variants, reads, sequence, inter
 ### 8c. Two content classes, and why we factor instead of subtype
 
 > **Superseded by ADR-0002** (decision 8), in part: "descriptive ⇒ `data_modality / assay_type / platform`
-> are `not_applicable`" no longer holds; a companion inherits them. The factoring itself stands.
+> are `not_applicable`" no longer holds for an index, which inherits them (not for a checksum, #596). The factoring itself stands.
 
 The corrected model puts **all** content types in one field, `data_type`, but
 recognizes they fall into two **classes**:
@@ -783,7 +783,7 @@ roadmap starts to cash in on generation.
 ## 9. Summary of the data-model assumptions
 
 > **Superseded by ADR-0002** (decisions 2, 8): items 4 and 5 (md5 grounding, edges naming no parent), 7 and 8, and item 3's
-> `not_applicable` for a companion.
+> `not_applicable` for an index companion (a checksum's stands, #596).
 
 1. **The axis is content, not derivation.** What separates these files is whether
    their content is *biological* (the bytes are the signal) or *descriptive* (the

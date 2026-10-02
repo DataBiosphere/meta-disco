@@ -96,10 +96,10 @@ activities:
         form: [file]
         required: true
         many: false
-        passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
     reason: >-
-      A checksum is a companion of one file, as an index is (ADR-0002 decision 8), so it
-      takes every dimension but its own kind.
+      A checksum is a hash of its file's bytes, so it takes nothing from it, and the step
+      is the link (ADR-0002 decision 8, amended by #596). For an `.md5`, the `checksum_file`
+      rule makes the dimensions `not_applicable`.
   - term: QualityControlActivity
     output: {form: [file], kind: [qc_report, annotations]}
     inputs:

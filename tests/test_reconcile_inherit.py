@@ -69,11 +69,16 @@ def rec(n: int, name: str, generated_by: dict | None = None, build: dict | None 
     return row
 
 
-def index_of(parent: int, parent_file: str) -> dict:
-    """The step inference writes from an index's name, as ``edges.generated_by`` writes it."""
+def step_of(rule, parent: int, parent_file: str) -> dict:
+    """The step inference writes from a child's name by ``rule``, as ``edges.generated_by`` writes it."""
     return edges.generated_by(
-        code_rules.INDEX_BY_NAME, {"file_name": parent_file, "file_id": f"file-{parent}"}, SOURCE_RECORD_KEYS["anvil"]
+        rule, {"file_name": parent_file, "file_id": f"file-{parent}"}, SOURCE_RECORD_KEYS["anvil"]
     )
+
+
+def index_of(parent: int, parent_file: str) -> dict:
+    """The step inference writes from an index's name."""
+    return step_of(code_rules.INDEX_BY_NAME, parent, parent_file)
 
 
 def go(tmp_path: Path, rows: list[dict], evidence: Path | None) -> tuple[dict[str, dict], dict]:
@@ -452,3 +457,31 @@ def test_a_parent_build_with_no_base_or_version_passes_no_build(tmp_path):
     )
     entry = slot(rows["s.bam.bai"], "reference_assembly")
     assert entry["value"] == "GRCh38" and "build" not in entry
+
+
+def test_a_checksum_inherits_nothing_and_keeps_its_link(tmp_path):
+    """`ChecksumActivity` passes nothing (#596): the `.md5` stays not_applicable, linked to its file."""
+    step = step_of(code_rules.CHECKSUM_BY_NAME, 1, "s.cram")
+    na = dict.fromkeys(CARRIED, NOT_APPLICABLE)
+    rows, report = go(
+        tmp_path,
+        [
+            rec(1, "s.cram", data_modality="genomic", platform="ILLUMINA", reference_assembly="GRCh38"),
+            rec(2, "s.cram.md5", step, None, data_type="checksum", **na),
+        ],
+        None,
+    )
+    md5 = rows["s.cram.md5"]
+    for dimension in CARRIED:
+        entry = slot(md5, dimension)
+        assert (entry["status"], entry["credited_to"]) == (NOT_APPLICABLE, NOT_APPLICABLE), dimension
+        assert not inherited_claims(entry), dimension
+    # The row's statuses are the rule's own: inference gives every `.md5` the five not_applicable.
+    from meta_disco.models import FileInfo
+    from meta_disco.rule_engine import RuleEngine
+
+    own = RuleEngine().classify_extended(FileInfo.from_filename("s.cram.md5"))
+    assert {d: own.status_of(d) for d in CARRIED} == na
+    assert md5["generated_by"]["activity"] == "ChecksumActivity"
+    assert md5["generated_by"]["inputs"][0]["parent_key"] == "file-1"
+    assert all(not per for per in report["inheritance"].values())

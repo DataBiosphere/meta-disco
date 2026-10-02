@@ -47,12 +47,16 @@ table is which.
 
 **Sources stay pure** (3.4). Nothing in a map may cite what a classification run
 concluded; ``test_slot_map`` checks the file for the strings that would. The only
-exclusions are structural. Two are enforced by the loader:
+exclusions are structural. Three are enforced by the loader:
 
 - A **derivative column** — an index or a checksum sidecar, named by
   :data:`DERIVATIVE_SUFFIXES` — carries no ``data_type`` of its own payload. An index is
   an ``index`` (#437) and the column says so in its own name. Its ``reference_assembly``
   is the payload's and stays.
+- A **checksum column** (:data:`CHECKSUM_SUFFIXES`) takes no slot at all: a checksum
+  holds no data, so its ``data_type`` is ``checksum`` and every carried dimension is
+  ``not_applicable`` (the ``checksum_file`` rule,
+  #596), and a source value for one would only conflict with it.
 - An **entity-shaped name token** (:data:`ENTITY_TOKENS`) describes a row, not a file. A
   table keyed by ``interval_id`` with chromosome and start columns is one row per
   scatter window; its ``interval`` token says what the row is, and its files are that
@@ -100,9 +104,12 @@ _NAME_FORMS = frozenset({SOURCE_TABLE_NAME, SOURCE_COLUMN_NAME})
 
 # A column whose last name token (`name_tokens`) is one of these is a sidecar of
 # another column's file: an index or a checksum. It takes no `data_type` from any
-# source, name or cell (its own name already says what it is), and keeps the payload's
-# `reference_assembly`.
+# source, name or cell (its own name already says what it is). An index keeps the
+# payload's `reference_assembly`; a checksum (`CHECKSUM_SUFFIXES`, below) takes no slot.
 DERIVATIVE_SUFFIXES = frozenset({"index", "idx", "bai", "crai", "tbi", "csi", "fai", "gzi", "md5"})
+# The derivative suffixes that name a checksum, which takes no slot from any source (#596):
+# its own `data_type` is `checksum` and its carried dimensions are `not_applicable`.
+CHECKSUM_SUFFIXES = frozenset({"md5"})
 
 # Name tokens that describe what a *row* is rather than what its files are. Only the
 # ones a slot could otherwise read are listed: `sample`, `participant` and `donor` are
@@ -189,18 +196,29 @@ def is_derivative_column(column: str) -> bool:
     return bool(tokens) and tokens[-1] in DERIVATIVE_SUFFIXES
 
 
+def is_checksum_column(column: str) -> bool:
+    """Whether a column name says its file is a checksum of another file."""
+    tokens = name_tokens(column)
+    return bool(tokens) and tokens[-1] in CHECKSUM_SUFFIXES
+
+
 ENTITY = "entity"
 DERIVATIVE = "derivative"
+CHECKSUM = "checksum"
 
 
 def structural_exclusion(slot: str, column: str, span: str) -> str | None:
-    """Which of the two structural rules refuses ``span`` as a source for ``slot`` on ``column``, if either.
+    """Which of the three structural rules refuses ``span`` as a source for ``slot`` on ``column``, if any.
 
-    The one statement of both rules: the loader raises on what this returns. ``ENTITY`` — a token of the span names what a row is; ``DERIVATIVE`` — the
-    slot is ``data_type`` and the column is an index or checksum sidecar.
+    The one statement of the rules: the loader raises on what this returns. ``ENTITY`` — a
+    token of the span names what a row is; ``CHECKSUM`` — the column is a checksum sidecar,
+    which takes no slot; ``DERIVATIVE`` — the slot is ``data_type`` and the column is an
+    index sidecar.
     """
     if any(token in ENTITY_TOKENS for token in name_tokens(span)):
         return ENTITY
+    if is_checksum_column(column):
+        return CHECKSUM
     if slot == DATA_TYPE and is_derivative_column(column):
         return DERIVATIVE
     return None
@@ -253,7 +271,7 @@ def load_slot_map(source: Readable | None = None) -> SlotMap:
     """Load and check a slot map; the bundled AnVIL one by default.
 
     The shape rules — one entry shape, three source forms, a span inside its name, no
-    source twice, no ``notes``, the two structural exclusions — are checked here, and
+    source twice, no ``notes``, the three structural exclusions — are checked here, and
     the first violation raises ``ValueError`` naming where it sits, as far down as the
     level allows (dataset, table, column, slot; a duplicate key by its line). Source
     purity (contract 3.4) is not a shape and is ``test_slot_map``'s to check. Checked
@@ -353,10 +371,15 @@ def _source(slot: str, item: object, table: str, column: str, at: str) -> SlotSo
             f"{at}: span {value!r} names what a row is, not what its files are (entity tokens: "
             f"{sorted(ENTITY_TOKENS)}), so no slot reads it"
         )
+    if excluded == CHECKSUM:
+        raise ValueError(
+            f"{at}: {column!r} is a checksum column (suffixes {sorted(CHECKSUM_SUFFIXES)}), which holds no data, so "
+            f"it takes no slot: a checksum's data_type is checksum and its carried dimensions are not_applicable (#596)"
+        )
     if excluded == DERIVATIVE:
         raise ValueError(
-            f"{at}: {column!r} is an index or checksum column and carries no data_type of its own "
-            f"payload (suffixes {sorted(DERIVATIVE_SUFFIXES)}); its reference_assembly may be mapped"
+            f"{at}: {column!r} is an index column and carries no data_type of its own "
+            f"payload (suffixes {sorted(DERIVATIVE_SUFFIXES - CHECKSUM_SUFFIXES)}); its reference_assembly may be mapped"
         )
     return SlotSource(form=form, value=value)
 

@@ -233,3 +233,29 @@ def test_the_inheritance_rule_declares_what_reconcile_writes():
     assert _make_claim_sites(code_rules.RECONCILE_INHERIT) == {
         name: {source_type} for name, (_, source_type) in declared.items()
     }
+
+
+def test_no_activity_passes_a_dimension_a_rule_makes_not_applicable_on_its_output():
+    """What a step passes and what the output's own rule stamps must not meet (#596).
+
+    For each activity's output kind, a rule that gives a file that `data_type` (or a term
+    under it, `annotations.coverage` under `annotations`) and stamps a dimension
+    `not_applicable` would conflict (contract 4.6) with any value the activity passed for
+    that dimension. #571 had to drop `checksum_file`'s stamps when it made `ChecksumActivity`
+    pass all five; #596 restores the stamps and has the activity pass nothing. This pins
+    that the two never meet again, whichever side changes.
+    """
+    from meta_disco.models import NOT_APPLICABLE
+    from meta_disco.rule_loader import get_unified_rules
+
+    clashes = []
+    for term, declaration in activities.declarations().items():
+        passed = set(activities.passes(term))
+        for kind in (str(k) for k in declaration.output.kind or ()):
+            for rule in get_unified_rules().rules:
+                data_type = str(rule.then.get("data_type") or "")
+                if data_type != kind and not data_type.startswith(kind + "."):
+                    continue
+                stamped = {slot for slot, status in rule.then_status.items() if status == NOT_APPLICABLE}
+                clashes += [(term, rule.id, slot) for slot in sorted(stamped & passed)]
+    assert clashes == [], f"(activity, rule, dimension) that would always conflict: {clashes}"

@@ -489,29 +489,33 @@
           "assay_type": {
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for assay_type",
-                "status": "not_classified"
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
               }
             ],
-            "status": "not_classified",
+            "status": "not_applicable",
             "value": null
           },
           "data_modality": {
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for data_modality",
-                "status": "not_classified"
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
               }
             ],
-            "status": "not_classified",
+            "status": "not_applicable",
             "value": null
           },
           "data_type": {
             "evidence": [
               {
-                "reason": "Checksum file \u2014 a checksum; what it describes is the checked file's to say",
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
                 "rule_id": "checksum_file",
                 "source_type": "filename_rule",
                 "tier": 2,
@@ -524,34 +528,40 @@
           "instrument_model": {
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for instrument_model",
-                "status": "not_classified"
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
               }
             ],
-            "status": "not_classified",
+            "status": "not_applicable",
             "value": null
           },
           "platform": {
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for platform",
-                "status": "not_classified"
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
               }
             ],
-            "status": "not_classified",
+            "status": "not_applicable",
             "value": null
           },
           "reference_assembly": {
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for reference_assembly",
-                "status": "not_classified"
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
               }
             ],
-            "status": "not_classified",
+            "status": "not_applicable",
             "value": null
           }
         },

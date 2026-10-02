@@ -1,5 +1,5 @@
 """The slot map and its loader (#369): one entry shape, spans that belong to the names
-they claim, the two structural exclusions enforced rather than hoped for, and the
+they claim, the three structural exclusions enforced rather than hoped for, and the
 bundled AnVIL map holding to all of it — including citing no classification run."""
 
 from pathlib import Path
@@ -201,7 +201,7 @@ def test_a_slot_may_name_several_distinct_sources(tmp_path):
     assert len(entry.slots["platform"]) == 3
 
 
-# --- the two structural exclusions --------------------------------------------
+# --- the three structural exclusions ------------------------------------------
 
 
 def test_an_entity_shaped_token_is_refused_as_a_source(tmp_path):
@@ -213,10 +213,18 @@ def test_an_entity_shaped_token_is_refused_as_a_source(tmp_path):
 
 def test_a_derivative_column_takes_no_data_type_but_keeps_its_reference(tmp_path):
     index = "catalog: c\ndatasets:\n  D:\n    1KGP_CHM13v2_sample:\n      chr1_hcvcf_index:\n        data_type:\n          - {table_name: sample}\n"
-    refuses(tmp_path, index, "'chr1_hcvcf_index' is an index or checksum column")
+    refuses(tmp_path, index, "'chr1_hcvcf_index' is an index column")
     reference = "catalog: c\ndatasets:\n  D:\n    1KGP_CHM13v2_sample:\n      chr1_hcvcf_index:\n        reference_assembly:\n          - {table_name: CHM13v2}\n"
     (entry,) = load(tmp_path, reference).entries
     assert entry.is_derivative
+
+
+@pytest.mark.parametrize("slot", CLASSIFICATION_FIELDS)
+def test_a_checksum_column_takes_no_slot(tmp_path, slot):
+    """A checksum holds no data (#596): its data_type is checksum and its carried dimensions are
+    not_applicable, so no source speaks for any slot of one."""
+    text = f"catalog: c\ndatasets:\n  D:\n    GRCh38_alignments:\n      cram_md5:\n        {slot}:\n          - {{table_name: GRCh38}}\n"
+    refuses(tmp_path, text, "'cram_md5' is a checksum column")
 
 
 @pytest.mark.parametrize(
