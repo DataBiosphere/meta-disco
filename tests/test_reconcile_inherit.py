@@ -452,3 +452,26 @@ def test_a_parent_build_with_no_base_or_version_passes_no_build(tmp_path):
     )
     entry = slot(rows["s.bam.bai"], "reference_assembly")
     assert entry["value"] == "GRCh38" and "build" not in entry
+
+
+def test_a_checksum_inherits_nothing_and_keeps_its_link(tmp_path):
+    """`ChecksumActivity` passes nothing (#596): the `.md5` stays not_applicable, linked to its file."""
+    checked = {"file_name": "s.cram", "file_id": "file-1"}
+    step = edges.generated_by(code_rules.CHECKSUM_BY_NAME, checked, SOURCE_RECORD_KEYS["anvil"])
+    na = dict.fromkeys(CARRIED, NOT_APPLICABLE)
+    rows, report = go(
+        tmp_path,
+        [
+            rec(1, "s.cram", data_modality="genomic", platform="ILLUMINA", reference_assembly="GRCh38"),
+            rec(2, "s.cram.md5", step, None, data_type="checksum", **na),
+        ],
+        None,
+    )
+    md5 = rows["s.cram.md5"]
+    for dimension in CARRIED:
+        entry = slot(md5, dimension)
+        assert (entry["status"], entry["credited_to"]) == (NOT_APPLICABLE, NOT_APPLICABLE), dimension
+        assert not inherited_claims(entry), dimension
+    assert md5["generated_by"]["activity"] == "ChecksumActivity"
+    assert md5["generated_by"]["inputs"][0]["parent_key"] == "file-1"
+    assert all(not per for per in report["inheritance"].values())

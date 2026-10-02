@@ -387,20 +387,19 @@ class TestRuleEngineE2E:
             pytest.param("HG01928.paternal.f1_assembly.hap1.bed", {"data_modality": "genomic"}, id="bed assembly qc"),
             # A checksum file is a checksum — a term the vocabulary has (#437). The rule used
             # to stamp `data_type: not_applicable`, asserting the file has no kind while
-            # `data_type_enum` carried a word for its kind. The others are the checked
-            # file's, and `ChecksumActivity` carries them across at reconcile (#571), so the
-            # rule leaves them open as an index's are.
+            # `data_type_enum` carried a word for its kind. The others do not apply: a
+            # checksum is a hash of bytes with no data of its own (#596).
             pytest.param(
                 "sample.md5",
                 {
                     "data_type": "checksum",
-                    "data_modality": NOT_CLASSIFIED,
-                    "reference_assembly": NOT_CLASSIFIED,
-                    "assay_type": NOT_CLASSIFIED,
-                    "platform": NOT_CLASSIFIED,
-                    "instrument_model": NOT_CLASSIFIED,
+                    "data_modality": NOT_APPLICABLE,
+                    "reference_assembly": NOT_APPLICABLE,
+                    "assay_type": NOT_APPLICABLE,
+                    "platform": NOT_APPLICABLE,
+                    "instrument_model": NOT_APPLICABLE,
                 },
-                id="checksum file is data_type checksum, the rest open",
+                id="checksum file is data_type checksum, the rest not_applicable",
             ),
             # An index extension claims the kind and stays silent on the rest (#437). The
             # dimensions a parent supplies do apply to an index file — reconcile carries
@@ -812,7 +811,7 @@ class TestDerivedFileTierPrecedence:
     `reference_assembly` on blanket rules because, when it still beat a same-tier
     value, it blocked `filename_ref_*`; #437 finished the job for the three
     dimensions #106 left to reconsider: the index rule now claims only `data_type`.
-    The checksum rule still claims all four, which is the contrast — a checksum is
+    The checksum rule claims all five, which is the contrast — a checksum is
     about bytes and has no coordinate space, while an index indexes coordinates into
     one.
     """
@@ -844,11 +843,10 @@ class TestDerivedFileTierPrecedence:
     # with a reference name in the filename ---
 
     def test_checksum_ignores_filename_reference(self):
-        """No filename rule reads a checksum's name: GRCh38 in it is the checked file's, and
-        the checksum takes its reference from that file at reconcile (#571)."""
+        """Checksum file should stay not_applicable even with GRCh38 in filename (#596)."""
         result = engine.classify_extended(FileInfo.from_filename("sample.GRCh38.bam.md5"))
-        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
-        assert result.status_of("data_modality") == NOT_CLASSIFIED
+        assert result.status_of("reference_assembly") == NOT_APPLICABLE
+        assert result.status_of("data_modality") == NOT_APPLICABLE
 
     # --- Log files: `data_type` is `log`, the rest not_applicable ---
 

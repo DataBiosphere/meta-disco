@@ -453,7 +453,8 @@ importer's half is built — 7.12 is enforced (below), and the published importe
   the source tables state (#583, #584), merged into that step (#577). Nothing is inherited across a link that
   gives no step: a sample parent (#582), a parent no file or two files of the dataset carry, a step
   conflict, or a step only the generic `Activity` names. Nor does the inference artifact carry any of it: an
-  index or checksum file's carried dimensions are `not_classified` there, and filled only at reconcile.
+  index file's carried dimensions are `not_classified` there, and filled only at reconcile. (A checksum's
+  are `not_applicable`: `ChecksumActivity` passes nothing, #596.)
 - **The slot maps and their importer exist for AnVIL only** (#369, #497): `slot_map` loads
   `sources/anvil_slot_map.yaml` (kind 3) and `sources/anvil_published_slot_map.yaml` (kind 2),
   `anvil_evidence` writes generations of evidence files under `data/source_evidence/anvil/` and

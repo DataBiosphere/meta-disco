@@ -253,7 +253,8 @@ evidence}` entry — plus the controlled vocabulary:
     cycle is refused), so the run is read twice after the join's own scan. A slot filled only by inheritance is
     credited `inherited`; the report's `inheritance` block counts what each role gave. With
     `--no-evidence` it still crosses the steps inference wrote (6.6). Inference itself
-    inherits nothing: an index's or checksum's carried dimensions are `not_classified` there.
+    inherits nothing: an index's carried dimensions are `not_classified` there. A checksum's are
+    `not_applicable`, and `ChecksumActivity` passes nothing (#596).
   - **No output record carries what a repository publishes** (#513). The `published`
     block (#424) and `make published-comparison` are deleted: the published values are
     input kind 2, written by the published importer as evidence (contract 7.1, 7.12,

@@ -1452,12 +1452,14 @@
       {
         "classifications": {
           "assay_type": {
-            "credited_to": "not_classified",
+            "credited_to": "conflict_sources",
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for assay_type",
-                "status": "not_classified"
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
               },
               {
                 "activity": "ChecksumActivity",
@@ -1472,20 +1474,22 @@
               }
             ],
             "inferred": {
-              "status": "not_classified",
+              "status": "not_applicable",
               "value": null
             },
-            "status": "not_classified",
+            "status": "conflict",
             "use": "published",
             "value": null
           },
           "data_modality": {
-            "credited_to": "inherited",
+            "credited_to": "conflict_sources",
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for data_modality",
-                "status": "not_classified"
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
               },
               {
                 "activity": "ChecksumActivity",
@@ -1500,18 +1504,18 @@
               }
             ],
             "inferred": {
-              "status": "not_classified",
+              "status": "not_applicable",
               "value": null
             },
-            "status": "classified",
-            "use": "meta_disco",
-            "value": "genomic"
+            "status": "conflict",
+            "use": "published",
+            "value": null
           },
           "data_type": {
             "credited_to": "filled_by_inference",
             "evidence": [
               {
-                "reason": "Checksum file \u2014 a checksum; what it describes is the checked file's to say",
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
                 "rule_id": "checksum_file",
                 "source_type": "filename_rule",
                 "tier": 2,
@@ -1527,46 +1531,52 @@
             "value": "checksum"
           },
           "instrument_model": {
-            "credited_to": "not_classified",
+            "credited_to": "not_applicable",
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for instrument_model",
-                "status": "not_classified"
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
               }
             ],
             "inferred": {
-              "status": "not_classified",
+              "status": "not_applicable",
               "value": null
             },
-            "status": "not_classified",
-            "use": "published",
+            "status": "not_applicable",
+            "use": "meta_disco",
             "value": null
           },
           "platform": {
-            "credited_to": "not_classified",
+            "credited_to": "not_applicable",
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for platform",
-                "status": "not_classified"
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
               }
             ],
             "inferred": {
-              "status": "not_classified",
+              "status": "not_applicable",
               "value": null
             },
-            "status": "not_classified",
-            "use": "published",
+            "status": "not_applicable",
+            "use": "meta_disco",
             "value": null
           },
           "reference_assembly": {
-            "credited_to": "published_unreviewed",
+            "credited_to": "conflict_published",
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for reference_assembly",
-                "status": "not_classified"
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
               },
               {
                 "claim_state": "unmapped",
@@ -1583,10 +1593,10 @@
               }
             ],
             "inferred": {
-              "status": "not_classified",
+              "status": "not_applicable",
               "value": null
             },
-            "status": "not_classified",
+            "status": "conflict",
             "use": "published",
             "value": null
           }

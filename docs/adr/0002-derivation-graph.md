@@ -289,11 +289,11 @@ authority, and this table is its reading when #580 wrote it.
 
 | activity | `data_modality` | `assay_type` | `platform` | `instrument_model` | `reference_assembly` |
 |---|---|---|---|---|---|
-| `IndexActivity`, `ChecksumActivity`, `QualityControlActivity`, `MergeActivity`, `VariantCallActivity` | yes | yes | yes | yes | yes |
+| `IndexActivity`, `QualityControlActivity`, `MergeActivity`, `VariantCallActivity` | yes | yes | yes | yes | yes |
 | `AlignmentActivity` | yes, from `reads` | yes, from `reads` | yes, from `reads` | yes, from `reads` | from its `reference` input only, not from the reads |
 | `LiftoverActivity` | yes | yes | yes | yes | **no** — liftover changes it |
 | `AssemblyActivity` | yes | yes | yes | yes | **no** — an assembly is its own reference |
-| `Activity`, `SequenceActivity`, `SampleCollectionActivity`, `SampleTreatmentActivity`, `ImageActivity`, `ExpressionActivity`, `AnalysisActivity` | no | no | no | no | no |
+| `Activity`, `ChecksumActivity` (amended by #596), `SequenceActivity`, `SampleCollectionActivity`, `SampleTreatmentActivity`, `ImageActivity`, `ExpressionActivity`, `AnalysisActivity` | no | no | no | no | no |
 
 - Carrying `reference_assembly` carries the build's identity — `ReferenceBuild.base` and `version` —
   so a child describes its reference as precisely as its parents agree on it. The build's observations
@@ -333,11 +333,14 @@ more. That producer used to write the edge decision 2 rejects, an index edge nam
 index file it took no parent for (`declined_record`, #438, ~15K files); #356 removed it, and
 `anvil_activity`, which names most of those parents, gives them theirs (#577).
 
-The `checksum_file` rule contradicted the `ChecksumActivity` row: it stamped all five lineage
-dimensions `not_applicable`, which 4.6 would have made a conflict against every inherited value (~14K
-`.md5` files). A checksum is a companion like an index, not a special case, so #571 left that rule
-only `data_type: checksum` — the correction #437 made to the index rule. It also shrinks what the
-engine's same-tier `not_applicable` exception protects (#511).
+**Amended (#596): a checksum passes nothing.** #571 first treated a checksum as a companion like an
+index: `ChecksumActivity` passed all five dimensions, and the `checksum_file` rule dropped its
+`not_applicable`. That made 14,074 `.md5` files say what their file says (`genomic`, a platform, a
+reference), which is not true of a hash of bytes. AnVIL publishes none of it, and the `auxiliary_inert`
+consistency rule forbids it. An index differs because it points into coordinates on its file's
+reference, so the dimensions apply to it; a checksum has nothing they could describe. So
+`ChecksumActivity` passes nothing, `checksum_file` makes the five `not_applicable` again, and the step
+stays as the link from a checksum to its file.
 
 ## What this supersedes
 

@@ -220,16 +220,17 @@ rules:
     rationale: "Index file — an index; what it indexes is the parent's to say"
 
   # ---------------------------------------------------------------------------
-  # Checksum files — `data_type` says what the file is; the rest are its file's.
+  # Checksum files — `data_type` says what the file is, the rest do not apply.
   # Same correction as the index rule above (#437): `checksum` is a term in
   # `data_type_enum`, and stamping the dimension `not_applicable` asserted the file
   # has no kind when the vocabulary has a word for its kind.
   #
-  # Until #571 this rule also stamped the other five `not_applicable`. A checksum is a
-  # companion of one file (ADR-0002 decision 8), and `ChecksumActivity` passes all five
-  # from the file it checks, so at reconcile that `not_applicable` would conflict with
-  # the parent's value (contract 4.6) on every checksum with a parent. They are left to
-  # the parent, as an index's are.
+  # The other five are `not_applicable`: a checksum is a hash of a file's bytes and
+  # holds no biological data, and AnVIL publishes none for it. #571 briefly let it
+  # inherit its file's dimensions instead; #596 reversed that, and `ChecksumActivity`
+  # passes nothing, so this cannot conflict with an inherited value. Unlike an index,
+  # which points into coordinates on its file's reference, a checksum has nothing the
+  # dimensions could describe.
   # ---------------------------------------------------------------------------
   - id: checksum_file
     tier: 2
@@ -238,7 +239,13 @@ rules:
       extensions: [".md5"]
     then:
       data_type: checksum
-    rationale: "Checksum file — a checksum; what it describes is the checked file's to say"
+      status:
+        data_modality: not_applicable
+        reference_assembly: not_applicable
+        assay_type: not_applicable
+        platform: not_applicable
+        instrument_model: not_applicable
+    rationale: "Checksum file — a checksum, and no data of its own"
 
   # ---------------------------------------------------------------------------
   # Log files - not applicable

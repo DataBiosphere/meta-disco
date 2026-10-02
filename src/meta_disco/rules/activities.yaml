@@ -96,10 +96,12 @@ activities:
         form: [file]
         required: true
         many: false
-        passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
     reason: >-
-      A checksum is a companion of one file, as an index is (ADR-0002 decision 8), so it
-      takes every dimension but its own kind.
+      A checksum is a hash of one file's bytes and holds no data the dimensions could
+      describe, so it takes nothing from that file (#596, amending ADR-0002 decision 8):
+      the `checksum_file` rule makes them `not_applicable`. The step is still the link to
+      the file it checks. An index differs: it points into coordinates on its file's
+      reference, so it takes every dimension but its own kind.
   - term: QualityControlActivity
     output: {form: [file], kind: [qc_report, annotations]}
     inputs:
