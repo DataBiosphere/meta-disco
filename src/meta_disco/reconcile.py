@@ -4,9 +4,10 @@ Beside the slots, reconcile builds each file's ``generated_by`` from the importe
 (#577): :mod:`reconcile_lineage` translates and resolves it, sharing the records scan
 below, and ``edges.merge_steps`` merges it with inference's own step. Across that step a
 file inherits what its activity passes from its parents (contract 4.9, #571,
-:mod:`reconcile_inherit`), so the run is read twice: once to settle every record's own
-answer and step, then, the parents settled before their children, to write each record
-with its inherited declarations weighed in.
+:mod:`reconcile_inherit`), so after the join's scan (which runs when there is evidence or
+lineage to place) the run is read twice more: once to settle every record's own answer and
+step, then, the parents settled before their children, to write each record with its
+inherited declarations weighed in.
 
 The stage after inference (contract 6.1): **infer → reconcile**. Reading the sources is
 the join below, reconcile's first step, and its per-source counts are a line of the
@@ -1106,7 +1107,8 @@ def reconcile_run(
     excludes lineage too, and inheritance still crosses the steps inference wrote (6.6).
 
     Inheritance (#571, :mod:`reconcile_inherit`) needs every parent's answer before its
-    child is written, and the records come file by file, so the run is read twice. The
+    child is written, and the records come file by file, so inheritance reads the run twice,
+    after the join's own scan (made when there is evidence or lineage to place). The
     first pass settles each record's own answer and step and keeps, per record, only its
     settled answer for the carried slots (and, for a child, what its own declarations
     are), each distinct one held once. The second settles each record again, now with its

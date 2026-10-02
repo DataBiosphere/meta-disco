@@ -249,7 +249,7 @@ evidence}` entry — plus the controlled vocabulary:
     parents settle (agree → their value; differ or mixed → `mixed`; any `conflict` or
     `not_classified` → nothing) and give the child one inherited claim, resolved with its
     own by `reconcile.settle`, the one resolution rule. Parents settle before children (a
-    cycle is refused), so the run is read twice. A slot filled only by inheritance is
+    cycle is refused), so the run is read twice after the join's own scan. A slot filled only by inheritance is
     credited `inherited`; the report's `inheritance` block counts what each role gave. With
     `--no-evidence` it still crosses the steps inference wrote (6.6). Inference itself
     inherits nothing: an index's or checksum's carried dimensions are `not_classified` there.
