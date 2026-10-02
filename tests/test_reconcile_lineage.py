@@ -17,7 +17,15 @@ from meta_disco.models import SOURCE_REPOSITORY_ACTIVITY, SOURCE_REPOSITORY_META
 from meta_disco.output_utils import iter_reconciled_records
 from meta_disco.reconcile import reconcile_run
 from meta_disco.schema.classification_model import ClassificationRecord
-from tests.lineage_fixtures import activity_line, line, write_lineage
+from tests.lineage_fixtures import (
+    activity_line,
+    drs,
+    line,
+    reconcile_fixture,
+    sample_line,
+    sample_lines,
+    write_lineage,
+)
 from tests.metadata_fixtures import write_metadata
 from tests.run_fixtures import output_record, write_run
 
@@ -70,42 +78,13 @@ def name_edge(parent: int, parent_file: str) -> dict:
     }
 
 
-@pytest.fixture
-def roots(tmp_path: Path):
-    """The slot evidence root and the lineage root beside it, as reconcile finds them by default."""
-    evidence = tmp_path / "data" / "source_evidence"
-    evidence.mkdir(parents=True)
-    return evidence, tmp_path / "data" / "lineage_evidence"
-
-
 def go(tmp_path: Path, rows: list[dict] | None, evidence: Path | None) -> tuple[dict[str, dict], dict]:
     """Reconcile a run of ``rows`` (or the run already written, for None) with the test's activity map."""
-    run_dir = tmp_path / "output" / "20261001_000000"
-    if rows is not None:
-        write_run(run_dir, rows)
-    table = tmp_path / "activity_map.yaml"
-    table.write_text(ACTIVITY_MAP)
-    metadata = write_metadata(tmp_path / "input.json", [], repository="anvil", catalog="anvil15")
-    report = reconcile_run(run_dir, metadata, evidence, activity_table=load_activity_map(table))
-    return {r["file_name"]: r for r in iter_reconciled_records(run_dir)}, report
+    return reconcile_fixture(tmp_path, rows, evidence, ACTIVITY_MAP)
 
 
 def activity_lines(lineage: Path, *lines) -> None:
     write_lineage(lineage, "anvil_activity", list(lines), dataset=DATASET)
-
-
-def sample_lines(lineage: Path, *lines) -> None:
-    write_lineage(
-        lineage, "sample", list(lines), dataset=DATASET, source_type=SOURCE_REPOSITORY_METADATA, key="drs_uri"
-    )
-
-
-def drs(n: int) -> str:
-    return f"drs://drs.anv0:v2_{n}"
-
-
-def sample_line(child: int, parent: int, child_column: str, parent_column: str):
-    return line(drs(child), drs(parent), child_column, parent_column, "drs_uri")
 
 
 # --- acceptance ---------------------------------------------------------------------

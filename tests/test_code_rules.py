@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from meta_disco import code_rules, models
+from meta_disco import activities, code_rules, models
 from meta_disco.models import CLASSIFICATION_FIELDS, SOURCE_TYPES
 from meta_disco.rule_loader import get_unified_rules
 
@@ -200,17 +200,36 @@ def test_a_header_classifier_rule_declares_what_its_claims_write():
         assert read[name]["tiers"] == {"CONTENT_TIER"}, name
 
 
-def test_the_index_producer_rules_declare_what_the_producer_writes():
-    import classify_index_files as cif
-
-    assert code_rules.INHERITED_FROM_PARENT.sets == cif.INHERITED_FIELDS
-    assert code_rules.INDEX_BY_EXTENSION.sets == (cif.DATA_TYPE,)
-    # Its evidence is built as dicts, not through add_claim: read each one's source_type.
+def _make_claim_sites(module: str) -> dict[str, set[str]]:
+    """Per code rule a module names in a ``make_claim`` call or an evidence dict, the ``source_type`` source texts."""
     written: dict[str, set[str]] = {}
-    for node in ast.walk(ast.parse(Path(code_rules.INDEX_PRODUCER).read_text(encoding="utf-8"))):
+    for node in ast.walk(ast.parse(Path(module).read_text(encoding="utf-8"))):
         if isinstance(node, ast.Dict):
             keys = {k.value: v for k, v in zip(node.keys, node.values, strict=True) if isinstance(k, ast.Constant)}
             if (name := _rule_constant(keys.get("rule_id"))) and "source_type" in keys:
                 written.setdefault(name, set()).add(ast.unparse(keys["source_type"]))
-    declared = _declared([code_rules.INHERITED_FROM_PARENT, code_rules.INDEX_BY_EXTENSION])
-    assert written == {name: {source_type} for name, (_, source_type) in declared.items()}
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "make_claim":
+            kw = {k.arg: k.value for k in node.keywords}
+            if name := _rule_constant(kw.get("rule_id")):
+                written.setdefault(name, set()).add(ast.unparse(kw["source_type"]))
+    return written
+
+
+def test_the_index_producer_rules_declare_what_the_producer_writes():
+    import classify_index_files as cif
+
+    assert code_rules.INDEX_BY_EXTENSION.sets == (cif.DATA_TYPE,)
+    declared = _declared([code_rules.INDEX_BY_EXTENSION])
+    assert _make_claim_sites(code_rules.INDEX_PRODUCER) == {
+        name: {source_type} for name, (_, source_type) in declared.items()
+    }
+
+
+def test_the_inheritance_rule_declares_what_reconcile_writes():
+    """``inherited_from_parent`` is reconcile's since #571: it may set any dimension an activity passes."""
+    assert code_rules.INHERITED_FROM_PARENT.sets == activities.carried()
+    assert "data_type" not in code_rules.INHERITED_FROM_PARENT.sets
+    declared = _declared([code_rules.INHERITED_FROM_PARENT])
+    assert _make_claim_sites(code_rules.RECONCILE_INHERIT) == {
+        name: {source_type} for name, (_, source_type) in declared.items()
+    }

@@ -755,7 +755,10 @@ classes:
       resolution marker (carries marker, no rule_id) recording that no claim was
       made or that claims conflicted.
 
-      A claim from one of our rules or content classifiers carries rule_id + tier.
+      A claim from one of our rules or content classifiers carries rule_id + tier,
+      except an inherited one (`derivation_inheritance`, made at reconcile, contract
+      4.9, #571), which carries no tier — it never reaches the rule ladder — and names
+      the step it crossed in `activity`, `parent_role` and `parent_keys`.
       A claim from an external source (issue #392) carries `source` as well as a
       rule_id — the mapping entry it fired, not a rule of ours — and no tier,
       because an import does not compete on the rule ladder (#401). It carries the
@@ -776,11 +779,18 @@ classes:
       - raw_value
       - join_key
       - match_exact
+      - activity
+      - parent_role
+      - parent_keys
     slot_usage:
       # A rule's claimed value / status for this dimension, and the rule tier it
       # fired at. status is optional on evidence (only sentinel-bearing evidence
       # carries it), unlike the required status on a Classification entry.
       status:
+        required: false
+      # On an inherited claim only (contract 4.9, #571): the step it crossed, the role
+      # its parents play in it, and their record keys. Required on a step, not here.
+      activity:
         required: false
 
   GeneratedBy:
@@ -1106,6 +1116,15 @@ slots:
   parent_kind:
     description: The kind of file the parent is.
     range: parent_kind_enum
+  parent_role:
+    description: >-
+      On an inherited claim (contract 4.9, #571): the input role of the step whose parents
+      gave the claim, a role its `activity` declares in `rules/activities.yaml`.
+  parent_keys:
+    description: >-
+      On an inherited claim (contract 4.9, #571): the record keys of the parents, in that
+      role, whose settled answers gave the claim — each one's record in the same run.
+    multivalued: true
 
 # =============================================================================
 # ENUMS  (the controlled vocabulary — the canonical source of truth)
@@ -1531,6 +1550,11 @@ enums:
         description: An external catalog declared the value through a translation row.
       filled_by_inference:
         description: No source declared the value; inference supplied it.
+      inherited:
+        description: >-
+          No source declared the value and inference did not either: it was inherited
+          from the file's parents across its `generated_by` (contract 4.9, #571), whose
+          record keys the inherited claim names.
       conflict_inference:
         description: Inference's own rules disagreed.
       conflict_sources:
@@ -1751,9 +1775,10 @@ enums:
   claim_state_enum:
     description: >-
       Why a claim that consulted a source produced no vocabulary value (issue
-      #392). Each state was observed in the spike over three real producers on
-      `AnVIL_HPRC_R2`. None of them declares a value, so none competes in
-      resolution. `mapped` is not a member: a claim that mapped carries a `value`,
+      #392). The first three (`unmapped`, `no_vocabulary_term`, `declined`) were
+      observed in the spike over three real producers on `AnVIL_HPRC_R2`; none of
+      them declares a value, so none competes in resolution. `mixed` was added for
+      inheritance (contract 4.9, #571): an inherited claim's only, and reconcile weighs it. `mapped` is not a member: a claim that mapped carries a `value`,
       and `not_applicable` / `not_classified` remain statuses, unchanged.
     permissible_values:
       unmapped:
@@ -1772,6 +1797,13 @@ enums:
           triple, not of a value: `alignments_v2.location` points at pangenome
           graphs and at a VCF of variants under one column, so neither a
           value-level mapping nor a finer key can fix it.
+      mixed:
+        description: >-
+          An inherited claim only (contract 4.9, #571): the parents in one input role
+          gave different answers, or one of them is itself mixed. It is the one state
+          that takes part in resolution: alone it leaves the slot `not_classified`,
+          and against a value or `not_applicable` from any other declaration it is a
+          conflict.
 
   join_key_enum:
     description: >-

@@ -326,17 +326,18 @@ concern where it matters: the dimensions that describe the file itself (`data_ty
 
 *Rejected: the child's own evidence wins a contradiction.* It would settle a disagreement nobody reviewed.
 
-**Today's case.** The index producer's inheritance (`classify_index_files.INHERITED_FIELDS`) is the
-`IndexActivity` row of the table (read from `rules/activities.yaml` since #580), built the way the contract's "What is not true yet" entry on 1.1 describes.
-How that path moves under 4.9 is #413's. That producer used to write the edge decision 2 rejects, an
-index edge naming no parent on an index file it took no parent for (`declined_record`, #438, ~15K
-files); #356 removed it, and `anvil_activity`, which names most of those parents, gives them theirs (#577).
+**How it was built (#571).** Reconcile carries every row of the table across each file's step
+(`reconcile_inherit`), and the index producer's own copy of its parent's answer, built outside
+`make_claim`, is gone (#413): it writes the index's kind and the `IndexActivity` edge and nothing
+more. That producer used to write the edge decision 2 rejects, an index edge naming no parent on an
+index file it took no parent for (`declined_record`, #438, ~15K files); #356 removed it, and
+`anvil_activity`, which names most of those parents, gives them theirs (#577).
 
-The `checksum_file` rule contradicts the `ChecksumActivity` row: it stamps all five lineage dimensions
-`not_applicable`, which 4.6 would make a conflict against every inherited value (~14K `.md5` files). A
-checksum is a companion like an index, not a special case, so when 4.9 is built that rule keeps only
-`data_type: checksum` and drops the five statuses — the correction #437 made to the index rule. It also
-shrinks what the engine's same-tier `not_applicable` exception protects (#511).
+The `checksum_file` rule contradicted the `ChecksumActivity` row: it stamped all five lineage
+dimensions `not_applicable`, which 4.6 would have made a conflict against every inherited value (~14K
+`.md5` files). A checksum is a companion like an index, not a special case, so #571 left that rule
+only `data_type: checksum` — the correction #437 made to the index rule. It also shrinks what the
+engine's same-tier `not_applicable` exception protects (#511).
 
 ## What this supersedes
 
@@ -410,17 +411,18 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   `ActivityDeclarations`; `meta_disco.activities` reads it through the generated pydantic model, so it is
   checked as it loads, and its readers trust it; `INHERITED_FIELDS` and the index producer's code rule read the
   `IndexActivity` entry.
-- An inherited claim (decision 8) carries `inherited_from`: a list, one entry per contributing parent, of
-  `{activity, parent_key, value | status | state}` — so the parents a declaration is credited to, and the
-  values a mixed one stands for, are on the record rather than re-joined from the parents'.
-- Mixed is a new `claim_state_enum` value, `mixed`: a claim with no value and no status, and the one state
-  that takes part in resolution, as 4.9 says. Alone or beside another mixed declaration it leaves the slot
-  `not_classified`; against a value or `not_applicable` from any other declaration — the child's own, or
-  another activity's inherited one — the slot is `conflict`.
-- `credited_to_enum` and `reconcile.SLOT_CATEGORIES` gain a category for a slot filled by inheritance,
-  and the conflict kinds one for a child against its parent, so the reconcile report counts neither as a
-  source (contract 6.10). The report also needs a way to list a mixed dimension with its parents' values,
-  and an edge conflict with the parents each source named.
+- **Done (#571):** an inherited claim (decision 8) carries the step it crossed — `activity`, the input
+  `parent_role` and the parents' record keys, `parent_keys` — so the parents a declaration is credited to
+  are on the record. The values a mixed one stands for are not: they are on the parents' own records,
+  which those keys join to.
+- **Done (#571):** mixed is a `claim_state_enum` value, `mixed`: a claim with no value and no status, and
+  the one state that takes part in resolution, as 4.9 says. Alone or beside another mixed declaration it
+  leaves the slot `not_classified`; against a value or `not_applicable` from any other declaration — the
+  child's own, or another role's inherited one — the slot is `conflict`.
+- **Done (#571):** `credited_to_enum` and `reconcile.SLOT_CATEGORIES` gain `inherited`, so the report counts
+  an inherited fill apart from every source (contract 6.10). A child against its parent takes the existing
+  conflict kinds, and the conflict listing names `derivation_inheritance` with what it declared, `mixed`
+  included; the report's `inheritance` block counts what each role gave. Edge conflicts are listed by #577.
 - An `edges.jsonl` row is its own class, not a `GeneratedBy`: its child is a record key or an
   `EntityIdentifier`, because a `SampleCollectionActivity`'s child, a sample, and `isBiologicalChildOf`'s, a donor, have no record to sit on; its parent carries the
   same fields as an `ActivityInput`'s — `parent_key`, `parent_file`, `parent_ref`, or `parent_id` — and its
@@ -439,11 +441,12 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   parents' final answers, looked up recursively to any depth (a `.bai`, then its BAM, then the BAM's
   FASTQs, which have none), each remembered once worked out and a cycle refused; then the files are
   written in their current order. Deciding `internal` for an evidence-stated parent needs each dataset's
-  record keys and names; the pass reconcile's join already makes over the records can collect them. #571's
-  to build.
-- **A parent in `conflict`.** 4.4–4.5 reconcile declarations, and a conflict declares no value. Whether a
-  parent's conflict reaches the child as a conflict (what the index producer does today) or as nothing is
-  #413's to decide.
+  record keys and names; the pass reconcile's join already makes over the records can collect them. Built
+  that way by #571 (`reconcile_inherit`): a first pass keeps each record's settled answer and each child's
+  step, parents settle before children, and a second pass writes every file in its order.
+- **A parent in `conflict`.** 4.4–4.5 reconcile declarations, and a conflict declares no value. Decided by
+  #571, which folded in #413: it passes nothing, so the conflict is listed on the parent and not repeated
+  on its companions (contract 4.9).
 - **Sources that name different parent sets for a role that takes many.** A caller header naming `{A}` and a
   submitter table naming `{B}` pool to `{A, B}`, which could hide a wrong edge; but sources are often
   partial (a header lists a subset), so differing sets are not a conflict. The consistency check (#362)

@@ -3,7 +3,7 @@
 A source (AnVIL, HPRC, …) maps its native metadata into the meta-disco record shape and
 calls :func:`run_all_classifications`; there is no per-source classifier. This module holds
 the orchestration — Phase 1 (the nine producers that route on their own), Phase 2
-(index inheritance), Phase 3 (the remaining catch-all). Which producers those are, and
+(index files and their parent edges), Phase 3 (the remaining catch-all). Which producers those are, and
 how each is invoked, is declared in :mod:`meta_disco.producers`. ``scripts/rerun_all_classifications.py``
 (AnVIL) and ``scripts/classify_hprc_files.py`` (HPRC) are thin CLI wrappers over it, so the
 shared path lives in the package alongside the rest of the pipeline rather than being
@@ -169,8 +169,8 @@ def run_all_classifications(
     HPRC, …) maps its native metadata into the meta-disco record shape and calls this;
     there is no per-source classifier. It writes a timestamped run dir under
     ``output_dir_base`` and caches header evidence under ``evidence_base``, running
-    Phase 1 (header types + non-header scripts), Phase 2 (index inheritance), and
-    Phase 3 (the remaining catch-all). ``workers`` sets the header-fetch concurrency
+    Phase 1 (header types + non-header scripts), Phase 2 (index files and their parent
+    edges), and Phase 3 (the remaining catch-all). ``workers`` sets the header-fetch concurrency
     (``None`` = the pipeline default). Returns True only if every phase succeeded and
     no value of the source's record key repeats across the completed run
     (:func:`_check_one_row_per_file`, which passes rows that carry none rather than
@@ -235,18 +235,15 @@ def run_all_classifications(
 
     _report_exclusions(output_dir)
 
-    # Phase 2: Index classification (inherits from parent file classifications)
+    # Phase 2: index files and the edge to each one's parent. It reads only the input:
+    # what an index takes from its parent is carried at reconcile (#571).
     index_producer = PRODUCERS["index"]
     index_output = output_dir / index_producer.output
     if not success:
         print("\nPhase 2: SKIPPED — one or more Phase 1 classifiers failed")
     else:
         print("\nPhase 2: Classifying index files...")
-        _, ok = run_script(
-            index_producer.script,
-            index_output,
-            ["--metadata", str(metadata), "--classifications", *[str(p) for p in all_classification_files]],
-        )
+        _, ok = run_script(index_producer.script, index_output, ["--metadata", str(metadata)])
         success &= ok
         all_classification_files.append(index_output)
 

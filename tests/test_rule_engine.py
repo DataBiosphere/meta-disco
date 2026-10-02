@@ -800,7 +800,7 @@ class TestDerivativeFiles:
             ("sample.bam.bai", "index", NOT_CLASSIFIED),
             ("sample.cram.crai", "index", NOT_CLASSIFIED),
             ("sample.vcf.gz.tbi", "index", NOT_CLASSIFIED),
-            ("HG02558.final.cram.md5", "checksum", NOT_APPLICABLE),
+            ("HG02558.final.cram.md5", "checksum", NOT_CLASSIFIED),
             ("pipeline.log", "log", NOT_APPLICABLE),
         ],
     )
@@ -984,7 +984,7 @@ class TestIntegration:
             ),
             pytest.param("NA19189.chr2.hc.vcf.gz", {"data_modality": "genomic"}, id="VCF with chromosome in the name"),
             pytest.param("GTEX-18A6Q-1126.svs", {"data_modality": "imaging.microscopy"}, id="GTEx histology image"),
-            pytest.param("HG02558.final.cram.md5", {"data_modality": NOT_APPLICABLE}, id="CRAM MD5 is not_applicable"),
+            pytest.param("HG02558.final.cram.md5", {"data_modality": NOT_CLASSIFIED}, id="CRAM MD5 is its CRAM's"),
             pytest.param("sample.xyz", {"data_modality": NOT_CLASSIFIED}, id="unknown extension is not classified"),
         ],
     )
@@ -1561,7 +1561,7 @@ class TestSentinelValues:
         `not_applicable`, on the reasoning — in its own docstring — that "reference IS
         applicable to indexes, it's determined by the parent file's alignment". That is
         equally true of modality, platform and assay: the parent determines all of them,
-        and the matched path in `classify_index_files` inherits all of them. #437 made the
+        and reconcile carries all of them across the index's edge (#571). #437 made the
         rule treat them alike.
         """
         result = engine.classify_extended(FileInfo.from_filename("sample.bam.bai"))

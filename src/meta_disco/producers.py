@@ -50,9 +50,9 @@ class Producer:
     ``extensions`` is what this producer claims; ``()`` means it claims nothing by
     extension — only the catch-all is declared that way.
 
-    ``phase`` is when it runs: 1 in the parallel pool, 2 for the index producer, which
-    reads Phase 1's output to inherit from a parent, 3 for the catch-all, which must see
-    every earlier output to know what is left.
+    ``phase`` is when it runs: 1 in the parallel pool, 2 for the index producer, alone after
+    the pool (it reads only the input since #571), 3 for the catch-all, which must see every
+    earlier output to know what is left.
 
     ``fetches_headers`` marks the producers that read file content, and so are the only
     ones handed ``--evidence-base`` and ``--workers``.

@@ -50,3 +50,11 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "network" in item.keywords:
                 item.add_marker(skip_network)
+
+
+@pytest.fixture
+def roots(tmp_path: Path):
+    """The slot evidence root and the lineage root beside it (``lineage_fixtures.lineage_roots``)."""
+    from tests.lineage_fixtures import lineage_roots
+
+    return lineage_roots(tmp_path)

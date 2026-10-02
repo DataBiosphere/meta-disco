@@ -221,28 +221,14 @@
       {
         "classifications": {
           "assay_type": {
-            "evidence": [
-              {
-                "reason": "Parent file sample.flnc.bam had no value for assay_type",
-                "rule_id": "inherited_from_parent",
-                "source_type": "derivation_inheritance",
-                "status": "not_classified"
-              }
-            ],
+            "evidence": [],
             "status": "not_classified",
             "value": null
           },
           "data_modality": {
-            "evidence": [
-              {
-                "reason": "Inherited from parent file: sample.flnc.bam",
-                "rule_id": "inherited_from_parent",
-                "source_type": "derivation_inheritance",
-                "value": "transcriptomic"
-              }
-            ],
-            "status": "classified",
-            "value": "transcriptomic"
+            "evidence": [],
+            "status": "not_classified",
+            "value": null
           },
           "data_type": {
             "evidence": [
@@ -250,6 +236,7 @@
                 "reason": ".bai identifies an index file",
                 "rule_id": "index_by_extension",
                 "source_type": "filename_rule",
+                "tier": 1,
                 "value": "index"
               }
             ],
@@ -257,39 +244,18 @@
             "value": "index"
           },
           "instrument_model": {
-            "evidence": [
-              {
-                "reason": "Parent file sample.flnc.bam had no value for instrument_model",
-                "rule_id": "inherited_from_parent",
-                "source_type": "derivation_inheritance",
-                "status": "not_classified"
-              }
-            ],
+            "evidence": [],
             "status": "not_classified",
             "value": null
           },
           "platform": {
-            "evidence": [
-              {
-                "reason": "Parent file sample.flnc.bam had no value for platform",
-                "rule_id": "inherited_from_parent",
-                "source_type": "derivation_inheritance",
-                "status": "not_classified"
-              }
-            ],
+            "evidence": [],
             "status": "not_classified",
             "value": null
           },
           "reference_assembly": {
-            "evidence": [
-              {
-                "reason": "Parent file sample.flnc.bam marks reference_assembly not applicable",
-                "rule_id": "inherited_from_parent",
-                "source_type": "derivation_inheritance",
-                "status": "not_applicable"
-              }
-            ],
-            "status": "not_applicable",
+            "evidence": [],
+            "status": "not_classified",
             "value": null
           }
         },
@@ -331,9 +297,7 @@
             "evidence": [
               {
                 "reason": "No parent to inherit assay_type from: no file in this dataset carries a candidate parent name, matched case-insensitively",
-                "rule_id": "no_matching_parent_in_dataset",
-                "source_type": "derivation_inheritance",
-                "status": "not_classified"
+                "rule_id": "no_matching_parent_in_dataset"
               }
             ],
             "status": "not_classified",
@@ -343,9 +307,7 @@
             "evidence": [
               {
                 "reason": "No parent to inherit data_modality from: no file in this dataset carries a candidate parent name, matched case-insensitively",
-                "rule_id": "no_matching_parent_in_dataset",
-                "source_type": "derivation_inheritance",
-                "status": "not_classified"
+                "rule_id": "no_matching_parent_in_dataset"
               }
             ],
             "status": "not_classified",
@@ -357,6 +319,7 @@
                 "reason": ".bai identifies an index file",
                 "rule_id": "index_by_extension",
                 "source_type": "filename_rule",
+                "tier": 1,
                 "value": "index"
               }
             ],
@@ -367,9 +330,7 @@
             "evidence": [
               {
                 "reason": "No parent to inherit instrument_model from: no file in this dataset carries a candidate parent name, matched case-insensitively",
-                "rule_id": "no_matching_parent_in_dataset",
-                "source_type": "derivation_inheritance",
-                "status": "not_classified"
+                "rule_id": "no_matching_parent_in_dataset"
               }
             ],
             "status": "not_classified",
@@ -379,9 +340,7 @@
             "evidence": [
               {
                 "reason": "No parent to inherit platform from: no file in this dataset carries a candidate parent name, matched case-insensitively",
-                "rule_id": "no_matching_parent_in_dataset",
-                "source_type": "derivation_inheritance",
-                "status": "not_classified"
+                "rule_id": "no_matching_parent_in_dataset"
               }
             ],
             "status": "not_classified",
@@ -391,9 +350,7 @@
             "evidence": [
               {
                 "reason": "No parent to inherit reference_assembly from: no file in this dataset carries a candidate parent name, matched case-insensitively",
-                "rule_id": "no_matching_parent_in_dataset",
-                "source_type": "derivation_inheritance",
-                "status": "not_classified"
+                "rule_id": "no_matching_parent_in_dataset"
               }
             ],
             "status": "not_classified",
@@ -417,9 +374,7 @@
       "details": {
         "ambiguous_parent": 0,
         "matched_to_parent": 1,
-        "unmatched": 1,
-        "with_data_modality": 1,
-        "with_reference_assembly": 0
+        "unmatched": 1
       },
       "dropped": 0,
       "errored": 0,
@@ -534,33 +489,29 @@
           "assay_type": {
             "evidence": [
               {
-                "reason": "Checksum file \u2014 a checksum, and no data of its own",
-                "rule_id": "checksum_file",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 2
+                "marker": "not_classified",
+                "reason": "No rule determined a value for assay_type",
+                "status": "not_classified"
               }
             ],
-            "status": "not_applicable",
+            "status": "not_classified",
             "value": null
           },
           "data_modality": {
             "evidence": [
               {
-                "reason": "Checksum file \u2014 a checksum, and no data of its own",
-                "rule_id": "checksum_file",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 2
+                "marker": "not_classified",
+                "reason": "No rule determined a value for data_modality",
+                "status": "not_classified"
               }
             ],
-            "status": "not_applicable",
+            "status": "not_classified",
             "value": null
           },
           "data_type": {
             "evidence": [
               {
-                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "reason": "Checksum file \u2014 a checksum; what it describes is the checked file's to say",
                 "rule_id": "checksum_file",
                 "source_type": "filename_rule",
                 "tier": 2,
@@ -573,40 +524,34 @@
           "instrument_model": {
             "evidence": [
               {
-                "reason": "Checksum file \u2014 a checksum, and no data of its own",
-                "rule_id": "checksum_file",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 2
+                "marker": "not_classified",
+                "reason": "No rule determined a value for instrument_model",
+                "status": "not_classified"
               }
             ],
-            "status": "not_applicable",
+            "status": "not_classified",
             "value": null
           },
           "platform": {
             "evidence": [
               {
-                "reason": "Checksum file \u2014 a checksum, and no data of its own",
-                "rule_id": "checksum_file",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 2
+                "marker": "not_classified",
+                "reason": "No rule determined a value for platform",
+                "status": "not_classified"
               }
             ],
-            "status": "not_applicable",
+            "status": "not_classified",
             "value": null
           },
           "reference_assembly": {
             "evidence": [
               {
-                "reason": "Checksum file \u2014 a checksum, and no data of its own",
-                "rule_id": "checksum_file",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 2
+                "marker": "not_classified",
+                "reason": "No rule determined a value for reference_assembly",
+                "status": "not_classified"
               }
             ],
-            "status": "not_applicable",
+            "status": "not_classified",
             "value": null
           }
         },

@@ -196,17 +196,13 @@ rules:
   # and `platform` explicitly to be reconsidered. This is that reconsideration: the
   # dimensions a parent supplies all behave alike now, and none is stamped.
   #
-  # They *do* apply to an index file. The matched path in `classify_index_files`
-  # proves it by inheriting `genomic` / `CHM13` / `ILLUMINA` / `WGS` from the parent;
+  # They *do* apply to an index file. Reconcile shows it by carrying `genomic` /
+  # `CHM13` / `ILLUMINA` / `WGS` across the index's edge from its parent (#571);
   # a `.bai` that has a reference assembly but no data modality was never coherent.
   # A rule that cannot see the parent cannot determine them, and `not_applicable`
   # would assert they cannot apply — a confident wrong answer, which coverage counts
   # as classified. Leaving them unclaimed is what `declined_record` does, for the same
   # reason, so the two agree.
-  #
-  # Contrast `checksum_file` below, which *does* claim `reference_assembly:
-  # not_applicable`: a checksum is about bytes and has no coordinate space. An index
-  # has one — it indexes coordinates into that assembly.
   #
   # The two claimants never see the same file — `classify_run` passes the index
   # output into the catch-all's skip set — so this is not a second opinion. It answers
@@ -224,10 +220,16 @@ rules:
     rationale: "Index file — an index; what it indexes is the parent's to say"
 
   # ---------------------------------------------------------------------------
-  # Checksum files — `data_type` says what the file is, the rest do not apply.
+  # Checksum files — `data_type` says what the file is; the rest are its file's.
   # Same correction as the index rule above (#437): `checksum` is a term in
   # `data_type_enum`, and stamping the dimension `not_applicable` asserted the file
   # has no kind when the vocabulary has a word for its kind.
+  #
+  # Until #571 this rule also stamped the other five `not_applicable`. A checksum is a
+  # companion of one file (ADR-0002 decision 8), and `ChecksumActivity` passes all five
+  # from the file it checks, so at reconcile that `not_applicable` would conflict with
+  # the parent's value (contract 4.6) on every checksum with a parent. They are left to
+  # the parent, as an index's are.
   # ---------------------------------------------------------------------------
   - id: checksum_file
     tier: 2
@@ -236,13 +238,7 @@ rules:
       extensions: [".md5"]
     then:
       data_type: checksum
-      status:
-        data_modality: not_applicable
-        reference_assembly: not_applicable
-        assay_type: not_applicable
-        platform: not_applicable
-        instrument_model: not_applicable
-    rationale: "Checksum file — a checksum, and no data of its own"
+    rationale: "Checksum file — a checksum; what it describes is the checked file's to say"
 
   # ---------------------------------------------------------------------------
   # Log files - not applicable

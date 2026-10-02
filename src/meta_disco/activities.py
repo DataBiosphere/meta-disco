@@ -2,8 +2,9 @@
 
 Its shape is the schema's ``ActivityDeclarations``, enforced by the generated model.
 The checks it cannot state are here: every term declared once, roles unique within a
-term, ``Activity`` passing nothing, and no role that can only be an identifier passing
-anything. Readers trust the result.
+term, ``Activity`` passing nothing, no role that can only be an identifier passing
+anything, and no role passing ``data_type``, which describes the file itself (contract
+4.9). Readers trust the result.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from .schema.classification_model import ActivityDeclaration, ActivityDeclaratio
 from .schema_vocab import activity_values
 from .slot_map import unique_key_loader
 
+DATA_TYPE = "data_type"
 UNKNOWN = "Activity"
 INDEXING = "IndexActivity"
 CHECKSUM = "ChecksumActivity"
@@ -48,6 +50,8 @@ def load_activities(text: str | None = None) -> dict[str, ActivityDeclaration]:
         for i in declaration.inputs:
             if i.passes and "file" not in {str(f) for f in i.form}:
                 raise ValueError(f"activity {term!r}: role {i.role!r} is an identifier, which has nothing to pass")
+            if DATA_TYPE in _role_slots(i):
+                raise ValueError(f"activity {term!r}: role {i.role!r} passes {DATA_TYPE}, which is never carried")
         declared[term] = declaration
     missing = sorted(activity_values() - set(declared))
     if missing:
@@ -58,9 +62,17 @@ def load_activities(text: str | None = None) -> dict[str, ActivityDeclaration]:
     return declared
 
 
+def _role_slots(role) -> set[str]:
+    """The dimensions one input role declares it passes."""
+    return {str(slot) for slot in role.passes or ()}
+
+
+def _ordered(slots: set[str]) -> tuple[str, ...]:
+    return tuple(slot for slot in CLASSIFICATION_FIELDS if slot in slots)
+
+
 def _passes(declaration: ActivityDeclaration) -> tuple[str, ...]:
-    passed = {str(slot) for i in declaration.inputs for slot in i.passes or ()}
-    return tuple(slot for slot in CLASSIFICATION_FIELDS if slot in passed)
+    return _ordered({slot for i in declaration.inputs for slot in _role_slots(i)})
 
 
 @cache
@@ -72,6 +84,20 @@ def declarations() -> dict[str, ActivityDeclaration]:
 def passes(term: str) -> tuple[str, ...]:
     """The dimensions an output of ``term`` takes from any of its inputs, in ``CLASSIFICATION_FIELDS`` order."""
     return _passes(declarations()[term])
+
+
+@cache
+def role_passes(term: str) -> dict[str, tuple[str, ...]]:
+    """Per input role of ``term`` that passes anything, the dimensions it passes, in ``CLASSIFICATION_FIELDS`` order.
+
+    Cached, since reconcile asks once per child; callers must not change the dict.
+    """
+    return {i.role: _ordered(_role_slots(i)) for i in declarations()[term].inputs if i.passes}
+
+
+def carried() -> tuple[str, ...]:
+    """Every dimension some activity passes from an input, in ``CLASSIFICATION_FIELDS`` order (``data_type`` never is)."""
+    return _ordered({slot for term in declarations() for slot in passes(term)})
 
 
 def agreed(terms: Iterable[str]) -> str | None:

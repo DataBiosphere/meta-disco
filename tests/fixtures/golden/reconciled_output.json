@@ -1033,10 +1033,15 @@
             "credited_to": "not_classified",
             "evidence": [
               {
-                "reason": "Parent file sample.flnc.bam had no value for assay_type",
+                "activity": "IndexActivity",
+                "claim_state": "mixed",
+                "parent_keys": [
+                  "g-file-b"
+                ],
+                "parent_role": "indexed",
+                "reason": "Inherited across IndexActivity: its indexed input(s) disagree",
                 "rule_id": "inherited_from_parent",
-                "source_type": "derivation_inheritance",
-                "status": "not_classified"
+                "source_type": "derivation_inheritance"
               }
             ],
             "inferred": {
@@ -1048,22 +1053,27 @@
             "value": null
           },
           "data_modality": {
-            "credited_to": "filled_by_inference",
+            "credited_to": "inherited",
             "evidence": [
               {
-                "reason": "Inherited from parent file: sample.flnc.bam",
+                "activity": "IndexActivity",
+                "parent_keys": [
+                  "g-file-b"
+                ],
+                "parent_role": "indexed",
+                "reason": "Inherited across IndexActivity: its indexed input(s) say genomic",
                 "rule_id": "inherited_from_parent",
                 "source_type": "derivation_inheritance",
-                "value": "transcriptomic"
+                "value": "genomic"
               }
             ],
             "inferred": {
-              "status": "classified",
-              "value": "transcriptomic"
+              "status": "not_classified",
+              "value": null
             },
             "status": "classified",
             "use": "meta_disco",
-            "value": "transcriptomic"
+            "value": "genomic"
           },
           "data_type": {
             "credited_to": "filled_by_inference",
@@ -1072,6 +1082,7 @@
                 "reason": ".bai identifies an index file",
                 "rule_id": "index_by_extension",
                 "source_type": "filename_rule",
+                "tier": 1,
                 "value": "index"
               }
             ],
@@ -1085,14 +1096,7 @@
           },
           "instrument_model": {
             "credited_to": "not_classified",
-            "evidence": [
-              {
-                "reason": "Parent file sample.flnc.bam had no value for instrument_model",
-                "rule_id": "inherited_from_parent",
-                "source_type": "derivation_inheritance",
-                "status": "not_classified"
-              }
-            ],
+            "evidence": [],
             "inferred": {
               "status": "not_classified",
               "value": null
@@ -1104,12 +1108,6 @@
           "platform": {
             "credited_to": "filled_by_submitter_harmonized",
             "evidence": [
-              {
-                "reason": "Parent file sample.flnc.bam had no value for platform",
-                "rule_id": "inherited_from_parent",
-                "source_type": "derivation_inheritance",
-                "status": "not_classified"
-              },
               {
                 "join_key": "drs_uri",
                 "match_exact": true,
@@ -1134,22 +1132,31 @@
             "value": "PACBIO"
           },
           "reference_assembly": {
-            "credited_to": "not_applicable",
+            "build": {
+              "base": "GRCh38",
+              "version": "p14"
+            },
+            "credited_to": "inherited",
             "evidence": [
               {
-                "reason": "Parent file sample.flnc.bam marks reference_assembly not applicable",
+                "activity": "IndexActivity",
+                "parent_keys": [
+                  "g-file-b"
+                ],
+                "parent_role": "indexed",
+                "reason": "Inherited across IndexActivity: its indexed input(s) say GRCh38",
                 "rule_id": "inherited_from_parent",
                 "source_type": "derivation_inheritance",
-                "status": "not_applicable"
+                "value": "GRCh38"
               }
             ],
             "inferred": {
-              "status": "not_applicable",
+              "status": "not_classified",
               "value": null
             },
-            "status": "not_applicable",
+            "status": "classified",
             "use": "meta_disco",
-            "value": null
+            "value": "GRCh38"
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -1191,9 +1198,7 @@
             "evidence": [
               {
                 "reason": "No parent to inherit assay_type from: no file in this dataset carries a candidate parent name, matched case-insensitively",
-                "rule_id": "no_matching_parent_in_dataset",
-                "source_type": "derivation_inheritance",
-                "status": "not_classified"
+                "rule_id": "no_matching_parent_in_dataset"
               }
             ],
             "inferred": {
@@ -1209,9 +1214,7 @@
             "evidence": [
               {
                 "reason": "No parent to inherit data_modality from: no file in this dataset carries a candidate parent name, matched case-insensitively",
-                "rule_id": "no_matching_parent_in_dataset",
-                "source_type": "derivation_inheritance",
-                "status": "not_classified"
+                "rule_id": "no_matching_parent_in_dataset"
               }
             ],
             "inferred": {
@@ -1229,6 +1232,7 @@
                 "reason": ".bai identifies an index file",
                 "rule_id": "index_by_extension",
                 "source_type": "filename_rule",
+                "tier": 1,
                 "value": "index"
               }
             ],
@@ -1245,9 +1249,7 @@
             "evidence": [
               {
                 "reason": "No parent to inherit instrument_model from: no file in this dataset carries a candidate parent name, matched case-insensitively",
-                "rule_id": "no_matching_parent_in_dataset",
-                "source_type": "derivation_inheritance",
-                "status": "not_classified"
+                "rule_id": "no_matching_parent_in_dataset"
               }
             ],
             "inferred": {
@@ -1263,9 +1265,7 @@
             "evidence": [
               {
                 "reason": "No parent to inherit platform from: no file in this dataset carries a candidate parent name, matched case-insensitively",
-                "rule_id": "no_matching_parent_in_dataset",
-                "source_type": "derivation_inheritance",
-                "status": "not_classified"
+                "rule_id": "no_matching_parent_in_dataset"
               }
             ],
             "inferred": {
@@ -1281,9 +1281,7 @@
             "evidence": [
               {
                 "reason": "No parent to inherit reference_assembly from: no file in this dataset carries a candidate parent name, matched case-insensitively",
-                "rule_id": "no_matching_parent_in_dataset",
-                "source_type": "derivation_inheritance",
-                "status": "not_classified"
+                "rule_id": "no_matching_parent_in_dataset"
               },
               {
                 "claim_state": "unmapped",
@@ -1454,48 +1452,66 @@
       {
         "classifications": {
           "assay_type": {
-            "credited_to": "not_applicable",
+            "credited_to": "not_classified",
             "evidence": [
               {
-                "reason": "Checksum file \u2014 a checksum, and no data of its own",
-                "rule_id": "checksum_file",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 2
+                "marker": "not_classified",
+                "reason": "No rule determined a value for assay_type",
+                "status": "not_classified"
+              },
+              {
+                "activity": "ChecksumActivity",
+                "claim_state": "mixed",
+                "parent_keys": [
+                  "g-file-5"
+                ],
+                "parent_role": "checked",
+                "reason": "Inherited across ChecksumActivity: its checked input(s) disagree",
+                "rule_id": "inherited_from_parent",
+                "source_type": "derivation_inheritance"
               }
             ],
             "inferred": {
-              "status": "not_applicable",
+              "status": "not_classified",
               "value": null
             },
-            "status": "not_applicable",
-            "use": "meta_disco",
+            "status": "not_classified",
+            "use": "published",
             "value": null
           },
           "data_modality": {
-            "credited_to": "not_applicable",
+            "credited_to": "inherited",
             "evidence": [
               {
-                "reason": "Checksum file \u2014 a checksum, and no data of its own",
-                "rule_id": "checksum_file",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 2
+                "marker": "not_classified",
+                "reason": "No rule determined a value for data_modality",
+                "status": "not_classified"
+              },
+              {
+                "activity": "ChecksumActivity",
+                "parent_keys": [
+                  "g-file-5"
+                ],
+                "parent_role": "checked",
+                "reason": "Inherited across ChecksumActivity: its checked input(s) say genomic",
+                "rule_id": "inherited_from_parent",
+                "source_type": "derivation_inheritance",
+                "value": "genomic"
               }
             ],
             "inferred": {
-              "status": "not_applicable",
+              "status": "not_classified",
               "value": null
             },
-            "status": "not_applicable",
+            "status": "classified",
             "use": "meta_disco",
-            "value": null
+            "value": "genomic"
           },
           "data_type": {
             "credited_to": "filled_by_inference",
             "evidence": [
               {
-                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "reason": "Checksum file \u2014 a checksum; what it describes is the checked file's to say",
                 "rule_id": "checksum_file",
                 "source_type": "filename_rule",
                 "tier": 2,
@@ -1511,52 +1527,46 @@
             "value": "checksum"
           },
           "instrument_model": {
-            "credited_to": "not_applicable",
+            "credited_to": "not_classified",
             "evidence": [
               {
-                "reason": "Checksum file \u2014 a checksum, and no data of its own",
-                "rule_id": "checksum_file",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 2
+                "marker": "not_classified",
+                "reason": "No rule determined a value for instrument_model",
+                "status": "not_classified"
               }
             ],
             "inferred": {
-              "status": "not_applicable",
+              "status": "not_classified",
               "value": null
             },
-            "status": "not_applicable",
-            "use": "meta_disco",
+            "status": "not_classified",
+            "use": "published",
             "value": null
           },
           "platform": {
-            "credited_to": "not_applicable",
+            "credited_to": "not_classified",
             "evidence": [
               {
-                "reason": "Checksum file \u2014 a checksum, and no data of its own",
-                "rule_id": "checksum_file",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 2
+                "marker": "not_classified",
+                "reason": "No rule determined a value for platform",
+                "status": "not_classified"
               }
             ],
             "inferred": {
-              "status": "not_applicable",
+              "status": "not_classified",
               "value": null
             },
-            "status": "not_applicable",
-            "use": "meta_disco",
+            "status": "not_classified",
+            "use": "published",
             "value": null
           },
           "reference_assembly": {
-            "credited_to": "conflict_published",
+            "credited_to": "published_unreviewed",
             "evidence": [
               {
-                "reason": "Checksum file \u2014 a checksum, and no data of its own",
-                "rule_id": "checksum_file",
-                "source_type": "filename_rule",
-                "status": "not_applicable",
-                "tier": 2
+                "marker": "not_classified",
+                "reason": "No rule determined a value for reference_assembly",
+                "status": "not_classified"
               },
               {
                 "claim_state": "unmapped",
@@ -1573,10 +1583,10 @@
               }
             ],
             "inferred": {
-              "status": "not_applicable",
+              "status": "not_classified",
               "value": null
             },
-            "status": "conflict",
+            "status": "not_classified",
             "use": "published",
             "value": null
           }

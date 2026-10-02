@@ -8,7 +8,8 @@ and ``docs/reconcile-dashboard.html`` (from ``docs/reconcile-dashboard-template.
 Both show, for the whole run and per dataset: how each slot of each dimension settled
 (the slot categories of ``meta_disco.reconcile``), the conflict rate, the join per
 evidence file, and the conflicts listed by their distinct competing values (contract
-5.1), and per dimension the values each dataset holds (#545). With a previous reconciled
+5.1), per dimension the values each dataset holds (#545), the lineage (#577) and what
+each file's parents gave it across its step (#571). With a previous reconciled
 run, each category's change per dimension, and the counts of a value in a dataset that
 moved. The markdown groups a wide dimension's dotted terms under their top-level term and
 lists at most MARKDOWN_MOVED_CELLS moved counts; the dashboard shows every term and count.
@@ -38,6 +39,7 @@ from meta_disco.reconcile import (
     SOURCE_PRECEDENCE,
     fill_category,
 )
+from meta_disco.reconcile_inherit import OUTCOMES as INHERITANCE_COLUMNS
 from meta_disco.reconcile_lineage import OUTCOMES
 from meta_disco.summaries import embed_json, md_code, md_table
 
@@ -345,6 +347,23 @@ def lineage_rows(report: dict) -> dict | None:
     }
 
 
+def inheritance_rows(report: dict) -> list[dict] | None:
+    """What each role's parents gave a child, per dataset and dimension (#571); None for a report written before it.
+
+    One row per dataset and dimension that any step passes, its counts keyed by
+    ``reconcile_inherit.OUTCOMES``: *declared* (a value or ``not_applicable``), *mixed*
+    (the parents disagree), and the three reasons nothing passed.
+    """
+    inheritance = report.get("inheritance")
+    if inheritance is None:
+        return None
+    return [
+        {"dataset": dataset, "slot": slot, **{k: counts.get(k, 0) for k in INHERITANCE_COLUMNS}}
+        for dataset, per_slot in sorted(inheritance.items())
+        for slot, counts in sorted(per_slot.items(), key=lambda kv: CLASSIFICATION_FIELDS.index(kv[0]))
+    ]
+
+
 def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
     """The payload ``reconcile-dashboard-template.html`` reads, and the markdown renders: the tables precomputed.
 
@@ -391,6 +410,8 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
         "values_new_dimensions": new_dimensions(report, previous) if previous else [],
         "lineage": lineage_rows(report),
         "lineage_columns": list(LINEAGE_COLUMNS),
+        "inheritance": inheritance_rows(report),
+        "inheritance_columns": list(INHERITANCE_COLUMNS),
     }
 
 
@@ -543,7 +564,8 @@ def render_markdown(data: dict) -> str:
     ]
     if p["evidence_excluded"]:
         lines.append(
-            "- **Evidence excluded:** the reconciled artifact concludes what inference concluded (contract 6.6)."
+            "- **Evidence excluded:** the reconciled artifact concludes what inference concluded, plus what "
+            "inheritance carried across the steps inference wrote (contract 6.6)."
         )
     if data["skipped_evidence"]:
         lines.append(f"- **Evidence files skipped** (another system or catalog): {data['skipped_evidence']}")
@@ -672,6 +694,7 @@ def render_markdown(data: dict) -> str:
             "</details>",
         ]
     lines += ["", *_lineage_section(data["lineage"])]
+    lines += ["", *_inheritance_section(data["inheritance"])]
     lines += ["", "## Per dataset", ""]
     for scope in data["datasets"]:
         name = scope["name"]
@@ -786,6 +809,30 @@ def _lineage_section(lineage: dict | None) -> list[str]:
             ),
         ]
     return lines
+
+
+def _inheritance_section(rows: list[dict] | None) -> list[str]:
+    """What each file's parents gave it across its step (#571), per dataset and dimension."""
+    lines = [
+        "## Inheritance: what each file takes from its parents",
+        "",
+        "Across a file's `generated_by`, each input role passes the dimensions its activity declares "
+        "(`rules/activities.yaml`), and the parents in that role settle among themselves (contract 4.9). "
+        "*declared*: they agree, and give the file their value or `not_applicable`, weighed with its own "
+        "(a slot it fills is credited *inherited* above); *mixed*: they disagree, which leaves the slot "
+        "`not_classified`, or a conflict beside a value; *parent_conflict* / *parent_not_classified*: a parent "
+        "in conflict, or with no answer, so nothing passes; *parent_not_in_run*: a parent no record of the "
+        "run carries. Counted once per file, dimension and role.",
+        "",
+    ]
+    if rows is None:
+        return [*lines, "This run's report predates inheritance at reconcile (#571): run `make reconcile` again."]
+    if not rows:
+        return [*lines, "No file has a step that passes a dimension."]
+    return lines + md_table(
+        ["dataset", "dimension", *INHERITANCE_COLUMNS],
+        [[md_code(shown(r["dataset"])), md_code(r["slot"])] + [_n(r[k]) for k in INHERITANCE_COLUMNS] for r in rows],
+    )
 
 
 def render_html(data: dict, template: str) -> str:

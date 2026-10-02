@@ -387,24 +387,25 @@ class TestRuleEngineE2E:
             pytest.param("HG01928.paternal.f1_assembly.hap1.bed", {"data_modality": "genomic"}, id="bed assembly qc"),
             # A checksum file is a checksum — a term the vocabulary has (#437). The rule used
             # to stamp `data_type: not_applicable`, asserting the file has no kind while
-            # `data_type_enum` carried a word for its kind. The others still do not
-            # apply: a checksum is about a file, not about any data of its own.
+            # `data_type_enum` carried a word for its kind. The others are the checked
+            # file's, and `ChecksumActivity` carries them across at reconcile (#571), so the
+            # rule leaves them open as an index's are.
             pytest.param(
                 "sample.md5",
                 {
                     "data_type": "checksum",
-                    "data_modality": NOT_APPLICABLE,
-                    "reference_assembly": NOT_APPLICABLE,
-                    "assay_type": NOT_APPLICABLE,
-                    "platform": NOT_APPLICABLE,
-                    "instrument_model": NOT_APPLICABLE,
+                    "data_modality": NOT_CLASSIFIED,
+                    "reference_assembly": NOT_CLASSIFIED,
+                    "assay_type": NOT_CLASSIFIED,
+                    "platform": NOT_CLASSIFIED,
+                    "instrument_model": NOT_CLASSIFIED,
                 },
-                id="checksum file is data_type checksum, the rest not_applicable",
+                id="checksum file is data_type checksum, the rest open",
             ),
             # An index extension claims the kind and stays silent on the rest (#437). The
-            # dimensions a parent supplies do apply to an index file — the matched path in
-            # `classify_index_files` proves it by inheriting them — so a rule that cannot
-            # see the parent leaves them open rather than asserting they cannot apply.
+            # dimensions a parent supplies do apply to an index file — reconcile carries
+            # them across its edge (#571) — so a rule that cannot see the parent leaves
+            # them open rather than asserting they cannot apply.
             pytest.param(
                 "sample.bam.bai",
                 {
@@ -843,10 +844,11 @@ class TestDerivedFileTierPrecedence:
     # with a reference name in the filename ---
 
     def test_checksum_ignores_filename_reference(self):
-        """Checksum file should stay not_applicable even with GRCh38 in filename."""
+        """No filename rule reads a checksum's name: GRCh38 in it is the checked file's, and
+        the checksum takes its reference from that file at reconcile (#571)."""
         result = engine.classify_extended(FileInfo.from_filename("sample.GRCh38.bam.md5"))
-        assert result.status_of("reference_assembly") == NOT_APPLICABLE
-        assert result.status_of("data_modality") == NOT_APPLICABLE
+        assert result.status_of("reference_assembly") == NOT_CLASSIFIED
+        assert result.status_of("data_modality") == NOT_CLASSIFIED
 
     # --- Log files: `data_type` is `log`, the rest not_applicable ---
 

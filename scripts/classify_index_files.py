@@ -1,22 +1,28 @@
 #!/usr/bin/env python3
-"""Propagate metadata from parent files to index files.
+"""Classify index files, and name each one's parent.
 
 An index file's ``data_type`` is ``index``, from its extension. The dimensions
-``IndexActivity`` passes (``INHERITED_FIELDS``, from ``rules/activities.yaml``) describe the data it points into, so they are inherited from
-its parent, found by filename within a dataset. ``INDEX_TO_PARENT`` declares which
-index extensions have which parent extensions.
+``IndexActivity`` passes (``INHERITED_FIELDS``, from ``rules/activities.yaml``) describe
+the data it points into, so they are its parent's to say. This producer finds the parent
+by filename within a dataset and writes the edge to it as the record's ``generated_by``;
+the reconcile stage carries the parent's settled answer across it (contract 4.9, #571).
+Here those dimensions are ``not_classified``. ``INDEX_TO_PARENT`` declares which index
+extensions have which parent extensions.
+
+It reads no other producer's rows: until #571 it copied the parent's answer from them
+(#413), which could see neither a parent's reconciled answer nor a parent only the
+catch-all writes.
 
 A filename does not always identify one file. Names are compared case-insensitively,
 as routing compares extensions (#449), so two files in a dataset whose names differ
 only by case identify neither (#455). Where two files in a dataset share — up to case —
 the name an index points at, no parent is chosen. Such a file still gets a record,
-but it inherits nothing: ``declined_record`` gives it ``data_type: index``, which the
-extension establishes without a parent, and ``not_classified`` on the others,
-which only a parent could supply. Why no parent was taken is listed separately in
-``unmatched_files``, with reason ``AMBIGUOUS_PARENT`` or ``NO_MATCHING_PARENT``
-(#438). So this module has two behaviours, and they differ only in the inherited
-dimensions: with a unique parent they are the parent's, without one they are
-``not_classified``. ``data_type`` is the same either way (#437).
+with no edge: ``declined_record`` gives it ``data_type: index``, which the extension
+establishes without a parent, and ``not_classified`` on the others, which only a parent
+could supply. Why no parent was taken is listed separately in ``unmatched_files``, with
+reason ``AMBIGUOUS_PARENT`` or ``NO_MATCHING_PARENT`` (#438). So this module has two
+behaviours, and they differ only in the edge: with a unique parent the record names it,
+without one it names none. The slots are the same either way (#437).
 
 The lookup used to keep whichever file load order visited last. Measured on the
 anvil15 corpus, 15,006 index files took a parent picked that way, and 7,422 of
@@ -27,36 +33,26 @@ and stores the outputs under the same filename in different directories.
 
 Telling such files apart needs a path or a declared parent-child relationship,
 and this producer can see neither — the compact manifest it reads carries no
-storage path and no sibling relation. So it declines rather than guesses. Doing
-better is import work (#369, #402).
+storage path and no sibling relation. So it declines rather than guesses. The source
+tables' lineage does better at reconcile: ``anvil_activity`` names one parent for every
+``ANVIL_T2T_CHRY`` index declined here, measured on anvil15 (#571).
 """
 
 import argparse
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
 
 from meta_disco import activities, code_rules, edges
 from meta_disco.deployments import PROD
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
-    CONFLICT,
-    NOT_APPLICABLE,
     NOT_CLASSIFIED,
-    SOURCE_DERIVATION_INHERITANCE,
     SOURCE_FILENAME_RULE,
-    STATUS_LABELS,
     build_field_entry,
-    field_detail,
-    field_label,
-    status_for_value,
 )
 from meta_disco.pipeline import (
-    RecordKey,
-    input_key_value,
-    keyed_rows,
     load_classifiable_records,
     load_envelope,
     record_key,
@@ -64,6 +60,8 @@ from meta_disco.pipeline import (
 )
 from meta_disco.producers import INDEX_TO_PARENT, PRODUCERS
 from meta_disco.records import OutputRecord, RunMetadata, coerce_identity, identity_from
+from meta_disco.rule_engine import make_claim
+from meta_disco.rule_loader import get_unified_rules
 
 # Why an index file took no parent, as the markers `code_rules` declares. Written into
 # each `unmatched_files` entry and read back by this module's diagnostics and its tests.
@@ -149,6 +147,12 @@ DATA_TYPE = "data_type"
 # `IndexActivity` declares them (`rules/activities.yaml`, #580).
 INHERITED_FIELDS = activities.passes(activities.INDEXING)
 INDEX_DATA_TYPE = "index"  # a term in `data_type_enum`, and what an index file is
+# The tier of `index_file`, the extension-scope rule whose claim this producer makes for the
+# files it owns (#437): read from the rule set rather than restated, so the two cannot drift.
+INDEX_FILE_RULE = "index_file"
+INDEX_FILE_TIER = next((rule.tier for rule in get_unified_rules().rules if rule.id == INDEX_FILE_RULE), None)
+if INDEX_FILE_TIER is None:
+    raise ImportError(f"rules/unified_rules.yaml declares no {INDEX_FILE_RULE!r} rule, whose tier an index claim takes")
 
 # Written verbatim into a declined record's evidence, so it is read by someone deciding
 # what to do about the file. Both say "carries", matched case-insensitively (#455): two
@@ -166,8 +170,9 @@ def index_data_type_entry(index_ext: str) -> dict:
 
     An index file *is* an index. That is knowable from the extension without a parent,
     which is how this producer finds the file in the first place, and ``index`` is a
-    term in ``data_type_enum``. Claimed the way an ``extension``-scope rule would claim
-    it (``SOURCE_FILENAME_RULE``, per ``rule_engine._RULE_SOURCE_TYPES``).
+    term in ``data_type_enum``. Claimed through ``make_claim`` the way the ``index_file``
+    rule would claim it: ``SOURCE_FILENAME_RULE`` (``rule_engine._RULE_SOURCE_TYPES``) at
+    that rule's tier.
 
     Before #437 a *matched* index inherited this dimension with the rest, so a ``.crai``
     reported ``alignments`` and a ``.tbi`` reported ``variants.germline`` — the parent's kind
@@ -185,12 +190,13 @@ def index_data_type_entry(index_ext: str) -> dict:
         INDEX_DATA_TYPE,
         status=CLASSIFIED,
         evidence=[
-            {
-                "rule_id": code_rules.INDEX_BY_EXTENSION.id,
-                "reason": f"{index_ext} identifies an index file",
-                "value": INDEX_DATA_TYPE,
-                "source_type": SOURCE_FILENAME_RULE,
-            }
+            make_claim(
+                source_type=SOURCE_FILENAME_RULE,
+                rule_id=code_rules.INDEX_BY_EXTENSION.id,
+                reason=f"{index_ext} identifies an index file",
+                value=INDEX_DATA_TYPE,
+                tier=INDEX_FILE_TIER,
+            )
         ],
     )
 
@@ -207,14 +213,10 @@ def declined_record(record: dict, index_ext: str, reason: str) -> dict:
     nothing here can determine them. ``not_applicable`` would assert they cannot apply,
     which the matched case disproves by filling them in.
 
-    Like ``inherited_evidence`` below, this builds its evidence by hand rather than
-    through ``make_claim``, and so is the second path outside it; CLAUDE.md names both.
-    Same reason as that one:
-    an index file has exactly one claim per dimension and never reaches
-    ``evaluate_claims``, so there is no tier to carry. Folding both in belongs to #413.
-    Its ``rule_id`` values name no rule in ``unified_rules.yaml``, as
-    ``inherited_from_parent`` already does not: they are markers declared in
-    ``code_rules`` (#572), which ``tests/test_code_rules.py`` holds this producer to.
+    Each of those dimensions carries a note, not a claim: a marker's ``rule_id`` and the
+    reason, declaring nothing, as a fetch failure's note does (#413). The markers name no
+    rule in ``unified_rules.yaml``: they are declared in ``code_rules`` (#572), which
+    ``tests/test_code_rules.py`` holds this producer to.
 
     Writing this record is what keeps such a file out of the catch-all producer. When
     #438 added it, that mattered because the catch-all's rule then stamped four
@@ -237,14 +239,7 @@ def declined_record(record: dict, index_ext: str, reason: str) -> dict:
         classifications[fld] = build_field_entry(
             None,
             status=NOT_CLASSIFIED,
-            evidence=[
-                {
-                    "rule_id": reason,
-                    "reason": f"No parent to inherit {fld} from: {why}",
-                    "status": NOT_CLASSIFIED,
-                    "source_type": SOURCE_DERIVATION_INHERITANCE,
-                }
-            ],
+            evidence=[{"rule_id": reason, "reason": f"No parent to inherit {fld} from: {why}"}],
         )
     # No edge: an edge exists only where the parent resolves (`meta_disco.edges`). The
     # names this index points at are worked out from its own, so an unresolved edge
@@ -259,54 +254,11 @@ def every_field(classifications: dict[str, dict]) -> dict[str, dict]:
     }
 
 
-def load_classifications(*paths: Path, key: RecordKey) -> dict[str, dict[str, Any]]:
-    """The parent rows of one or more ``*_classifications.json`` files, by the source's key.
+def propagate_to_index_files(metadata_path: Path, output_path: Path):
+    """Write one record per index file: its kind, and the edge to its parent where one name resolves.
 
-    ``key`` is the field the source declares unique per file
-    (``pipeline.SOURCE_RECORD_KEYS``), read here under its output spelling; the caller
-    looks a matched parent up under the input one. Not the checksum: two
-    differently-named files can hold the same bytes and classify differently —
-    ``grch38.fasta`` takes ``GRCh38`` from a filename rule while the byte-identical
-    ``Homo_sapiens_assembly38.fasta`` does not — and a map keyed on bytes alone held
-    whichever row the producer wrote last, an order that varies run to run under the
-    thread pool, so the two ``.fai`` files indexing them inherited one answer between
-    them, chosen per run (#486).
-
-    A row without the key raises (``pipeline.keyed_rows``) rather than being left out:
-    left out, the index file it parents would inherit nothing, silently. A key two rows
-    carry raises too, naming the key and the file it repeated in, rather than keeping
-    whichever row came last — the order-dependent silent choice this map used to make
-    on md5. The input gate rejects a repeated key before ``make classify``, and the
-    post-run one-row-per-file check (#445) fails the run on one, but that check runs
-    after this producer has written; refusing here keeps a wrong index row from being
-    written at all.
+    The parent's answer is not read: reconcile carries it across the edge (#571).
     """
-    classifications: dict[str, dict[str, Any]] = {}
-    for value, c in keyed_rows(paths, key):
-        if value in classifications:
-            raise ValueError(
-                f"{key.output_field} {value!r} is carried by more than one classification row "
-                f"(a repeat is {c.get('file_name')!r}); the index producer keys a parent on it as "
-                f"unique per file and would inherit from whichever row it read last. "
-                f"`make validate-metadata` rejects a repeated {key.input_field} before "
-                f"`make classify` runs."
-            )
-        classifications[value] = {
-            **{fld: field_label(c, fld) for fld in INHERITED_FIELDS},
-            # Per-field detail (the first is reference_assembly's build, #340)
-            # rides along with the labels: an index record must not describe
-            # its parent less precisely than the parent does.
-            "detail": {fld: field_detail(c, fld) for fld in INHERITED_FIELDS},
-        }
-    return classifications
-
-
-def propagate_to_index_files(
-    metadata_path: Path,
-    classification_paths: list[Path],
-    output_path: Path,
-):
-    """Propagate metadata from parent files to index files."""
 
     # Before the load: an envelope naming no repository is refused without parsing the
     # corpus or writing anything into the run directory, as the catch-all producer does.
@@ -319,24 +271,17 @@ def propagate_to_index_files(
     files = load_classifiable_records(metadata_path, output_path.parent)
     print(f"Loaded {len(files):,} files from metadata")
 
-    # A key two input records share would let an index inherit the wrong parent's
-    # answer: `load_classifications` sees a repeat only among the rows Phase 1 wrote,
-    # and a duplicate whose own row the catch-all writes later is not among them, so a
-    # matched index would look its key up and find the other record's labels. Refused
-    # here, as the catch-all refuses it, for a run started outside `make classify`;
-    # `make validate-metadata` reports it before one.
+    # A key two input records share would ground an edge on whichever record carries it:
+    # the edge's `parent_key` would name two files. Refused here, as the catch-all refuses
+    # it, for a run started outside `make classify`; `make validate-metadata` reports it
+    # before one.
     repeated = repeated_key_values(files, key)
     if repeated:
         examples = ", ".join(f"{value} (x{n})" for value, n in sorted(repeated.items())[:10])
         raise ValueError(
             f"{metadata_path}: {len(repeated):,} value(s) of {key.input_field} are carried by more "
-            f"than one input record, but this producer keys a parent on it as unique per file "
-            f"and would inherit from whichever record carries a classification row: {examples}"
+            f"than one input record, but this producer grounds a parent on it as unique per file: {examples}"
         )
-
-    # Load classifications
-    classifications = load_classifications(*classification_paths, key=key)
-    print(f"Loaded {len(classifications):,} parent classifications")
 
     # Group files by dataset for matching
     by_dataset = defaultdict(list)
@@ -354,27 +299,12 @@ def propagate_to_index_files(
     files_by_folded_name = edges.files_by_folded_name(files)
 
     # Find index files and match to parents
-    results = []
+    matched: list[tuple[dict, str, dict]] = []
     unmatched = []  # Track failed lookups
     # Index files this producer took no parent for. They still get a record — the
     # extension says what they are, even when nothing says what they are of (#438).
     declined: list[tuple[dict, str, str]] = []
-    stats = defaultdict(
-        lambda: {
-            "total": 0,
-            "matched": 0,
-            "no_parent_row": 0,
-            "unmatched": 0,
-            "ambiguous": 0,
-            "with_modality": 0,
-            "with_ref": 0,
-        }
-    )
-    nc = NOT_CLASSIFIED
-    # Labels field_label() returns for a field that is *not* classified. They are
-    # statuses, not values, and must be re-emitted as such — a parent in
-    # conflict must not become an index file classified as "conflict".
-    _sentinels = STATUS_LABELS
+    stats = defaultdict(lambda: {"total": 0, "matched": 0, "unmatched": 0, "ambiguous": 0})
 
     for ds, ds_files in by_dataset.items():
         for f in ds_files:
@@ -438,60 +368,20 @@ def propagate_to_index_files(
                 declined.append((f, index_ext, AMBIGUOUS_PARENT))
                 continue
 
-            # The matched file's own name, not the candidate that found it: this reaches
-            # the row and its `generated_by`, which name the file as the catalog
-            # spells it (#455).
-            parent = parent_files[0]
+            # The matched file itself, not the candidate that found it: its own name
+            # reaches the edge, which names the file as the catalog spells it (#455).
             stats[index_ext]["matched"] += 1
-
-            # Joined on the source's key, under its input spelling; the map was keyed
-            # on the same field under its output spelling. Not on the parent's md5: for
-            # AnVIL a checksum is not an identity (see `load_classifications`). A
-            # drifted key on the parent would match nothing and the index would inherit
-            # nothing, silently, so `input_key_value` raises on one.
-            parent_row = classifications.get(input_key_value(parent, key, "find the parent's classification"))
-            # A matched parent with no row is not a parent that said nothing: a parent
-            # only the catch-all writes (a `.txt.gz` under a `.tbi`) has no Phase 1 row
-            # when this runs. The evidence names that, and the tally counts it, so the
-            # two cannot be read as one.
-            parent_row_found = parent_row is not None
-            parent_class: dict[str, Any] = parent_row if parent_row is not None else {}
-            if not parent_row_found:
-                stats[index_ext]["no_parent_row"] += 1
-
-            result = {
-                # The raw input record this row is about; the output is built from it.
-                # This intermediate adds only the parent's labels, and the two must stay
-                # apart: the output row is built from the record, never from this dict,
-                # whose labels are the parent's answer and not the index file's own.
-                "record": f,
-                # The extension this file matched on, which is not always `file_format`:
-                # every `.fai` in the corpus carries `file_format: "Other"` (#437).
-                "index_extension": index_ext,
-                "parent_record": parent,
-                "parent_row_found": parent_row_found,
-                **{fld: parent_class.get(fld) or nc for fld in INHERITED_FIELDS},
-                "detail": parent_class.get("detail", {}),
-            }
-
-            if result.get("data_modality", nc) not in _sentinels:
-                stats[index_ext]["with_modality"] += 1
-            if result.get("reference_assembly", nc) not in _sentinels:
-                stats[index_ext]["with_ref"] += 1
-
-            results.append(result)
+            matched.append((f, index_ext, parent_files[0]))
 
     # Print stats
     print("\n" + "=" * 70)
-    print("INDEX FILE INHERITANCE RESULTS")
+    print("INDEX FILE PARENTS")
     print("=" * 70)
 
     total_all = 0
     matched_all = 0
     unmatched_all = 0
     ambiguous_all = 0
-    modality_all = 0
-    ref_all = 0
 
     for ext in INDEX_TO_PARENT:
         s = stats[ext]
@@ -499,23 +389,16 @@ def propagate_to_index_files(
             match_pct = s["matched"] / s["total"] * 100
             unmatch_pct = s["unmatched"] / s["total"] * 100
             amb_pct = s["ambiguous"] / s["total"] * 100
-            mod_pct = s["with_modality"] / s["total"] * 100
-            ref_pct = s["with_ref"] / s["total"] * 100
             print(f"\n{ext}:")
             print(f"  Total:              {s['total']:>7,}")
             print(f"  Matched to parent:  {s['matched']:>7,} ({match_pct:.1f}%)")
-            print(f"    parent has no row: {s['no_parent_row']:>6,}")
             print(f"  Unmatched:          {s['unmatched']:>7,} ({unmatch_pct:.1f}%)")
             print(f"  Ambiguous parent:   {s['ambiguous']:>7,} ({amb_pct:.1f}%)")
-            print(f"  With data_modality: {s['with_modality']:>7,} ({mod_pct:.1f}%)")
-            print(f"  With reference:     {s['with_ref']:>7,} ({ref_pct:.1f}%)")
 
             total_all += s["total"]
             matched_all += s["matched"]
             unmatched_all += s["unmatched"]
             ambiguous_all += s["ambiguous"]
-            modality_all += s["with_modality"]
-            ref_all += s["with_ref"]
 
     print(f"\n{'=' * 70}")
     print("TOTAL:")
@@ -524,8 +407,6 @@ def propagate_to_index_files(
         print(f"  Matched to parent:  {matched_all:>7,} ({matched_all / total_all * 100:.1f}%)")
         print(f"  Unmatched:          {unmatched_all:>7,} ({unmatched_all / total_all * 100:.1f}%)")
         print(f"  Ambiguous parent:   {ambiguous_all:>7,} ({ambiguous_all / total_all * 100:.1f}%)")
-        print(f"  With data_modality: {modality_all:>7,} ({modality_all / total_all * 100:.1f}%)")
-        print(f"  With reference:     {ref_all:>7,} ({ref_all / total_all * 100:.1f}%)")
     else:
         print("  No index files found")
     print("=" * 70)
@@ -556,77 +437,19 @@ def propagate_to_index_files(
             else:
                 print(f"    Tried: {u['candidates_tried']}")
 
-    # Save results in same format as other classification outputs
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # Convert to standard classification format (matching bam_classifications.json / vcf_classifications.json)
-
-    def inherited_evidence(field_name, field_val, parent, parent_row_found=True):
-        """Build evidence entry for an inherited classification field.
-
-        ``parent_row_found`` is False when the matched parent has no classification
-        row in the files this producer read — a parent a later phase writes — and the
-        not_classified reason then says so, rather than that the parent had no value.
-
-        Hand-built rather than routed through ``make_claim``, for two reasons.
-        These entries carry no tier — an index file has exactly one per dimension
-        and never goes through ``evaluate_claims`` — and the status branch can emit
-        ``conflict``, which ``make_claim`` rejects as a status no producer may
-        author. Both follow from what this is: a copy of the parent's *resolved*
-        answer, not a declaration for resolution to weigh. They do carry the
-        ``source_type`` every claim carries (#392) — this file's classification was
-        inherited from a related file, not determined for it.
-        """
-        if field_val and field_val not in _sentinels:
-            return [
-                {
-                    "rule_id": code_rules.INHERITED_FROM_PARENT.id,
-                    "reason": f"Inherited from parent file: {parent}",
-                    "value": field_val,
-                    "source_type": SOURCE_DERIVATION_INHERITANCE,
-                }
-            ]
-        status = status_for_value(field_val)
-        # An explicit not_applicable parent isn't "no value" — the field is
-        # determined (not applicable). Keep "had no value" for the not_classified /
-        # missing case. (generate_coverage_report normalizes both reason forms.)
-        if status == NOT_APPLICABLE:
-            reason = f"Parent file {parent} marks {field_name} not applicable"
-        elif status == CONFLICT:
-            reason = f"Parent file {parent} had conflicting evidence for {field_name}"
-        elif not parent_row_found:
-            reason = f"No classification row for parent file {parent}"
-        else:
-            reason = f"Parent file {parent} had no value for {field_name}"
-        return [
-            {
-                "rule_id": code_rules.INHERITED_FROM_PARENT.id,
-                "reason": reason,
-                "status": status,
-                "source_type": SOURCE_DERIVATION_INHERITANCE,
-            }
-        ]
-
     standard_results = []
-    for r in results:
-        parent = r["parent_record"]["file_name"]
-        # Field entries share to_output_dict's builder (epic #116): `status`
-        # carries the sentinel, `value` is None unless CLASSIFIED (Stage 3).
-        # `data_type` is the file's own kind and is never inherited (#437); the
-        # dimensions `IndexActivity` passes describe the data the index points into.
-        classifications = {DATA_TYPE: index_data_type_entry(r["index_extension"])}
-        for fld in INHERITED_FIELDS:
-            label = r.get(fld)
-            evidence = inherited_evidence(fld, label, parent, r["parent_row_found"])
-            classifications[fld] = build_field_entry(label, evidence=evidence, detail=r["detail"].get(fld))
-        classifications = every_field(classifications)
-        # The index file's own identity, not the parent's (#433): this row resolves to
-        # this file's bytes. The parent is the edge's grounding, and nothing else.
+    for record, index_ext, parent in matched:
+        # `data_type` is the file's own kind (#437); the dimensions `IndexActivity` passes
+        # are `not_classified` here and filled at reconcile across the edge (#571). The
+        # index file's own identity, not the parent's (#433): this row resolves to this
+        # file's bytes, and the parent is the edge's grounding.
         standard_results.append(
             OutputRecord.from_record(
-                r["record"],
-                classifications,
-                generated_by=edges.generated_by(code_rules.INDEX_BY_NAME, r["parent_record"], key),
+                record,
+                every_field({DATA_TYPE: index_data_type_entry(index_ext)}),
+                generated_by=edges.generated_by(code_rules.INDEX_BY_NAME, parent, key),
             ).to_dict()
         )
 
@@ -645,8 +468,6 @@ def propagate_to_index_files(
                         "matched_to_parent": matched_all,
                         "unmatched": unmatched_all,
                         "ambiguous_parent": ambiguous_all,
-                        "with_data_modality": modality_all,
-                        "with_reference_assembly": ref_all,
                     },
                 ).to_dict(),
                 "classifications": standard_results,
@@ -658,42 +479,20 @@ def propagate_to_index_files(
 
     print(
         f"\nSaved {len(standard_results):,} index file records to {output_path}: "
-        f"{matched_all:,} inherited from a parent; {unmatched_all:,} found none and "
+        f"{matched_all:,} name their parent; {unmatched_all:,} found none and "
         f"{ambiguous_all:,} found more than one, so those {unmatched_all + ambiguous_all:,} "
-        f"carry `index` and nothing else, and are listed in unmatched_files with why"
+        f"carry `index` and no edge, and are listed in unmatched_files with why"
     )
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Propagate metadata to index files")
+    parser = argparse.ArgumentParser(description="Classify index files and name each one's parent")
     parser.add_argument(
         "--metadata",
         "-m",
         type=Path,
         default=PROD.input_file,
         help="Path to source metadata JSON",
-    )
-    parser.add_argument(
-        "--classifications",
-        "-c",
-        type=Path,
-        nargs="+",
-        help="Paths to classification JSON files (BAM, VCF, BED, FASTQ, FASTA, etc.)",
-    )
-    # Backwards-compatible args (default to standard output paths)
-    parser.add_argument(
-        "--bam",
-        "-b",
-        type=Path,
-        default=Path("output/anvil") / PRODUCERS["bam"].output,
-        help="Path to BAM classifications (used when --classifications not provided)",
-    )
-    parser.add_argument(
-        "--vcf",
-        "-v",
-        type=Path,
-        default=Path("output/anvil") / PRODUCERS["vcf"].output,
-        help="Path to VCF classifications (used when --classifications not provided)",
     )
     parser.add_argument(
         "--output",
@@ -703,15 +502,7 @@ def main():
         help="Output path for index classifications",
     )
     args = parser.parse_args()
-
-    # Build list of classification paths (deduplicated)
-    cls_paths = list(dict.fromkeys(args.classifications)) if args.classifications else [args.bam, args.vcf]
-
-    propagate_to_index_files(
-        args.metadata,
-        cls_paths,
-        args.output,
-    )
+    propagate_to_index_files(args.metadata, args.output)
 
 
 if __name__ == "__main__":

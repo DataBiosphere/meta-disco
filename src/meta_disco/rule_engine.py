@@ -15,8 +15,11 @@ from .models import (
     CLASSIFIED,
     CONFLICT,
     EXTERNAL_SOURCE_TYPES,
+    MIXED,
     NO_VOCABULARY_TERM,
+    NOT_APPLICABLE,
     NOT_CLASSIFIED,
+    SOURCE_DERIVATION_INHERITANCE,
     SOURCE_FILENAME_RULE,
     SOURCE_HEADER_RULE,
     SOURCE_TYPES,
@@ -155,6 +158,9 @@ def make_claim(
     raw_value: str | None = None,
     join_key: str | None = None,
     match_exact: bool | None = None,
+    activity: str | None = None,
+    parent_role: str | None = None,
+    parent_keys: list[str] | None = None,
 ) -> dict:
     """Construct one claim dict for ``field_evidence``, enforcing its invariants.
 
@@ -219,6 +225,13 @@ def make_claim(
     first importer (#369/#394) shows what the constraint should be — the guard is
     cheap to add then and cheap to get wrong now.
 
+    **An inherited claim** (``SOURCE_DERIVATION_INHERITANCE``, contract 4.9, #571) is a
+    parent's settled answer carried across the child's ``generated_by`` at reconcile.
+    It names the step it crossed — ``activity``, the input ``parent_role`` and the
+    parents' record keys (``parent_keys``) — and only it may carry those three. It
+    carries no tier, since it never reaches ``evaluate_claims``, and it is the only
+    claim that may declare the state ``mixed``.
+
     Keys whose argument is None are omitted from the returned dict, so a rule
     claim serializes exactly as it did before this record was extended, apart
     from its ``source_type``.
@@ -253,6 +266,27 @@ def make_claim(
         raise ValueError(
             f"claim from {producer!r} has unknown source_type {source_type!r} (expected one of {sorted(SOURCE_TYPES)})"
         )
+    inherited = source_type == SOURCE_DERIVATION_INHERITANCE
+    if inherited:
+        if not (isinstance(activity, str) and activity and isinstance(parent_role, str) and parent_role):
+            raise ValueError(f"inherited claim from {producer!r} must name the activity and parent_role it crossed")
+        if not (isinstance(parent_keys, list) and parent_keys and all(isinstance(k, str) and k for k in parent_keys)):
+            raise ValueError(f"inherited claim from {producer!r} must name its parents' record keys in parent_keys")
+        if tier is not None:
+            raise ValueError(f"inherited claim from {producer!r} carries a tier, but it never competes on the tiers")
+        # Contract 4.9: parents give a value, `not_applicable`, or `mixed`, and nothing else.
+        if status not in (None, NOT_APPLICABLE) or state not in (None, MIXED):
+            raise ValueError(
+                f"inherited claim from {producer!r} declares status={status!r} state={state!r}; an inherited "
+                f"claim declares a value, {NOT_APPLICABLE!r}, or the state {MIXED!r}"
+            )
+    elif activity is not None or parent_role is not None or parent_keys is not None:
+        raise ValueError(
+            f"claim from {producer!r} names an activity, parent_role or parent_keys, which only an inherited "
+            f"claim ({SOURCE_DERIVATION_INHERITANCE!r}) carries"
+        )
+    if state == MIXED and not inherited:
+        raise ValueError(f"claim from {producer!r} declares {MIXED!r}, which only an inherited claim may")
     # A source object and an external source type are one fact stated twice, so they
     # are required to agree. Neither alone is enough: a claim naming `repository_
     # metadata` with no `ClaimSource` would skip every import rule below — including
@@ -302,7 +336,7 @@ def make_claim(
             )
     # Tier is the resolution input for a claim that does compete, so it is required
     # exactly where one does and rejected where it cannot.
-    if source is None and state is None and tier is None:
+    if source is None and state is None and tier is None and not inherited:
         raise ValueError(f"claim from {producer!r} declaring value/status must carry a tier")
     # And it must be a number `evaluate_claims` can order. A claim arriving from a
     # file can carry `"tier": "1"`, which passes the None check and then fails inside
@@ -378,6 +412,10 @@ def make_claim(
         claim["join_key"] = join_key
     if match_exact is not None:
         claim["match_exact"] = match_exact
+    if inherited:
+        claim["activity"] = activity
+        claim["parent_role"] = parent_role
+        claim["parent_keys"] = list(parent_keys or ())
     return claim
 
 
