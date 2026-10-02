@@ -97,14 +97,8 @@ class TestStandaloneProducers:
                 _pair("t.bam.bai", ".bai", md5=BAD_MD5),
             ],
         )
-        # `file_id` is the source's key, as `_pair` derives it for `s.bam` above; a
-        # parent row without it is refused (#486).
-        parent = output_record(
-            "s.bam", parent_md5, file_id="fid-s.bam", data_modality="genomic", data_type="alignments"
-        )
-        parents = write_run(tmp_path, [parent]) / OUTPUT_FILE
         output = tmp_path / "index_classifications.json"
-        propagate_to_index_files(metadata, [parents], output)
+        propagate_to_index_files(metadata, output)
         assert _names(output) == ["s.bam.bai"]
 
 

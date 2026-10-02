@@ -439,11 +439,12 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   parents' final answers, looked up recursively to any depth (a `.bai`, then its BAM, then the BAM's
   FASTQs, which have none), each remembered once worked out and a cycle refused; then the files are
   written in their current order. Deciding `internal` for an evidence-stated parent needs each dataset's
-  record keys and names; the pass reconcile's join already makes over the records can collect them. #571's
-  to build.
-- **A parent in `conflict`.** 4.4–4.5 reconcile declarations, and a conflict declares no value. Whether a
-  parent's conflict reaches the child as a conflict (what the index producer does today) or as nothing is
-  #413's to decide.
+  record keys and names; the pass reconcile's join already makes over the records can collect them. Built
+  that way by #571 (`reconcile_inherit`): a first pass keeps each record's settled answer and each child's
+  step, parents settle before children, and a second pass writes every file in its order.
+- **A parent in `conflict`.** 4.4–4.5 reconcile declarations, and a conflict declares no value. Decided by
+  #571, which folded in #413: it passes nothing, so the conflict is listed on the parent and not repeated
+  on its companions (contract 4.9).
 - **Sources that name different parent sets for a role that takes many.** A caller header naming `{A}` and a
   submitter table naming `{B}` pool to `{A, B}`, which could hide a wrong edge; but sources are often
   partial (a header lists a subset), so differing sets are not a conflict. The consistency check (#362)

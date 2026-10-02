@@ -2,7 +2,11 @@
 
 Beside the slots, reconcile builds each file's ``generated_by`` from the imported lineage
 (#577): :mod:`reconcile_lineage` translates and resolves it, sharing the records scan
-below, and ``edges.merge_steps`` merges it with inference's own step.
+below, and ``edges.merge_steps`` merges it with inference's own step. Across that step a
+file inherits what its activity passes from its parents (contract 4.9, #571,
+:mod:`reconcile_inherit`), so the run is read twice: once to settle every record's own
+answer and step, then, the parents settled before their children, to write each record
+with its inherited declarations weighed in.
 
 The stage after inference (contract 6.1): **infer → reconcile**. Reading the sources is
 the join below, reconcile's first step, and its per-source counts are a line of the
@@ -51,9 +55,11 @@ import shutil
 import sys
 from collections import Counter, defaultdict
 from collections.abc import Iterable
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import activities
 from .activity_map import ActivityMap, load_activity_map
 from .deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS
 from .edges import LineageStep, StepConflict, generic_only, merge_steps, misfits
@@ -62,8 +68,10 @@ from .models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
     CONFLICT,
+    MIXED,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
+    SOURCE_DERIVATION_INHERITANCE,
     SOURCE_PRECEDENCE,
     SOURCE_PUBLISHED_VALUE,
     UNMAPPED,
@@ -80,6 +88,17 @@ from .output_utils import (
     write_reconciled_file,
 )
 from .pipeline import ANVIL_REPOSITORY, PUBLISHED_TABLES, RecordKey, is_key_value, load_envelope, record_key
+from .reconcile_inherit import (
+    REFERENCE_ASSEMBLY,
+    InheritanceCycle,
+    Inherited,
+    Interner,
+    Settled,
+    Step,
+    build_detail,
+    build_for,
+    inherit,
+)
 from .reconcile_lineage import Carrier, Locator, PendingLineage, applies, resolve_lineage, translate_lineage
 from .records import JOIN_KEY_OUTPUT_FIELDS
 from .rule_engine import CONFLICT_MARKER, make_claim
@@ -133,6 +152,8 @@ ADDED = "added"
 UNCONFIRMED = "unconfirmed"
 DISAGREED = "disagreed"
 FILLED_BY_INFERENCE = "filled_by_inference"
+# The value came from the file's parents across its `generated_by` (contract 4.9, #571).
+INHERITED = "inherited"
 PUBLISHED_UNREVIEWED = "published_unreviewed"
 CONFLICT_INFERENCE = "conflict_inference"
 CONFLICT_PUBLISHED = "conflict_published"
@@ -148,11 +169,13 @@ def fill_category(name: str, harmonized: bool) -> str:
 
 
 # Every category ``credited_to`` returns, in the order a report reads them: each
-# source's fills by precedence, inference's, the three kinds of conflict, then the slot's
-# other outcomes. Exactly one per slot, so a dimension's counts sum to the files.
+# source's fills by precedence, inference's, inheritance's, the three kinds of conflict,
+# then the slot's other outcomes. Exactly one per slot, so a dimension's counts sum to the
+# files.
 SLOT_CATEGORIES = (
     *(fill_category(name, harmonized) for _, name in SOURCE_PRECEDENCE for harmonized in (False, True)),
     FILLED_BY_INFERENCE,
+    INHERITED,
     *CONFLICT_CATEGORIES,
     PUBLISHED_UNREVIEWED,
     NOT_APPLICABLE,
@@ -200,11 +223,45 @@ def declaration(entry: dict) -> str | None:
 
 
 def resolve_slot(
-    slot: str, inferred: dict, source_claims: Iterable[dict], published_unreviewed: bool
+    slot: str,
+    inferred: dict,
+    source_claims: Iterable[dict],
+    published_unreviewed: bool,
+    inherited: Iterable[dict] = (),
 ) -> tuple[str, str | None]:
     """The reconciled ``(status, value)`` of one slot of one file, from inference's ``{value, status}``.
 
-    In order:
+    ``inherited`` are the slot's inherited claims (contract 4.9, :mod:`reconcile_inherit`),
+    weighed as any other declaration; one in state ``mixed`` declares no value but takes
+    part. The rule is :func:`settle`'s.
+    """
+    inherited = list(inherited)
+    inference_conflict, declared = own_inputs(inferred, source_claims)
+    declared |= {d for d in map(declaration, inherited) if d is not None}
+    mixed = any(c.get("claim_state") == MIXED for c in inherited)
+    return settle(slot, inference_conflict, declared, mixed, published_unreviewed)
+
+
+def own_inputs(inferred: dict, source_claims: Iterable[dict]) -> tuple[bool, frozenset[str]]:
+    """What a slot's own inputs give :func:`settle`: whether inference concluded ``conflict``, and every declaration.
+
+    Inference's and the sources', before anything is inherited; the first pass keeps it for
+    a child, and :func:`resolve_slot` adds the inherited declarations to it.
+    """
+    declared = {d for d in map(declaration, source_claims) if d is not None}
+    if (own := declaration(inferred)) is not None:
+        declared.add(own)
+    return inferred["status"] == CONFLICT, frozenset(declared)
+
+
+def settle(
+    slot: str, inference_conflict: bool, declared: AbstractSet[str], mixed: bool, published_unreviewed: bool
+) -> tuple[str, str | None]:
+    """One slot's ``(status, value)`` from every input's declaration: the whole resolution rule.
+
+    ``declared`` holds each input's declaration (a value or ``not_applicable``: inference's,
+    every source's, every inherited one's); ``mixed`` whether an inherited declaration is
+    the state ``mixed``. In order:
 
     1. Inference itself concluded ``conflict``: the conflict stands, whatever a source
        says — agreeing with one of two disagreeing rules is not resolving them, which 4.7
@@ -214,26 +271,27 @@ def resolve_slot(
        (:func:`~.schema_vocab.most_specific`, #473): ``CHM13`` beside
        ``T2T-CHM13v2.0`` is one answer at two levels of detail, and the deepest is
        the value (4.4).
-    3. The published source spoke with a value no authored row reads (unreviewed): a
+    3. An inherited ``mixed`` beside any declaration: ``conflict``, since one value
+       contradicts a lineage that has none, and ``not_applicable`` stands for the values
+       it would contradict (4.9). Alone it declares nothing, and the slot goes on.
+    4. The published source spoke with a value no authored row reads (unreviewed): a
        ``conflict`` if any other input declared something, else ``not_classified`` —
        missing work, not a challenge.
-    4. One value: ``classified``. Otherwise ``not_applicable`` if anyone declared it, and
+    5. One value: ``classified``. Otherwise ``not_applicable`` if anyone declared it, and
        ``not_classified`` if nobody declared anything. ``not_classified`` never conflicts
        and yields to ``not_applicable`` (4.6).
 
     ``value`` is null unless the status is ``classified``.
     """
-    if inferred["status"] == CONFLICT:
+    if inference_conflict:
         return CONFLICT, None
-    declared = {d for d in map(declaration, source_claims) if d is not None}
-    own = declaration(inferred)
-    if own is not None:
-        declared.add(own)
     if len(declared) > 1:
         deepest = most_specific(slot, declared)
         if deepest is None:
             return CONFLICT, None
         declared = {deepest}
+    if mixed and declared:
+        return CONFLICT, None
     if published_unreviewed:
         return (CONFLICT, None) if declared else (NOT_CLASSIFIED, None)
     if not declared:
@@ -544,7 +602,7 @@ def _translate(
 # --- the record ---------------------------------------------------------------------
 
 
-def credited_to(settled: dict, said: SlotEvidence) -> str:
+def credited_to(settled: dict, said: SlotEvidence, inherited: Iterable[dict] = ()) -> str:
     """Where a settled slot's answer is credited: one of ``SLOT_CATEGORIES`` (#552).
 
     Stored on the reconciled slot as ``credited_to`` by :func:`reconcile_record`, and
@@ -561,7 +619,11 @@ def credited_to(settled: dict, said: SlotEvidence) -> str:
       ``not_classified``);
     - ``filled_by_<source>`` or ``filled_by_<source>_harmonized`` for the first source in
       ``SOURCE_PRECEDENCE`` that declared the delivered value — verbatim before
-      harmonized — else ``filled_by_inference``.
+      harmonized;
+    - ``filled_by_inference`` where inference declared it;
+    - ``inherited`` where only an inherited claim (``inherited``, contract 4.9) did — the
+      value came from the file's parents, and nothing read the file itself for it;
+    - else ``filled_by_inference``.
 
     It attributes and never decides: ``resolve_slot`` settled the slot before this reads
     it, and precedence never picks a value (contract 6.8). Where declarations nest, the
@@ -585,11 +647,23 @@ def credited_to(settled: dict, said: SlotEvidence) -> str:
         declaring = [c for c in said.claims if c["source_type"] == source_type and declaration(c) == settled["value"]]
         if declaring:
             return fill_category(name, harmonized=all(is_harmonized(c) for c in declaring))
+    if declaration(settled["inferred"]) != settled["value"] and any(
+        declaration(c) == settled["value"] for c in inherited
+    ):
+        return INHERITED
     return FILLED_BY_INFERENCE
 
 
-def reconcile_record(record: dict, record_slots: dict[str, SlotEvidence]) -> dict:
+def reconcile_record(
+    record: dict, record_slots: dict[str, SlotEvidence], inherited: dict[str, list[Inherited]] | None = None
+) -> dict:
     """The reconciled record for one inference record: same identity, each slot settled.
+
+    ``inherited`` is the record's inherited declarations by slot (:mod:`reconcile_inherit`):
+    each is weighed with inference's and the sources' and written after them in the slot's
+    evidence. A classified slot whose value is not inference's carries the build ``base`` and
+    ``version`` of the inherited declaration that declared that value, if one did
+    (``reconcile_inherit.build_for``), whoever the slot is credited to.
 
     Its ``generated_by`` is not settled here: :func:`reconcile_run` merges inference's step
     with the record's lineage steps (``edges.merge_steps``) after this returns, where the
@@ -621,18 +695,22 @@ def reconcile_record(record: dict, record_slots: dict[str, SlotEvidence]) -> dic
                 "or the run predates the slot — re-run `make classify`"
             )
         said = record_slots.get(slot, NO_EVIDENCE)
+        passed = (inherited or {}).get(slot, [])
+        claims = [i.claim() for i in passed]
         inferred = {"value": entry.get("value"), "status": entry["status"]}
-        status, value = resolve_slot(slot, inferred, said.claims, SOURCE_PUBLISHED_VALUE in said.unreviewed)
+        status, value = resolve_slot(slot, inferred, said.claims, SOURCE_PUBLISHED_VALUE in said.unreviewed, claims)
         settled: dict = {
             "value": value,
             "status": status,
             "use": use_for(status),
             "inferred": inferred,
-            "evidence": list(entry.get("evidence") or []) + said.claims,
+            "evidence": list(entry.get("evidence") or []) + said.claims + claims,
         }
-        settled["credited_to"] = credited_to(settled, said)
+        settled["credited_to"] = credited_to(settled, said, claims)
         if (status, value) == (inferred["status"], inferred["value"]):
             settled.update(field_detail(record, slot))
+        elif status == CLASSIFIED:
+            settled.update(build_detail(build_for(value, None, passed)))
         classifications[slot] = settled
     out["classifications"] = classifications
     return out
@@ -684,6 +762,9 @@ class Report:
     # Per dataset, the files whose only step is the generic `Activity`, written as no
     # `generated_by` until reviewed (`edges.merge_steps`).
     generic_only: Counter = field(default_factory=Counter)
+    # Inheritance (#571): per dataset and slot, what each role's parents gave a child
+    # (`reconcile_inherit.OUTCOMES`), once per role that passes the slot.
+    inheritance: dict = field(default_factory=lambda: defaultdict(lambda: defaultdict(Counter)))
     # Per (dataset, slot), the source types whose evidence speaks to it: only those are
     # scored there.
     _covering: dict[tuple[str, str], tuple[str, ...]] = field(default_factory=dict)
@@ -729,18 +810,27 @@ class Report:
                 own is None
                 and settled["inferred"]["status"] != CONFLICT
                 and settled["status"] in (CLASSIFIED, NOT_APPLICABLE)
+                # A source's, not an inherited one's (#571): the answer a source declared.
+                and any(declaration(c) == (settled["value"] or settled["status"]) for c in said.claims)
             ):
                 self.filled_over_inference[dataset][slot] += 1
             per_input = self.inputs[dataset][slot]
-            per_input[INFERENCE][self._inference_outcome(slot, settled, said, own)] += 1
+            lineage = _inherited_declarations(settled)
+            per_input[INFERENCE][self._inference_outcome(slot, settled, said, own, lineage)] += 1
             published_silent = SOURCE_PUBLISHED_VALUE in self.coverage and SOURCE_PUBLISHED_VALUE not in covering
             for source_type in covering:
-                outcome = self._source_outcome(slot, said, own, source_type)
+                outcome = self._source_outcome(slot, said, own, source_type, lineage)
                 per_input[source_type][outcome] += 1
                 if source_type == SOURCE_PUBLISHED_VALUE and outcome == SILENT:
                     published_silent = True
             if published_silent and settled["status"] == CLASSIFIED:
                 self.added_over_published[dataset][slot] += 1
+
+    def add_inheritance(self, reconciled: dict, outcomes: Iterable[tuple[str, str]]) -> None:
+        """Count what each role's parents gave one child, per slot (``reconcile_inherit.OUTCOMES``)."""
+        dataset = str(reconciled.get("dataset_title") or "")
+        for slot, outcome in outcomes:
+            self.inheritance[dataset][slot][outcome] += 1
 
     def add_step(self, reconciled: dict, conflict: StepConflict | None, steps: list[LineageStep]) -> None:
         """Count one record's settled step: who named it, a conflict with who said what, or how it misfits.
@@ -781,14 +871,17 @@ class Report:
     def _competing(settled: dict, said: SlotEvidence, own: str | None) -> tuple[tuple[str, tuple[str, ...]], ...]:
         """Who said what on a conflicted slot, as sorted ``(input, values)`` pairs.
 
-        Three kinds of input are listed:
+        Four kinds of input are listed:
 
         - inference: its value, or where its own rules conflicted, the ``competing_values``
-          of its conflict marker. An index file's conflict inherited from its parent carries
-          no marker (#413), so there inference is listed with no values;
+          of its conflict marker. An index file's conflict copied from its parent at
+          inference, in a run made before #571, carries no marker (#413), so there inference
+          is listed with no values;
         - each source type: the values it declared;
         - ``<source type> (unreviewed)``: the raw values of that source type's unmapped
-          entries — only the published source's are kept on a record (:func:`_translate`).
+          entries — only the published source's are kept on a record (:func:`_translate`);
+        - ``derivation_inheritance``: what the file's parents gave it (contract 4.9), a value,
+          ``not_applicable`` or ``mixed``, read off the slot's inherited claims.
 
         A source that declared nothing is left out. Values, not the rules behind them: a rule id per
         value would multiply the distinct sets.
@@ -806,10 +899,14 @@ class Report:
                 said_by[f"{claim['source_type']} (unreviewed)"].add(str(claim.get("raw_value")))
             elif (declared := declaration(claim)) is not None:
                 said_by[claim["source_type"]].add(declared)
+        said_by[SOURCE_DERIVATION_INHERITANCE].update(_inherited_declarations(settled))
+        if not said_by[SOURCE_DERIVATION_INHERITANCE]:
+            del said_by[SOURCE_DERIVATION_INHERITANCE]
         return tuple(sorted((name, tuple(sorted(values))) for name, values in said_by.items()))
 
     @staticmethod
-    def _inference_outcome(slot: str, settled: dict, said: SlotEvidence, own: str | None) -> str:
+    def _inference_outcome(slot: str, settled: dict, said: SlotEvidence, own: str | None, lineage: set[str]) -> str:
+        """Inference's outcome; ``lineage`` (the slot's inherited declarations) counts only toward disagreeing."""
         if settled["inferred"]["status"] == CONFLICT:
             return DISAGREED
         if own is None:
@@ -817,8 +914,9 @@ class Report:
         others = {d for c in said.claims if (d := declaration(c)) is not None}
         # Agreement is nesting over every declaration, as resolve_slot has it (#473): a
         # source's CHM13 agrees with inference's T2T-CHM13v2.0, but not when another
-        # source's sibling release makes the slot a conflict.
-        if most_specific(slot, others | {own}) is None:
+        # source's sibling release, or a disagreeing or mixed inheritance (#571), makes the
+        # slot a conflict. Agreeing with an inherited value alone is not a source agreeing.
+        if _disagree(slot, others | {own}, lineage):
             return DISAGREED
         if others:
             return AGREED
@@ -826,7 +924,8 @@ class Report:
         return UNCONFIRMED if spoke else ADDED
 
     @staticmethod
-    def _source_outcome(slot: str, said: SlotEvidence, own: str | None, source_type: str) -> str:
+    def _source_outcome(slot: str, said: SlotEvidence, own: str | None, source_type: str, lineage: set[str]) -> str:
+        """A source's outcome; ``lineage`` (the slot's inherited declarations) counts only toward disagreeing."""
         mine = [c for c in said.claims if c.get("source_type") == source_type and declaration(c) is not None]
         if mine:
             declared = {d for c in mine if (d := declaration(c)) is not None}
@@ -836,7 +935,7 @@ class Report:
             if own is not None:
                 others.add(own)
             # Agreement is nesting over every declaration, as resolve_slot has it (#473).
-            if most_specific(slot, declared | others) is None:
+            if _disagree(slot, declared | others, lineage):
                 return DISAGREED
             # The same rule the slot's category uses: verbatim if any claim is verbatim.
             return MATCH if any(not is_harmonized(c) for c in mine) else HARMONIZED
@@ -895,6 +994,7 @@ class Report:
                     for (d, a, p, x), n in sorted(self.misfits.items())
                 ],
             },
+            "inheritance": plain(self.inheritance),
             "coverage": {
                 source_type: {
                     dataset or EVERY_DATASET: sorted(slot for d, slot in pairs if d == dataset)
@@ -905,7 +1005,72 @@ class Report:
         }
 
 
+def _inherited_declarations(settled: dict) -> set[str]:
+    """What a settled slot's inherited claims declare: values, ``not_applicable``, or ``mixed``."""
+    return {
+        declaration(e) or MIXED
+        for e in settled["evidence"]
+        if e.get("source_type") == SOURCE_DERIVATION_INHERITANCE and "parent_keys" in e
+    }
+
+
+def _disagree(slot: str, declared: set[str], lineage: set[str]) -> bool:
+    """Whether ``declared`` and the inherited ``lineage`` fail to nest, as :func:`settle` judges them (mixed included)."""
+    if MIXED in lineage:
+        return True
+    return most_specific(slot, declared | lineage) is None
+
+
 # --- the stage ----------------------------------------------------------------------
+
+
+class _Graph:
+    """The first pass's memory: every record's own settled answers, and each child's step and own declarations.
+
+    ``base`` holds a :class:`reconcile_inherit.Settled` per record key, ``steps`` a
+    :class:`reconcile_inherit.Step` per record with a ``generated_by``. A child also keeps,
+    per carried slot in ``carried`` order, what :func:`settle` needs to weigh an inherited
+    declaration with its own (:func:`own_inputs`, and whether the published source spoke
+    unreviewed). Most records share one of a few answers, so each distinct one is held once
+    (``intern``) and a record keeps a reference.
+    """
+
+    def __init__(self) -> None:
+        self.carried = activities.carried()
+        self.base: dict[str, Settled] = {}
+        self.steps: dict[str, Step] = {}
+        self.own: dict[str, tuple[tuple[bool, frozenset[str], bool], ...]] = {}
+        self.intern = Interner()
+
+    def add(self, identity: str, record: dict, record_slots: dict[str, SlotEvidence], step: dict | None) -> None:
+        classifications = record.get("classifications") or {}
+        answers: dict[str, tuple[str, str | None]] = {}
+        own = []
+        build = None
+        for slot in self.carried:
+            entry = classifications.get(slot) or {}
+            said = record_slots.get(slot, NO_EVIDENCE)
+            inferred = {"value": entry.get("value"), "status": entry.get("status")}
+            inference_conflict, declared = own_inputs(inferred, said.claims)
+            unreviewed = SOURCE_PUBLISHED_VALUE in said.unreviewed
+            answers[slot] = self.intern(settle(slot, inference_conflict, declared, False, unreviewed))
+            own.append(self.intern((inference_conflict, declared, unreviewed)))
+            if slot == REFERENCE_ASSEMBLY and answers[slot] == (inferred["status"], inferred["value"]):
+                detail = field_detail(record, slot).get("build")
+                if isinstance(detail, dict) and answers[slot][0] == CLASSIFIED:
+                    build = self.intern((detail.get("base"), detail.get("version")))
+        self.base[identity] = self.intern.settled(answers, build)
+        if step is not None:
+            self.steps[identity] = Step.of(step, self.intern)
+            self.own[identity] = self.intern(tuple(own))
+
+    def resolve(self, identity: str, slot: str, inherited: list[Inherited]) -> tuple[str, str | None]:
+        """A child's answer for ``slot`` with ``inherited`` weighed in; status ``mixed`` where only a mixed one spoke."""
+        inference_conflict, declared, unreviewed = self.own[identity][self.carried.index(slot)]
+        values = {i.declared for i in inherited if i.declared != MIXED}
+        mixed = any(i.declared == MIXED for i in inherited)
+        answer = settle(slot, inference_conflict, declared | values, mixed, unreviewed)
+        return (MIXED, None) if mixed and answer == (NOT_CLASSIFIED, None) else answer
 
 
 def reconcile_run(
@@ -933,7 +1098,15 @@ def reconcile_run(
     ``activity_table`` (the bundled activity map by default), and merged per record with
     inference's own step (``edges.merge_steps``) into the reconciled ``generated_by``. A
     record no lineage names keeps inference's step as it is. ``evidence_root=None``
-    excludes lineage too.
+    excludes lineage too, and inheritance still crosses the steps inference wrote (6.6).
+
+    Inheritance (#571, :mod:`reconcile_inherit`) needs every parent's answer before its
+    child is written, and the records come file by file, so the run is read twice. The
+    first pass settles each record's own answer and step and keeps, per record, only its
+    settled answer for the carried slots (and, for a child, what its own declarations
+    are), each distinct one held once. The second settles each record again, now with its
+    inherited declarations, and writes it. Refuses (``ReconcileError``) a run whose steps
+    form a cycle.
     """
     if not run_dir.is_dir():
         raise ReconcileError(f"run directory not found: {run_dir}")
@@ -985,35 +1158,55 @@ def reconcile_run(
     # without one could receive nothing, and two rows sharing one would both receive what
     # matched either. `make classify` fails such a run
     # (#445), but its directory is still on disk to be named here.
-    seen: set[str] = set()
+    def identity_of(record: dict, seen: set[str]) -> str:
+        identity = record.get(key.output_field)
+        if not is_key_value(identity):
+            raise ValueError(
+                f"{run_dir}: row {record.get('file_name')!r} has no usable {key.output_field}, the run's record "
+                "key; it cannot be joined or checked for a second row"
+            )
+        if identity in seen:
+            raise ValueError(
+                f"{run_dir}: two rows share {key.output_field} {identity!r}; a run must hold one row per file (#445)"
+            )
+        seen.add(identity)
+        return identity
 
-    def settle(records: list[dict]):
+    def step_of(record: dict, identity: str) -> tuple[dict | None, StepConflict | None]:
+        if identity in lineage.steps:
+            return merge_steps(record.get("generated_by"), lineage.steps[identity])
+        return record.get("generated_by"), None
+
+    # The first pass: each record's own settled answers, and each child's step.
+    graph = _Graph()
+    seen: set[str] = set()
+    for _, records in iter_run_files(run_dir, strict=True):
         for record in records:
-            identity = record.get(key.output_field)
-            if not is_key_value(identity):
-                raise ValueError(
-                    f"{run_dir}: row {record.get('file_name')!r} has no usable {key.output_field}, the run's record "
-                    "key; it cannot be joined or checked for a second row"
-                )
-            if identity in seen:
-                raise ValueError(
-                    f"{run_dir}: two rows share {key.output_field} {identity!r}; a run must hold one row per file (#445)"
-                )
-            seen.add(identity)
+            identity = identity_of(record, seen)
+            step, _ = step_of(record, identity)
+            graph.add(identity, record, joined.slots.get(identity, {}), step)
+    try:
+        inheritance = inherit(graph.steps, graph.base.get, graph.resolve, graph.intern)
+    except InheritanceCycle as exc:
+        raise ReconcileError(str(exc)) from None
+    del graph
+
+    def reconciled_rows(records: list[dict]):
+        for record in records:
+            identity = str(record[key.output_field])
             record_slots = joined.slots.get(identity, {})
-            reconciled = reconcile_record(record, record_slots)
-            conflict = None
-            if identity in lineage.steps:
-                reconciled["generated_by"], conflict = merge_steps(record.get("generated_by"), lineage.steps[identity])
+            reconciled = reconcile_record(record, record_slots, inheritance.declarations.get(identity))
+            reconciled["generated_by"], conflict = step_of(record, identity)
             report.add(reconciled, record_slots)
             report.add_step(reconciled, conflict, lineage.steps.get(identity, []))
+            report.add_inheritance(reconciled, inheritance.outcomes.get(identity, ()))
             yield reconciled
 
     if staging.exists():
         shutil.rmtree(staging)
     staging.mkdir()
     for fname, records in iter_run_files(run_dir, strict=True):
-        write_reconciled_file(staging / reconciled_name(fname), header, settle(records))
+        write_reconciled_file(staging / reconciled_name(fname), header, reconciled_rows(records))
 
     full_report = {
         **header,
@@ -1039,7 +1232,10 @@ def render_summary(report: dict) -> str:
     """The report's headline numbers as plain text: the join, then each dimension's totals."""
     lines = []
     if report["evidence_excluded"]:
-        lines.append("Evidence excluded: the reconciled artifact concludes what inference concluded.")
+        lines.append(
+            "Evidence excluded: the reconciled artifact concludes what inference concluded, plus what "
+            "inheritance carried across the steps inference wrote."
+        )
     elif not report["evidence"]:
         catalog = f" for catalog {report['catalog']}" if report["catalog"] else ""
         lines.append(f"No evidence{catalog} about {report['repository']}'s files: nothing to reconcile against.")
@@ -1089,7 +1285,8 @@ def main(argv: list[str] | None = None) -> int:
         "--no-evidence",
         action="store_true",
         help="Exclude all source evidence and lineage (--lineage-root is then not read): the reconciled "
-        "artifact concludes what inference did (6.6)",
+        "artifact concludes what inference did, plus what inheritance carries across the steps inference "
+        "wrote (6.6)",
     )
     args = parser.parse_args(argv)
     # A run's output root is prod's until a deployment names its own (#480), so the latest

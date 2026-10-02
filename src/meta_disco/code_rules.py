@@ -2,9 +2,10 @@
 
 A YAML rule is declared in ``rules/unified_rules.yaml``, with its ``when``, ``then`` and
 ``rationale``. The rules here make a claim from code instead. Most read file content a ``when``
-cannot express (contig lengths, BED coordinates, tar members). The index producer's two
-are in code because that producer builds its records itself: ``index_by_extension``
-reads the extension, and ``inherited_from_parent`` copies another file's answer. Before #572 each one's id was a
+cannot express (contig lengths, BED coordinates, tar members). The index producer's
+is in code because that producer builds its records itself: ``index_by_extension`` reads the
+extension. ``inherited_from_parent`` is reconcile's: it carries a parent's settled answer
+across a file's ``generated_by`` (contract 4.9, #571). Before #572 each one's id was a
 string literal at its call site, so nothing listed them. Now every call site names its
 rule through a constant here (``code_rules.VCF_CONTIG_LENGTH.id``), and
 ``tests/test_code_rules.py`` fails on a rule id written as a string literal elsewhere in
@@ -14,7 +15,7 @@ dict, or as a ``*_RULE_ID`` module constant. An id reaching a call site some oth
 source and not on the output.
 
 A **marker** carries a ``rule_id`` and names no rule. It records why a slot has no
-value: the file could not be read, the input record broke the contract, or an index
+value: the file could not be read, the input record broke the contract, or the index
 producer took no parent. ``make rules-report`` lists markers in a table of their own.
 The ``not_classified`` placeholder carries no ``rule_id`` at all, so it is not declared
 here.
@@ -61,6 +62,7 @@ BASES = (
 
 HEADER_CLASSIFIER = "src/meta_disco/header_classifier.py"
 INDEX_PRODUCER = "scripts/classify_index_files.py"
+RECONCILE_INHERIT = "src/meta_disco/reconcile_inherit.py"
 EDGES = "src/meta_disco/edges.py"
 METADATA_SCHEMA = "src/meta_disco/metadata_schema.py"
 
@@ -270,15 +272,16 @@ INDEX_BY_EXTENSION = CodeRule(
 )
 INHERITED_FROM_PARENT = CodeRule(
     id="inherited_from_parent",
-    module=INDEX_PRODUCER,
+    module=RECONCILE_INHERIT,
     basis=BASIS_PARENT_FILE,
     source_type=SOURCE_DERIVATION_INHERITANCE,
-    reads="the matched parent file's resolved classification",
-    sets=activities.passes(activities.INDEXING),
+    reads="the settled answers, at reconcile, of the parents in one input role of the file's generated_by",
+    sets=activities.carried(),
     rationale=(
-        "An index describes the data it points into, so it takes its parent's answer for "
-        "each dimension IndexActivity passes (rules/activities.yaml), including a status and a conflict. It is copied, "
-        "not weighed in resolution; folding it into make_claim is #413."
+        "A file's step passes what its activity declares for each input role (rules/activities.yaml): "
+        "an index, checksum or QC report takes what its one parent says, a VCF what its alignments say. "
+        "Parents that agree give their value; parents that differ give mixed; a parent not_classified or "
+        "in conflict gives nothing (contract 4.9). The claim is weighed with the file's own (4.2-4.6)."
     ),
 )
 

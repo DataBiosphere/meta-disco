@@ -187,7 +187,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     5. curator
 
     Inherited results (`SOURCE_DERIVATION_INHERITANCE`) are not a sixth kind: they are a parent's resolved
-    answer carried across a derivation edge (4.9). How today's one instance meets 1.1 is #413.
+    answer carried across a derivation edge (4.9), built at reconcile through `make_claim` (#571).
 
     Lineage evidence is not an input kind either: it names a file's parent and the step that made it,
     not a value (#583). Its files declare `repository_activity` (AnVIL's `anvil_activity`) or
@@ -267,8 +267,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
       other declaration it is a conflict too, as the values it stands for would be (4.6);
     - if the parents with an answer agree but any parent across the activity is `not_classified`, the activity
       passes nothing for that dimension, since the unclassified one cannot be known to agree; parents
-      already known to differ, or a mixed parent, give mixed whatever the rest are; what a parent in
-      `conflict` passes, and so what its activity gives, is #413's.
+      already known to differ, or a mixed parent, give mixed whatever the rest are; a parent in
+      `conflict` passes nothing either (#571, which folded in #413): the conflict is the parent's to
+      settle, and is listed on the parent rather than repeated on its companions.
 
     Which activity carries which dimension is its `passes` in `rules/activities.yaml`, the one place
     code reads it (ADR-0002 decision 8 records the reasoning, #580); `data_type` is never carried. Sources that name different parents for an
@@ -447,15 +448,15 @@ importer's half is built — 7.12 is enforced (below), and the published importe
 (7.1, today through the verbatim manifest, 7.12) and transcribes verbatim (7.3, #497, #421) — and what 7.1,
 7.2, 7.10 and 7.13 say about claims, comparison and delivery is the reconcile stage's (#432), which is built. Parts of it *are* enforced independently: `make_claim` refuses a claim that declares two things at once, or that carries a tier where none belongs, and `source_evidence` refuses a line that carries a mapped value at all (#421) — its record has no member for one, and `_entry_from_line` turns away a hand-written line that has. A declared term is checked against its slot's vocabulary when the translation table loads (`value_map`, #414) — on authored rows, per 3.11; no runtime constructor checks it. 3.3 is enforced for rule claims anyway — `test_rule_vocabulary` checks every rule's `then` value against the LinkML enums at CI time, and output is validated at the schema gate — but **no runtime constructor checks it**. Nothing checks these assertions as a set. Enumerated rather than asserted, because "the contract holds" is the obvious sentence and it is false in each place below:
 
-- **1.1 is already violated.** `scripts/classify_index_files.py` builds value- and status-bearing evidence outside the rule engine, stamping `rule_id: inherited_from_parent` and its `source_type` by hand. CLAUDE.md documents this as a deliberate exception, because it copies a parent's *already-resolved* status — `conflict` included — which `make_claim` cannot express. Moving it into the engine is its own work and interacts with #371 — filed as #413, which also asks whether the honest fix is a clause here rather than a code move. 4.9 is now that clause for what an inherited value declares; how the index path builds it is still #413's.
-- **4.9 is not built** (ADR-0002). Its one instance is the index producer's, built as the 1.1 entry above
-  describes. Inference writes the `IndexActivity` and `ChecksumActivity` edges a file's name states, each by the
-  parent's record key and only where the parent resolves (#356); no other step's edge is emitted. The
-  links the source tables state are imported as lineage evidence (#583), translated by the activity map
-  (#584) and built into each reconciled file's step at reconcile (#577); nothing passes across them yet (#571). The `checksum_file` rule still stamps the dimensions
-  `ChecksumActivity` carries `not_applicable`, which 4.6 would turn into a conflict once 4.9 is built.
-  6.6's inheritance clause is true vacuously until then; when 4.9 is built, the `--no-evidence` help in
-  `reconcile.main` ("concludes what inference did") changes with it.
+- **4.9 is built at reconcile, and reaches only the steps reconcile builds** (#571). Inference writes the
+  `IndexActivity` and `ChecksumActivity` edges a file's name states, each by the parent's record key and only
+  where the parent resolves (#356); the links the source tables state are imported as lineage evidence
+  (#583), translated by the activity map (#584) and merged into each reconciled file's step (#577); and
+  reconcile carries each parent's settled answer across that step (`reconcile_inherit`). So nothing is
+  inherited across a link that gives no step: a sample parent (#582), a parent no file or two files of the
+  dataset carry, a step conflict, or a step only the generic `Activity` names. Inference's own output carries
+  none of it: an index or checksum file's carried dimensions are `not_classified` there, and filled at
+  reconcile.
 - **The slot maps and their importer exist for AnVIL only** (#369, #497): `slot_map` loads
   `sources/anvil_slot_map.yaml` (kind 3) and `sources/anvil_published_slot_map.yaml` (kind 2),
   `anvil_evidence` writes generations of evidence files under `data/source_evidence/anvil/` and

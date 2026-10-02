@@ -68,8 +68,8 @@ class TestTheIndexProducerCarriesTheRightIdentity:
     def test_the_index_producer_carries_the_index_files_own_identity(self, tmp_path, with_parent):
         """Not the parent's — the index file is the row, and it resolves to its own bytes.
 
-        Both of this producer's record-building sites: `inherited_evidence` when a parent
-        is found, and `declined_record` when none is (#438).
+        Both of this producer's record paths: the matched one, which writes an edge to the
+        parent, and `declined_record` when none is found (#438).
         """
         parent = valid_record(
             file_name="sample.bam",

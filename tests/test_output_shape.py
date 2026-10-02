@@ -72,6 +72,7 @@ from meta_disco.models import (
 from meta_disco.pipeline import ClassifyPipeline
 from meta_disco.producers import PRODUCERS
 from meta_disco.reconcile import SlotEvidence, reconcile_record
+from meta_disco.reconcile_inherit import Inherited
 from meta_disco.rule_engine import make_claim
 from meta_disco.validators.reference_builds import IDENTITY_FIELDS
 from tests.metadata_fixtures import METADATA_KEYS, RECORD_KEYS, valid_record, write_metadata
@@ -184,11 +185,10 @@ GOLDEN_INPUTS = {
 
 # The index producer's inputs. Both its record paths reach the schema gate: a matched
 # index carries an `IndexActivity` edge, a declined one none. `sample.flnc.bam` is the
-# golden's own bam input, so the matched `.bai` inherits from a row a real producer wrote
-# rather than a hand-built stand-in — and the `inherited_evidence` it inherits through is
-# built outside `make_claim` (#413), so no constructor's invariants cover its shape.
-# `orphan.bai` names a parent the snapshot does not hold, so this producer declines it
-# (#438) and writes no edge (#356).
+# golden's own bam input, so the matched `.bai`'s edge names a file the snapshot holds;
+# what it inherits across that edge is reconcile's (#571), and the reconciled fixture
+# below carries an inherited claim on it. `orphan.bai` names a parent the snapshot does
+# not hold, so this producer declines it (#438) and writes no edge (#356).
 INDEX_INPUTS = [
     GOLDEN_INPUTS["bam"][0],
     _golden_record("1", file_name="sample.flnc.bam.bai", file_size=9000, file_format=".bai", entry_id="g-bai-1"),
@@ -319,16 +319,15 @@ def build_output(tmp_path: Path) -> dict:
     return out
 
 
-def build_standalone_output(tmp_path: Path, pipeline_output: dict) -> dict:
+def build_standalone_output(tmp_path: Path) -> dict:
     """Run the four standalone producers; return ``{producer_name: output_envelope}``.
 
     The other half of the schema gate's input (#465). None of these four reads file
     content, so there is no fetcher to stub: they are offline and deterministic as they
     stand.
 
-    ``pipeline_output`` is :func:`build_output`'s. Its bam rows are the parent
-    classifications the matched index file inherits from — see :data:`INDEX_INPUTS` for
-    why a real producer's rows and not a stand-in.
+    The index producer reads no other producer's rows since #571: its matched index's
+    parent is the golden's bam input (:data:`INDEX_INPUTS`), named in its snapshot.
     """
     out = {}
     for i, param in enumerate(STANDALONE_PRODUCERS):
@@ -371,9 +370,7 @@ def build_standalone_output(tmp_path: Path, pipeline_output: dict) -> dict:
 
     index_work = tmp_path / "index"
     index_work.mkdir()
-    out["index"] = run_index_producer(
-        index_work, INDEX_INPUTS, parent_classifications=pipeline_output["bam"]["classifications"]
-    )
+    out["index"] = run_index_producer(index_work, INDEX_INPUTS)
     # `build_output` asserts the same thing for the same reason: a producer that wrote no
     # rows would regenerate as an empty `classifications` list and reach no schema
     # validation, with every test still green — the coverage test compares only keys, and
@@ -406,9 +403,9 @@ def output(tmp_path_factory):
 
 
 @pytest.fixture(scope="session")
-def standalone_output(tmp_path_factory, output):
+def standalone_output(tmp_path_factory):
     """The four standalone producers' output, built once and shared (#465)."""
-    return build_standalone_output(tmp_path_factory.mktemp("standalone"), output)
+    return build_standalone_output(tmp_path_factory.mktemp("standalone"))
 
 
 def test_golden_inputs_cover_all_file_types():
@@ -613,6 +610,9 @@ def build_reconciled_output(pipeline_output: dict, standalone: dict) -> dict:
     appear: a submitter claim on ``platform`` (which agrees, fills a gap or conflicts,
     depending on what the producer inferred), and the published source speaking to
     ``reference_assembly`` with a value no authored row reads (a conflict or missing work).
+    A row with a ``generated_by`` also takes inherited declarations across it (#571): its
+    parents' value on ``data_modality``, with a reference build on ``reference_assembly``
+    where the row has no source claim on it, and the state ``mixed`` on ``assay_type``.
     """
     source = ClaimSource(name="anvil", dataset="AnVIL_GOLDEN", table="sequencing", column="platform")
     platform = make_claim(
@@ -639,13 +639,28 @@ def build_reconciled_output(pipeline_output: dict, standalone: dict) -> dict:
         )
         return SlotEvidence(claims=[seen], unreviewed={SOURCE_PUBLISHED_VALUE})
 
+    def inherited(row: dict, skip: str) -> dict[str, list[Inherited]]:
+        step = row.get("generated_by")
+        if step is None:
+            return {}
+        role = step["inputs"][0]["role"]
+        parents = tuple(i["parent_key"] for i in step["inputs"])
+
+        def one(declared: str, build=None) -> list[Inherited]:
+            return [Inherited(step["activity"], role, parents, declared, build)]
+
+        passed = {"data_modality": one("genomic"), "assay_type": one("mixed")}
+        if skip != "reference_assembly":
+            passed["reference_assembly"] = one("GRCh38", ("GRCh38", "p14"))
+        return passed
+
     reconciled: dict = {}
     for producer, payload in sorted({**pipeline_output, **standalone}.items()):
         rows = []
         for i, row in enumerate(payload["classifications"]):
             said = SlotEvidence(claims=[platform]) if i % 2 == 0 else unreviewed()
             slot = "platform" if i % 2 == 0 else "reference_assembly"
-            rows.append(reconcile_record(row, {slot: said}))
+            rows.append(reconcile_record(row, {slot: said}, inherited(row, skip=slot)))
         reconciled[producer] = {"classifications": rows}
     return reconciled
 
@@ -658,9 +673,8 @@ def test_reconciled_output_matches_fixture(output, standalone_output):
 def _regenerate_fixtures():
     """Write the committed fixtures from a fresh run (manual regen entry point).
 
-    One command for both, because the standalone fixture's index records inherit from
-    the golden's bam rows: regenerating either alone would leave that inheritance
-    pinned against the other fixture's previous contents.
+    One command for all three, because the reconciled fixture is built from the other
+    two: regenerating one alone would leave it pinned against the others' previous contents.
     """
     import tempfile
 
@@ -669,7 +683,7 @@ def _regenerate_fixtures():
         output = build_output(Path(tmp))
         standalone_dir = Path(tmp) / "standalone"
         standalone_dir.mkdir()
-        standalone = build_standalone_output(standalone_dir, output)
+        standalone = build_standalone_output(standalone_dir)
     reconciled = build_reconciled_output(output, standalone)
     for path, payload in ((GOLDEN_PATH, output), (STANDALONE_PATH, standalone), (RECONCILED_PATH, reconciled)):
         path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")

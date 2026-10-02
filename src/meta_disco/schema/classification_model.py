@@ -389,6 +389,10 @@ class CreditedToEnum(str, Enum):
     """
     No source declared the value; inference supplied it.
     """
+    inherited = "inherited"
+    """
+    No source declared the value and inference did not either: it was inherited from the file's parents across its `generated_by` (contract 4.9, #571), whose record keys the inherited claim names.
+    """
     conflict_inference = "conflict_inference"
     """
     Inference's own rules disagreed.
@@ -576,7 +580,7 @@ Listed rather than derived because LinkML has no enum-subset construct that `gen
 
 class ClaimStateEnum(str, Enum):
     """
-    Why a claim that consulted a source produced no vocabulary value (issue #392). Each state was observed in the spike over three real producers on `AnVIL_HPRC_R2`. None of them declares a value, so none competes in resolution. `mapped` is not a member: a claim that mapped carries a `value`, and `not_applicable` / `not_classified` remain statuses, unchanged.
+    Why a claim that consulted a source produced no vocabulary value (issue #392). Each state was observed in the spike over three real producers on `AnVIL_HPRC_R2`. None of them declares a value, so none competes in resolution — except `mixed`, an inherited claim's, which reconcile weighs (contract 4.9). `mapped` is not a member: a claim that mapped carries a `value`, and `not_applicable` / `not_classified` remain statuses, unchanged.
     """
     unmapped = "unmapped"
     """
@@ -589,6 +593,10 @@ class ClaimStateEnum(str, Enum):
     declined = "declined"
     """
     This column is not an authority on this dimension, so no claim is made from it whatever it says. A property of the (source, column, dimension) triple, not of a value: `alignments_v2.location` points at pangenome graphs and at a VCF of variants under one column, so neither a value-level mapping nor a finer key can fix it.
+    """
+    mixed = "mixed"
+    """
+    An inherited claim only (contract 4.9, #571): the parents in one input role gave different answers, or one of them is itself mixed. It is the one state that takes part in resolution: alone it leaves the slot `not_classified`, and against a value or `not_applicable` from any other declaration it is a conflict.
     """
 
 
@@ -1361,7 +1369,8 @@ class Evidence(ConfiguredBaseModel):
     A claim from one of our rules or content classifiers carries rule_id + tier. A claim from an external source (issue #392) carries `source` as well as a rule_id — the mapping entry it fired, not a rule of ours — and no tier, because an import does not compete on the rule ladder (#401). It carries the raw value it read and, once the join has run, how it was matched to our file. Evidence that is neither — the note left when a fetch or the input contract failed — carries a rule_id and a reason but declares nothing.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
-         'slot_usage': {'status': {'name': 'status', 'required': False}}})
+         'slot_usage': {'activity': {'name': 'activity', 'required': False},
+                        'status': {'name': 'status', 'required': False}}})
 
     rule_id: Optional[str] = Field(default=None, description="""Identifier of the rule or content classifier that produced this evidence. Absent on synthetic resolution markers, which carry `marker` instead.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
     marker: Optional[EvidenceMarkerEnum] = Field(default=None, description="""Kind of synthetic resolution marker, when this entry is not a claim but a note about the outcome: `not_classified` (no rule determined a value) or `conflict` (claims disagreed at the top tier). The marker's `status` is the status the field resolved to — `conflict` on a conflict marker (#88). Absent on real claims.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
@@ -1376,6 +1385,9 @@ class Evidence(ConfiguredBaseModel):
     raw_value: Optional[str] = Field(default=None, description="""What the source actually said, before mapping — `Revio` beside a mapped `PACBIO`. The mapping is the reviewable decision, and storing only the mapped value makes it unauditable. Also present on an `unmapped` or `no_vocabulary_term` claim, where it is the whole content of the claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'Evidence']} })
     join_key: Optional[JoinKeyEnum] = Field(default=None, description="""Which key attached this claim to our file. Recorded per claim rather than per source because identity is the risky step and sources publish different keys: md5 collides on 1.72% of the corpus's rows and the HPRC catalog publishes only file names (#390). Absent on a claim our own inference produced, which was never joined to anything.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
     match_exact: Optional[bool] = Field(default=None, description="""Whether the join on `join_key` was an exact match rather than a normalized or partial one. Absent whenever `join_key` is.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
+    activity: Optional[ActivityTypeEnum] = Field(default=None, description="""The kind of step that made the file (`activity_type_enum`); what passes from each input role is declared per term in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'GeneratedBy']} })
+    parent_role: Optional[str] = Field(default=None, description="""On an inherited claim (contract 4.9, #571): the input role of the step whose parents gave the claim, a role its `activity` declares in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
+    parent_keys: Optional[list[str]] = Field(default=None, description="""On an inherited claim (contract 4.9, #571): the record keys of the parents, in that role, whose settled answers gave the claim — each one's record in the same run.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
 
 
 class GeneratedBy(ConfiguredBaseModel):
@@ -1384,7 +1396,7 @@ class GeneratedBy(ConfiguredBaseModel):
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
-    activity: ActivityTypeEnum = Field(default=..., description="""The kind of step that made the file (`activity_type_enum`); what passes from each input role is declared per term in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy']} })
+    activity: ActivityTypeEnum = Field(default=..., description="""The kind of step that made the file (`activity_type_enum`); what passes from each input role is declared per term in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'GeneratedBy']} })
     named_by: list[Attribution] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityInput']} })
     inputs: list[ActivityInput] = Field(default=..., description="""The inputs the step used, each in one of the roles its activity declares.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityDeclaration']} })
 

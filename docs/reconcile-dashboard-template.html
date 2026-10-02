@@ -96,6 +96,14 @@
     run.</p>
   <div class="scroll" id="lineage"></div>
 
+  <h2>Inheritance: what each file takes from its parents</h2>
+  <p class="note">Across a file's <code>generated_by</code>, each input role passes the dimensions its activity
+    declares, and the parents in that role settle among themselves (contract 4.9, #571). <em>declared</em>: they
+    agree and give the file their answer (a slot it fills is credited <em>inherited</em>); <em>mixed</em>: they
+    disagree; <em>parent_conflict</em> / <em>parent_not_classified</em>: a parent in conflict or with no answer, so
+    nothing passes; <em>parent_not_in_run</em>: a parent the run does not hold. Once per file, dimension and role.</p>
+  <div class="scroll" id="inheritance"></div>
+
   <script type="module">
     // Data injected by scripts/generate_reconcile_report.py; every table is precomputed there.
     const DATA = RECONCILE_DATA_PLACEHOLDER;
@@ -221,6 +229,17 @@
               ? table(['dataset', 'activity', 'problem', 'detail', 'files'], L.misfits.map(m => [shown(m.dataset), m.activity, m.problem, m.detail, {text: n(m.files), cls: 'num'}]))
               : '<p>None.</p>');
       }
+    }
+
+    {
+      const I = DATA.inheritance;
+      const el = document.getElementById('inheritance');
+      el.innerHTML = I === null
+        ? "<p>This run's report predates inheritance at reconcile (#571).</p>"
+        : I.length
+          ? table(['dataset', 'dimension', ...DATA.inheritance_columns],
+              I.map(r => [shown(r.dataset), r.slot, ...DATA.inheritance_columns.map(k => ({text: n(r[k]), cls: 'num'}))]))
+          : '<p>No file has a step that passes a dimension.</p>';
     }
 
     // To one decimal, rounded down, so a dataset short of every file never reads 100%.

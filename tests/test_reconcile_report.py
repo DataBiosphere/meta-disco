@@ -351,6 +351,29 @@ def test_a_report_written_before_lineage_says_so_and_one_with_no_conflicts_says_
     assert "None: wherever two sources named a file's step, they agreed." in md
 
 
+def test_the_inheritance_section_lists_what_each_role_passed_per_dataset_and_dimension():
+    report = {
+        "inheritance": {
+            DATASET: {
+                "platform": {"declared": 5, "mixed": 1},
+                "data_modality": {"declared": 7, "parent_not_classified": 2},
+            }
+        }
+    }
+    rows = rr.inheritance_rows(report)
+    assert rows is not None
+    # In dimension order, every outcome a column, zero where none.
+    assert [r["slot"] for r in rows] == ["data_modality", "platform"]
+    md = "\n".join(rr._inheritance_section(rows))
+    assert f"| `{DATASET}` | `data_modality` | 7 | 0 | 0 | 2 | 0 |" in md
+    assert f"| `{DATASET}` | `platform` | 5 | 1 | 0 | 0 | 0 |" in md
+
+
+def test_a_report_written_before_inheritance_says_so():
+    assert rr.inheritance_rows({}) is None
+    assert "predates inheritance at reconcile (#571)" in "\n".join(rr._inheritance_section(None))
+
+
 def test_the_dashboard_carries_the_lineage_section(tmp_path, conflicted):
     code, md, html = render(tmp_path, "--run-dir", str(conflicted), "--no-previous")
     assert code == 0

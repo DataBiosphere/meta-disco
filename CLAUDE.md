@@ -144,13 +144,12 @@ evidence}` entry — plus the controlled vocabulary:
   - `rule_engine.make_claim` (or `add_claim`, which wraps it) is the single
     construction site for a claim, and enforces its invariants: exactly one of
     `value` / `status` / `state`, a `tier` only where one belongs, and a producer
-    handle. `classify_index_files` holds the two paths outside it, both hand-building
-    evidence for the same reason — an index file has exactly one claim per dimension and
-    never reaches `evaluate_claims`, so there is no tier to carry, and `inherited_evidence`
-    additionally copies a parent's resolved `conflict`, which `make_claim` refuses.
-    `inherited_evidence` serves a matched index; `declined_record` serves one this
-    producer took no parent for (#438). Both are known violations of the contract's 1.1,
-    tracked as #413, which should fold them in together.
+    handle. An **inherited claim** (`derivation_inheritance`) is built through it too, at
+    reconcile (`reconcile_inherit`, #571): it names the `activity`, `parent_role` and
+    `parent_keys` it crossed, carries no tier, and is the only claim that may declare the
+    state `mixed`. The index producer's two hand-built paths (#413) are gone: it no longer
+    copies a parent's answer, and a declined index's markers are notes (`rule_id` and
+    `reason`, declaring nothing), as a fetch failure's are.
   - Every claim carries a `source_type`, stated explicitly from the `SOURCE_*`
     constants. Never derive it from `tier`, which cannot tell `contig_detection`
     from `content_read`. Rule claims are the one derived case and key off `scope`.
@@ -245,6 +244,15 @@ evidence}` entry — plus the controlled vocabulary:
     `generated_by`; both are counted in the report's `lineage` block, never written on a record. A
     sample parent waits for #582. A file whose only steps are generic gets none, counted as
     `generic_only`. The inference artifact's `generated_by` is never changed.
+  - **Reconcile carries each parent's answer across that step** (#571, contract 4.9,
+    `reconcile_inherit`): for each input role and each dimension its activity passes, the
+    parents settle (agree → their value; differ or mixed → `mixed`; any `conflict` or
+    `not_classified` → nothing) and give the child one inherited claim, resolved with its
+    own by `reconcile.settle`, the one resolution rule. Parents settle before children (a
+    cycle is refused), so the run is read twice. A slot filled only by inheritance is
+    credited `inherited`; the report's `inheritance` block counts what each role gave. With
+    `--no-evidence` it still crosses the steps inference wrote (6.6). Inference itself
+    inherits nothing: an index's or checksum's carried dimensions are `not_classified` there.
   - **No output record carries what a repository publishes** (#513). The `published`
     block (#424) and `make published-comparison` are deleted: the published values are
     input kind 2, written by the published importer as evidence (contract 7.1, 7.12,
@@ -311,7 +319,7 @@ evidence}` entry — plus the controlled vocabulary:
     input carries `parent_file`, `parent_key` (the parent's record key, never its md5),
     `parent_kind`, and `named_by`, every source that named it (the step has its own). A parent no file or
     two files of the dataset carry gives none. Steps the source tables state are built at
-    reconcile (#577); inheritance is #571.
+    reconcile (#577), and reconcile inherits across every step (#571).
   - **A producer is declared once**, in `producers.PRODUCERS` — the eleven writers of a
     run's `*_classifications.json` files. Add one there, never to a second list:
     `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,
@@ -323,16 +331,16 @@ evidence}` entry — plus the controlled vocabulary:
     is `file_id` (durable across a re-index, #433; not `entry_id`, not `file_name`), HPRC's
     is `file_md5sum` / `md5sum`, a hash of the file's URL that the HPRC builder writes
     because its catalogs issue no identifier — no catalog identity is minted for an HPRC
-    record. Four readers use it and none may hard-code a field: the input gate
+    record. None of its readers may hard-code a field; they include the input gate
     (`scripts/validate_metadata.py`, which also names its sample records by it through
     `pipeline.key_field`), the catch-all producer's skip set
-    (`scripts/classify_remaining_files.py`), the index producer's parent join
-    (`scripts/classify_index_files.py`, #486) and the post-run one-row-per-file check
-    (#445). The two producers read another producer's rows through `pipeline.keyed_rows`
-    and the input record each compares against those rows — every record for the
-    catch-all, the matched parent for the index producer — through
-    `pipeline.input_key_value`; both raise on a missing key rather than skip. An
-    envelope naming no repository is refused before a run starts.
+    (`scripts/classify_remaining_files.py`), an edge's `parent_key` (`edges.generated_by`,
+    written by the index producer and the catch-all; the index producer joined parent rows
+    on it until #571 took the copy away, #486), the post-run one-row-per-file check (#445)
+    and reconcile. The catch-all reads another producer's rows through `pipeline.keyed_rows`
+    and compares every input record against them through `pipeline.input_key_value`, and an
+    edge grounds its parent through the same function; both raise on a missing key rather
+    than skip. An envelope naming no repository is refused before a run starts.
   - **Ask `Producer.claims`; never write a second routing predicate.** A file has one
     owner because one function says so — the name decides and `file_format` is only a
     fallback, for reasons `route`'s docstring gives. Four hand-written predicates are

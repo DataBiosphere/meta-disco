@@ -32,12 +32,15 @@ AUTHORABLE_STATUSES = frozenset({NOT_APPLICABLE, NOT_CLASSIFIED})
 
 # Claim states (issue #392): why a claim that consulted a source produced no
 # vocabulary value. These are NOT statuses — a claim in one of these states
-# declares nothing, so it never competes in resolution and can never become a
-# dimension's status.
+# declares no value, and can never become a dimension's status. The first three never
+# compete in resolution. `mixed` is an inherited claim's (contract 4.9, #571): the
+# parents disagree, and reconcile weighs it — alone it leaves the slot
+# `not_classified`, against a value or `not_applicable` it is a conflict.
 UNMAPPED = "unmapped"
 NO_VOCABULARY_TERM = "no_vocabulary_term"
 DECLINED = "declined"
-CLAIM_STATES = frozenset({UNMAPPED, NO_VOCABULARY_TERM, DECLINED})
+MIXED = "mixed"
+CLAIM_STATES = frozenset({UNMAPPED, NO_VOCABULARY_TERM, DECLINED, MIXED})
 
 # Kinds of source behind a claim (issue #392). Deliberately not derived from a
 # claim's tier: SOURCE_CONTIG_DETECTION and SOURCE_CONTENT_READ share
