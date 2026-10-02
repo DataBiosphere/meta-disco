@@ -373,10 +373,12 @@ distinction.
 > **The consuming layer (verified 2026-06-25, edge re-checked 2026-09-21).** There
 > is **no search layer inside this repo** — meta-disco produces classification JSON;
 > the actual filtering UI is the external AnVIL Explorer / TDR. The in-repo consumers
-> are the batch **report generators**, and none of them follows a link: an index
-> record's inherited values are copied onto it at write time (`classify_index_files.py`
-> looks the parent up by the source's record key, `pipeline.SOURCE_RECORD_KEYS`, and
-> writes the parent's labels into the index's own record). Before #356 the emitted
+> are the batch **report generators**, and none of them follows a link. Until #571 an
+> index record's inherited values were copied onto it at write time
+> (`classify_index_files.py` looked the parent up by the source's record key and wrote
+> the parent's labels into the index's own record); since #571 the inference record
+> carries the link only, and reconcile writes the inherited values onto the reconciled
+> record, credited `inherited` (contract 4.9). Before #356 the emitted
 > `derived_from` edge grounded on `parent_md5sum` and `parent_file` only, so a
 > consumer could not resolve it into a key-indexed map, and in the same-bytes case
 > (#486) an md5 alone could not say which parent row was meant. Since #356 the edge
