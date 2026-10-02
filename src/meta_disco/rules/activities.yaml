@@ -62,10 +62,17 @@ activities:
   - term: ExpressionActivity
     output: {form: [file], kind: [quantification, expression_matrix]}
     inputs:
-      - {role: quantified, form: [file], kind: [reads, alignments], required: true, many: true}
+      - role: quantified
+        form: [file]
+        kind: [reads, alignments]
+        required: true
+        many: true
+        passes: [data_modality, assay_type, platform, instrument_model]
     reason: >-
-      Not decided: whether a quantification keeps its reads' reference depends on the tool
-      (salmon quantifies against a transcriptome), and no translation row maps to this term yet.
+      A quantification counts the library its reads came from, so the sequencer and the library
+      pass. The reference does not (#595): salmon and kallisto quantify against a transcriptome,
+      not the reads' reference, and FASTQ reads say `not_applicable`, which would pass on as a
+      false claim about the quantification.
   - term: AnalysisActivity
     output: {form: [file]}
     inputs:
@@ -109,8 +116,8 @@ activities:
         many: false
         passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
     reason: >-
-      A report on one file's content (samtools stats, mosdepth) describes that file's data,
-      so it takes every dimension but its own kind.
+      A report on one file's content (samtools stats, mosdepth, a bedGraphToBigWig coverage
+      track of a BAM) describes that file's data, so it takes every dimension but its own kind.
   - term: LiftoverActivity
     output: {form: [file]}
     inputs:

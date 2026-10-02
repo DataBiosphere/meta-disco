@@ -63,6 +63,23 @@ rows:
     match: {source_type: repository_metadata, table: file, child_column: file_path, parent_column: derived_from, child_data_type: alignments, parent_data_type: reads}
     declares: {activity: AlignmentActivity, role: reads}
     reason: IGVF alignments derived from reads are those reads aligned.
+  - id: activity.track_bedgraphtobigwig
+    match: {source_type: repository_activity, table: anvil_activity, raw_activity: 'Track: bedGraphToBigWig', parent_column: used_file_id}
+    declares: {activity: QualityControlActivity, role: reported_on}
+    reason: >-
+      ENCORE's coverage tracks: bedGraphToBigWig writes the per-strand coverage of the one STAR
+      BAM it used, so the track describes that BAM's data (#543 made these bigWigs
+      `annotations.coverage`).
+  - id: activity.quantification_salmon
+    match: {source_type: repository_activity, table: anvil_activity, raw_activity: 'Quantificatioin: salmon', parent_column: used_file_id}
+    declares: {activity: ExpressionActivity, role: quantified}
+    reason: >-
+      salmon quantifies the reads it used; every file this step used in anvil15 is a trimmed
+      FASTQ. `Quantificatioin` is AnVIL's spelling, matched as written.
+  - id: activity.merger_fastq
+    match: {source_type: repository_activity, table: anvil_activity, raw_activity: 'Merger: multiple FASTQ files', parent_column: used_file_id}
+    declares: {activity: MergeActivity, role: shard}
+    reason: The step joins the FASTQs it used into one FASTQ.
   - id: activity.anvil_activity_generated_file_id_used_biosample_id
     match: {source_type: repository_activity, table: anvil_activity, raw_activity: null, child_column: generated_file_id, parent_column: used_biosample_id, child_data_type: null, parent_data_type: null}
     seeded_from: [anvil/anvil15/AnVIL_HPRC_R2/20260930T062532Z]
@@ -87,14 +104,8 @@ rows:
   - id: activity.anvil_activity_merger_multiple_fastq_files_generated_file_id_used_biosample_id
     match: {source_type: repository_activity, table: anvil_activity, raw_activity: 'Merger: multiple FASTQ files', child_column: generated_file_id, parent_column: used_biosample_id, child_data_type: null, parent_data_type: null}
     seeded_from: [anvil/anvil15/AnVIL_ENCORE_293T/20260930T062532Z]
-  - id: activity.anvil_activity_merger_multiple_fastq_files_generated_file_id_used_file_id
-    match: {source_type: repository_activity, table: anvil_activity, raw_activity: 'Merger: multiple FASTQ files', child_column: generated_file_id, parent_column: used_file_id, child_data_type: null, parent_data_type: null}
-    seeded_from: [anvil/anvil15/AnVIL_ENCORE_293T/20260930T062532Z]
   - id: activity.anvil_activity_quantificatioin_salmon_generated_file_id_used_biosample_id
     match: {source_type: repository_activity, table: anvil_activity, raw_activity: 'Quantificatioin: salmon', child_column: generated_file_id, parent_column: used_biosample_id, child_data_type: null, parent_data_type: null}
-    seeded_from: [anvil/anvil15/AnVIL_ENCORE_293T/20260930T062532Z, anvil/anvil15/AnVIL_ENCORE_RS293/20260930T062532Z]
-  - id: activity.anvil_activity_quantificatioin_salmon_generated_file_id_used_file_id
-    match: {source_type: repository_activity, table: anvil_activity, raw_activity: 'Quantificatioin: salmon', child_column: generated_file_id, parent_column: used_file_id, child_data_type: null, parent_data_type: null}
     seeded_from: [anvil/anvil15/AnVIL_ENCORE_293T/20260930T062532Z, anvil/anvil15/AnVIL_ENCORE_RS293/20260930T062532Z]
   - id: activity.anvil_activity_sequence_novaseq6000_generated_file_id_used_biosample_id
     match: {source_type: repository_activity, table: anvil_activity, raw_activity: 'Sequence: NovaSeq6000', child_column: generated_file_id, parent_column: used_biosample_id, child_data_type: null, parent_data_type: null}
@@ -104,9 +115,6 @@ rows:
     seeded_from: [anvil/anvil15/AnVIL_IGVF_Mouse_R1/20260930T062532Z]
   - id: activity.anvil_activity_track_bedgraphtobigwig_generated_file_id_used_biosample_id
     match: {source_type: repository_activity, table: anvil_activity, raw_activity: 'Track: bedGraphToBigWig', child_column: generated_file_id, parent_column: used_biosample_id, child_data_type: null, parent_data_type: null}
-    seeded_from: [anvil/anvil15/AnVIL_ENCORE_293T/20260930T062532Z, anvil/anvil15/AnVIL_ENCORE_RS293/20260930T062532Z]
-  - id: activity.anvil_activity_track_bedgraphtobigwig_generated_file_id_used_file_id
-    match: {source_type: repository_activity, table: anvil_activity, raw_activity: 'Track: bedGraphToBigWig', child_column: generated_file_id, parent_column: used_file_id, child_data_type: null, parent_data_type: null}
     seeded_from: [anvil/anvil15/AnVIL_ENCORE_293T/20260930T062532Z, anvil/anvil15/AnVIL_ENCORE_RS293/20260930T062532Z]
   - id: activity.anvil_activity_unknown_generated_file_id_used_biosample_id
     match: {source_type: repository_activity, table: anvil_activity, raw_activity: Unknown, child_column: generated_file_id, parent_column: used_biosample_id, child_data_type: null, parent_data_type: null}
