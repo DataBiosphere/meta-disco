@@ -1058,9 +1058,10 @@ class _Graph:
             own.append(self.intern((inference_conflict, declared, unreviewed)))
             if slot == REFERENCE_ASSEMBLY and inferred["status"] == CLASSIFIED:
                 detail = field_detail(record, slot).get("build")
-                own_build = (
-                    self.intern((detail.get("base"), detail.get("version"))) if isinstance(detail, dict) else None
-                )
+                # Only a resolved build passes on: observations alone (a header's reference name)
+                # are the file's own, so a build with neither base nor version is none.
+                pair = (detail.get("base"), detail.get("version")) if isinstance(detail, dict) else (None, None)
+                own_build = self.intern(pair) if pair != (None, None) else None
                 inferred_reference = self.intern(((inferred["status"], inferred["value"]), own_build))
                 build = reference_build(answers[slot], inferred_reference, [])
         self.base[identity] = self.intern.settled(answers, build, inferred_reference)

@@ -437,3 +437,18 @@ def test_a_file_passes_on_only_the_build_its_record_shows(tmp_path, roots):
     entry = slot(rows["s.vcf.gz.tbi"], "reference_assembly")
     assert (entry["value"], entry["credited_to"]) == ("GRCh38", INHERITED)
     assert "build" not in entry
+
+
+def test_a_parent_build_with_no_base_or_version_passes_no_build(tmp_path):
+    """Header observations alone are the parent's own: a child gets no `build` block for them."""
+    observed = {"base": None, "version": None, "name": "chm13.draft_v1.0.fasta"}
+    rows, _ = go(
+        tmp_path,
+        [
+            rec(1, "s.bam", reference_assembly="GRCh38", build=observed),
+            rec(2, "s.bam.bai", generated_by=index_of(1, "s.bam")),
+        ],
+        None,
+    )
+    entry = slot(rows["s.bam.bai"], "reference_assembly")
+    assert entry["value"] == "GRCh38" and "build" not in entry
