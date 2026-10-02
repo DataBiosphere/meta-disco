@@ -65,11 +65,11 @@ rows:
     reason: IGVF alignments derived from reads are those reads aligned.
   - id: activity.track_bedgraphtobigwig
     match: {source_type: repository_activity, table: anvil_activity, raw_activity: 'Track: bedGraphToBigWig', parent_column: used_file_id}
-    declares: {activity: QualityControlActivity, role: reported_on}
+    declares: {activity: CoverageActivity, role: covered}
     reason: >-
-      ENCORE's coverage tracks: bedGraphToBigWig writes the per-strand coverage of the one STAR
-      BAM it used, so the track describes that BAM's data (#543 made these bigWigs
-      `annotations.coverage`).
+      Each step used one STAR BAM and generated its four `Signal.{Unique,UniqueMultiple}.strand±`
+      bigWigs: STAR's per-strand coverage of that BAM, converted by bedGraphToBigWig, so the
+      raw words name the conversion, not what was computed.
   - id: activity.quantification_salmon
     match: {source_type: repository_activity, table: anvil_activity, raw_activity: 'Quantificatioin: salmon', parent_column: used_file_id}
     declares: {activity: ExpressionActivity, role: quantified}
