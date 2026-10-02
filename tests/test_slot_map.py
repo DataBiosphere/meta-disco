@@ -213,7 +213,7 @@ def test_an_entity_shaped_token_is_refused_as_a_source(tmp_path):
 
 def test_a_derivative_column_takes_no_data_type_but_keeps_its_reference(tmp_path):
     index = "catalog: c\ndatasets:\n  D:\n    1KGP_CHM13v2_sample:\n      chr1_hcvcf_index:\n        data_type:\n          - {table_name: sample}\n"
-    refuses(tmp_path, index, "'chr1_hcvcf_index' is an index or checksum column")
+    refuses(tmp_path, index, "'chr1_hcvcf_index' is an index column")
     reference = "catalog: c\ndatasets:\n  D:\n    1KGP_CHM13v2_sample:\n      chr1_hcvcf_index:\n        reference_assembly:\n          - {table_name: CHM13v2}\n"
     (entry,) = load(tmp_path, reference).entries
     assert entry.is_derivative

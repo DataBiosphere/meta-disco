@@ -104,8 +104,8 @@ _NAME_FORMS = frozenset({SOURCE_TABLE_NAME, SOURCE_COLUMN_NAME})
 
 # A column whose last name token (`name_tokens`) is one of these is a sidecar of
 # another column's file: an index or a checksum. It takes no `data_type` from any
-# source, name or cell (its own name already says what it is), and keeps the payload's
-# `reference_assembly`.
+# source, name or cell (its own name already says what it is). An index keeps the
+# payload's `reference_assembly`; a checksum (`CHECKSUM_SUFFIXES`, below) takes no slot.
 DERIVATIVE_SUFFIXES = frozenset({"index", "idx", "bai", "crai", "tbi", "csi", "fai", "gzi", "md5"})
 # The derivative suffixes that name a checksum, which takes no slot from any source (#596):
 # its own `data_type` is `checksum` and its carried dimensions are `not_applicable`.
@@ -378,8 +378,8 @@ def _source(slot: str, item: object, table: str, column: str, at: str) -> SlotSo
         )
     if excluded == DERIVATIVE:
         raise ValueError(
-            f"{at}: {column!r} is an index or checksum column and carries no data_type of its own "
-            f"payload (suffixes {sorted(DERIVATIVE_SUFFIXES)}); its reference_assembly may be mapped"
+            f"{at}: {column!r} is an index column and carries no data_type of its own "
+            f"payload (suffixes {sorted(DERIVATIVE_SUFFIXES - CHECKSUM_SUFFIXES)}); its reference_assembly may be mapped"
         )
     return SlotSource(form=form, value=value)
 
