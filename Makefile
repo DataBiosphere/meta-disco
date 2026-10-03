@@ -1,4 +1,4 @@
-.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published check-lineage-map import-anvil-lineage seed-activity-map seed-value-map review-queue corpus-diff reconcile reconcile-report rules-report all-reports download-hprc validate-hprc clean help
+.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published check-lineage-map import-anvil-lineage import-ena-evidence seed-activity-map seed-value-map review-queue corpus-diff reconcile reconcile-report rules-report all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -33,6 +33,7 @@ help:
 	@echo "  make import-anvil-published Import AnVIL's published anvil_file columns as a generation of evidence files"
 	@echo "  make check-lineage-map  Check the AnVIL lineage map against the manifests on disk (offline)"
 	@echo "  make import-anvil-lineage Import AnVIL's lineage (anvil_activity, sample rows, IGVF derived_from) as lineage evidence"
+	@echo "  make import-ena-evidence Import ENA's run records for the FASTQs ENA generated, where the md5 matches (network)"
 	@echo "  make seed-activity-map  Append a seeded row to the activity map for every lineage step with no row (offline)"
 	@echo "  make seed-value-map     Append a seeded row to the value map for every evidence value with no row (offline)"
 	@echo "  make review-queue       Write docs/review-queue-report.md + review-queue.html: every evidence value and lineage step no authored row reads (offline)"
@@ -255,6 +256,12 @@ check-lineage-map:
 
 import-anvil-lineage:
 	uv run python scripts/import_anvil_lineage.py $(ARGS)
+
+# ENA's run records (#606), for the files named as ENA names its generated FASTQs and
+# whose md5 ENA's equals: a generation per dataset under data/source_evidence/ena/, with
+# ENA's response kept beside it. Network; `ARGS="--response <file>"` re-imports offline.
+import-ena-evidence:
+	uv run python scripts/import_ena_evidence.py $(ARGS)
 
 # The activity translation table (#584; src/meta_disco/activity_map.py): seed it from the
 # current lineage evidence; `make review-queue` lists its unauthored rows. Offline.

@@ -17,10 +17,12 @@ What each comparison means today (#330):
   content (the content ceiling), so our side is a sentinel. The
   comparisons are wired now so they activate once import work fills
   those dimensions.
-- Circularity policy (stated here, NOT yet enforced in code): ENA should
-  only validate modality/assay values that were imported from a
-  DIFFERENT source (e.g. the HPRC Catalog or a study's methods paper) —
-  never values imported from ENA itself.
+- Circularity: ENA must never validate a value ENA supplied. ENA's run
+  records are imported as evidence (#606) for the FASTQs ENA generated,
+  and reach only the reconciled artifact (``<run>/reconciled/``); this
+  reads inference's output, which reads no evidence, so no value here
+  came from ENA. An input under a ``reconciled/`` directory is refused
+  (:func:`refuse_reconciled`) so it cannot be pointed at ENA's own values.
 
 Usage:
     python scripts/validate_ena_accessions.py -i output/anvil/<run>/fastq_classifications.json
@@ -39,8 +41,9 @@ from pathlib import Path
 
 import requests
 
+from meta_disco.ena_evidence import RUN_ACCESSION
 from meta_disco.models import STATUS_LABELS, field_status, field_value
-from meta_disco.output_utils import find_latest_run
+from meta_disco.output_utils import RECONCILED_DIR, find_latest_run
 from meta_disco.schema_vocab import most_specific
 from meta_disco.validation_maps import ENA_LIBRARY_STRATEGY_MAP
 
@@ -51,7 +54,7 @@ FIELDS = "run_accession,instrument_platform,library_strategy,library_source"
 # style prefixes put an underscore *before* the accession, so the leading
 # guard rejects only letters/digits (an embedded ...XERR123456 is not an
 # accession), not underscores. Greedy \d{6,} consumes the whole digit run.
-ACCESSION_RE = re.compile(r"(?<![A-Za-z0-9])([ESD]RR\d{6,})")
+ACCESSION_RE = re.compile(rf"(?<![A-Za-z0-9])({RUN_ACCESSION})")
 # Statuses that mean "our side committed nothing": every status label
 # (`models.STATUS_LABELS`, conflict included, #88) and "" for a status absent.
 _SENTINEL_STATUSES = STATUS_LABELS | {""}
@@ -149,14 +152,24 @@ def fetch_ena_metadata(acc: str) -> dict | None:
         return None
 
 
+def refuse_reconciled(input_path: Path) -> None:
+    """Raise if ``input_path`` is in a reconciled artifact, which can carry ENA's own values (#606)."""
+    if RECONCILED_DIR in input_path.resolve().parts:
+        raise ValueError(
+            f"{input_path} is reconciled output, which carries ENA-sourced values (#606); "
+            "validating them against ENA is circular — give inference's output, <run>/fastq_classifications.json"
+        )
+
+
 def validate_against_ena(
     input_path: Path,
     output_path: Path,
     limit: int | None = None,
     workers: int = 10,
 ):
-    """Validate FASTQ classifications against ENA metadata."""
+    """Validate FASTQ classifications against ENA metadata; refuses a reconciled input (:func:`refuse_reconciled`)."""
 
+    refuse_reconciled(input_path)
     # Load classifications
     print(f"Loading classifications from {input_path}...")
     with input_path.open() as f:

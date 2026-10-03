@@ -464,7 +464,9 @@ importer's half is built — 7.12 is enforced (below), and the published importe
   repository, and 7.12 at the map for AnVIL and at the run for every repository; that a map was
   authored from nothing a run concluded is
   not enforceable, and a test greps each file for the strings that would say otherwise. No other source
-  has a map and there is no rule scope for source evidence. Inference consumes none of what is written;
+  has a map and there is no rule scope for source evidence. Kind 4 has one importer, `ena_evidence`
+  (#606), with no map: it reads ENA's run records for the FASTQs ENA generated, under
+  `data/source_evidence/ena/`, and writes a file's lines only where ENA's md5 equals the catalog's. Inference consumes none of what is written;
   the value map's seeder and review queue read it, and so does reconcile (#432).
 - **The translation table is read by reconcile alone** (#414, #432). `value_map` holds 3.9's row,
   enforces 3.11's split, 3.12's scope and collision rules and 3.5's bound, seeds from evidence and lists

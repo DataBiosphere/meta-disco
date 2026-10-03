@@ -147,9 +147,9 @@ JOIN_KEY_FILE_NAME = "file_name"
 JOIN_KEY_FILE_ID = "file_id"
 JOIN_KEY_ENTRY_ID = "entry_id"
 # Not a field of the input record but a fact classification *derives* — read from a
-# fastq's read headers. ENA run accessions appear in no input file name at all, so a
-# claim from ENA or SRA can only be attached by this, which is why the join runs
-# after inference rather than over the input corpus.
+# fastq's read headers. ENA's run records reach the files ENA generated, which carry
+# the run accession in their name, by `file_id` instead (#606): the accession in the
+# name is only a lookup, and the md5 decides.
 JOIN_KEY_ARCHIVE_ACCESSION = "archive_accession"
 JOIN_KEYS = frozenset(
     {

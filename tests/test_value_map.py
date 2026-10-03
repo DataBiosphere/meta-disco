@@ -1020,13 +1020,14 @@ def test_the_bundled_table_covers_hprc_and_leaves_the_named_values_seeded():
     assert table.by_id("reference_assembly.unaligned").declares == {"reference_assembly": NOT_APPLICABLE}
     assert table.by_id("data_type.bam").authored and table.by_id("data_type.bam").declares == {}
     assert table.by_id("assay_type.wgs").declares == {"assay_type": "WGS", "data_modality": "genomic"}
-    # the scoped rows this test pins: SRA's library_source GENOMIC, declared nothing where it occurs (#563),
+    # the scoped rows this test pins: SRA's library_source GENOMIC, declared nothing where it occurs (#563, #606),
     # and the SHARE-seq pair, whose protocol only IGVF's analysis sets name (#533)
     scoped = {row.id: row for row in table.rows if row.scope is not None}
     share_seq = "single_nucleus_atac_seq+single_nucleus_rna_sequencing_assay"
     assert {rid: scoped[rid].scope for rid in scoped if ".genomic_" in rid or share_seq in rid} == {
         "data_modality.genomic_hprc_r2": Scope("anvil", "AnVIL_HPRC_R2"),
         "data_modality.genomic_1000g_high_coverage": Scope("anvil", "ANVIL_1000G_high_coverage_2019"),
+        "data_modality.genomic_ena": Scope("ena"),
         f"assay_type.{share_seq}": Scope("anvil", "AnVIL_IGVF_Mouse_R1"),
         f"data_modality.{share_seq}": Scope("anvil", "AnVIL_IGVF_Mouse_R1"),
     }
@@ -1038,6 +1039,8 @@ def test_the_bundled_table_covers_hprc_and_leaves_the_named_values_seeded():
     assert table.select("data_modality", "GENOMIC", "anvil", "AnVIL_HPRC_R2") is scoped["data_modality.genomic_hprc_r2"]
     # in any other dataset the value selects no row, so it enters the review queue
     assert table.select("data_modality", "GENOMIC", "anvil", "AnVIL_MAGE") is None
+    # ENA's run records carry it for every run they reach (#606)
+    assert table.select("data_modality", "GENOMIC", "ena", "ANVIL_T2T") is scoped["data_modality.genomic_ena"]
 
 
 def test_the_bundled_instrument_rows_declare_the_model_beside_the_platform():
@@ -1046,6 +1049,7 @@ def test_the_bundled_instrument_rows_declare_the_model_beside_the_platform():
     models = {row.id: row.declares for row in table.rows if "instrument_model" in row.declares}
     assert sorted(models) == [
         "platform.gridion",
+        "platform.illumina_hiseq_2000",
         "platform.illumina_nextseq_2000",
         "platform.illumina_novaseq_6000",
         "platform.illumina_novaseq_x",
@@ -1172,6 +1176,25 @@ def test_every_importer_source_has_a_queue_group():
     from meta_disco.value_map import QUEUE_GROUP_TEXT
 
     assert set(QUEUE_GROUP_TEXT) == {source_type for source_type, _ in SOURCE_PRECEDENCE}
+
+
+def test_narrowing_to_a_dataset_keeps_an_external_source_that_names_it_only_as_its_target(tmp_path, evidence_root):
+    """ENA's envelope names no source dataset; the dataset its lines are about is its target's (#606)."""
+    external = EvidenceFileSource(repository="ena", table="read_run", url="https://example.org")
+    envelope = evidence_file_envelope(
+        source=external,
+        source_version="anvil15",
+        source_key="run_accession",
+        target=EvidenceTarget(system="anvil", dataset="ANVIL_T2T", version="anvil15"),
+        target_key=JOIN_KEY_DRS_URI,
+    )
+    line = EvidenceEntry(
+        field="platform", target_key_value="drs://f1", raw_value="Revio", source=claim_source_for(external, "x")
+    )
+    write_generation(evidence_root, "ANVIL_T2T", "read_run", [line], envelope=envelope, source="ena")
+    table = load(tmp_path, "rows:\n")
+    assert [e.raw_value for e in review_queue(evidence_root, table, ["ANVIL_T2T"])] == ["Revio"]
+    assert review_queue(evidence_root, table, ["AnVIL_HPRC_R2"]) == []
 
 
 def test_a_queue_limited_to_some_datasets_says_so(tmp_path, two_sources):
