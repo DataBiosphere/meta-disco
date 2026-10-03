@@ -9,6 +9,7 @@ import pytest
 
 from meta_disco.models import SOURCE_REPOSITORY_METADATA
 from meta_disco.output_utils import RECONCILED_DIR
+from meta_disco.pipeline import HPRC_REPOSITORY
 from meta_disco.reconcile import FILLED_GROUPS, REPORT_FILE, UNFILLED_CATEGORIES
 from meta_disco.summaries import md_code
 from tests.run_fixtures import write_run
@@ -206,6 +207,28 @@ def test_the_completeness_filled_count_is_the_values_tables_filled_summed_over_t
     data = rr.dashboard_data(rr.load_report(conflicted), None, Path("report.json"))
     filled = sum(m["total"]["filled"] * m["total"]["files"] for m in data["values"].values())
     assert round(filled) == data["run"]["completeness"]["filled"] > 0
+
+
+def test_the_catalog_alone_counts_its_own_dimensions_and_the_values_it_publishes(conflicted):
+    """Its slots are the files times its published columns; a value no translation row reads still fills one."""
+    report = rr.load_report(conflicted)
+    data = rr.dashboard_data(report, None, Path("report.json"))
+    assert data["run"]["catalog_alone"] == {
+        "dimensions": ["data_modality", "reference_assembly"],
+        "slots": data["run"]["files"] * 2,
+        "filled": 1,  # the one unreviewed published reference_assembly
+    }
+    md = rr.render_markdown(data)
+    assert "| **filled** |" in md and "| catalog alone | % of its slots |" in md
+    assert "publishes a column for (`data_modality`, `reference_assembly`)" in md
+
+
+def test_a_repository_with_no_published_source_has_no_catalog_alone(conflicted):
+    report = {**rr.load_report(conflicted), "repository": HPRC_REPOSITORY}
+    data = rr.dashboard_data(report, None, Path("report.json"))
+    assert data["run"]["catalog_alone"] is None
+    md = rr.render_markdown(data)
+    assert "catalog alone" not in md.lower()
 
 
 def test_a_share_too_small_to_show_is_not_shown_as_zero():
