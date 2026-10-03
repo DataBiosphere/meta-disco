@@ -237,7 +237,9 @@ def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[
     ``inferred`` is the step inference wrote from the child's name (or None); ``lineage``
     the steps the source tables state. Sources agree when their activities agree
     (``activities.agreed``: the generic ``Activity`` agrees with any) and, in a role that
-    takes one input, name the same parent. Beside a specific activity, a generic step's parent
+    takes one input, name the same parent; in any role where inference names parents, a
+    source naming parents there must name the same set, since inference's step names every
+    input of the step it read. Beside a specific activity, a generic step's parent
     must be one a specific source names: it then adds its attribution to that input, and a
     parent no specific source names is an edge conflict in its role — never an input in a role
     the activity does not declare. A file whose only steps are generic gets no ``generated_by``
@@ -250,7 +252,8 @@ def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[
     ``lineage`` gives them, each once.
     """
     lineage = list(lineage)
-    said = [*inferred_steps(inferred), *lineage]
+    from_inference = inferred_steps(inferred)
+    said = [*from_inference, *lineage]
     if not said:
         return None, None
     activity = activities.agreed(s.activity for s in said)
@@ -275,9 +278,18 @@ def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[
         s if s.activity != activities.UNKNOWN else replace(named[s.parent_key], attribution=s.attribution) for s in said
     ]
     declared = {i.role: i for i in activities.declarations()[activity].inputs}
+    inferred_parents = {s.role: set() for s in from_inference}
+    for s in from_inference:
+        inferred_parents[s.role].add(s.parent_key)
     for role in dict.fromkeys(s.role for s in said):
         in_role = [s for s in said if s.role == role]
         if len({s.parent_key for s in in_role}) > 1 and role in declared and not declared[role].many:
+            return None, StepConflict(EDGE_CONFLICT, role, _distinct((s.parent_file, s.attribution) for s in in_role))
+        # Inference names every input of the step it read (a name rule its one parent, a
+        # header command line all its inputs), so a source naming other parents in that
+        # role contradicts it rather than adding to it, in a role that takes several too.
+        from_sources = {s.parent_key for s in said[len(from_inference) :] if s.role == role}
+        if role in inferred_parents and from_sources and from_sources != inferred_parents[role]:
             return None, StepConflict(EDGE_CONFLICT, role, _distinct((s.parent_file, s.attribution) for s in in_role))
     inputs: dict[tuple[str, str], dict] = {}
     for s in said:

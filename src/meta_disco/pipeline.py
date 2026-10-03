@@ -819,7 +819,8 @@ class ClassifyPipeline:
                     processed += 1
                     writer.write(outcome.result.to_dict())
                     if outcome.step_outcome is not None:
-                        step_counts[str(outcome.result.dataset_title)][outcome.step_outcome] += 1
+                        # As reconcile names a record with no title: "" (HPRC has none).
+                        step_counts[str(outcome.result.dataset_title or "")][outcome.step_outcome] += 1
                     if outcome.validation_failed:
                         invalid += 1
                     else:

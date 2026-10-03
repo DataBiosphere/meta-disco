@@ -295,7 +295,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     Which activity carries which dimension is its `passes` in `rules/activities.yaml`, the one place
     code reads it (ADR-0002 decision 8 records the reasoning, #580); `data_type` is never carried. Sources that name different parents for an
     input role that takes one are an edge conflict, across which nothing is
-    inherited until it is settled. The declaration is a claim like any other (1.1, 3.2), naming the step it
+    inherited until it is settled. So is a source naming a different set of parents than inference names in any
+    role, one that takes several included: inference's step names every input of the step it read (#609). The declaration is a claim like any other (1.1, 3.2), naming the step it
     crossed as its rule. It is the only way a slot is filled from another file's answer, and nothing fills
     one slot from another slot's answer within a file.
 
