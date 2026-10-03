@@ -411,12 +411,16 @@ def claims_from(
 
 
 def _current_paths(evidence_root: Path, datasets: Iterable[str] | None) -> list[Path]:
-    """Every current evidence file, restricted to the envelopes naming one of ``datasets`` when given."""
+    """Every current evidence file, restricted to the envelopes whose target is one of ``datasets`` when given.
+
+    The target's dataset, not the source's: the two are one for AnVIL's own tables, and an
+    external source (ENA's, #606) names the dataset its lines are about only as its target.
+    """
     paths = discover(evidence_root)
     if datasets is None:
         return paths
     wanted = set(datasets)
-    return [p for p in paths if read_envelope(p).source.dataset in wanted]
+    return [p for p in paths if read_envelope(p).target.dataset in wanted]
 
 
 @dataclass(frozen=True)

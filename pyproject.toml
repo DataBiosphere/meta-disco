@@ -88,7 +88,11 @@ docstring-code-format = true
 [tool.pyright]
 # Type checker, run separately from Ruff (make type / make lint-all). Standard
 # mode is the shared Clever Canary baseline. Pyright resolves imports and the
-# meta_disco package from the active uv venv (make runs it under `uv run`).
+# meta_disco package from the project's uv venv: `make type` runs it under `uv run`,
+# and venvPath/venv name the same venv for a pyright started outside it — the
+# language server an editor or Claude Code launches from PATH.
+venvPath = "."
+venv = ".venv"
 typeCheckingMode = "standard"
 pythonVersion = "3.10"
 include = ["src", "scripts", "tests"]

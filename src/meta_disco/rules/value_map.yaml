@@ -74,6 +74,15 @@ rows:
       `data_modality.genomic_hprc_r2`, for the same reason. Measured on run 20260927_225823:
       none of the 9,603 files it reached depended on it alone for data_modality.
     seeded_from: ["anvil/anvil15/ANVIL_1000G_high_coverage_2019/20260920T175642Z"]
+  - id: "data_modality.genomic_ena"
+    match: {slot: data_modality, value: "GENOMIC"}
+    scope: {source: ena}
+    declares: {}
+    reason: >-
+      ENA's `library_source` for a run, the same SRA value as `data_modality.genomic_hprc_r2`,
+      for the same reason: it names the molecule sequenced, not a MODAL modality (#563). A
+      WGS run's modality comes from its `library_strategy` instead (`assay_type.wgs`).
+    seeded_from: ["ena/anvil15/ANVIL_T2T/20261003T074816Z", "ena/anvil15/ANVIL_T2T_CHRY/20261003T074816Z"]
   - id: "data_modality.methylation"
     match: {slot: data_modality, value: "methylation"}
     declares: {data_modality: epigenomic.methylation}
@@ -250,6 +259,11 @@ rows:
     declares: {platform: ILLUMINA}
     reason: Spelled as our term, as SRA's platform value and as a table-name span. Identity by ruling.
     seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
+  - id: "platform.illumina_hiseq_2000"
+    match: {slot: platform, value: "Illumina HiSeq 2000"}
+    declares: {platform: ILLUMINA, instrument_model: Illumina HiSeq 2000}
+    reason: An Illumina instrument model, spelled as ENA/SRA's; the model implies the platform.
+    seeded_from: ["ena/anvil15/ANVIL_T2T_CHRY/20261003T074816Z"]
   - id: "platform.illumina_novaseq_6000"
     match: {slot: platform, value: "Illumina NovaSeq 6000"}
     declares: {platform: ILLUMINA, instrument_model: Illumina NovaSeq 6000}
