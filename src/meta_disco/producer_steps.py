@@ -25,7 +25,7 @@ and output cannot be read, so the chain cannot be.
 
 **Only what the tool wrote is read.** A command line is the tool recording its own
 invocation; the values another program carried into it (bwa's ``-R`` read group, say)
-are not read here, per contract 3.13.
+are not read here (contract 3.13).
 
 **Which producing step is a step we write** is :data:`STEP_RULES`: a ``HaplotypeCaller``
 with exactly one alignment input is a ``VariantCallActivity``, its parent found by file
