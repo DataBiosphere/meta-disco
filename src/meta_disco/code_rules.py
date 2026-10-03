@@ -64,6 +64,7 @@ HEADER_CLASSIFIER = "src/meta_disco/header_classifier.py"
 INDEX_PRODUCER = "scripts/classify_index_files.py"
 RECONCILE_INHERIT = "src/meta_disco/reconcile_inherit.py"
 EDGES = "src/meta_disco/edges.py"
+PRODUCER_STEPS = "src/meta_disco/producer_steps.py"
 METADATA_SCHEMA = "src/meta_disco/metadata_schema.py"
 
 
@@ -97,12 +98,12 @@ class CodeMarker:
 
 @dataclass(frozen=True)
 class EdgeRule:
-    """A rule that states a derivation edge from the child's own name (ADR-0002).
+    """A rule that states a derivation edge (ADR-0002), from the child's own name or its header.
 
     ``activity`` and ``role`` are the step it states and the parent's part in it (#580).
-    ``reads`` says how the
-    parent's name is worked out from the child's, and ``rationale`` why that names the
-    parent. Its ``source_type`` is ``filename_rule``: both edge rules read the name.
+    ``reads`` says where the parent's name is read: from the child's own name
+    (``filename_rule``, the index and checksum rules) or from a command line in the
+    child's header (``content_read``, #609). ``rationale`` says why that names the parent.
     """
 
     id: str
@@ -335,7 +336,28 @@ CHECKSUM_BY_NAME = EdgeRule(
     ),
 )
 
-EDGE_RULES = (INDEX_BY_NAME, CHECKSUM_BY_NAME)
+VARIANT_CALL_BY_HEADER = EdgeRule(
+    id="variant_call_by_header",
+    module=PRODUCER_STEPS,
+    activity=activities.VARIANT_CALL,
+    role="calls_from",
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "the VCF's own header: its producer command lines (##GATKCommandLine, ##bcftools_*Command) "
+        "chained by matching outputs to inputs, the one end of that flow being the step that made the "
+        "file; where that step is HaplotypeCaller with one alignment input, the input's base name, "
+        "matched case-insensitively within the dataset"
+    ),
+    rationale=(
+        "HaplotypeCaller records the alignment it called from in its own command line, written into "
+        "the VCF it writes. A file that carries several command lines carries its inputs' too, and GATK "
+        "sorts them, so the step is the end of the data flow, never the last line. The paths are where "
+        "the workflow ran, so only the name is matched, and a name two files of the dataset carry names "
+        "neither (#438)."
+    ),
+)
+
+EDGE_RULES = (INDEX_BY_NAME, CHECKSUM_BY_NAME, VARIANT_CALL_BY_HEADER)
 
 FETCH_FAILED = CodeMarker(
     id="fetch_failed",

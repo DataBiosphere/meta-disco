@@ -1,18 +1,21 @@
-"""Derivation edges inference states from a child's own name (ADR-0002, #356).
+"""Derivation edges inference states, and the name index their parents resolve in (ADR-0002, #356).
 
-Two producers write one: the index producer (``IndexActivity``) and the catch-all, for a
-checksum file (``ChecksumActivity``). Each works out the parent's name from the child's own
-(the index producer's candidates are its own, ``get_parent_candidates``) and looks it up
-in the child's dataset; the name index, that lookup and the edge it yields are built here.
+Three producers write one. Two work out the parent's name from the child's own: the index
+producer (``IndexActivity``; its candidates are its own, ``get_parent_candidates``) and the
+catch-all, for a checksum file (``ChecksumActivity``). The VCF producer reads it from a
+command line in the child's header (``producer_steps``, #609). Each looks the name up in
+the child's dataset; the name index, that lookup and the edge it yields are built here.
 
 **An edge is written only where the parent resolves**: exactly one file of the child's
 dataset carries the name. The edge then carries the parent's record key
 (``pipeline.SOURCE_RECORD_KEYS``) as ``parent_key``. Where no file carries it, or two do,
 no edge is written. ADR-0002 keeps an edge whose parent does not resolve (an ``external``
 one) only for a source that names the parent independently of the child: a header line, a
-table row. Here the name is worked out from the child's own — its name less a suffix, or
-with the suffix replaced (``sample.bai`` -> ``sample.bam``) — so an unresolved edge would
-restate what the child's name, extension and ``data_type`` already say.
+table row. The two name rules work the name out from the child's own — its name less a
+suffix, or with the suffix replaced (``sample.bai`` -> ``sample.bam``) — so an unresolved
+edge would restate what the child's name, extension and ``data_type`` already say. The
+header rule does name its parent independently, but by a path where the workflow ran,
+which says nothing a reader could follow, so it too writes no unresolved edge.
 
 **Merging every source's step** (#577) is here too: reconcile hands :func:`merge_steps`
 inference's step and the steps the source tables state (``reconcile_lineage``), and it
@@ -31,6 +34,7 @@ from .code_rules import EdgeRule
 from .file_name import EXTENSION_MAP, FileName
 from .models import ClaimSource
 from .pipeline import RecordKey, input_key_value
+from .records import dataset_of
 
 # The `EXTENSION_MAP` category of a checksum file's extension. The extension decides
 # whether a checksum edge is looked for, not whether a rule fired on the file.
@@ -74,7 +78,7 @@ def files_by_folded_name(records: Iterable[dict]) -> NameIndex:
     for record in records:
         name = record.get("file_name")
         if isinstance(name, str) and name:
-            index[(record.get("dataset_id", "unknown"), name.lower())].append(record)
+            index[(dataset_of(record), name.lower())].append(record)
     return index
 
 
@@ -146,7 +150,7 @@ def checksum_generated_by(record: dict, name: FileName, index: NameIndex, key: R
     """
     if EXTENSION_MAP.get(name.extension or "") != CHECKSUM_CATEGORY or not name.stem:
         return None
-    parent = resolve(index, record.get("dataset_id", "unknown"), name.stem)
+    parent = resolve(index, dataset_of(record), name.stem)
     if parent is None:
         return None
     return generated_by(code_rules.CHECKSUM_BY_NAME, parent, key)

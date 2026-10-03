@@ -5,7 +5,7 @@
 - **Extends, and supersedes in part:** `docs/derived-file-data-model.md` (#109), which settled the edge for companion files only; see [What this supersedes](#what-this-supersedes)
 - **Contract:** adds 4.9 to `docs/claims-contract.md` (inheritance) and its entry under "What is not true yet"; amends 2.8, 3.1, 4.1, 4.2 and 6.6 to match
 - **Related:** #356 (companion edges), #357 (sample identity), #358 (alignment ← reads), #359 (variants ← alignments), #360 (assemblies), #361 (sample ← donor), #362 (consistency and coverage), #371 (the edge carries the parent's record key), #413 (index inheritance and contract 1.1), #438 (ambiguous index parents)
-- **Amended by:** [#580](https://github.com/DataBiosphere/meta-disco/issues/580) (2026-09-29): a step is an activity from AnVIL FSS's vocabulary, not a verb between two files (decision 5)
+- **Amended by:** [#580](https://github.com/DataBiosphere/meta-disco/issues/580) (2026-09-29): a step is an activity from AnVIL FSS's vocabulary, not a verb between two files (decision 5); [#609](https://github.com/DataBiosphere/meta-disco/issues/609) (2026-10-03): which of a header's command lines made the file (decision 6)
 
 ## Context
 
@@ -235,6 +235,20 @@ record.
 
 For companion files, `anvil_activity` states the parent by `file_id` and the filename match is the second
 source: the two agreed on all 209,668 index files matched today.
+
+**Which header command line made the file (#609).** A header carries the command lines of its inputs as
+well as its own, and GATK sorts them, so neither the last line nor any one line's position names the step.
+The step is **the end of the data flow**: each line is a step with inputs and an output, steps chain where
+an output is an input (by base name, `.gz` aside), and the step that made the file is the one whose output
+nothing consumes and that does not name another file. No single such step, or a tool whose arguments are
+not declared (`producer_steps.TOOL_ARGUMENTS`, about tools, never datasets), and no step is written. The
+paths are where the workflow ran, so the parent resolves by name within the child's dataset, as a
+filename edge does. Built at inference, in the VCF producer, from the cached header: it is the file's own
+bytes (input kind 1), and reconcile merges it with the steps the tables state.
+
+*Rejected: the last line.* T2T's `1kgp.chr1.recalibrated.snp_indel.vcf.gz` ends in the `bcftools concat`
+that made its input, `chr1.genotyped.vcf`; its producer is the indel pass of `ApplyVQSR`, which GATK's
+sorting puts first.
 
 ### 7. Specific process runs stay out of scope
 

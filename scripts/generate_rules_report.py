@@ -152,7 +152,8 @@ DASHBOARD_KEY = [*KEY, ("Highlighted", "a rule that gave no answer for any file 
 MARKERS_NOTE = "Not rules. Each is a reason a field of a file was left without an answer."
 EDGE_RULES_NOTE = (
     "Rules that say which file a file was made from, rather than giving a field an answer. The code rules name "
-    "the parent from the file's own name, and only where exactly one file of the dataset carries that name. The "
+    "the parent from the file's own name, or from the command line in its header that made it (#609), and only "
+    "where exactly one file of the dataset carries that name. The "
     "activity-map rows (#584) translate what a source table says about a step, and reconcile resolves the "
     "parent that table names (#577). Counted by the inputs of the reconciled `generated_by` that cite them."
 )

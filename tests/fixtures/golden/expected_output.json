@@ -848,7 +848,13 @@
     "metadata": {
       "complete": true,
       "content_unreadable": 0,
-      "details": null,
+      "details": {
+        "producer_steps": {
+          "GOLDEN_FIXTURE": {
+            "no_command_line": 2
+          }
+        }
+      },
       "dropped": 0,
       "errored": 0,
       "failed": 0,

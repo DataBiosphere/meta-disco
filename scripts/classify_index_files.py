@@ -59,7 +59,7 @@ from meta_disco.pipeline import (
     repeated_key_values,
 )
 from meta_disco.producers import INDEX_TO_PARENT, PRODUCERS
-from meta_disco.records import OutputRecord, RunMetadata, coerce_identity, identity_from
+from meta_disco.records import OutputRecord, RunMetadata, coerce_identity, dataset_of, identity_from
 from meta_disco.rule_engine import make_claim
 from meta_disco.rule_loader import get_unified_rules
 
@@ -133,7 +133,7 @@ def unmatched_entry(record: dict, index_ext: str, candidates: list[str], reason:
         "file_format": coerce_identity(record.get("file_format")),
         "file_md5sum": coerce_identity(record.get("file_md5sum")),
         **identity_from(record, coerce=True),
-        "dataset_id": record.get("dataset_id", "unknown"),
+        "dataset_id": dataset_of(record),
         "dataset_title": coerce_identity(record.get("dataset_title")),
         "index_extension": index_ext,
         "candidates_tried": candidates,
@@ -286,7 +286,7 @@ def propagate_to_index_files(metadata_path: Path, output_path: Path):
     # Group files by dataset for matching
     by_dataset = defaultdict(list)
     for f in files:
-        ds = f.get("dataset_id", "unknown")
+        ds = dataset_of(f)
         by_dataset[ds].append(f)
 
     # Every file a `(dataset_id, file_name)` names, case-folded, not just the last one

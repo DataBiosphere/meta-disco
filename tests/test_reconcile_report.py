@@ -351,6 +351,18 @@ def test_a_report_written_before_lineage_says_so_and_one_with_no_conflicts_says_
     assert "None: wherever two sources named a file's step, they agreed." in md
 
 
+def test_the_header_steps_are_listed_per_dataset_in_outcome_order_and_absent_ones_say_so():
+    rows = rr.lineage_rows(lineage_report(header_steps={DATASET: {"stepped": 3, "parent_ambiguous": 1}}))
+    assert rows is not None
+    md = "\n".join(rr._lineage_section(rows))
+    assert "### Steps read from VCF headers" in md
+    assert f"| `{DATASET}` | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |" in md
+    # A report written before the reader (#609) has no header_steps block at all.
+    rows = rr.lineage_rows(lineage_report())
+    assert rows is not None and rows["header_steps"] == []
+    assert "None: no producer read a header in this run" in "\n".join(rr._lineage_section(rows))
+
+
 def test_the_inheritance_section_lists_what_each_role_passed_per_dataset_and_dimension():
     report = {
         "inheritance": {

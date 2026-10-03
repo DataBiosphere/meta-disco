@@ -55,6 +55,23 @@ class FileTypeConfig:
     # so the reader stays decoupled from the classifier's recognition logic. None means
     # the fetcher reads a single fixed head (the default for every type but tar).
     head_detector: Callable | None = None
+    # The step that made a file, read from its fetched content (#609). Called once per run
+    # with every loaded record and the source's record key, it returns the per-file
+    # reader: given the payload, the file's name and dataset, ``(generated_by or None,
+    # outcome)``. None means the type states no step.
+    step: Callable | None = None
+
+
+def _vcf_steps(records, key):
+    """``producer_steps.HeaderSteps.for_run``, imported when a run builds it.
+
+    Imported here rather than at the top because ``producer_steps`` reads ``edges``,
+    which imports ``pipeline``, which imports this module: a top-level import would close
+    that loop before ``pipeline`` has finished loading.
+    """
+    from .producer_steps import HeaderSteps
+
+    return HeaderSteps.for_run(records, key)
 
 
 BAM_CONFIG = FileTypeConfig(
@@ -73,6 +90,7 @@ VCF_CONFIG = FileTypeConfig(
     fetcher=fetch_vcf_header,
     classifier=classify_from_vcf_header,
     summary_printer=print_vcf_summary,
+    step=_vcf_steps,
 )
 
 FASTQ_CONFIG = FileTypeConfig(

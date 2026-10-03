@@ -216,6 +216,12 @@
             ? table(['source type', 'dataset', ...DATA.lineage_columns],
                 L.sources.map(r => [r.source_type, shown(r.dataset), ...DATA.lineage_columns.map(k => ({text: n(r[k]), cls: 'num'}))]))
             : '<p>No lineage was read.</p>')
+          + '<h3>Steps read from VCF headers</h3>'
+          + '<p class="note">Inference chains a VCF\'s producer command lines and takes the one end of that flow as the step that made it (#609); only a <code>HaplotypeCaller</code> with one alignment input whose parent resolves gives a step.</p>'
+          + (L.header_steps.length
+              ? table(['dataset', ...DATA.header_step_columns],
+                  L.header_steps.map(r => [shown(r.dataset), ...DATA.header_step_columns.map(k => ({text: n(r[k]), cls: 'num'}))]))
+              : '<p>None: no producer read a header in this run.</p>')
           + '<h3>Who named each file\'s step</h3>'
           + table(['dataset', 'named by', 'files'], L.steps.map(r => [shown(r.dataset), r.named_by, {text: n(r.files), cls: 'num'}]))
           + '<h3>Conflicts</h3>'

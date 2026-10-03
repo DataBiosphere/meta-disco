@@ -754,9 +754,8 @@ class TestFileTypeConfigs:
         stale.parent.mkdir(parents=True, exist_ok=True)
         stale.write_text("{ not json")
 
-        out, was_cached, content_unreadable, _validation_failed = pipeline._process_single_record(
-            ClassifierRecord.from_record(record)
-        )
+        outcome = pipeline._process_single_record(ClassifierRecord.from_record(record))
+        out, was_cached, content_unreadable = outcome.result, outcome.was_cached, outcome.content_unreadable
 
         assert content_unreadable is True
         assert was_cached is False, "a fetch that reached the network is not a cache hit"
