@@ -33,7 +33,9 @@ from .header_classifier import (
     classify_from_vcf_header,
     tar_head_is_conclusive,
 )
+from .producer_steps import HeaderSteps
 from .summaries import print_bam_summary, print_fastq_summary, print_vcf_summary
+from .validators.header_extractors import parse_vcf_header
 
 
 @dataclass(frozen=True)
@@ -55,23 +57,19 @@ class FileTypeConfig:
     # so the reader stays decoupled from the classifier's recognition logic. None means
     # the fetcher reads a single fixed head (the default for every type but tar).
     head_detector: Callable | None = None
+    # The parse of the fetched payload, made once per file (#615): the classifier and the
+    # step reader both take it in place of the payload, so neither parses again. The cache
+    # keeps the raw payload. None hands them the payload as fetched.
+    parser: Callable | None = None
     # The step that made a file, read from its fetched content (#609). Called once per run
     # with every loaded record and the source's record key, it returns the per-file
-    # reader: given the payload, the file's name and dataset, ``(generated_by or None,
-    # outcome)``. None means the type states no step.
+    # reader: given the parse, the file's name and dataset, ``(generated_by or None,
+    # outcome)``. None means the type states no step; a type with one needs a ``parser``.
     step: Callable | None = None
 
-
-def _vcf_steps(records, key):
-    """``producer_steps.HeaderSteps.for_run``, imported when a run builds it.
-
-    Imported here rather than at the top because ``producer_steps`` reads ``edges``,
-    which imports ``pipeline``, which imports this module: a top-level import would close
-    that loop before ``pipeline`` has finished loading.
-    """
-    from .producer_steps import HeaderSteps
-
-    return HeaderSteps.for_run(records, key)
+    def __post_init__(self):
+        if self.step is not None and self.parser is None:
+            raise ValueError(f"file type {self.name!r} reads a step but declares no parser to read it from")
 
 
 BAM_CONFIG = FileTypeConfig(
@@ -90,7 +88,8 @@ VCF_CONFIG = FileTypeConfig(
     fetcher=fetch_vcf_header,
     classifier=classify_from_vcf_header,
     summary_printer=print_vcf_summary,
-    step=_vcf_steps,
+    parser=parse_vcf_header,
+    step=HeaderSteps.for_run,
 )
 
 FASTQ_CONFIG = FileTypeConfig(

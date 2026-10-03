@@ -229,7 +229,7 @@ def validate_records(records, key_field: str | None) -> ValidationReport:
     """Validate every record, grouping violations by kind into a ValidationReport.
 
     ``key_field`` names the field the samples quote — the source's record key
-    (``pipeline.key_field``), which differs by source — or ``None`` where the input's
+    (``record_keys.key_field``), which differs by source — or ``None`` where the input's
     envelope declares no source, in which case every sample reads ``<unknown>``.
     """
     report = ValidationReport(key_field=key_field)

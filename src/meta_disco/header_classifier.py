@@ -27,6 +27,7 @@ from .models import (
     build_field_entry,
 )
 from .schema_vocab import most_specific
+from .validators.header_extractors import VCFHeader, parse_vcf_header
 from .validators.read_name_parsers import (
     detect_paired_end_indicators,
     extract_archive_accession,
@@ -266,7 +267,7 @@ def classify_from_header(
 
 
 def classify_from_vcf_header(
-    header_text: str,
+    header: "str | VCFHeader",
     *,
     name: FileName = FileName.EMPTY,
     file_size: int | None = None,
@@ -279,7 +280,9 @@ def classify_from_vcf_header(
     to classify VCF files based on their headers.
 
     Args:
-        header_text: VCF header text (lines starting with ##)
+        header: The VCF header, parsed (the pipeline's one parse per file, which
+            its step reader shares, #615) or as text (lines starting with ##),
+            which is parsed here
         name: Optional parsed :class:`FileName`; its tokens (e.g. a chm13 assembly
             hint) drive the tier-2 filename rules
         file_size: Optional file size in bytes
@@ -299,21 +302,22 @@ def classify_from_vcf_header(
     # AnVIL file_format is redundant with the name and not consulted (#157). When
     # there is no name (a header-only call), the engine reads the extension from
     # the file_format we set — the known ".vcf.gz" — instead of a fabricated name.
+    parsed = parse_vcf_header(header) if isinstance(header, str) else header
     file_info = ExtendedFileInfo(
         name=name,
         file_format=".vcf.gz",
         file_size=file_size,
-        vcf_header=header_text,
+        vcf_header=parsed,
     )
 
-    # One parse per file (#488): file_info owns it, the engine's tier-3 matcher
+    # One parse per file (#488): file_info holds it, the engine's tier-3 matcher
     # reads the same one, the contig-length detector takes the observed contigs
     # rather than re-splitting the raw text, and the build resolver takes the same
     # observation instead of parsing a third time.
     from .validators.contig_lengths import detect_reference_from_contigs
     from .validators.reference_builds import observe_vcf_header, resolve_identity
 
-    signatures, declared = observe_vcf_header(file_info.parsed_vcf_header)
+    signatures, declared = observe_vcf_header(parsed)
 
     # Detect reference from contig lengths — definitive signal, no guessing.
     contig_ref, contig_matches = detect_reference_from_contigs((s.name, s.length) for s in signatures)

@@ -93,16 +93,18 @@ class ExtendedFileInfo:
 
     # Header data (populated when available)
     bam_header: str | None = None
-    vcf_header: str | None = None
+    # A VCF header arrives parsed: its one parse per file is the pipeline's, which the
+    # step reader shares (#615), so it is held as given rather than parsed here.
+    vcf_header: "VCFHeader | None" = None
     fastq_first_read: str | None = None
     fasta_contig_names: list[str] | None = None
 
     # Derived/cached fields
     platform: str | None = None
 
-    # The parse of each header, made once on first use and shared by everything
+    # The parse of a SAM/BAM header, made once on first use and shared by everything
     # that reads it: the tier-3 matchers, the header presence check, and the
-    # classifiers' contig-length and build steps (#488). Owning the parse here,
+    # classifier's contig-length and build steps (#488). Owning the parse here,
     # on the object that holds the text, is what makes "parsed once per file" a
     # property of the object rather than a convention between modules. A missing
     # header parses as empty text, so a reader never has to guard None twice.
@@ -114,12 +116,6 @@ class ExtendedFileInfo:
         from .validators.header_extractors import parse_sam_header
 
         return parse_sam_header(self.bam_header or "")
-
-    @cached_property
-    def parsed_vcf_header(self) -> "VCFHeader":
-        from .validators.header_extractors import parse_vcf_header
-
-        return parse_vcf_header(self.vcf_header or "")
 
     @property
     def file_size_gb(self) -> float | None:
@@ -1147,7 +1143,7 @@ class RuleEngine:
 
         from .validators.header_extractors import match_vcf_header_pattern
 
-        return match_vcf_header_pattern(file_info.parsed_vcf_header, header_type, pattern)
+        return match_vcf_header_pattern(file_info.vcf_header, header_type, pattern)
 
     def _match_fastq_header(self, when: dict[str, Any], file_info: ExtendedFileInfo) -> bool:
         """Match conditions against FASTQ read name."""
@@ -1249,16 +1245,18 @@ class RuleEngine:
 
         Args:
             filename: The filename (used for extension and filename pattern rules)
-            vcf_header: Raw VCF header text (lines starting with ##)
+            vcf_header: Raw VCF header text (lines starting with ##), parsed here
             file_size: Optional file size in bytes
 
         Returns:
             ExtendedClassificationResult with classification and metadata
         """
+        from .validators.header_extractors import parse_vcf_header
+
         file_info = ExtendedFileInfo(
             name=FileName.parse(filename),
             file_size=file_size,
-            vcf_header=vcf_header,
+            vcf_header=parse_vcf_header(vcf_header),
         )
         return self.classify_extended(file_info, include_tier3=True)
 

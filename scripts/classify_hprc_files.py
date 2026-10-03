@@ -35,7 +35,7 @@ from pathlib import Path
 from meta_disco.classify_run import run_all_classifications
 from meta_disco.fetchers import FetchError, fetch_content_length
 from meta_disco.file_name import FileName
-from meta_disco.pipeline import HPRC_REPOSITORY
+from meta_disco.record_keys import HPRC_REPOSITORY
 
 # The S3 location field differs per HPRC catalog; each maps to the meta-disco ``url``.
 # All four catalogs carry one, so records normally get a content URL — but a record that
@@ -239,7 +239,7 @@ def main():
         # "files" is the canonical meta-disco metadata key (what the AnVIL source emits);
         # every classifier loads it, so the mapped HPRC input is shape-identical to AnVIL's.
         # The envelope names the repository so a run can read this source's record key
-        # (`pipeline.SOURCE_RECORD_KEYS`, #446). No `catalog`: the HPRC catalogs carry no
+        # (`record_keys.SOURCE_RECORD_KEYS`, #446). No `catalog`: the HPRC catalogs carry no
         # generation.
         json.dump({"metadata": {"repository": HPRC_REPOSITORY}, "files": all_records}, f)
     print(f"Wrote {len(all_records):,} meta-disco records to {args.metadata_out}")

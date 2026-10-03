@@ -201,7 +201,7 @@ evidence}` entry — plus the controlled vocabulary:
     `--response` re-imports from it offline. `scripts/validate_ena_accessions.py` measures
     inference (contract 6.9) and refuses a `reconciled/` input, which carries ENA's own values.
   - **Every repository has exactly one published source** (contract 7.12), declared in
-    `pipeline.PUBLISHED_TABLES` beside the record keys, each repository's own entry in
+    `record_keys.PUBLISHED_TABLES` beside the record keys, each repository's own entry in
     its module (`azul_manifest.PUBLISHED_TABLE`); `anvil_evidence.check` holds both maps to it
     and the run's preflight refuses evidence that contradicts it
     (`source_evidence.require_one_published_source`).
@@ -283,7 +283,7 @@ evidence}` entry — plus the controlled vocabulary:
     `file_id` — the schema's slot descriptions carry that, not the tuple. Since #499
     `entry_id` is optional on the input: absent from a record derived from a snapshot,
     and null on that record's output row. The input gate's samples name a record by
-    the source's record key (`pipeline.key_field`), not by `entry_id`; the reports that
+    the source's record key (`record_keys.key_field`), not by `entry_id`; the reports that
     echo the catalog identity (`excluded_files.json`, the unprocessable report) still
     carry `entry_id` as one of its three columns.
   - **The input is a TDR snapshot's tables, however they arrived** (#499). The one
@@ -329,7 +329,13 @@ evidence}` entry — plus the controlled vocabulary:
     index producer's `IndexActivity` and the catch-all's `ChecksumActivity` for a `.md5`, and
     one from a VCF's header through `meta_disco.producer_steps` (#609): the end of the
     header's data flow (ADR-0002 decision 6), a `HaplotypeCaller` giving `VariantCallActivity`.
-    Its outcomes per dataset are in the VCF producer's `metadata.details.producer_steps`. An
+    Its outcomes per dataset are in the VCF producer's `metadata.details.producer_steps`.
+    **A VCF's command lines are read once, on first use, by `VCFHeader.commands`** (#615),
+    which gives each line's words and its step, through `validators.command_lines` and its
+    `TOOL_ARGUMENTS` (an undeclared tool is an unread step, never a guess). Its readers
+    (`producer_steps`, `reference_builds`) inspect that and never split command-line text, and
+    the pipeline parses each VCF header once for both the classifier and the step reader
+    (`FileTypeConfig.parser`). An
     input carries `parent_file`, `parent_key` (the parent's record key, never its md5),
     `parent_kind`, and `named_by`, every source that named it (the step has its own). A parent no file or
     two files of the dataset carry gives none. Steps the source tables state are built at
@@ -339,20 +345,20 @@ evidence}` entry — plus the controlled vocabulary:
     `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,
     and the three hand-maintained lists they replaced are what let a registered type
     never run (#151).
-  - **A source's record key is declared once**, in `pipeline.SOURCE_RECORD_KEYS`, keyed by the
-    input envelope's `repository` and read through `pipeline.record_key` (#446). It is
+  - **A source's record key is declared once**, in `record_keys.SOURCE_RECORD_KEYS`, keyed by the
+    input envelope's `repository` and read through `record_keys.record_key` (#446). It is
     the field the source guarantees unique per file, in both spellings a run uses: AnVIL's
     is `file_id` (durable across a re-index, #433; not `entry_id`, not `file_name`), HPRC's
     is `file_md5sum` / `md5sum`, a hash of the file's URL that the HPRC builder writes
     because its catalogs issue no identifier — no catalog identity is minted for an HPRC
     record. None of its readers may hard-code a field; they include the input gate
     (`scripts/validate_metadata.py`, which also names its sample records by it through
-    `pipeline.key_field`), the catch-all producer's skip set
+    `record_keys.key_field`), the catch-all producer's skip set
     (`scripts/classify_remaining_files.py`), an edge's `parent_key` (`edges.generated_by`,
     written by the index producer and the catch-all; the index producer joined parent rows
     on it until #571 took the copy away, #486), the post-run one-row-per-file check (#445)
-    and reconcile. The catch-all reads another producer's rows through `pipeline.keyed_rows`
-    and compares every input record against them through `pipeline.input_key_value`, and an
+    and reconcile. The catch-all reads another producer's rows through `record_keys.keyed_rows`
+    and compares every input record against them through `record_keys.input_key_value`, and an
     edge grounds its parent through the same function; both raise on a missing key rather
     than skip. An envelope naming no repository is refused before a run starts.
   - **Ask `Producer.claims`; never write a second routing predicate.** A file has one

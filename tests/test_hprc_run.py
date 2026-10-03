@@ -4,7 +4,7 @@ HPRC is a source like AnVIL: ``scripts/classify_hprc_files.py`` maps its catalog
 the one record shape and calls the one run. Its records carry no ``entry_id``,
 ``file_id`` or ``drs_uri`` — the catalogs issue none, and none is minted — so a run
 that keyed Phase 3 on ``entry_id`` refused every one of them. The key is now the
-source's own (``pipeline.SOURCE_RECORD_KEYS``): for HPRC, the URL hash the builder
+source's own (``record_keys.SOURCE_RECORD_KEYS``): for HPRC, the URL hash the builder
 writes as the checksum.
 """
 
@@ -16,7 +16,7 @@ from classify_hprc_files import build_metadata_records, path_key
 from meta_disco.classify_run import run_all_classifications
 from meta_disco.exclusions import read_excluded
 from meta_disco.output_utils import CLASSIFICATION_FILES, iter_records_with_source
-from meta_disco.pipeline import HPRC_REPOSITORY
+from meta_disco.record_keys import HPRC_REPOSITORY
 from tests.metadata_fixtures import write_metadata
 
 # Catalog rows in the shape the assemblies catalog has (`awsFasta` is its location

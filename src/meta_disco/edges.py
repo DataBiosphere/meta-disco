@@ -8,7 +8,7 @@ the child's dataset; the name index, that lookup and the edge it yields are buil
 
 **An edge is written only where the parent resolves**: exactly one file of the child's
 dataset carries the name. The edge then carries the parent's record key
-(``pipeline.SOURCE_RECORD_KEYS``) as ``parent_key``. Where no file carries it, or two do,
+(``record_keys.SOURCE_RECORD_KEYS``) as ``parent_key``. Where no file carries it, or two do,
 no edge is written. ADR-0002 keeps an edge whose parent does not resolve (an ``external``
 one) only for a source that names the parent independently of the child: a header line, a
 table row. The two name rules work the name out from the child's own — its name less a
@@ -33,7 +33,7 @@ from . import activities, code_rules
 from .code_rules import EdgeRule
 from .file_name import EXTENSION_MAP, FileName
 from .models import ClaimSource
-from .pipeline import RecordKey, input_key_value
+from .record_keys import RecordKey, input_key_value
 from .records import dataset_of
 
 # The `EXTENSION_MAP` category of a checksum file's extension. The extension decides

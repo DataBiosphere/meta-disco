@@ -1121,6 +1121,7 @@ class TestAVcfHeaderIsParsedOnce:
     raw text: three passes over every header in the corpus."""
 
     def test_one_parse_per_classification(self, monkeypatch):
+        from meta_disco import header_classifier
         from meta_disco.validators import header_extractors, reference_builds
 
         real = header_extractors.parse_vcf_header
@@ -1131,10 +1132,11 @@ class TestAVcfHeaderIsParsedOnce:
             return real(text)
 
         # Patched at every site that bound the name: the engine imports it at call
-        # time, but reference_builds bound it at import, so a resolver that parsed
-        # again would be invisible to a patch on header_extractors alone.
+        # time, but this module and reference_builds bound it at import, so a parse
+        # there would be invisible to a patch on header_extractors alone.
         monkeypatch.setattr(header_extractors, "parse_vcf_header", counting)
         monkeypatch.setattr(reference_builds, "parse_vcf_header", counting)
+        monkeypatch.setattr(header_classifier, "parse_vcf_header", counting)
         header = (
             "##fileformat=VCFv4.2\n##source=HaplotypeCaller\n##reference=file:///ref/hg38.fa\n"
             '##contig=<ID=chr1,length=248956422>\n##INFO=<ID=DP,Number=1,Type=Integer,Description="depth">\n'

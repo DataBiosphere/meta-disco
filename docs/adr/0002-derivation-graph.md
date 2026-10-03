@@ -76,7 +76,7 @@ table would be empty scaffolding. Revisit if #337's manifest route populates the
 ### 2. Parent scope: `internal` and `external`
 
 - **`internal`** — the parent is one file we hold **in the child's own dataset**, and the edge carries its
-  record key (`pipeline.SOURCE_RECORD_KEYS`). A file parent resolves only within the child's dataset,
+  record key (`record_keys.SOURCE_RECORD_KEYS`). A file parent resolves only within the child's dataset,
   whatever form the source names it in, as today's filename joins do.
 - **`external`** — a source names the parent (`NA21127.merged.bam` in a `@PG` line, or a `file_id` or DRS
   URI in a table) but it is missing from the child's dataset: it was never deposited, or the name is
@@ -243,7 +243,7 @@ The step is **the end of the data flow**: each line is a step with inputs and an
 an output is an input (by base name, `.gz` aside), and an end is a step whose output no other step consumes.
 An end naming another file is set aside; the step that made the file is the one end naming it, or an end
 naming no output (stdout) when it is the only end at all. No such step, or a tool whose arguments are
-not declared (`producer_steps.TOOL_ARGUMENTS`, about tools, never datasets), and no step is written. The
+not declared (`validators.command_lines.TOOL_ARGUMENTS`, about tools, never datasets), and no step is written. The
 paths are where the workflow ran, so the parent resolves by name within the child's dataset, as a
 filename edge does. Built at inference, in the VCF producer, from the cached header: it is the file's own
 bytes (input kind 1), and reconcile merges it with the steps the tables state.

@@ -54,7 +54,7 @@ from meta_disco.models import (
     SOURCE_WRANGLER_ANNOTATION,
     ClaimSource,
 )
-from meta_disco.pipeline import PUBLISHED_TABLES
+from meta_disco.record_keys import PUBLISHED_TABLES
 from meta_disco.schema_vocab import default_schema_path
 from meta_disco.source_evidence import (
     _MAX_ENVELOPE_BYTES,

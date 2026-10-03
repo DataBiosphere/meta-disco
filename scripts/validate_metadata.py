@@ -7,7 +7,7 @@ column, a stringified `file_size`) is caught in seconds with a grouped summary
 instead of surfacing as a per-record failure deep in the run. See issue #161.
 
 Exits non-zero if any record violates the contract, if the envelope names no repository
-with a declared record key (`pipeline.SOURCE_RECORD_KEYS`, #446), or if that key is
+with a declared record key (`record_keys.SOURCE_RECORD_KEYS`, #446), or if that key is
 carried by more than one record — the two things a run needs of its input beyond the
 records themselves, checked here so they stop a run before it starts.
 
@@ -28,7 +28,8 @@ from pathlib import Path
 
 from meta_disco.deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS
 from meta_disco.metadata_schema import validate_records
-from meta_disco.pipeline import key_field, load_snapshot, record_key, repeated_key_values
+from meta_disco.pipeline import load_snapshot
+from meta_disco.record_keys import key_field, record_key, repeated_key_values
 
 
 def main(argv=None) -> int:

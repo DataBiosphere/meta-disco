@@ -196,7 +196,7 @@ def _check_kind(slot_map: SlotMap, datasets: set[str]) -> list[str]:
 
     It has an evidence directory here, and it holds to the published-table declaration:
     a ``published_value`` map maps exactly ``REPOSITORY``'s published table — the entry
-    ``pipeline.PUBLISHED_TABLES`` carries for the repository this importer's evidence is
+    ``record_keys.PUBLISHED_TABLES`` carries for the repository this importer's evidence is
     about — and a ``repository_metadata`` map does not map it.
     """
     try:

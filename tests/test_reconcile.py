@@ -29,7 +29,6 @@ from meta_disco.models import (
     ClaimSource,
 )
 from meta_disco.output_utils import RECONCILED_DIR, iter_reconciled_records
-from meta_disco.pipeline import PUBLISHED_TABLES
 from meta_disco.reconcile import (
     REPORT_FILE,
     SLOT_CATEGORIES,
@@ -43,6 +42,7 @@ from meta_disco.reconcile import (
     resolve_slot,
     use_for,
 )
+from meta_disco.record_keys import PUBLISHED_TABLES
 from meta_disco.rule_engine import conflict_marker, make_claim
 from meta_disco.schema.classification_model import (
     Classification,

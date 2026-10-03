@@ -5,9 +5,10 @@ for use in classification rules.
 """
 
 import re
-import shlex
-from collections.abc import Iterable
 from dataclasses import dataclass
+from functools import cached_property
+
+from .command_lines import VcfCommand, split_command_line, vcf_commands
 
 
 @dataclass
@@ -69,6 +70,16 @@ class VCFHeader:
     # ``other_meta`` because ``match_vcf_header_pattern`` falls back to a prefix
     # scan of that list, and these must not widen what a rule can match (#354).
     unkeyed_meta: list[str] | None = None
+
+    @cached_property
+    def commands(self) -> list[VcfCommand]:
+        """The command lines recorded under ``##<key containing "command">=`` lines (#615).
+
+        Read once, on first use, from ``other_meta`` and then ``unkeyed_meta`` — together,
+        every ``##`` line :func:`parse_vcf_header` does not route to a named field — each in
+        header order. Each gives its words and its step (``command_lines.VcfCommand``).
+        """
+        return vcf_commands((self.other_meta or []) + (self.unkeyed_meta or []))
 
 
 def parse_sam_header_line(line: str) -> tuple[str, dict[str, str]] | None:
@@ -323,24 +334,6 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
     return header
 
 
-# A VCF header line that records how the file was produced. GATK writes
-# ``##GATKCommandLine=<ID=Tool,...,CommandLine="...">`` (GATK3 suffixed the key:
-# ``##GATKCommandLine.HaplotypeCaller``), bcftools writes
-# ``##bcftools_normCommand=norm -f ...``, freebayes ``##commandline=...``. What
-# they share is the word "command" in the key, so that is the whole test; the
-# tool names are not enumerated. GATK4 spells the attribute ``CommandLine``,
-# GATK3 ``CommandLineOptions`` (its value is ``key=value`` pairs, among them
-# ``reference_sequence=/path.fa``). The attribute pattern tolerates a
-# backslash-escaped quote inside the value, which ``parse_vcf_header_line``'s
-# field pattern does not; it is written unrolled because it runs on every
-# command line in the corpus.
-_VCF_COMMAND_KEY_RE = re.compile(r"^##([^=]*command[^=]*)=(.*)$", re.IGNORECASE)
-# The same lines found in a whole header's text at once, for a reader holding the text
-# rather than a parsed header: the scan runs in the regex engine, not line by line.
-_VCF_COMMAND_LINE_RE = re.compile(r"^##[^=\n]*command[^=\n]*=.*$", re.IGNORECASE | re.MULTILINE)
-_VCF_COMMAND_ATTR_RE = re.compile(r'(CommandLine(?:Options)?)="([^"\\]*(?:\\.[^"\\]*)*)"')
-_VCF_COMMAND_ID_RE = re.compile(r"(?:^<|,)ID=([^,>]+)")
-
 # INFO fields Picard's LiftoverVcf adds: the two swap flags on every run, the
 # three ``Original*`` fields only with its opt-in WRITE_ORIGINAL_* options. Any
 # one marks a lifted file (issue #354).
@@ -349,79 +342,9 @@ LIFTOVER_INFO_IDS = frozenset(
 )
 
 
-def sam_command_lines(header: SAMHeader) -> list[str]:
-    """The ``CL`` of each ``@PG`` record, in header order; empty when none carry one."""
-    return [pg["CL"] for pg in header.pg or [] if pg.get("CL")]
-
-
-@dataclass(frozen=True)
-class VcfCommand:
-    """One ``##<key containing "command">=`` line: its key, the ``ID`` a structured line
-    gives, the command it records, and whether that is GATK 3's ``CommandLineOptions``
-    (``key=value`` options) rather than a command line."""
-
-    key: str
-    tool_id: str | None
-    text: str
-    options_form: bool = False
-
-
-def vcf_commands(lines: Iterable[str]) -> list[VcfCommand]:
-    """The command lines among ``lines``, in order.
-
-    A structured ``<...>`` line contributes its quoted ``CommandLine`` (GATK4) or
-    ``CommandLineOptions`` (GATK3) attribute and is skipped if it has neither; a simple
-    ``##key=value`` line contributes its value, minus one pair of enclosing double
-    quotes if the whole value is quoted (freebayes writes it that way).
-    """
-    commands = []
-    for line in lines:
-        match = _VCF_COMMAND_KEY_RE.match(line)
-        if not match:
-            continue
-        key, value = match.group(1), match.group(2)
-        if value.startswith("<"):
-            attr = _VCF_COMMAND_ATTR_RE.search(value)
-            if attr:
-                found = _VCF_COMMAND_ID_RE.search(value)
-                tool_id = found.group(1) if found else None
-                commands.append(VcfCommand(key, tool_id, attr.group(2), attr.group(1) == "CommandLineOptions"))
-        elif len(value) >= 2 and value[0] == value[-1] == '"':
-            commands.append(VcfCommand(key, None, value[1:-1]))
-        else:
-            commands.append(VcfCommand(key, None, value))
-    return commands
-
-
-def vcf_commands_in_text(header_text: str) -> list[VcfCommand]:
-    """:func:`vcf_commands` over a header's raw text, for a reader that has not parsed it."""
-    return vcf_commands(m.group(0) for m in _VCF_COMMAND_LINE_RE.finditer(header_text))
-
-
-def vcf_command_lines(header: VCFHeader) -> list[str]:
-    """The command lines recorded under ``##<key containing "command">=`` lines.
-
-    Read from ``other_meta`` and then ``unkeyed_meta`` — together, every ``##``
-    line :func:`parse_vcf_header` does not route to a named field — each in
-    header order, as :func:`vcf_commands` reads them.
-    """
-    return [c.text for c in vcf_commands((header.other_meta or []) + (header.unkeyed_meta or []))]
-
-
-def split_command_line(command_line: str) -> list[str]:
-    """A recorded command line's arguments.
-
-    ``str.split`` unless the line contains a quote character: ``shlex`` is two hundred
-    times slower, and what it contributes is stripping the quotes (``--reference="/x.fa"``,
-    ``-I "/x/a.cram"``). A line ``shlex`` rejects (an unbalanced quote) falls back to
-    whitespace splitting.
-    """
-    if '"' not in command_line and "'" not in command_line:
-        return command_line.split()
-    try:
-        return shlex.split(command_line)
-    except ValueError:
-        return command_line.split()
+def sam_command_words(header: SAMHeader) -> list[list[str]]:
+    """The arguments of the ``CL`` of each ``@PG`` record, in header order; empty when none carry one."""
+    return [split_command_line(pg["CL"]) for pg in header.pg or [] if pg.get("CL")]
 
 
 def is_lifted(header: VCFHeader) -> bool:

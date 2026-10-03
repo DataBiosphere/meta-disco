@@ -90,7 +90,7 @@ SIDECAR = "manifests.json"
 # shape is part of the format rather than of one submitter's workspace.
 VERBATIM_FILE = "anvil_file"
 # AnVIL's published source (#497, contract 7.12): the table whose harmonized columns
-# are what AnVIL itself publishes for a file. `pipeline.PUBLISHED_TABLES` declares it
+# are what AnVIL itself publishes for a file. `record_keys.PUBLISHED_TABLES` declares it
 # per repository; `anvil_evidence` holds its slot maps to it.
 PUBLISHED_TABLE = VERBATIM_FILE
 VERBATIM_ACTIVITY = "anvil_activity"
@@ -813,7 +813,7 @@ def metadata_block(
     no manifest.
 
     ``repository`` names who published these files, so nothing downstream has to infer
-    it (#424); a run reads the source's record key off it (``pipeline.SOURCE_RECORD_KEYS``).
+    it (#424); a run reads the source's record key off it (``record_keys.SOURCE_RECORD_KEYS``).
 
     ``datasets`` maps a title to a :func:`dataset_entry`: ``file_count`` plus the TDR
     snapshot it was materialised from (#434) — for a compact-sourced input the one the

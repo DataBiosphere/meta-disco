@@ -254,7 +254,7 @@ the "conflict" becomes structured provenance instead of an error.
 > single-object, md5-grounded edge in the example and paragraphs below describes the output before #356.
 
 A classification record is identified by the source's record key
-(`pipeline.SOURCE_RECORD_KEYS`, #446): for AnVIL its `file_id`, the catalog identity
+(`record_keys.SOURCE_RECORD_KEYS`, #446): for AnVIL its `file_id`, the catalog identity
 that survives a re-index (`records.CATALOG_IDENTITY_FIELDS`). An AnVIL `md5sum` is not
 an identity: two differently-named files can hold the same bytes and classify
 differently (#486). HPRC issues no `file_id`; its key is the hash of the file's URL,

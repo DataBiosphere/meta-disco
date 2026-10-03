@@ -241,7 +241,7 @@ def row_identities(run_dir: Path, key: str) -> RowIdentities:
     """Report which values of ``key`` more than one of a run's rows carries.
 
     ``key`` is the output-row spelling of the source's record key
-    (``pipeline.SOURCE_RECORD_KEYS``). No default: one source's field is not a fallback.
+    (``record_keys.SOURCE_RECORD_KEYS``). No default: one source's field is not a fallback.
     """
     # Only the first source per key value is kept until a second row claims it: a
     # duplicate is the exception, so the list is paid for only where one occurs.

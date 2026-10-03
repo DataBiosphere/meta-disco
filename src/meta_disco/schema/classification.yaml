@@ -940,7 +940,7 @@ slots:
       (#433). Null on a record whose input came from a TDR snapshot's tables rather
       than the compact manifest (#499), and on every HPRC record. An AnVIL record's
       durable identity is `file_id`; an HPRC record's is the URL hash it carries in
-      `md5sum` (`pipeline.SOURCE_RECORD_KEYS`).
+      `md5sum` (`record_keys.SOURCE_RECORD_KEYS`).
   file_id:
     description: >-
       The repository's own file identifier, and the durable one: it survives a catalog
@@ -1109,7 +1109,7 @@ slots:
       worked out from the child), otherwise as the source that names the input wrote it.
   parent_key:
     description: >-
-      The parent's record key (`pipeline.SOURCE_RECORD_KEYS`: AnVIL's `file_id`, HPRC's
+      The parent's record key (`record_keys.SOURCE_RECORD_KEYS`: AnVIL's `file_id`, HPRC's
       URL hash in `md5sum`), set only when the parent resolves to exactly one record of
       the child's dataset (ADR-0002 decision 2). Named for the key rather than
       `parent_file_id` because HPRC's key is not a `file_id`.

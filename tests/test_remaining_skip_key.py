@@ -6,7 +6,7 @@ records under 442,865 distinct names — so a name-keyed skip set drops a file b
 ``classifications`` array at all, which is the counted-and-dropped shape #376 exists to
 prevent.
 
-Which field is the identity is the source's to say (``pipeline.SOURCE_RECORD_KEYS``, #446):
+Which field is the identity is the source's to say (``record_keys.SOURCE_RECORD_KEYS``, #446):
 ``file_id`` for AnVIL, the URL hash written as the checksum for HPRC. The producer reads
 it off the input envelope and refuses an envelope that names no repository.
 """
@@ -19,7 +19,7 @@ from classify_hprc_files import build_metadata_records
 from classify_remaining_files import classify_remaining, load_already_classified
 
 from meta_disco.models import NOT_CLASSIFIED
-from meta_disco.pipeline import SOURCE_RECORD_KEYS
+from meta_disco.record_keys import SOURCE_RECORD_KEYS
 from tests.metadata_fixtures import valid_record, write_metadata
 
 ANVIL_KEY = SOURCE_RECORD_KEYS["anvil"]

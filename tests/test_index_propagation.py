@@ -219,7 +219,7 @@ class TestTheEdge:
         """Where the source declares the checksum field its key, the edge grounds on it.
 
         The HPRC catalog issues no `file_id`; what it guarantees unique is the file's
-        URL, whose hash its builder writes as the checksum (`pipeline.SOURCE_RECORD_KEYS`).
+        URL, whose hash its builder writes as the checksum (`record_keys.SOURCE_RECORD_KEYS`).
         Read off the envelope rather than guessed from which fields a record carries.
         """
         parent = _file("sample.bam", ".bam", "a" * 32, "e1")

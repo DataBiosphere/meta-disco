@@ -49,7 +49,7 @@ from .reference_builds import (
     identity_from_vcf,
     observe_sam,
     observe_vcf,
-    reference_from_command_line,
+    reference_from_command_words,
     resolve_identity,
 )
 
@@ -66,7 +66,7 @@ __all__ = [
     "identity_from_vcf",
     "observe_sam",
     "observe_vcf",
-    "reference_from_command_line",
+    "reference_from_command_words",
     "resolve_identity",
     # Header extractors
     "SAMHeader",

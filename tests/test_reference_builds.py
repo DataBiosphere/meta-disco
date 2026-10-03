@@ -24,6 +24,7 @@ from meta_disco import schema_vocab
 from meta_disco.header_classifier import classify_from_header, classify_from_vcf_header
 from meta_disco.models import field_status, field_value
 from meta_disco.rule_loader import KEY_CONTIGS, SIGNATURE_FIELDS, RuleLoader, get_unified_rules
+from meta_disco.validators.command_lines import split_command_line
 from meta_disco.validators.reference_builds import (
     BUILD_TERMS,
     IDENTITY_FIELDS,
@@ -40,7 +41,7 @@ from meta_disco.validators.reference_builds import (
     identity_from_vcf,
     observe_sam,
     observe_vcf,
-    reference_from_command_line,
+    reference_from_command_words,
     resolve_identity,
 )
 
@@ -353,9 +354,9 @@ class TestCommandLineName:
         assert entry["build"]["name_source"] == NAME_SOURCE_REFERENCE_FIELD
 
 
-class TestReferenceFromCommandLine:
-    """The parse itself, tool by tool. Corpus lines, trimmed, except the three
-    marked synthetic."""
+class TestReferenceFromCommandWords:
+    """The parse itself, tool by tool, over a line split as the header parse splits it.
+    Corpus lines, trimmed, except the ones marked synthetic."""
 
     @pytest.mark.parametrize(
         ("command_line", "expected"),
@@ -397,8 +398,8 @@ class TestReferenceFromCommandLine:
             ("bwa mem -R '@RG\\tID:x /ref/GRCh38.fa r1.fq", "GRCh38.fa"),
         ],
     )
-    def test_reference_from_command_line(self, command_line, expected):
-        assert reference_from_command_line(command_line) == expected
+    def test_reference_from_command_words(self, command_line, expected):
+        assert reference_from_command_words(split_command_line(command_line)) == expected
 
 
 class TestBuildDecidesTheValue:
