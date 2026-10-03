@@ -14,8 +14,8 @@ What each comparison means today (#330):
   submitter-declared; two independent routes to the same fact.
 - modality / assay — reported, but expected to score unknown-by-design:
   FASTQ modality/assay is not recoverable from content (the content
-  ceiling), and inference reads no evidence, so in the inference output
-  this reads our side is a sentinel. Imported values, ENA's (#606)
+  ceiling), and inference reads no evidence, so our side is a sentinel
+  in the inference output this script reads. Imported values, ENA's (#606)
   included, fill only the reconciled artifact, which this refuses.
 - Circularity: ENA must never validate a value ENA supplied. ENA's run
   records are imported as evidence (#606) for the FASTQs ENA generated,

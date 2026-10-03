@@ -2,10 +2,12 @@
 name match alone writes nothing, a run's files are read by name, the response is kept and
 re-imports offline, and the validator refuses reconciled output."""
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+import requests
 import validate_ena_accessions as validator
 
 from meta_disco import ena_evidence as ena
@@ -159,6 +161,49 @@ def test_a_dataset_that_cannot_be_read_fails_the_import_before_anything_is_writt
     with pytest.raises(ValueError, match="Missing: not a dataset the anvil15 sidecar names"):
         ena.import_all(tmp_path / "m", CATALOG, tmp_path / "ev", FakePortal(ROWS), ["D", "Missing"], STAMP)
     assert not (tmp_path / "ev").exists()
+
+
+class FakeSession:
+    """Stands in for ``requests.Session``: records each POST and answers with the asked-for rows."""
+
+    def __init__(self, rows, status=200):
+        self.rows = {r["run_accession"]: r for r in rows}
+        self.status = status
+        self.posts: list[tuple[str, dict]] = []
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def post(self, url, data, timeout):
+        self.posts.append((url, data))
+        asked = data["includeAccessions"].split(",")
+        response = requests.Response()
+        response.status_code = self.status
+        response._content = json.dumps([self.rows[a] for a in asked if a in self.rows]).encode()
+        return response
+
+
+def test_fetch_runs_posts_batches_of_the_asked_runs_and_keys_the_rows(monkeypatch):
+    accessions = [f"ERR{n:06d}" for n in range(1, ena.BATCH + 3)]
+    session = FakeSession([run(a, {f"{a}_1.fastq.gz": "aa"}) for a in accessions[:3]])
+    monkeypatch.setattr(ena.requests, "Session", lambda: session)
+    response = ena.fetch_runs(CATALOG, "D", accessions)
+    assert [len(data["includeAccessions"].split(",")) for _, data in session.posts] == [ena.BATCH, 2]
+    url, data = session.posts[0]
+    assert url == ena.PORTAL_SEARCH
+    assert (data["result"], data["format"], data["limit"]) == ("read_run", "json", 0)
+    assert data["fields"].split(",") == list(ena.FIELDS)
+    assert (response.catalog, response.dataset) == (CATALOG, "D")
+    assert sorted(response.rows) == accessions[:3]
+
+
+def test_fetch_runs_raises_on_an_http_error(monkeypatch):
+    monkeypatch.setattr(ena.requests, "Session", lambda: FakeSession([], status=500))
+    with pytest.raises(requests.HTTPError):
+        ena.fetch_runs(CATALOG, "D", ["ERR000001"])
 
 
 def test_ena_returning_two_different_rows_for_one_run_is_refused():
