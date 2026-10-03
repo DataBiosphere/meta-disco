@@ -314,3 +314,9 @@ def test_the_vcf_producer_refuses_an_input_naming_no_repository_before_any_work(
     path.write_text(json.dumps({"file_id": "v1", "file_name": "x.vcf.gz", "file_md5sum": "0" * 32}) + "\n")
     with pytest.raises(ValueError):
         ClassifyPipeline(VCF_CONFIG, path, tmp_path / "vcf.json", evidence_base=tmp_path / "ev").run()
+
+
+def test_a_step_whose_input_is_its_own_output_less_gz_is_still_an_end():
+    hc = gatk4("HaplotypeCaller", "--input ./HG00096.cram --output HG00096.chr1.hc.vcf")
+    recompress = "##bcftools_viewCommand=view -Oz -o HG00096.chr1.hc.vcf.gz HG00096.chr1.hc.vcf; Date=x"
+    assert made(header(hc, recompress), "HG00096.chr1.hc.vcf.gz").tool == "view"

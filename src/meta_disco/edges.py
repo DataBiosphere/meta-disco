@@ -194,8 +194,9 @@ def lineage_attribution(source_type: str, row_id: str, source: ClaimSource, acti
 
 @dataclass(frozen=True)
 class StepConflict:
-    """Why a file's sources give no one step: two activities; two parents in a role that takes one; or, beside a
-    specific activity, a generic ``Activity`` step whose parent no specific source names (in the generic step's role).
+    """Why a file's sources give no one step: two activities; two parents in a role that takes one; a source
+    naming other parents than inference names in a role, any role (#609); or, beside a specific activity, a
+    generic ``Activity`` step whose parent no specific source names (in the generic step's role).
 
     ``said`` is who said what: per source, the activity (an activity conflict) or the
     parent's name (an edge conflict), with the source's attribution.
@@ -234,7 +235,7 @@ def inferred_steps(step: dict | None) -> list[LineageStep]:
 def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[dict | None, StepConflict | None]:
     """The one ``generated_by`` every source's step for a file agrees on, or the conflict that prevents one.
 
-    ``inferred`` is the step inference wrote from the child's name (or None); ``lineage``
+    ``inferred`` is the step inference wrote, from the child's name or its header (or None); ``lineage``
     the steps the source tables state. Sources agree when their activities agree
     (``activities.agreed``: the generic ``Activity`` agrees with any) and, in a role that
     takes one input, name the same parent; in any role where inference names parents, a

@@ -198,7 +198,8 @@ it are an **edge conflict**: a `.tbi` whose filename match says
 `a.vcf.gz` and whose `anvil_activity` says `b.vcf.gz` has one of them wrong. An edge conflict is listed
 for review, and nothing is inherited across that activity until it is settled. For a role that
 takes many, the parents every source names are pooled into one set of inputs, each listing in `named_by`
-the sources that named it (decision 6).
+the sources that named it (decision 6) — except where inference names that role: its step names every input
+of the step it read, so a source naming another set there is an edge conflict too (#609, contract 4.9).
 
 *Rejected (#580): verbs on file-to-file edges*, which this decision first minted. The sources state
 lineage as steps: `anvil_activity` has one row per step, and FSS's Activity table is its model. What
@@ -239,8 +240,9 @@ source: the two agreed on all 209,668 index files matched today.
 **Which header command line made the file (#609).** A header carries the command lines of its inputs as
 well as its own, and GATK sorts them, so neither the last line nor any one line's position names the step.
 The step is **the end of the data flow**: each line is a step with inputs and an output, steps chain where
-an output is an input (by base name, `.gz` aside), and the step that made the file is the one whose output
-nothing consumes and that does not name another file. No single such step, or a tool whose arguments are
+an output is an input (by base name, `.gz` aside), and an end is a step whose output no other step consumes.
+An end naming another file is set aside; the step that made the file is the one end naming it, or an end
+naming no output (stdout) when it is the only end at all. No such step, or a tool whose arguments are
 not declared (`producer_steps.TOOL_ARGUMENTS`, about tools, never datasets), and no step is written. The
 paths are where the workflow ran, so the parent resolves by name within the child's dataset, as a
 filename edge does. Built at inference, in the VCF producer, from the cached header: it is the file's own

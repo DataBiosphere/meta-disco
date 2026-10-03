@@ -274,8 +274,13 @@ def producing_step(header_text: str, file_name: str) -> tuple[Step | None, str]:
         return None, UNKNOWN_TOOL
     if not steps:
         return None, NO_COMMAND_LINE
-    consumed = {data_name(p) for s in steps for p in s.inputs}
-    ends = [s for s in steps if s.output is None or data_name(s.output) not in consumed]
+    # Consumed by another step: a recompression step's own input (`view -Oz -o x.vcf.gz x.vcf`)
+    # shares its output's name less `.gz`, and does not make it consume itself.
+    ends = [
+        s
+        for s in steps
+        if s.output is None or data_name(s.output) not in {data_name(p) for o in steps if o is not s for p in o.inputs}
+    ]
     this_file = data_name(file_name)
     named_here = [s for s in ends if s.output is not None and data_name(s.output) == this_file]
     unnamed = [s for s in ends if s.output is None]

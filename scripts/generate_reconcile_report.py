@@ -796,9 +796,9 @@ def _lineage_section(lineage: dict | None) -> list[str]:
         lines.append("None: wherever two sources named a file's step, they agreed.")
     else:
         lines += [
-            "A file whose sources name two activities, or two parents in a role that takes one, or a generic "
-            "`Activity` step naming a parent no specific source names, gets no "
-            "`generated_by`; the first few are listed with who said what.",
+            "A file whose sources name two activities, or two parents in a role that takes one, or, in any role, "
+            "other parents than inference names there (#609), or a generic `Activity` step naming a parent no "
+            "specific source names, gets no `generated_by`; the first few are listed with who said what.",
             "",
             *md_table(
                 ["dataset", "kind", "files", "e.g."],
