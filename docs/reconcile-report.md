@@ -30,15 +30,17 @@ The last two columns are extra counts laid over those, not part of the sum:
 
 **How complete the metadata is.** A slot is one file in one dimension. It is *filled* when it settled with a value or as not applicable, which is an answer (the dimension does not apply to the file), unlike not classified. A filled slot is counted once, by where its answer is credited: *original*, a source's value spelled exactly as the term its translation row declares (the *published* and *submitter* columns above); *mapped*, one spelled differently that its row translates (the *harmonized* columns); *inferred*, inference's, where no source declared it; *inherited*, only the file's parents' across its `generated_by`; *not applicable*, which is not credited to any input. A slot not classified, published unreviewed or in conflict is not filled.
 
-|  | slots | % of all slots |
-| --- | ---: | ---: |
-| original | 88,614 | 2.0% |
-| mapped | 319,491 | 7.5% |
-| inferred | 1,197,998 | 28.1% |
-| inherited | 646,299 | 15.2% |
-| not applicable | 154,240 | 3.6% |
-| **filled** | **2,406,642** | **56.6%** |
-| **all slots** | **4,248,528** | **100%** |
+|  | slots | % of all slots | catalog alone | % of its slots |
+| --- | ---: | ---: | ---: | ---: |
+| original | 88,614 | 2.0% | — | — |
+| mapped | 319,491 | 7.5% | — | — |
+| inferred | 1,197,998 | 28.1% | — | — |
+| inherited | 646,299 | 15.2% | — | — |
+| not applicable | 154,240 | 3.6% | — | — |
+| **filled** | **2,406,642** | **56.6%** | **11,451** | **0.8%** |
+| **all slots** | **4,248,528** | **100%** | **1,416,176** | **100%** |
+
+*Catalog alone* is the catalog's own metadata, before ours: only the dimensions it publishes a column for (`data_modality`, `reference_assembly`), so fewer slots, and a slot is filled where it publishes a value for the file, read by a translation row or not. It is not split by credit, so those rows read —.
 
 ## Conflict rate
 
@@ -444,15 +446,15 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | **all dimensions** | **0** | **0** | **0** | **0** | **25,845** | **46** | **0** | **0** | **0** | **0** | **14,260** | **28,807** | **25,891** | **0** |
 | **% of slots** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **37.4%** | **<0.1%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **20.6%** | **41.7%** | **37.5%** | **0.0%** |
 
-|  | slots | % of all slots |
-| --- | ---: | ---: |
-| original | 0 | 0.0% |
-| mapped | 0 | 0.0% |
-| inferred | 25,845 | 37.4% |
-| inherited | 46 | <0.1% |
-| not applicable | 14,260 | 20.6% |
-| **filled** | **40,151** | **58.2%** |
-| **all slots** | **68,958** | **100%** |
+|  | slots | % of all slots | catalog alone | % of its slots |
+| --- | ---: | ---: | ---: | ---: |
+| original | 0 | 0.0% | — | — |
+| mapped | 0 | 0.0% | — | — |
+| inferred | 25,845 | 37.4% | — | — |
+| inherited | 46 | <0.1% | — | — |
+| not applicable | 14,260 | 20.6% | — | — |
+| **filled** | **40,151** | **58.2%** | **0** | **0.0%** |
+| **all slots** | **68,958** | **100%** | **22,986** | **100%** |
 
 ### `ANVIL_1000G_high_coverage_2019`
 
@@ -469,15 +471,15 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | **all dimensions** | **0** | **0** | **25,604** | **12,808** | **32,420** | **19,324** | **0** | **0** | **0** | **0** | **65,040** | **900** | **90,156** | **28,806** |
 | **% of slots** | **0.0%** | **0.0%** | **16.4%** | **8.2%** | **20.7%** | **12.3%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **41.6%** | **0.5%** | **57.7%** | **18.4%** |
 
-|  | slots | % of all slots |
-| --- | ---: | ---: |
-| original | 25,604 | 16.4% |
-| mapped | 12,808 | 8.2% |
-| inferred | 32,420 | 20.7% |
-| inherited | 19,324 | 12.3% |
-| not applicable | 65,040 | 41.6% |
-| **filled** | **155,196** | **99.4%** |
-| **all slots** | **156,096** | **100%** |
+|  | slots | % of all slots | catalog alone | % of its slots |
+| --- | ---: | ---: | ---: | ---: |
+| original | 25,604 | 16.4% | — | — |
+| mapped | 12,808 | 8.2% | — | — |
+| inferred | 32,420 | 20.7% | — | — |
+| inherited | 19,324 | 12.3% | — | — |
+| not applicable | 65,040 | 41.6% | — | — |
+| **filled** | **155,196** | **99.4%** | **0** | **0.0%** |
+| **all slots** | **156,096** | **100%** | **52,032** | **100%** |
 
 ### `ANVIL_HPRC`
 
@@ -494,15 +496,15 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | **all dimensions** | **0** | **0** | **0** | **2,357** | **23,689** | **557** | **3** | **0** | **0** | **0** | **32,499** | **80,005** | **26,603** | **1,321** |
 | **% of slots** | **0.0%** | **0.0%** | **0.0%** | **1.6%** | **17.0%** | **0.4%** | **<0.1%** | **0.0%** | **0.0%** | **0.0%** | **23.3%** | **57.5%** | **19.1%** | **0.9%** |
 
-|  | slots | % of all slots |
-| --- | ---: | ---: |
-| original | 0 | 0.0% |
-| mapped | 2,357 | 1.6% |
-| inferred | 23,689 | 17.0% |
-| inherited | 557 | 0.4% |
-| not applicable | 32,499 | 23.3% |
-| **filled** | **59,102** | **42.4%** |
-| **all slots** | **139,110** | **100%** |
+|  | slots | % of all slots | catalog alone | % of its slots |
+| --- | ---: | ---: | ---: | ---: |
+| original | 0 | 0.0% | — | — |
+| mapped | 2,357 | 1.6% | — | — |
+| inferred | 23,689 | 17.0% | — | — |
+| inherited | 557 | 0.4% | — | — |
+| not applicable | 32,499 | 23.3% | — | — |
+| **filled** | **59,102** | **42.4%** | **0** | **0.0%** |
+| **all slots** | **139,110** | **100%** | **46,370** | **100%** |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -524,15 +526,15 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | **all dimensions** | **0** | **0** | **0** | **6** | **25,097** | **0** | **0** | **6** | **0** | **0** | **12,505** | **37,590** | **25,103** | **0** |
 | **% of slots** | **0.0%** | **0.0%** | **0.0%** | **<0.1%** | **33.3%** | **0.0%** | **0.0%** | **<0.1%** | **0.0%** | **0.0%** | **16.6%** | **49.9%** | **33.3%** | **0.0%** |
 
-|  | slots | % of all slots |
-| --- | ---: | ---: |
-| original | 0 | 0.0% |
-| mapped | 6 | <0.1% |
-| inferred | 25,097 | 33.3% |
-| inherited | 0 | 0.0% |
-| not applicable | 12,505 | 16.6% |
-| **filled** | **37,608** | **50.0%** |
-| **all slots** | **75,204** | **100%** |
+|  | slots | % of all slots | catalog alone | % of its slots |
+| --- | ---: | ---: | ---: | ---: |
+| original | 0 | 0.0% | — | — |
+| mapped | 6 | <0.1% | — | — |
+| inferred | 25,097 | 33.3% | — | — |
+| inherited | 0 | 0.0% | — | — |
+| not applicable | 12,505 | 16.6% | — | — |
+| **filled** | **37,608** | **50.0%** | **0** | **0.0%** |
+| **all slots** | **75,204** | **100%** | **25,068** | **100%** |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -553,15 +555,15 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | **all dimensions** | **0** | **0** | **0** | **48** | **554,920** | **286,822** | **4** | **0** | **0** | **0** | **6,434** | **886,996** | **841,790** | **0** |
 | **% of slots** | **0.0%** | **0.0%** | **0.0%** | **<0.1%** | **31.9%** | **16.5%** | **<0.1%** | **0.0%** | **0.0%** | **0.0%** | **0.3%** | **51.1%** | **48.5%** | **0.0%** |
 
-|  | slots | % of all slots |
-| --- | ---: | ---: |
-| original | 0 | 0.0% |
-| mapped | 48 | <0.1% |
-| inferred | 554,920 | 31.9% |
-| inherited | 286,822 | 16.5% |
-| not applicable | 6,434 | 0.3% |
-| **filled** | **848,224** | **48.8%** |
-| **all slots** | **1,735,224** | **100%** |
+|  | slots | % of all slots | catalog alone | % of its slots |
+| --- | ---: | ---: | ---: | ---: |
+| original | 0 | 0.0% | — | — |
+| mapped | 48 | <0.1% | — | — |
+| inferred | 554,920 | 31.9% | — | — |
+| inherited | 286,822 | 16.5% | — | — |
+| not applicable | 6,434 | 0.3% | — | — |
+| **filled** | **848,224** | **48.8%** | **0** | **0.0%** |
+| **all slots** | **1,735,224** | **100%** | **578,408** | **100%** |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -582,15 +584,15 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | **all dimensions** | **0** | **0** | **46,798** | **262,595** | **501,860** | **333,622** | **1** | **0** | **0** | **0** | **594** | **714,404** | **1,144,875** | **211,255** |
 | **% of slots** | **0.0%** | **0.0%** | **2.5%** | **14.1%** | **26.9%** | **17.9%** | **<0.1%** | **0.0%** | **0.0%** | **0.0%** | **<0.1%** | **38.4%** | **61.5%** | **11.3%** |
 
-|  | slots | % of all slots |
-| --- | ---: | ---: |
-| original | 46,798 | 2.5% |
-| mapped | 262,595 | 14.1% |
-| inferred | 501,860 | 26.9% |
-| inherited | 333,622 | 17.9% |
-| not applicable | 594 | <0.1% |
-| **filled** | **1,145,469** | **61.5%** |
-| **all slots** | **1,859,874** | **100%** |
+|  | slots | % of all slots | catalog alone | % of its slots |
+| --- | ---: | ---: | ---: | ---: |
+| original | 46,798 | 2.5% | — | — |
+| mapped | 262,595 | 14.1% | — | — |
+| inferred | 501,860 | 26.9% | — | — |
+| inherited | 333,622 | 17.9% | — | — |
+| not applicable | 594 | <0.1% | — | — |
+| **filled** | **1,145,469** | **61.5%** | **0** | **0.0%** |
+| **all slots** | **1,859,874** | **100%** | **619,958** | **100%** |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -611,15 +613,15 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | **all dimensions** | **0** | **0** | **0** | **0** | **3,022** | **1,510** | **0** | **0** | **0** | **0** | **0** | **17,014** | **4,532** | **0** |
 | **% of slots** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **14.0%** | **7.0%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **78.9%** | **21.0%** | **0.0%** |
 
-|  | slots | % of all slots |
-| --- | ---: | ---: |
-| original | 0 | 0.0% |
-| mapped | 0 | 0.0% |
-| inferred | 3,022 | 14.0% |
-| inherited | 1,510 | 7.0% |
-| not applicable | 0 | 0.0% |
-| **filled** | **4,532** | **21.0%** |
-| **all slots** | **21,546** | **100%** |
+|  | slots | % of all slots | catalog alone | % of its slots |
+| --- | ---: | ---: | ---: | ---: |
+| original | 0 | 0.0% | — | — |
+| mapped | 0 | 0.0% | — | — |
+| inferred | 3,022 | 14.0% | — | — |
+| inherited | 1,510 | 7.0% | — | — |
+| not applicable | 0 | 0.0% | — | — |
+| **filled** | **4,532** | **21.0%** | **0** | **0.0%** |
+| **all slots** | **21,546** | **100%** | **7,182** | **100%** |
 
 ### `AnVIL_ENCORE_293T`
 
@@ -636,15 +638,15 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | **all dimensions** | **0** | **1,544** | **0** | **0** | **4,928** | **224** | **0** | **0** | **0** | **0** | **448** | **4,808** | **5,152** | **1,320** |
 | **% of slots** | **0.0%** | **12.9%** | **0.0%** | **0.0%** | **41.2%** | **1.8%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **3.7%** | **40.2%** | **43.1%** | **11.0%** |
 
-|  | slots | % of all slots |
-| --- | ---: | ---: |
-| original | 0 | 0.0% |
-| mapped | 1,544 | 12.9% |
-| inferred | 4,928 | 41.2% |
-| inherited | 224 | 1.8% |
-| not applicable | 448 | 3.7% |
-| **filled** | **7,144** | **59.7%** |
-| **all slots** | **11,952** | **100%** |
+|  | slots | % of all slots | catalog alone | % of its slots |
+| --- | ---: | ---: | ---: | ---: |
+| original | 0 | 0.0% | — | — |
+| mapped | 1,544 | 12.9% | — | — |
+| inferred | 4,928 | 41.2% | — | — |
+| inherited | 224 | 1.8% | — | — |
+| not applicable | 448 | 3.7% | — | — |
+| **filled** | **7,144** | **59.7%** | **1,544** | **38.7%** |
+| **all slots** | **11,952** | **100%** | **3,984** | **100%** |
 
 ### `AnVIL_ENCORE_RS293`
 
@@ -661,15 +663,15 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | **all dimensions** | **0** | **2,932** | **0** | **0** | **9,020** | **410** | **0** | **0** | **0** | **0** | **820** | **9,330** | **9,430** | **2,522** |
 | **% of slots** | **0.0%** | **13.0%** | **0.0%** | **0.0%** | **40.0%** | **1.8%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **3.6%** | **41.4%** | **41.8%** | **11.2%** |
 
-|  | slots | % of all slots |
-| --- | ---: | ---: |
-| original | 0 | 0.0% |
-| mapped | 2,932 | 13.0% |
-| inferred | 9,020 | 40.0% |
-| inherited | 410 | 1.8% |
-| not applicable | 820 | 3.6% |
-| **filled** | **13,182** | **58.5%** |
-| **all slots** | **22,512** | **100%** |
+|  | slots | % of all slots | catalog alone | % of its slots |
+| --- | ---: | ---: | ---: | ---: |
+| original | 0 | 0.0% | — | — |
+| mapped | 2,932 | 13.0% | — | — |
+| inferred | 9,020 | 40.0% | — | — |
+| inherited | 410 | 1.8% | — | — |
+| not applicable | 820 | 3.6% | — | — |
+| **filled** | **13,182** | **58.5%** | **2,932** | **39.0%** |
+| **all slots** | **22,512** | **100%** | **7,504** | **100%** |
 
 ### `AnVIL_HPRC_R2`
 
@@ -686,15 +688,15 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | **all dimensions** | **0** | **0** | **12,532** | **18,915** | **6,034** | **1,397** | **0** | **2** | **0** | **0** | **16,112** | **42,634** | **38,878** | **17,032** |
 | **% of slots** | **0.0%** | **0.0%** | **12.8%** | **19.3%** | **6.1%** | **1.4%** | **0.0%** | **<0.1%** | **0.0%** | **0.0%** | **16.5%** | **43.6%** | **39.8%** | **17.4%** |
 
-|  | slots | % of all slots |
-| --- | ---: | ---: |
-| original | 12,532 | 12.8% |
-| mapped | 18,915 | 19.3% |
-| inferred | 6,034 | 6.1% |
-| inherited | 1,397 | 1.4% |
-| not applicable | 16,112 | 16.5% |
-| **filled** | **54,990** | **56.3%** |
-| **all slots** | **97,626** | **100%** |
+|  | slots | % of all slots | catalog alone | % of its slots |
+| --- | ---: | ---: | ---: | ---: |
+| original | 12,532 | 12.8% | — | — |
+| mapped | 18,915 | 19.3% | — | — |
+| inferred | 6,034 | 6.1% | — | — |
+| inherited | 1,397 | 1.4% | — | — |
+| not applicable | 16,112 | 16.5% | — | — |
+| **filled** | **54,990** | **56.3%** | **0** | **0.0%** |
+| **all slots** | **97,626** | **100%** | **32,542** | **100%** |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -715,15 +717,15 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | **all dimensions** | **0** | **13,496** | **3,680** | **4,790** | **4,040** | **14** | **0** | **0** | **2** | **220** | **3,970** | **10,504** | **12,512** | **16,818** |
 | **% of slots** | **0.0%** | **33.1%** | **9.0%** | **11.7%** | **9.9%** | **<0.1%** | **0.0%** | **0.0%** | **<0.1%** | **0.5%** | **9.7%** | **25.7%** | **30.7%** | **41.3%** |
 
-|  | slots | % of all slots |
-| --- | ---: | ---: |
-| original | 3,680 | 9.0% |
-| mapped | 18,286 | 44.9% |
-| inferred | 4,040 | 9.9% |
-| inherited | 14 | <0.1% |
-| not applicable | 3,970 | 9.7% |
-| **filled** | **29,990** | **73.6%** |
-| **all slots** | **40,716** | **100%** |
+|  | slots | % of all slots | catalog alone | % of its slots |
+| --- | ---: | ---: | ---: | ---: |
+| original | 3,680 | 9.0% | — | — |
+| mapped | 18,286 | 44.9% | — | — |
+| inferred | 4,040 | 9.9% | — | — |
+| inherited | 14 | <0.1% | — | — |
+| not applicable | 3,970 | 9.7% | — | — |
+| **filled** | **29,990** | **73.6%** | **6,975** | **51.3%** |
+| **all slots** | **40,716** | **100%** | **13,572** | **100%** |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -744,12 +746,12 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | **all dimensions** | **0** | **0** | **0** | **0** | **7,123** | **2,373** | **0** | **0** | **0** | **0** | **1,558** | **8,656** | **9,496** | **0** |
 | **% of slots** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **36.1%** | **12.0%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **7.9%** | **43.9%** | **48.1%** | **0.0%** |
 
-|  | slots | % of all slots |
-| --- | ---: | ---: |
-| original | 0 | 0.0% |
-| mapped | 0 | 0.0% |
-| inferred | 7,123 | 36.1% |
-| inherited | 2,373 | 12.0% |
-| not applicable | 1,558 | 7.9% |
-| **filled** | **11,054** | **56.0%** |
-| **all slots** | **19,710** | **100%** |
+|  | slots | % of all slots | catalog alone | % of its slots |
+| --- | ---: | ---: | ---: | ---: |
+| original | 0 | 0.0% | — | — |
+| mapped | 0 | 0.0% | — | — |
+| inferred | 7,123 | 36.1% | — | — |
+| inherited | 2,373 | 12.0% | — | — |
+| not applicable | 1,558 | 7.9% | — | — |
+| **filled** | **11,054** | **56.0%** | **0** | **0.0%** |
+| **all slots** | **19,710** | **100%** | **6,570** | **100%** |

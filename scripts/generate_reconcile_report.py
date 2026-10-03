@@ -28,7 +28,7 @@ import math
 import sys
 from pathlib import Path
 
-from meta_disco.models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, STATUS_LABELS
+from meta_disco.models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, SOURCE_PUBLISHED_VALUE, STATUS_LABELS
 from meta_disco.output_utils import RECONCILED_DIR, find_latest_run, list_runs
 from meta_disco.reconcile import (
     CONFLICT_CATEGORIES,
@@ -36,9 +36,11 @@ from meta_disco.reconcile import (
     FILLED_GROUPS,
     INFERENCE,
     REPORT_FILE,
+    SILENT,
     SLOT_CATEGORIES,
     SOURCE_PRECEDENCE,
     fill_category,
+    published_slots,
 )
 from meta_disco.reconcile_inherit import OUTCOMES as INHERITANCE_COLUMNS
 from meta_disco.reconcile_lineage import OUTCOMES
@@ -190,6 +192,29 @@ def completeness(counts: dict[str, int]) -> dict[str, int]:
     """Each of ``FILLED_GROUPS``'s slot count, in its order, then ``filled``: their sum."""
     groups = {group: sum(counts[c] for c in categories) for group, categories in FILLED_GROUPS.items()}
     return {**groups, "filled": sum(groups.values())}
+
+
+def catalog_alone(report: dict, dataset: str | None = None) -> dict | None:
+    """How complete the catalog's own metadata is, before ours: its dimensions, their slots, and how many it fills.
+
+    Its dimensions are the ones its published source has a column for
+    (:func:`meta_disco.reconcile.published_slots`), and a slot is filled where that source
+    was not silent for the file: it publishes a value, whether or not a translation row
+    reads it. None where the repository has no published source.
+    """
+    dimensions = sorted(published_slots(report["repository"]))
+    if not dimensions:
+        return None
+    names = _datasets(report, dataset)
+    filled = sum(
+        n
+        for d in names
+        for slot in dimensions
+        for outcome, n in report["inputs"].get(d, {}).get(slot, {}).get(SOURCE_PUBLISHED_VALUE, {}).items()
+        if outcome != SILENT
+    )
+    files = sum(report["files"].get(d, 0) for d in names)
+    return {"dimensions": dimensions, "slots": files * len(dimensions), "filled": filled}
 
 
 def conflict_rows(report: dict, dataset: str | None = None) -> list[dict]:
@@ -402,6 +427,7 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
             "headline": rows,
             "totals": summed,
             "completeness": completeness(summed["counts"]),
+            "catalog_alone": catalog_alone(report, dataset),
             "conflicts": conflicts,
             "slots": slots,
             "conflict_rate": conflicts / slots if slots else 0.0,
@@ -471,14 +497,32 @@ def _of_slots(count: int, slots: int) -> str:
     return _pct(count / slots) if slots else "0.0%"
 
 
-def _completeness_table(scope: dict) -> list[str]:
-    c, slots = scope["completeness"], scope["slots"]
-    body = [[group.replace("_", " "), _n(c[group]), _of_slots(c[group], slots)] for group in FILLED_GROUPS]
-    body += [
-        ["**filled**", f"**{_n(c['filled'])}**", f"**{_of_slots(c['filled'], slots)}**"],
-        ["**all slots**", f"**{_n(slots)}**", "**100%**"],
+def _catalog_dimensions(scope: dict) -> list[str]:
+    alone = scope["catalog_alone"]
+    if alone is None:
+        return []
+    dimensions = ", ".join(md_code(d) for d in alone["dimensions"])
+    return [
+        "",
+        f"*Catalog alone* is the catalog's own metadata, before ours: only the dimensions it publishes a column "
+        f"for ({dimensions}), so fewer slots, and a slot is filled where it publishes a value for the file, read "
+        "by a translation row or not. It is not split by credit, so those rows read —.",
     ]
-    return md_table(["", "slots", "% of all slots"], body, align="right")
+
+
+def _completeness_table(scope: dict) -> list[str]:
+    """Ours by credit, then filled and all slots; beside them, where there is one, the catalog alone's."""
+    c, slots, alone = scope["completeness"], scope["slots"], scope["catalog_alone"]
+    header = ["", "slots", "% of all slots"]
+    body = [[group.replace("_", " "), _n(c[group]), _of_slots(c[group], slots)] for group in FILLED_GROUPS]
+    filled = ["**filled**", f"**{_n(c['filled'])}**", f"**{_of_slots(c['filled'], slots)}**"]
+    every = ["**all slots**", f"**{_n(slots)}**", "**100%**"]
+    if alone is not None:
+        header += ["catalog alone", "% of its slots"]
+        body = [[*row, "—", "—"] for row in body]
+        filled += [f"**{_n(alone['filled'])}**", f"**{_of_slots(alone['filled'], alone['slots'])}**"]
+        every += [f"**{_n(alone['slots'])}**", "**100%**"]
+    return md_table(header, [*body, filled, every], align="right")
 
 
 def _grouped(matrix: dict) -> tuple[dict, dict[str, list[str]]]:
@@ -646,6 +690,7 @@ def render_markdown(data: dict) -> str:
         "unreviewed or in conflict is not filled.",
         "",
         *_completeness_table(whole),
+        *_catalog_dimensions(whole),
         "",
         "## Conflict rate",
         "",

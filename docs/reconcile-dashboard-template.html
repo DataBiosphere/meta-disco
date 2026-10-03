@@ -68,6 +68,7 @@
     <em>inherited</em>, only the file's parents' across its <code>generated_by</code>; <em>not applicable</em>, which
     is not credited to any input. A slot not classified, published unreviewed or in conflict is not filled.</p>
   <div class="scroll" id="completeness"></div>
+  <p class="note" id="catalog-dimensions"></p>
 
   <h2>Conflict rate</h2>
   <p id="rate-summary"></p>
@@ -157,12 +158,18 @@
       return table(header, rows.map(r => [r.dimension, ...cells(r, fmt)]), totals);
     }
 
+    // Ours by credit, then filled and all slots; beside them, where there is one, the catalog alone's.
     function completenessTable(scope) {
-      const c = scope.completeness;
-      const row = (label, v, share) => [label, {text: n(v), cls: 'num'}, {text: share, cls: 'num'}];
-      return table(['', 'slots', '% of all slots'],
-        DATA.filled_groups.map(g => row(g.label, c[g.key], ofSlots(c[g.key], scope.slots))),
-        [row('filled', c.filled, ofSlots(c.filled, scope.slots)), row('all slots', scope.slots, '100%')]);
+      const c = scope.completeness, alone = scope.catalog_alone;
+      const num = text => ({text, cls: 'num'});
+      const extra = alone ? (filled, slots) => [num(n(filled)), num(ofSlots(filled, slots))] : () => [];
+      const dash = alone ? [num('—'), num('—')] : [];
+      return table(['', 'slots', '% of all slots', ...(alone ? ['catalog alone', '% of its slots'] : [])],
+        DATA.filled_groups.map(g => [g.label, num(n(c[g.key])), num(ofSlots(c[g.key], scope.slots)), ...dash]),
+        [
+          ['filled', num(n(c.filled)), num(ofSlots(c.filled, scope.slots)), ...(alone ? extra(alone.filled, alone.slots) : [])],
+          ['all slots', num(n(scope.slots)), num('100%'), ...(alone ? [num(n(alone.slots)), num('100%')] : [])],
+        ]);
     }
 
     const competing = inputs => Object.entries(inputs)
@@ -189,6 +196,11 @@
       const scope = whole ? DATA.run : DATA.datasets[index];
       const name = whole ? DATA.all : scope.name;
       document.getElementById('completeness').innerHTML = completenessTable(scope);
+      document.getElementById('catalog-dimensions').innerHTML = scope.catalog_alone
+        ? `<em>Catalog alone</em> is the catalog's own metadata, before ours: only the dimensions it publishes a column for (${
+            scope.catalog_alone.dimensions.map(d => `<code>${esc(d)}</code>`).join(', ')}), so fewer slots, and a slot is filled ` +
+          'where it publishes a value for the file, read by a translation row or not. It is not split by credit, so those rows read —.'
+        : '';
       document.getElementById('headline').innerHTML = headlineTable(scope.headline, n, scope);
 
       document.getElementById('rate-summary').innerHTML =
