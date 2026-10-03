@@ -353,6 +353,10 @@ def import_dataset(
     lines = (e for c in matched for e in entries(c, response.rows[c.accession], source))
     with staged_generation(result.directory) as staging:
         result.written = write_evidence_file(evidence_file_path(staging, TABLE), envelope, lines)
+        if not result.written:
+            # Matched files whose every mapped field is empty: an evidence file with no
+            # lines is refused by reconcile (contract 5.3), so fail as no match does.
+            raise ValueError(f"{dataset}: {len(matched):,} matched files, but ENA states no mapped field for any")
         write_response(staging / RESPONSE_FILE, response)
     return result
 

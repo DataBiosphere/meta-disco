@@ -12,11 +12,11 @@ What each comparison means today (#330):
 - platform — the meaningful check: the stored value was derived from the
   file's read-name grammar at classification time, ENA's is
   submitter-declared; two independent routes to the same fact.
-- modality / assay — reported, but expected to score unknown-by-design
-  under current rules: FASTQ modality/assay is not recoverable from
-  content (the content ceiling), so our side is a sentinel. The
-  comparisons are wired now so they activate once import work fills
-  those dimensions.
+- modality / assay — reported, but expected to score unknown-by-design:
+  FASTQ modality/assay is not recoverable from content (the content
+  ceiling), and inference reads no evidence, so in the inference output
+  this reads our side is a sentinel. Imported values, ENA's (#606)
+  included, fill only the reconciled artifact, which this refuses.
 - Circularity: ENA must never validate a value ENA supplied. ENA's run
   records are imported as evidence (#606) for the FASTQs ENA generated,
   and reach only the reconciled artifact (``<run>/reconciled/``); this
@@ -294,9 +294,9 @@ def validate_against_ena(
             prefix=True,
         )
 
-        # Dormant until import fills assay (#330): activates the moment our
-        # side holds concrete values. Circularity policy (unenforced) in the
-        # module docstring.
+        # Dormant on inference output, whose FASTQ assay is a sentinel; imported
+        # values reach only the reconciled artifact, refused as circular (module
+        # docstring).
         our_assay, assay_status = our_field(rec, "assay_type")
         expected_assay = ENA_LIBRARY_STRATEGY_MAP.get(ena_strategy)
         verdict(

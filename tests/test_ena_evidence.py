@@ -181,6 +181,14 @@ def test_a_run_whose_file_and_md5_lists_differ_in_length_matches_no_file_and_is_
     assert {key for key, *_ in lines(result.directory)} == {"t2"}
 
 
+def test_matched_files_with_no_mapped_field_fail_and_write_nothing(tmp_path):
+    empty = run("ERR000001", {"ERR000001_1.fastq.gz": "aa"}, **dict.fromkeys(ena.FIELD_SLOTS, ""))
+    write_dataset(tmp_path / "m", "D", [fastq("t1", "ERR000001_1.fastq.gz", "aa")])
+    with pytest.raises(ValueError, match="D: 1 matched files, but ENA states no mapped field for any"):
+        ena.import_all(tmp_path / "m", CATALOG, tmp_path / "ev", FakePortal([empty]), generation=STAMP)
+    assert not (tmp_path / "ev" / ena.SOURCE / CATALOG / "D" / STAMP).exists()
+
+
 def test_a_response_for_another_catalog_is_refused(tmp_path):
     write_dataset(tmp_path / "m", "D", entities())
     stored = ena.Response("anvil14", "D", REQUESTED, {r["run_accession"]: r for r in ROWS})
