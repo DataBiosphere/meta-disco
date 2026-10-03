@@ -206,6 +206,15 @@ def test_fetch_runs_raises_on_an_http_error(monkeypatch):
         ena.fetch_runs(CATALOG, "D", ["ERR000001"])
 
 
+def test_a_dataset_that_lost_its_enas_names_fails_while_its_old_generation_is_current(tmp_path):
+    write_dataset(tmp_path / "m", "D", entities())
+    ena.import_all(tmp_path / "m", CATALOG, tmp_path / "ev", FakePortal(ROWS), generation=STAMP)
+    write_dataset(tmp_path / "m", "D", [fastq("o1", "sample.bam", "aa")])
+    with pytest.raises(ValueError, match="D: no file named as ENA's, but an earlier ENA generation is current"):
+        ena.import_all(tmp_path / "m", CATALOG, tmp_path / "ev", FakePortal(ROWS), generation="20261004T000000Z")
+    assert not (tmp_path / "ev" / ena.SOURCE / CATALOG / "D" / "20261004T000000Z").exists()
+
+
 def test_ena_returning_two_different_rows_for_one_run_is_refused():
     rows: dict[str, dict] = {}
     ena.add_row(rows, ROWS[0], "here")

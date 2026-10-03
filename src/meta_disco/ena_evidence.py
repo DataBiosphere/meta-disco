@@ -50,6 +50,7 @@ from .azul_manifest import REPOSITORY, VERBATIM_FILE, iter_verbatim_lines, parse
 from .models import JOIN_KEY_FILE_ID, SOURCE_EXTERNAL_GROUND_TRUTH
 from .schema.classification_model import ImporterSourceTypeEnum, JoinKeyEnum
 from .source_evidence import (
+    EVIDENCE_FILE_SUFFIX,
     EvidenceEntry,
     EvidenceFileEnvelope,
     EvidenceFileSource,
@@ -57,6 +58,7 @@ from .source_evidence import (
     claim_source_for,
     evidence_file_path,
     generation_dir,
+    is_generation,
     new_generation,
     staged_generation,
     write_evidence_file,
@@ -287,9 +289,12 @@ def import_all(
 ) -> list[DatasetImport]:
     """Import every dataset of the catalog's sidecar (or ``datasets``), each as one new generation.
 
-    A dataset with no file named as ENA names one is passed over with no request. The
-    stamp is shared across the datasets of one run, as the AnVIL importer's is. Raises
-    before writing anything if a chosen dataset's verbatim manifest cannot be read.
+    A dataset with no file named as ENA names one is passed over with no request, unless
+    an earlier import wrote it a generation: that one would stay current and keep applying
+    evidence nothing now confirms, so the import raises instead, as it does when no file
+    matches. The stamp is shared across the datasets of one run, as the AnVIL importer's
+    is. Raises before writing anything if a chosen dataset's verbatim manifest cannot be
+    read, or if a dataset would leave a generation behind.
     """
     named = sidecar_datasets(manifest_root, catalog)
     chosen = chosen_datasets(list(named), None if datasets is None else list(datasets))
@@ -298,13 +303,25 @@ def import_all(
     if problems:
         raise ValueError("; ".join(problems))
     paths = {dataset: path for dataset, path in found_paths.items() if isinstance(path, Path)}
+    found = {dataset: candidates(path) for dataset, path in paths.items()}
+    stale = [d for d, files in found.items() if not files and imported_before(evidence_root, catalog, d)]
+    if stale:
+        raise ValueError(
+            f"{', '.join(stale)}: no file named as ENA's, but an earlier ENA generation is current for "
+            f"{catalog}; it would keep applying evidence nothing now confirms — remove it by hand"
+        )
     stamp = generation or new_generation()
-    imports = []
-    for dataset, path in paths.items():
-        found = candidates(path)
-        if found:
-            imports.append(import_dataset(dataset, found, catalog, evidence_root, fetch, stamp))
-    return imports
+    return [
+        import_dataset(dataset, files, catalog, evidence_root, fetch, stamp)
+        for dataset, files in found.items()
+        if files
+    ]
+
+
+def imported_before(evidence_root: Path, catalog: str, dataset: str) -> bool:
+    """Whether a generation of ENA evidence exists for ``dataset`` in ``catalog``."""
+    directory = evidence_root / SOURCE / catalog / dataset
+    return any(is_generation(p.parent.name) for p in directory.glob(f"*/{TABLE}{EVIDENCE_FILE_SUFFIX}"))
 
 
 def import_dataset(
