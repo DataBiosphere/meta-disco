@@ -95,7 +95,7 @@ def leading_metadata(path: Path) -> dict | None:
     Every writer of an input envelope and of a run's classification files puts the block
     first, compact or indented. That is a writer detail, not a contract, so a caller falls
     back to a full parse of its own when this gives None. Shared by
-    ``pipeline.load_envelope`` and :func:`run_file_metadata`, whose files run to most of a GB.
+    ``inputs.load_envelope`` and :func:`run_file_metadata`, whose files run to most of a GB.
     """
     with path.open(encoding="utf-8") as f:
         head = f.read(_METADATA_HEAD_BYTES)

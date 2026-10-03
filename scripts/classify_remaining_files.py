@@ -22,12 +22,13 @@ from pathlib import Path
 
 from meta_disco import edges
 from meta_disco.deployments import PROD
+from meta_disco.inputs import load_envelope
 from meta_disco.metadata_schema import (
     classification_blocking_reasons,
     validation_failed_classifications,
 )
 from meta_disco.models import FileInfo
-from meta_disco.pipeline import load_classifiable_records, load_envelope
+from meta_disco.pipeline import load_classifiable_records
 from meta_disco.producers import PRODUCERS
 from meta_disco.record_keys import RecordKey, input_key_value, keyed_rows, record_key, repeated_key_values
 from meta_disco.records import InvalidRecord, OutputRecord, RunMetadata

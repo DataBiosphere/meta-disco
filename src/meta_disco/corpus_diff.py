@@ -33,9 +33,9 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+from .inputs import load_snapshot
 from .models import CLASSIFICATION_FIELDS, STATUS_LABELS, field_label
 from .output_utils import ARTIFACT_READERS
-from .pipeline import load_snapshot
 from .summaries import escape_md_cell
 
 # Which artifact of a run a comparison reads (contract 6.9, #432). Neither is a default:
@@ -183,7 +183,7 @@ def read_snapshot(path: Path) -> tuple[SnapshotMeta, list]:
     """Read an input snapshot's envelope facts and its records in one parse.
 
     These files are several hundred megabytes, so the header and the records come
-    from the same ``pipeline.load_snapshot`` call rather than two full parses. An
+    from the same ``inputs.load_snapshot`` call rather than two full parses. An
     ``.ndjson`` input carries no envelope, so its facts beyond the path are
     ``None``.
     """

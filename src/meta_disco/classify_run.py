@@ -18,8 +18,8 @@ from datetime import datetime
 from pathlib import Path
 
 from meta_disco.exclusions import EXCLUDED_FILE, read_excluded
+from meta_disco.inputs import load_envelope
 from meta_disco.output_utils import row_identities
-from meta_disco.pipeline import load_envelope
 from meta_disco.producers import PRODUCERS, output_paths, producers_in_phase, validate_registry
 from meta_disco.record_keys import PUBLISHED_TABLES, RecordKey, record_key
 from meta_disco.source_evidence import (
@@ -182,7 +182,7 @@ def run_all_classifications(
     file must not start one — or if the input envelope names no repository with a
     declared record key (:func:`record_keys.record_key`), since Phase 3 would refuse the
     same input after every earlier phase had run (#446). That preflight reads the
-    envelope alone (:func:`pipeline.load_envelope`), not the records.
+    envelope alone (:func:`inputs.load_envelope`), not the records.
 
     After those two refusals and before the run directory exists, it reports the
     evidence files under ``source_evidence_root``

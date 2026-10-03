@@ -65,6 +65,7 @@ from .activity_map import ActivityMap, load_activity_map
 from .azul_manifest import REPOSITORY as ANVIL_REPOSITORY
 from .deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS
 from .edges import LineageStep, StepConflict, generic_only, merge_steps, misfits
+from .inputs import load_envelope
 from .lineage_evidence import DEFAULT_LINEAGE_EVIDENCE_ROOT
 from .models import (
     CLASSIFICATION_FIELDS,
@@ -91,7 +92,6 @@ from .output_utils import (
     run_file_metadata,
     write_reconciled_file,
 )
-from .pipeline import load_envelope
 from .reconcile_inherit import (
     REFERENCE_ASSEMBLY,
     InheritanceCycle,

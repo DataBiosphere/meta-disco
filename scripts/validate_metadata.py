@@ -27,8 +27,8 @@ import sys
 from pathlib import Path
 
 from meta_disco.deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS
+from meta_disco.inputs import load_snapshot
 from meta_disco.metadata_schema import validate_records
-from meta_disco.pipeline import load_snapshot
 from meta_disco.record_keys import key_field, record_key, repeated_key_values
 
 

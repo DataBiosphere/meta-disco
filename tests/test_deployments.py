@@ -21,7 +21,7 @@ import validate_metadata
 from meta_disco import azul_manifest as am
 from meta_disco import tdr
 from meta_disco.deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS, DEV, PROD, Deployment
-from meta_disco.pipeline import load_envelope, load_records
+from meta_disco.inputs import load_envelope, load_records
 from tests.tdr_fixtures import FakeClient, table_of
 from tests.test_azul_manifest import (
     SERVICE,

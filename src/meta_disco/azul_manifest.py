@@ -852,7 +852,7 @@ def write_input_files(root: Path, block: dict[str, Any], records: Iterable[dict[
 
     ``records`` is consumed once; no more than the current record is held. The
     JSON envelope is ``{"metadata": block, "files": [...]}`` (the shape
-    ``pipeline.load_records`` reads); the NDJSON is one record per line. Both
+    ``inputs.load_records`` reads); the NDJSON is one record per line. Both
     are written to temporary files and renamed into place only after every
     record is out, so an exception mid-stream — a cell the mapping rejects —
     leaves the previous input files untouched. Returns the number written.
