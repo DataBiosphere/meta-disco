@@ -6,11 +6,12 @@ which carries extension filters, fetcher, classifier, and summary printer.
 """
 
 import json
-from collections.abc import Iterable, Iterator
+from collections import Counter, defaultdict
+from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Lock
-from typing import NamedTuple, TypeGuard
+from typing import Any, NamedTuple, TypeGuard
 
 from .azul_manifest import PUBLISHED_TABLE as ANVIL_PUBLISHED_TABLE
 from .azul_manifest import REPOSITORY as ANVIL_REPOSITORY
@@ -24,9 +25,11 @@ from .metadata_schema import (
     validation_failed_classifications,
 )
 from .models import JOIN_KEY_FILE_ID, JOIN_KEY_FILE_MD5SUM
+from .output_utils import leading_metadata
 from .producers import producer_for
 from .records import (
     OUTPUT_MD5SUM_FIELD,
+    STEP_OUTCOMES_KEY,
     ClassifierRecord,
     InvalidRecord,
     OutputRecord,
@@ -272,11 +275,6 @@ def repeated_key_values(records: list, key: RecordKey) -> dict[str, int]:
     return {value: n for value, n in counts.items() if n > 1}
 
 
-# How much of an input file to read for its envelope: the metadata block of the AnVIL
-# snapshot is a few kilobytes and the HPRC one a few bytes, so this is generous.
-_ENVELOPE_HEAD = 1 << 20
-
-
 def load_envelope(input_path: Path) -> dict:
     """An input file's ``metadata`` block without parsing its records.
 
@@ -295,17 +293,8 @@ def load_envelope(input_path: Path) -> dict:
     """
     if input_path.suffix == ".ndjson":
         return {}
-    prefix = '{"metadata": '
-    with input_path.open() as f:
-        head = f.read(_ENVELOPE_HEAD)
-    if head.startswith(prefix):
-        try:
-            block, _ = json.JSONDecoder().raw_decode(head, len(prefix))
-        except json.JSONDecodeError:
-            block = None
-        if isinstance(block, dict):
-            return block
-    return load_snapshot(input_path)[0]
+    block = leading_metadata(input_path)
+    return block if block is not None else load_snapshot(input_path)[0]
 
 
 def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> list[dict]:
@@ -359,7 +348,7 @@ class RecordOutcome(NamedTuple):
     The three flags are mutually exclusive and only one, at most, is set:
     ``validation_failed`` (failed the input contract), ``was_cached`` (evidence already
     on disk), ``content_unreadable`` (fetch failed; the record is fully not_classified,
-    #293), or none of these (a fresh fetch). Named so the four fields cannot be transposed
+    #293), or none of these (a fresh fetch). Named so the fields cannot be transposed
     at the unpack sites.
     """
 
@@ -367,6 +356,9 @@ class RecordOutcome(NamedTuple):
     was_cached: bool
     content_unreadable: bool
     validation_failed: bool
+    # Why the file got the step it did, or none, where its type states one
+    # (``FileTypeConfig.step``, #609); None for every other type and for a file not read.
+    step_outcome: str | None = None
 
 
 def _fetch_and_classify(
@@ -381,13 +373,14 @@ def _fetch_and_classify(
     is_gzipped: bool,
     use_cache: bool,
     url: str | None = None,
-) -> tuple[dict, bool]:
+) -> tuple[dict, bool, Any]:
     """Fetch a file's content and classify it.
 
-    Returns ``(classifications, content_unreadable)``:
+    Returns ``(classifications, content_unreadable, payload)``, ``payload`` being what
+    the fetcher returned, for a type that reads more from it (``FileTypeConfig.step``):
 
-    * content read        -> ``(classifications, False)``
-    * content unreadable  -> ``(all-not_classified classifications, True)``, when the
+    * content read        -> ``(classifications, False, payload)``
+    * content unreadable  -> ``(all-not_classified classifications, True, None)``, when the
       fetcher raised ``FetchError``; the file stays in the output as a fully
       ``not_classified`` row rather than vanishing (#155), asserting nothing about
       a file we could not read (#293).
@@ -419,14 +412,10 @@ def _fetch_and_classify(
         )
     except FetchError as e:
         print(f"Content unreadable, classified as nothing — {file_name or md5sum}: {e.reason}")
-        return classify_without_content(e.reason), True
+        return classify_without_content(e.reason), True, None
 
-    return config.classifier(
-        raw_data,
-        name=name,
-        file_size=file_size,
-        file_format=file_format,
-    ), False
+    classifications = config.classifier(raw_data, name=name, file_size=file_size, file_format=file_format)
+    return classifications, False, raw_data
 
 
 class NdjsonWriter:
@@ -489,6 +478,10 @@ class ClassifyPipeline:
         self.workers = workers or 10
         self.skip_complete = skip_complete
         self.skip_cached = skip_cached
+        # The per-file step reader of a type that states one (``FileTypeConfig.step``,
+        # #609), built by ``run`` from the whole input, not this type's share of it — a
+        # VCF's parent is a CRAM. None for every other type.
+        self._step: Callable | None = None
 
     def run(self) -> list[dict]:
         """Execute the full pipeline: load -> filter -> parse -> fetch+classify -> write.
@@ -498,8 +491,12 @@ class ClassifyPipeline:
         record whose classifier-relevant fields violate the input contract (#161).
         Everything downstream reads typed attributes, not raw ``dict`` keys.
         """
-        records = self._load_input()
-        records = self._filter_records(records)
+        # A type that states a step needs the source's record key, which the input's envelope
+        # names: refused here, before any work, where the envelope names none (an `.ndjson`
+        # input), as the index producer and the catch-all refuse it.
+        key = record_key(load_envelope(self.input_path), self.input_path) if self.config.step is not None else None
+        loaded = self._load_input()
+        records = self._filter_records(loaded)
 
         if not records:
             print(f"No {self.config.name.upper()} files found matching extensions {self.config.extensions}")
@@ -544,6 +541,11 @@ class ClassifyPipeline:
         if self.config.preflight is not None and will_fetch:
             self.config.preflight()
 
+        if self.config.step is not None:
+            self._step = self.config.step(loaded, key)
+        # The step reader keeps what it needs of the input; the rest need not outlive the load.
+        del loaded
+
         self.evidence_dir.mkdir(parents=True, exist_ok=True)
         classifications = self._run_parallel(work)
 
@@ -584,7 +586,7 @@ class ClassifyPipeline:
         evidence_dir = evidence_base / config.name
         evidence_dir.mkdir(parents=True, exist_ok=True)
 
-        classifications, _unreadable = _fetch_and_classify(
+        classifications, _unreadable, _payload = _fetch_and_classify(
             config,
             evidence_dir,
             md5sum,
@@ -763,7 +765,7 @@ class ClassifyPipeline:
 
         was_cached = self.resume and self._is_cached(item.file_md5sum)
 
-        classifications, content_unreadable = _fetch_and_classify(
+        classifications, content_unreadable, payload = _fetch_and_classify(
             self.config,
             self.evidence_dir,
             item.file_md5sum,
@@ -783,8 +785,15 @@ class ClassifyPipeline:
             # unreadable tally.
             was_cached = False
 
+        generated_by, step_outcome = None, None
+        if self._step is not None and not content_unreadable:
+            generated_by, step_outcome = self._step(payload, item.file_name, item.dataset_id)
         return RecordOutcome(
-            OutputRecord.from_work_item(item, classifications), was_cached, content_unreadable, validation_failed=False
+            OutputRecord.from_work_item(item, classifications, generated_by=generated_by),
+            was_cached,
+            content_unreadable,
+            validation_failed=False,
+            step_outcome=step_outcome,
         )
 
     def _run_parallel(self, work: list[ClassifierRecord | InvalidRecord]) -> list[dict]:
@@ -797,6 +806,8 @@ class ClassifyPipeline:
         unreadable = 0
         lock = Lock()
         total = len(work)
+        # Per dataset, each outcome's files, for a type that states a step (#609).
+        step_counts: dict[str, Counter] = defaultdict(Counter)
 
         print(f"Using {self.workers} parallel workers")
 
@@ -807,6 +818,9 @@ class ClassifyPipeline:
                 with lock:
                     processed += 1
                     writer.write(outcome.result.to_dict())
+                    if outcome.step_outcome is not None:
+                        # As reconcile names a record with no title: "" (HPRC has none).
+                        step_counts[str(outcome.result.dataset_title or "")][outcome.step_outcome] += 1
                     if outcome.validation_failed:
                         invalid += 1
                     else:
@@ -847,6 +861,11 @@ class ClassifyPipeline:
             print(f"Errored (cause printed above): {errored}")
         if invalid:
             print(f"Failed input validation (written, classified as nothing): {invalid}")
+        details = None
+        if self._step is not None:
+            details = {STEP_OUTCOMES_KEY: {dataset: dict(counts) for dataset, counts in sorted(step_counts.items())}}
+            for dataset, counts in details[STEP_OUTCOMES_KEY].items():
+                print(f"  Producer steps, {dataset}: {', '.join(f'{k} {v:,}' for k, v in counts.items())}")
         classifications = self._save_final(
             total,
             successful,
@@ -854,6 +873,7 @@ class ClassifyPipeline:
             unreadable=unreadable,
             errored=errored,
             validation_failed=invalid,
+            details=details,
         )
 
         print(f"\nSaved to {self.output_path}")
@@ -869,6 +889,7 @@ class ClassifyPipeline:
         unreadable: int,
         errored: int = 0,
         validation_failed: int = 0,
+        details: dict | None = None,
     ) -> list[dict]:
         """Write final JSON output from NDJSON progress file.
 
@@ -900,6 +921,7 @@ class ClassifyPipeline:
                         content_unreadable=unreadable,
                         errored=errored,
                         validation_failed=validation_failed,
+                        details=details,
                     ).to_dict(),
                     "classifications": classifications,
                 },

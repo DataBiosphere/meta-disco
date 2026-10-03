@@ -110,6 +110,21 @@ def identity_from(record: dict, *, coerce: bool = False) -> dict:
     return {field: record.get(field) for field in CATALOG_IDENTITY_FIELDS}
 
 
+# What an input record with no `dataset_id` is grouped under, wherever a producer resolves a
+# parent within a dataset (`edges.files_by_folded_name` builds its index on it and every
+# lookup reads it the same way). One spelling, so the index and a lookup cannot disagree.
+UNKNOWN_DATASET = "unknown"
+
+# Where a producer whose type states a step (`FileTypeConfig.step`, #609) records, in its
+# metadata `details`, the outcome of each file per dataset; reconcile reads it back.
+STEP_OUTCOMES_KEY = "producer_steps"
+
+
+def dataset_of(record: dict) -> Any:
+    """The dataset an input record belongs to, for resolving a parent within it."""
+    return record.get("dataset_id", UNKNOWN_DATASET)
+
+
 @dataclass(frozen=True)
 class ClassifierRecord:
     """A filtered record whose classifier-relevant fields passed the input contract.
@@ -153,6 +168,9 @@ class ClassifierRecord:
     drs_uri: Any
     name: FileName
     url: str | None = None
+    # The dataset a producer resolves a parent within (``edges.files_by_folded_name``
+    # keys on it, #609). Not echoed to the output row: records carry no `dataset_id` (#450).
+    dataset_id: Any = None
 
     @classmethod
     def from_record(cls, record: dict) -> ClassifierRecord:
@@ -180,6 +198,7 @@ class ClassifierRecord:
             drs_uri=record.get("drs_uri"),
             name=FileName.parse(record["file_name"]),
             url=record.get("url"),
+            dataset_id=dataset_of(record),
         )
 
 
@@ -291,11 +310,15 @@ class OutputRecord:
         cls,
         item: ClassifierRecord | InvalidRecord,
         classifications: dict,
+        *,
+        generated_by: dict | None = None,
     ) -> OutputRecord:
         """Build from a parsed work item and its classifications payload.
 
         Reads the identity attributes both streams expose (see the module docstring),
-        so it is agnostic to which stream produced ``item``.
+        so it is agnostic to which stream produced ``item``. ``generated_by`` is the step
+        a type reads from the file's content (``FileTypeConfig.step``, #609); null for
+        every other type.
         """
         return cls(
             file_name=item.file_name,
@@ -307,6 +330,7 @@ class OutputRecord:
             file_id=item.file_id,
             drs_uri=item.drs_uri,
             classifications=classifications,
+            generated_by=generated_by,
         )
 
     @classmethod

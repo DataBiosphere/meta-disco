@@ -169,6 +169,46 @@ def test_a_role_that_takes_several_keeps_one_input_per_parent():
     assert step["named_by"] == [ROW]
 
 
+HEADER = {"source_type": "content_read", "rule_id": "variant_call_by_header"}
+SAMPLE = {"source_type": "repository_metadata", "rule_id": "activity.t2t_variant_call", "source": {"name": "anvil"}}
+
+
+def inferred_call(parent_key: str, parent_file: str) -> dict:
+    used = {"role": "calls_from", "parent_file": parent_file, "parent_key": parent_key, "parent_kind": "alignment"}
+    return {"activity": "VariantCallActivity", "named_by": [HEADER], "inputs": [{**used, "named_by": [HEADER]}]}
+
+
+def test_a_source_naming_other_parents_than_inference_is_an_edge_conflict_in_a_role_that_takes_several():
+    # `calls_from` takes several parents, but the header names every input of its step.
+    step, conflict = merge_steps(
+        inferred_call("k-a", "A.cram"),
+        [LineageStep("VariantCallActivity", "calls_from", "k-b", "B.cram", "alignment", SAMPLE)],
+    )
+    assert step is None and conflict is not None
+    assert (conflict.kind, conflict.role) == (EDGE_CONFLICT, "calls_from")
+    assert conflict.said == (("A.cram", HEADER), ("B.cram", SAMPLE))
+
+
+def test_a_source_naming_inferences_parent_and_another_is_a_conflict_too():
+    step, conflict = merge_steps(
+        inferred_call("k-a", "A.cram"),
+        [
+            LineageStep("VariantCallActivity", "calls_from", "k-a", "A.cram", "alignment", SAMPLE),
+            LineageStep("VariantCallActivity", "calls_from", "k-b", "B.cram", "alignment", SAMPLE),
+        ],
+    )
+    assert step is None and conflict is not None and conflict.kind == EDGE_CONFLICT
+
+
+def test_a_source_naming_inferences_parent_merges_with_it():
+    step, conflict = merge_steps(
+        inferred_call("k-a", "A.cram"),
+        [LineageStep("VariantCallActivity", "calls_from", "k-a", "A.cram", "alignment", SAMPLE)],
+    )
+    assert conflict is None and step is not None
+    assert [i["named_by"] for i in step["inputs"]] == [[HEADER, SAMPLE]]
+
+
 def test_two_activities_are_an_activity_conflict_and_the_generic_one_agrees_with_either():
     step, conflict = merge_steps(
         inferred_index("k", "a.cram"),

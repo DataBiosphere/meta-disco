@@ -247,8 +247,9 @@ evidence}` entry — plus the controlled vocabulary:
     parent resolved within the child's dataset by `file_id` / `drs_uri`, and merged with
     inference's own step by `edges.merge_steps` into the reconciled `generated_by`. A lineage
     source is cited by its activity-map row id and a `ClaimSource`. An unresolved parent gives no
-    input and a conflict (two activities; two parents in a role that takes one; a generic `Activity`
-    beside a specific one naming another parent) gives no
+    input and a conflict (two activities; two parents in a role that takes one; in any role, other
+    parents than inference names there, #609; a generic `Activity` beside a specific one naming another
+    parent) gives no
     `generated_by`; both are counted in the report's `lineage` block, never written on a record. A
     sample parent waits for #582. A file whose only steps are generic gets none, counted as
     `generic_only`. The inference artifact's `generated_by` is never changed.
@@ -323,9 +324,12 @@ evidence}` entry — plus the controlled vocabulary:
     resolves** (#450, #356, #580, ADR-0002): an `activity` (a term of `activity_type_enum`,
     AnVIL FSS's activity types, never a verb) and its `inputs`, each in a `role` the
     activity declares. What each role passes is `rules/activities.yaml`'s to say, read
-    through `meta_disco.activities` and trusted by its readers. Inference states two, from
-    the child's own name through `meta_disco.edges` and `code_rules.EDGE_RULES`: the index
-    producer's `IndexActivity` and the catch-all's `ChecksumActivity` for a `.md5`. An
+    through `meta_disco.activities` and trusted by its readers. Inference states three
+    (`code_rules.EDGE_RULES`): two from the child's own name through `meta_disco.edges`, the
+    index producer's `IndexActivity` and the catch-all's `ChecksumActivity` for a `.md5`, and
+    one from a VCF's header through `meta_disco.producer_steps` (#609): the end of the
+    header's data flow (ADR-0002 decision 6), a `HaplotypeCaller` giving `VariantCallActivity`.
+    Its outcomes per dataset are in the VCF producer's `metadata.details.producer_steps`. An
     input carries `parent_file`, `parent_key` (the parent's record key, never its md5),
     `parent_kind`, and `named_by`, every source that named it (the step has its own). A parent no file or
     two files of the dataset carry gives none. Steps the source tables state are built at

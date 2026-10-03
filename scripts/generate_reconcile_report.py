@@ -30,6 +30,7 @@ from pathlib import Path
 
 from meta_disco.models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, STATUS_LABELS
 from meta_disco.output_utils import RECONCILED_DIR, find_latest_run, list_runs
+from meta_disco.producer_steps import OUTCOMES as HEADER_STEP_COLUMNS
 from meta_disco.reconcile import (
     CONFLICT_CATEGORIES,
     EVERY_DATASET,
@@ -315,8 +316,9 @@ def lineage_rows(report: dict) -> dict | None:
     """The lineage section (#577) as tables over the whole run, or None for a report written before it.
 
     ``sources``: per source type and dataset, the lines offered and what became of them;
-    ``steps``: per dataset, the files whose ``generated_by`` each combination of source
-    types named; ``conflicts``: per dataset and kind, the files and the first few with who
+    ``header_steps``: per dataset, what inference's producer-step reader made of each VCF
+    header (#609), empty for a report written before it; ``steps``: per dataset, the files
+    whose ``generated_by`` each combination of source types named; ``conflicts``: per dataset and kind, the files and the first few with who
     said what; ``misfits``: the steps that do not fit their activity's declaration.
     """
     lineage = report.get("lineage")
@@ -337,8 +339,13 @@ def lineage_rows(report: dict) -> dict | None:
         for dataset, per in sorted(lineage["conflicts"].items())
         for kind, c in sorted(per.items())
     ]
+    header_steps = [
+        {"dataset": dataset, **{k: counts.get(k, 0) for k in HEADER_STEP_COLUMNS}}
+        for dataset, counts in sorted(lineage.get("header_steps", {}).items())
+    ]
     return {
         "sources": sources,
+        "header_steps": header_steps,
         "steps": steps,
         "conflicts": conflicts,
         "misfits": lineage["misfits"],
@@ -410,6 +417,7 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
         "values_new_dimensions": new_dimensions(report, previous) if previous else [],
         "lineage": lineage_rows(report),
         "lineage_columns": list(LINEAGE_COLUMNS),
+        "header_step_columns": list(HEADER_STEP_COLUMNS),
         "inheritance": inheritance_rows(report),
         "inheritance_columns": list(INHERITANCE_COLUMNS),
     }
@@ -718,6 +726,29 @@ def _said(example: dict) -> str:
     )
 
 
+def _header_steps_section(rows: list[dict]) -> list[str]:
+    """What inference's producer-step reader made of each VCF header, per dataset (#609)."""
+    lines = [
+        "### Steps read from VCF headers",
+        "",
+        "Inference reads a VCF's producer command lines, chains them by matching outputs to inputs, and takes the "
+        "one end of that flow as the step that made the file (#609). *stepped*: a `HaplotypeCaller` gave a "
+        "`VariantCallActivity` whose parent resolved; *no_command_line* / *unknown_tool*: nothing to read, or a "
+        "tool whose arguments are not declared; *no_single_end* / *output_not_this_file*: the flow has no one end "
+        "that made this file; *no_activity*: a producer found that no rule turns into a step yet, or a "
+        "`HaplotypeCaller` without exactly one alignment input; "
+        "*parent_not_found* / *parent_ambiguous*: no file, or more than one, of the dataset carries the input's "
+        "name.",
+        "",
+    ]
+    if not rows:
+        return [*lines, "None: no producer read a header in this run, or the run predates the reader."]
+    return lines + md_table(
+        ["dataset", *HEADER_STEP_COLUMNS],
+        [[md_code(shown(r["dataset"])), *(_n(r[k]) for k in HEADER_STEP_COLUMNS)] for r in rows],
+    )
+
+
 def _lineage_section(lineage: dict | None) -> list[str]:
     """The lineage section (#577): what became of each source's lines, who named each step, conflicts, misfits."""
     lines = [
@@ -745,12 +776,13 @@ def _lineage_section(lineage: dict | None) -> list[str]:
                 for r in lineage["sources"]
             ],
         )
+    lines += ["", *_header_steps_section(lineage["header_steps"])]
     lines += [
         "",
         "### Who named each file's step",
         "",
         "Files with a `generated_by`, by the kinds of source that named it: `filename_rule` is inference's name "
-        "rule; two kinds joined by `+` agreed on the step.",
+        "rule, `content_read` its reading of the file's header (#609); two kinds joined by `+` agreed on the step.",
         "",
         *md_table(
             ["dataset", "named by", "files"],
@@ -764,9 +796,9 @@ def _lineage_section(lineage: dict | None) -> list[str]:
         lines.append("None: wherever two sources named a file's step, they agreed.")
     else:
         lines += [
-            "A file whose sources name two activities, or two parents in a role that takes one, or a generic "
-            "`Activity` step naming a parent no specific source names, gets no "
-            "`generated_by`; the first few are listed with who said what.",
+            "A file whose sources name two activities, or two parents in a role that takes one, or, in any role, "
+            "other parents than inference names there (#609), or a generic `Activity` step naming a parent no "
+            "specific source names, gets no `generated_by`; the first few are listed with who said what.",
             "",
             *md_table(
                 ["dataset", "kind", "files", "e.g."],

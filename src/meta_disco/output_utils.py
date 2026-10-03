@@ -1,6 +1,7 @@
 """Shared utilities for working with classification output directories."""
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -80,6 +81,46 @@ def iter_records(run_dir: Path):
     """
     for fname in CLASSIFICATION_FILES:
         yield from _records_in(run_dir / fname)
+
+
+# How much of a file to read for a leading `metadata` block: an input envelope is a few
+# kilobytes, a run file's tallies a few hundred bytes, so this is generous.
+_METADATA_HEAD_BYTES = 1 << 20
+_LEADING_METADATA = re.compile(r'\s*\{\s*"metadata"\s*:\s*')
+
+
+def leading_metadata(path: Path) -> dict | None:
+    """The ``metadata`` block a JSON file opens with, decoded from its first MiB; None if it does not.
+
+    Every writer of an input envelope and of a run's classification files puts the block
+    first, compact or indented. That is a writer detail, not a contract, so a caller falls
+    back to a full parse of its own when this gives None. Shared by
+    ``pipeline.load_envelope`` and :func:`run_file_metadata`, whose files run to most of a GB.
+    """
+    with path.open(encoding="utf-8") as f:
+        head = f.read(_METADATA_HEAD_BYTES)
+    opening = _LEADING_METADATA.match(head)
+    if opening is None:
+        return None
+    try:
+        block, _ = json.JSONDecoder().raw_decode(head, opening.end())
+    except json.JSONDecodeError:
+        return None
+    return block if isinstance(block, dict) else None
+
+
+def run_file_metadata(path: Path) -> dict | None:
+    """A classification file's ``metadata`` block; None if it has none.
+
+    Decoded from the file's head (:func:`leading_metadata`), which every producer's
+    layout allows; a file laid out otherwise is parsed whole and gives the same answer.
+    """
+    block = leading_metadata(path)
+    if block is not None:
+        return block
+    data = json.loads(path.read_text(encoding="utf-8"))
+    block = data.get("metadata") if isinstance(data, dict) else None
+    return block if isinstance(block, dict) else None
 
 
 def iter_run_files(run_dir: Path, strict: bool = False):

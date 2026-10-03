@@ -80,12 +80,14 @@ from .models import (
     field_label,
 )
 from .output_utils import (
+    CLASSIFICATION_FILES,
     RECONCILED_DIR,
     find_latest_run,
     iter_records,
     iter_run_files,
     reconciled_name,
     relative_to,
+    run_file_metadata,
     write_reconciled_file,
 )
 from .pipeline import ANVIL_REPOSITORY, PUBLISHED_TABLES, RecordKey, is_key_value, load_envelope, record_key
@@ -102,7 +104,7 @@ from .reconcile_inherit import (
     reference_build,
 )
 from .reconcile_lineage import Carrier, Locator, PendingLineage, applies, resolve_lineage, translate_lineage
-from .records import JOIN_KEY_OUTPUT_FIELDS
+from .records import JOIN_KEY_OUTPUT_FIELDS, STEP_OUTCOMES_KEY
 from .rule_engine import CONFLICT_MARKER, make_claim
 from .schema.classification_model import EvidenceFileEnvelope
 from .schema_vocab import most_specific
@@ -459,6 +461,24 @@ class Joined:
 _Key = Locator
 
 
+def header_step_counts(run_dir: Path) -> dict[str, dict[str, int]]:
+    """Per dataset, the outcomes of inference's producer-step reader (#609), summed over the run's files.
+
+    Read from each classification file's ``metadata.details.producer_steps``, which a
+    producer whose type states a step writes (``FileTypeConfig.step``); empty for a run
+    written before it, or with no such producer.
+    """
+    totals: dict[str, Counter] = defaultdict(Counter)
+    for fname in CLASSIFICATION_FILES:
+        path = run_dir / fname
+        if not path.exists():
+            continue
+        details = (run_file_metadata(path) or {}).get("details") or {}
+        for dataset, counts in (details.get(STEP_OUTCOMES_KEY) or {}).items():
+            totals[dataset].update(counts)
+    return {dataset: dict(counts) for dataset, counts in sorted(totals.items())}
+
+
 def join(
     evidence: list[EvidenceFile], run_dir: Path, key: RecordKey, table: ValueMap, extra: set[_Key] | None = None
 ) -> Joined:
@@ -756,6 +776,9 @@ class Report:
     # first few with who said what; per (dataset, activity, problem, detail), the steps that
     # do not fit their declaration (`edges.misfits`).
     lineage_counts: dict = field(default_factory=dict)
+    # Per dataset, what inference's producer-step reader made of each file's header
+    # (`producer_steps.OUTCOMES`, #609), as the producers' metadata records it.
+    header_steps: dict = field(default_factory=dict)
     steps: dict = field(default_factory=lambda: defaultdict(Counter))
     step_conflicts: dict = field(
         default_factory=lambda: defaultdict(lambda: defaultdict(lambda: {"files": 0, "examples": []}))
@@ -985,6 +1008,7 @@ class Report:
             },
             "lineage": {
                 "sources": plain(self.lineage_counts),
+                "header_steps": self.header_steps,
                 "steps": plain(self.steps),
                 "conflicts": {
                     dataset: {kind: dict(tally) for kind, tally in sorted(per_kind.items())}
@@ -1145,7 +1169,10 @@ def reconcile_run(
     joined = join(applicable, run_dir, key, table, extra=pending.wanted)
     lineage = resolve_lineage(pending, joined.carriers)
     report = Report(
-        coverage=joined.coverage, published_slots=published_slots(repository), lineage_counts=lineage.counts
+        coverage=joined.coverage,
+        published_slots=published_slots(repository),
+        lineage_counts=lineage.counts,
+        header_steps=header_step_counts(run_dir),
     )
 
     root = evidence_root or Path()

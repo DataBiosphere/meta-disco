@@ -5,7 +5,7 @@
 - **Extends, and supersedes in part:** `docs/derived-file-data-model.md` (#109), which settled the edge for companion files only; see [What this supersedes](#what-this-supersedes)
 - **Contract:** adds 4.9 to `docs/claims-contract.md` (inheritance) and its entry under "What is not true yet"; amends 2.8, 3.1, 4.1, 4.2 and 6.6 to match
 - **Related:** #356 (companion edges), #357 (sample identity), #358 (alignment ← reads), #359 (variants ← alignments), #360 (assemblies), #361 (sample ← donor), #362 (consistency and coverage), #371 (the edge carries the parent's record key), #413 (index inheritance and contract 1.1), #438 (ambiguous index parents)
-- **Amended by:** [#580](https://github.com/DataBiosphere/meta-disco/issues/580) (2026-09-29): a step is an activity from AnVIL FSS's vocabulary, not a verb between two files (decision 5)
+- **Amended by:** [#580](https://github.com/DataBiosphere/meta-disco/issues/580) (2026-09-29): a step is an activity from AnVIL FSS's vocabulary, not a verb between two files (decision 5); [#609](https://github.com/DataBiosphere/meta-disco/issues/609) (2026-10-03): which of a header's command lines made the file (decision 6)
 
 ## Context
 
@@ -198,7 +198,8 @@ it are an **edge conflict**: a `.tbi` whose filename match says
 `a.vcf.gz` and whose `anvil_activity` says `b.vcf.gz` has one of them wrong. An edge conflict is listed
 for review, and nothing is inherited across that activity until it is settled. For a role that
 takes many, the parents every source names are pooled into one set of inputs, each listing in `named_by`
-the sources that named it (decision 6).
+the sources that named it (decision 6) — except where inference names that role: its step names every input
+of the step it read, so a source naming another set there is an edge conflict too (#609, contract 4.9).
 
 *Rejected (#580): verbs on file-to-file edges*, which this decision first minted. The sources state
 lineage as steps: `anvil_activity` has one row per step, and FSS's Activity table is its model. What
@@ -235,6 +236,21 @@ record.
 
 For companion files, `anvil_activity` states the parent by `file_id` and the filename match is the second
 source: the two agreed on all 209,668 index files matched today.
+
+**Which header command line made the file (#609).** A header carries the command lines of its inputs as
+well as its own, and GATK sorts them, so neither the last line nor any one line's position names the step.
+The step is **the end of the data flow**: each line is a step with inputs and an output, steps chain where
+an output is an input (by base name, `.gz` aside), and an end is a step whose output no other step consumes.
+An end naming another file is set aside; the step that made the file is the one end naming it, or an end
+naming no output (stdout) when it is the only end at all. No such step, or a tool whose arguments are
+not declared (`producer_steps.TOOL_ARGUMENTS`, about tools, never datasets), and no step is written. The
+paths are where the workflow ran, so the parent resolves by name within the child's dataset, as a
+filename edge does. Built at inference, in the VCF producer, from the cached header: it is the file's own
+bytes (input kind 1), and reconcile merges it with the steps the tables state.
+
+*Rejected: the last line.* T2T's `1kgp.chr1.recalibrated.snp_indel.vcf.gz` ends in the `bcftools concat`
+that made its input, `chr1.genotyped.vcf`; its producer is the indel pass of `ApplyVQSR`, which GATK's
+sorting puts first.
 
 ### 7. Specific process runs stay out of scope
 

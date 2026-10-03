@@ -1,18 +1,21 @@
-"""Derivation edges inference states from a child's own name (ADR-0002, #356).
+"""Derivation edges inference states, and the name index their parents resolve in (ADR-0002, #356).
 
-Two producers write one: the index producer (``IndexActivity``) and the catch-all, for a
-checksum file (``ChecksumActivity``). Each works out the parent's name from the child's own
-(the index producer's candidates are its own, ``get_parent_candidates``) and looks it up
-in the child's dataset; the name index, that lookup and the edge it yields are built here.
+Three producers write one. Two work out the parent's name from the child's own: the index
+producer (``IndexActivity``; its candidates are its own, ``get_parent_candidates``) and the
+catch-all, for a checksum file (``ChecksumActivity``). The VCF producer reads it from a
+command line in the child's header (``producer_steps``, #609). Each looks the name up in
+the child's dataset; the name index, that lookup and the edge it yields are built here.
 
 **An edge is written only where the parent resolves**: exactly one file of the child's
 dataset carries the name. The edge then carries the parent's record key
 (``pipeline.SOURCE_RECORD_KEYS``) as ``parent_key``. Where no file carries it, or two do,
 no edge is written. ADR-0002 keeps an edge whose parent does not resolve (an ``external``
 one) only for a source that names the parent independently of the child: a header line, a
-table row. Here the name is worked out from the child's own — its name less a suffix, or
-with the suffix replaced (``sample.bai`` -> ``sample.bam``) — so an unresolved edge would
-restate what the child's name, extension and ``data_type`` already say.
+table row. The two name rules work the name out from the child's own — its name less a
+suffix, or with the suffix replaced (``sample.bai`` -> ``sample.bam``) — so an unresolved
+edge would restate what the child's name, extension and ``data_type`` already say. The
+header rule does name its parent independently, but by a path where the workflow ran,
+which says nothing a reader could follow, so it too writes no unresolved edge.
 
 **Merging every source's step** (#577) is here too: reconcile hands :func:`merge_steps`
 inference's step and the steps the source tables state (``reconcile_lineage``), and it
@@ -31,6 +34,7 @@ from .code_rules import EdgeRule
 from .file_name import EXTENSION_MAP, FileName
 from .models import ClaimSource
 from .pipeline import RecordKey, input_key_value
+from .records import dataset_of
 
 # The `EXTENSION_MAP` category of a checksum file's extension. The extension decides
 # whether a checksum edge is looked for, not whether a rule fired on the file.
@@ -74,7 +78,7 @@ def files_by_folded_name(records: Iterable[dict]) -> NameIndex:
     for record in records:
         name = record.get("file_name")
         if isinstance(name, str) and name:
-            index[(record.get("dataset_id", "unknown"), name.lower())].append(record)
+            index[(dataset_of(record), name.lower())].append(record)
     return index
 
 
@@ -146,7 +150,7 @@ def checksum_generated_by(record: dict, name: FileName, index: NameIndex, key: R
     """
     if EXTENSION_MAP.get(name.extension or "") != CHECKSUM_CATEGORY or not name.stem:
         return None
-    parent = resolve(index, record.get("dataset_id", "unknown"), name.stem)
+    parent = resolve(index, dataset_of(record), name.stem)
     if parent is None:
         return None
     return generated_by(code_rules.CHECKSUM_BY_NAME, parent, key)
@@ -190,8 +194,9 @@ def lineage_attribution(source_type: str, row_id: str, source: ClaimSource, acti
 
 @dataclass(frozen=True)
 class StepConflict:
-    """Why a file's sources give no one step: two activities; two parents in a role that takes one; or, beside a
-    specific activity, a generic ``Activity`` step whose parent no specific source names (in the generic step's role).
+    """Why a file's sources give no one step: two activities; two parents in a role that takes one; a source
+    naming other parents than inference names in a role, any role (#609); or, beside a specific activity, a
+    generic ``Activity`` step whose parent no specific source names (in the generic step's role).
 
     ``said`` is who said what: per source, the activity (an activity conflict) or the
     parent's name (an edge conflict), with the source's attribution.
@@ -230,10 +235,12 @@ def inferred_steps(step: dict | None) -> list[LineageStep]:
 def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[dict | None, StepConflict | None]:
     """The one ``generated_by`` every source's step for a file agrees on, or the conflict that prevents one.
 
-    ``inferred`` is the step inference wrote from the child's name (or None); ``lineage``
+    ``inferred`` is the step inference wrote, from the child's name or its header (or None); ``lineage``
     the steps the source tables state. Sources agree when their activities agree
     (``activities.agreed``: the generic ``Activity`` agrees with any) and, in a role that
-    takes one input, name the same parent. Beside a specific activity, a generic step's parent
+    takes one input, name the same parent; in any role where inference names parents, a
+    source naming parents there must name the same set, since inference's step names every
+    input of the step it read. Beside a specific activity, a generic step's parent
     must be one a specific source names: it then adds its attribution to that input, and a
     parent no specific source names is an edge conflict in its role — never an input in a role
     the activity does not declare. A file whose only steps are generic gets no ``generated_by``
@@ -246,7 +253,8 @@ def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[
     ``lineage`` gives them, each once.
     """
     lineage = list(lineage)
-    said = [*inferred_steps(inferred), *lineage]
+    from_inference = inferred_steps(inferred)
+    said = [*from_inference, *lineage]
     if not said:
         return None, None
     activity = activities.agreed(s.activity for s in said)
@@ -271,9 +279,18 @@ def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[
         s if s.activity != activities.UNKNOWN else replace(named[s.parent_key], attribution=s.attribution) for s in said
     ]
     declared = {i.role: i for i in activities.declarations()[activity].inputs}
+    inferred_parents = {s.role: set() for s in from_inference}
+    for s in from_inference:
+        inferred_parents[s.role].add(s.parent_key)
     for role in dict.fromkeys(s.role for s in said):
         in_role = [s for s in said if s.role == role]
         if len({s.parent_key for s in in_role}) > 1 and role in declared and not declared[role].many:
+            return None, StepConflict(EDGE_CONFLICT, role, _distinct((s.parent_file, s.attribution) for s in in_role))
+        # Inference names every input of the step it read (a name rule its one parent, a
+        # header command line all its inputs), so a source naming other parents in that
+        # role contradicts it rather than adding to it, in a role that takes several too.
+        from_sources = {s.parent_key for s in said[len(from_inference) :] if s.role == role}
+        if role in inferred_parents and from_sources and from_sources != inferred_parents[role]:
             return None, StepConflict(EDGE_CONFLICT, role, _distinct((s.parent_file, s.attribution) for s in in_role))
     inputs: dict[tuple[str, str], dict] = {}
     for s in said:

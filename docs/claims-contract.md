@@ -187,6 +187,16 @@ Importers say what was written. Rules say what it means. Only rules make claims.
      same slot at the same scope, alternate spellings included, are a rule set that cannot be loaded. This
      selects which row fires before any claim exists, so it is not a tier ladder and 4.3 is unaffected.
 
+3.13 **Text a tool copied in speaks only for what it describes.** What the tool that wrote the file wrote
+     from its content or its own invocation describes this file: SAM `@SQ` names, lengths and `M5`, the
+     `##contig` lines a caller wrote, the producing step's own command line. A field whose value appears
+     verbatim in an argument of that step was carried in, not observed. Where it describes the reads — the
+     platform, instrument or basecall model that made them — it still holds, since a step that realigns or
+     filters reads does not change what sequenced them. Where it describes an earlier file's processing —
+     the reference it was aligned to — it states nothing about this one. T2T's CHM13 CRAMs set the case
+     (#359, #609): bwa's `-R` copied NYGC's read groups in whole, so each `@RG` still names the reads'
+     platform (`PL:illumina`) and says `DS:GRCh38` inside a file aligned to CHM13.
+
 ## 4. Sources and resolution
 
 4.1 There are five input kinds:
@@ -285,7 +295,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     Which activity carries which dimension is its `passes` in `rules/activities.yaml`, the one place
     code reads it (ADR-0002 decision 8 records the reasoning, #580); `data_type` is never carried. Sources that name different parents for an
     input role that takes one are an edge conflict, across which nothing is
-    inherited until it is settled. The declaration is a claim like any other (1.1, 3.2), naming the step it
+    inherited until it is settled. So is a source naming a different set of parents than inference names in any
+    role, one that takes several included: inference's step names every input of the step it read (#609). The declaration is a claim like any other (1.1, 3.2), naming the step it
     crossed as its rule. It is the only way a slot is filled from another file's answer, and nothing fills
     one slot from another slot's answer within a file.
 
@@ -466,6 +477,12 @@ importer's half is built — 7.12 is enforced (below), and the published importe
   conflict, or a step only the generic `Activity` names. Nor does the inference artifact carry any of it: an
   index file's carried dimensions are `not_classified` there, and filled only at reconcile. (A checksum's
   are `not_applicable`: `ChecksumActivity` passes nothing, #596.)
+- **3.13 is held by what is read, not by a check.** No code tests whether a header field was carried in.
+  The rules that read `@RG` fields read properties of the reads: `PL` (platform), `PM` (instrument model)
+  and, in `ont_basecall_dna`, the ONT basecall model in `DS`. A carried-in value of those is still true of
+  the file. No rule reads a read-group field that describes processing, such as a reference named in `DS`,
+  and the producer-step reader (#609) reads only command lines. A rule that reads such a field must test
+  whether it was carried in first.
 - **The slot maps and their importer exist for AnVIL only** (#369, #497): `slot_map` loads
   `sources/anvil_slot_map.yaml` (kind 3) and `sources/anvil_published_slot_map.yaml` (kind 2),
   `anvil_evidence` writes generations of evidence files under `data/source_evidence/anvil/` and
