@@ -323,9 +323,12 @@ evidence}` entry — plus the controlled vocabulary:
     resolves** (#450, #356, #580, ADR-0002): an `activity` (a term of `activity_type_enum`,
     AnVIL FSS's activity types, never a verb) and its `inputs`, each in a `role` the
     activity declares. What each role passes is `rules/activities.yaml`'s to say, read
-    through `meta_disco.activities` and trusted by its readers. Inference states two, from
-    the child's own name through `meta_disco.edges` and `code_rules.EDGE_RULES`: the index
-    producer's `IndexActivity` and the catch-all's `ChecksumActivity` for a `.md5`. An
+    through `meta_disco.activities` and trusted by its readers. Inference states three
+    (`code_rules.EDGE_RULES`): two from the child's own name through `meta_disco.edges`, the
+    index producer's `IndexActivity` and the catch-all's `ChecksumActivity` for a `.md5`, and
+    one from a VCF's header through `meta_disco.producer_steps` (#609): the end of the
+    header's data flow (ADR-0002 decision 6), a `HaplotypeCaller` giving `VariantCallActivity`.
+    Its outcomes per dataset are in the VCF producer's `metadata.details.producer_steps`. An
     input carries `parent_file`, `parent_key` (the parent's record key, never its md5),
     `parent_kind`, and `named_by`, every source that named it (the step has its own). A parent no file or
     two files of the dataset carry gives none. Steps the source tables state are built at

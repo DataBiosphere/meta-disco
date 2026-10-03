@@ -24,6 +24,7 @@ DATA_TYPE = "data_type"
 UNKNOWN = "Activity"
 INDEXING = "IndexActivity"
 CHECKSUM = "ChecksumActivity"
+VARIANT_CALL = "VariantCallActivity"
 
 
 _UniqueKeyLoader = unique_key_loader("activities file")

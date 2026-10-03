@@ -114,7 +114,6 @@ source (``name_source``) so a consumer can weight the two differently.
 from __future__ import annotations
 
 import re
-import shlex
 from collections.abc import Mapping
 from dataclasses import asdict, astuple, dataclass, fields
 from itertools import pairwise
@@ -130,6 +129,7 @@ from .header_extractors import (
     parse_sam_header,
     parse_vcf_header,
     sam_command_lines,
+    split_command_line,
     vcf_command_lines,
 )
 
@@ -431,7 +431,7 @@ def reference_from_command_line(command_line: str) -> str | None:
     token the FASTA check can match. A line ``shlex`` rejects (an unbalanced
     quote) falls back to whitespace splitting.
     """
-    argv = _split_command_line(command_line)
+    argv = split_command_line(command_line)
     # ``--reference=path`` as the two tokens the flag loop expects.
     argv = [part for arg in argv for part in (arg.split("=", 1) if arg.startswith("--reference=") else (arg,))]
     for flag, value in pairwise(argv):
@@ -443,15 +443,6 @@ def reference_from_command_line(command_line: str) -> str | None:
 def _looks_like_fasta_path(token: str) -> bool:
     # A literal backslash-t is how a tab is written inside a SAM ``CL`` value.
     return bool(_FASTA_PATH_RE.search(token)) and "\\t" not in token and "\t" not in token
-
-
-def _split_command_line(command_line: str) -> list[str]:
-    if '"' not in command_line and "'" not in command_line:
-        return command_line.split()
-    try:
-        return shlex.split(command_line)
-    except ValueError:
-        return command_line.split()
 
 
 def _basename(reference: str | None) -> str | None:
