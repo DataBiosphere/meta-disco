@@ -195,11 +195,11 @@ evidence}` entry — plus the controlled vocabulary:
   - **ENA's run records** (#606) are the one external (`external_ground_truth`) evidence:
     `ena_evidence` (`make import-ena-evidence`, network) looks up the files named as ENA names
     its generated FASTQs (`ERR…_1.fastq.gz`) and writes a file's `library_strategy`,
-    `library_source`, `instrument_platform` and `instrument_model` only where ENA's `fastq_md5`
-    equals the catalog's md5, keyed by `file_id`, under `data/source_evidence/ena/`. ENA's
-    response is kept beside each generation (`read_run.response.json`, not evidence), and
-    `--response` re-imports from it offline. `scripts/validate_ena_accessions.py` reads
-    inference output only and refuses a `reconciled/` input, which would carry ENA's own values.
+    `library_source`, `instrument_platform` and `instrument_model`, keyed by `file_id`, under
+    `data/source_evidence/ena/`, only where the md5 confirms the file is ENA's (contract 2.10).
+    ENA's response is kept beside each generation (`read_run.response.json`, not evidence), and
+    `--response` re-imports from it offline. `scripts/validate_ena_accessions.py` measures
+    inference (contract 6.9) and refuses a `reconciled/` input, which carries ENA's own values.
   - **Every repository has exactly one published source** (contract 7.12), declared in
     `pipeline.PUBLISHED_TABLES` beside the record keys, each repository's own entry in
     its module (`azul_manifest.PUBLISHED_TABLE`); `anvil_evidence.check` holds both maps to it

@@ -106,6 +106,16 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     a second opinion on what inference already knows, they are the only opinion where it is blind.
     Retired from ADR-0001, which measured it; that document is deleted and its salvage is #422.
 
+2.10 **A key the target does not carry attaches nothing until an identity confirms it.** A source keyed
+    by its own identifier — an archive's run accession — has its key mapped by the importer to one of the
+    target's (the `join_key_enum` description), and a line is written only where an identity both sides
+    state agrees: the file's checksum. An identifier read out of a file name finds the candidate; it never
+    attaches evidence by itself, and a candidate the checksum does not confirm is counted, not written.
+    ENA's archive-generated FASTQs are the case that set it (#606): `ERR3240114_1.fastq.gz` is looked
+    up as run ERR3240114, and is ENA's file only because ENA's `fastq_md5` for it equals the catalog's md5.
+    A source keyed by a field the target publishes (a file name within a dataset) joins on that field
+    as it is.
+
 ## 3. Claims
 
 3.1 A claim is a rule's declaration about a slot, derived from source evidence (2.1), from inference's own
@@ -466,7 +476,7 @@ importer's half is built — 7.12 is enforced (below), and the published importe
   not enforceable, and a test greps each file for the strings that would say otherwise. No other source
   has a map and there is no rule scope for source evidence. Kind 4 has one importer, `ena_evidence`
   (#606), with no map: it reads ENA's run records for the FASTQs ENA generated, under
-  `data/source_evidence/ena/`, and writes a file's lines only where ENA's md5 equals the catalog's. Inference consumes none of what is written;
+  `data/source_evidence/ena/`, and holds to 2.10. Inference consumes none of what is written;
   the value map's seeder and review queue read it, and so does reconcile (#432).
 - **The translation table is read by reconcile alone** (#414, #432). `value_map` holds 3.9's row,
   enforces 3.11's split, 3.12's scope and collision rules and 3.5's bound, seeds from evidence and lists
