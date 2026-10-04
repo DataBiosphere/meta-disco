@@ -164,6 +164,24 @@ TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `gener
 | `SampleCollectionActivity` | sample id ← donor id | the sample's row: `anvil_biosample.donor_id`, a submitter donor column (#361) | `donor_of` |
 | `Activity` | related, step unknown | IGVF `file.derived_from` between content types no term names, `anvil_activity` `Unknown` | `derived_from` |
 
+**EDAM operations for steps not yet linked** (looked up in EBI OLS, 2026-10-04, #610). A term added
+for one of these takes the id as its `meaning`, by the rule above, rather than searching again:
+
+| step | EDAM operation | where AnVIL holds it |
+|---|---|---|
+| methylation calling | `operation_3919` Methylation calling | HPRC methylation BAMs (#481) |
+| peak calling | `operation_3222` Peak calling | ATAC-seq and ChIP-seq peaks |
+| base-calling | `operation_3185` Base-calling | ONT `fast5` → reads (NIA_CARD, HPRC; #605) |
+| demultiplexing | `operation_3933` Demultiplexing | per-sample reads from a pooled run |
+| read pre-processing, trimming | `operation_3219` Read pre-processing; `operation_3192` Sequence trimming | ENCORE's trimmed FASTQs |
+| a population or sample subset of a callset | `operation_3695` Data filtering | T2T's per-population PASS VCFs (`…pass.AFR.vcf.gz`) |
+| variant annotation or classification | `operation_3225` Variant classification | none annotated yet; `operation_0331` Variant effect prediction is about protein structure, not this |
+
+EDAM has no operation for variant normalization, joint genotyping as a step of its own (Genotyping,
+`operation_3196`, is a close mapping on `VariantCallActivity`), a GenomicsDB import, a cohort
+definition, or a file's checksum (`operation_3348` checksums a sequence). A term for one of these
+records no id.
+
 FSS's other types (`SampleCollectionActivity`, `SampleTreatmentActivity`, `ExpressionActivity`,
 `AnalysisActivity`, `ImageActivity`) are in the vocabulary, though when this ADR was written no
 translation row mapped a source's value to one; ENCORE's `anvil_activity` rows (`Quantificatioin: salmon`,

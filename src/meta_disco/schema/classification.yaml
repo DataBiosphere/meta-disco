@@ -1609,10 +1609,15 @@ enums:
         close_mappings:
           - EDAM:operation_3198
       VariantCallActivity:
+        description: >-
+          Calling variants or genotypes from alignments or gVCFs. EDAM's Variant calling is
+          a close step, and its Genotyping is close for a joint genotyping step
+          (GenotypeGVCFs).
         is_a: Activity
         meaning: TerraCore:VariantCallActivity
         close_mappings:
           - EDAM:operation_3227
+          - EDAM:operation_3196
       ExpressionActivity:
         description: >-
           Quantifying expression. EDAM's RNA-Seq quantification is one kind of it, not the
@@ -1647,7 +1652,10 @@ enums:
           The read coverage of one alignment file at each position, as a signal track:
           ENCORE's per-strand STAR signal bigWigs (#595). Our own term, under FSS's
           AnalysisActivity; it is not a report on the file, so not QualityControlActivity.
+          EDAM's Read depth analysis analyses depth rather than writing it, so it is close.
         is_a: AnalysisActivity
+        close_mappings:
+          - EDAM:operation_3230
       LiftoverActivity:
         description: >-
           Moving a file's coordinates to another reference. Our own term; TerraCore has no

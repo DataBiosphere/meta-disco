@@ -438,6 +438,9 @@ class ActivityTypeEnum(str, Enum):
     """
     AlignmentActivity = "AlignmentActivity"
     VariantCallActivity = "VariantCallActivity"
+    """
+    Calling variants or genotypes from alignments or gVCFs. EDAM's Variant calling is a close step, and its Genotyping is close for a joint genotyping step (GenotypeGVCFs).
+    """
     ExpressionActivity = "ExpressionActivity"
     """
     Quantifying expression. EDAM's RNA-Seq quantification is one kind of it, not the same step.
@@ -458,7 +461,7 @@ class ActivityTypeEnum(str, Enum):
     """
     CoverageActivity = "CoverageActivity"
     """
-    The read coverage of one alignment file at each position, as a signal track: ENCORE's per-strand STAR signal bigWigs (#595). Our own term, under FSS's AnalysisActivity; it is not a report on the file, so not QualityControlActivity.
+    The read coverage of one alignment file at each position, as a signal track: ENCORE's per-strand STAR signal bigWigs (#595). Our own term, under FSS's AnalysisActivity; it is not a report on the file, so not QualityControlActivity. EDAM's Read depth analysis analyses depth rather than writing it, so it is close.
     """
     LiftoverActivity = "LiftoverActivity"
     """
