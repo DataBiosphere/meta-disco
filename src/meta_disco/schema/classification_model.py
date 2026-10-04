@@ -421,7 +421,7 @@ class CreditedToEnum(str, Enum):
 
 class ActivityTypeEnum(str, Enum):
     """
-    The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its released LinkML schema spells them, plus five of our own, each under the FSS term it narrows. `meaning` is TerraCore's class, else EDAM's operation for the same step; a near EDAM operation is a close mapping. What each passes is in `rules/activities.yaml`.
+    The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its released LinkML schema spells them, plus seven of our own, each under the term it narrows. `meaning` is TerraCore's class, else EDAM's operation for the same step; a near EDAM operation is a close mapping. What each passes is in `rules/activities.yaml`.
     """
     Activity = "Activity"
     """
@@ -463,6 +463,14 @@ class ActivityTypeEnum(str, Enum):
     LiftoverActivity = "LiftoverActivity"
     """
     Moving a file's coordinates to another reference. Our own term; neither TerraCore nor EDAM has one.
+    """
+    VariantProcessingActivity = "VariantProcessingActivity"
+    """
+    Variants in, variants out, with the samples, reads and reference unchanged: filtering, annotating, normalizing or subsetting a callset. Our own term, under FSS's AnalysisActivity; a record names one of its children (#610).
+    """
+    VariantFilterActivity = "VariantFilterActivity"
+    """
+    Labelling a callset's rows by a filter (GATK's ApplyVQSR) or keeping only those that pass (`bcftools view -f PASS`). Our own term; no TerraCore or EDAM id is recorded.
     """
     MergeActivity = "MergeActivity"
     """
@@ -1455,8 +1463,9 @@ class ActivityDeclaration(ConfiguredBaseModel):
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
     term: ActivityTypeEnum = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityDeclaration']} })
-    output: ActivityEnd = Field(default=..., description="""What the step makes.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityDeclaration']} })
-    inputs: list[InputRole] = Field(default=..., description="""The step's input roles.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityDeclaration']} })
+    output: Optional[ActivityEnd] = Field(default=None, description="""What the step makes. Absent: taken with `inputs` from the nearest declared ancestor.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityDeclaration']} })
+    inputs: Optional[list[InputRole]] = Field(default=None, description="""The step's input roles. Absent, with `output`: the term takes both from its nearest declared `is_a` ancestor (#610).""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityDeclaration']} })
+    abstract: Optional[bool] = Field(default=None, description="""True for a term that only declares what its children pass; no step is written with it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityDeclaration']} })
     reason: str = Field(default=..., description="""Why the step passes what it passes.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'ActivityDeclaration']} })
 
 

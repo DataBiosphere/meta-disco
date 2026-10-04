@@ -141,7 +141,7 @@ decision 1 rejects.
 *Amended by #580.* A step is named by its **activity**, not by a verb between two files. The
 vocabulary is `activity_type_enum`: AnVIL FSS's `ActivityTypes`, spelled as FSS's released LinkML schema
 spells them (`DataBiosphere/biocore-data-model`, `AnVILDataSubmissionFindabilitySubsetSchema.linkml.yaml`),
-plus four of our own (five since #595 added `CoverageActivity`). FSS's values spreadsheet spells three differently (`VariantCallingActivity`,
+plus seven of our own (`CoverageActivity` added by #595; `VariantProcessingActivity` and `VariantFilterActivity` by #610). FSS's values spreadsheet spells three differently (`VariantCallingActivity`,
 `ImagingActivity`, `IndexingActivity`); the schema a submission is validated against wins. A term's `meaning` is the Terra
 Interoperability Model's class where it has one, else EDAM's operation where EDAM defines the same step.
 TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `generated_file_id` are PROV's
@@ -157,6 +157,7 @@ TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `gener
 | `VariantCallActivity` | variants ← alignments or gVCFs | VCF caller command lines, submitter same-row (1000G `cram` → `gvcf`) | `called_from` |
 | `MergeActivity` (ours) | merged file ← shards | headers and filenames (T2T chromosome VCF ← window VCFs), `anvil_activity` (ENCORE `Merger: multiple FASTQ files`, #595) | `merged_from` |
 | `CoverageActivity` (ours, under `AnalysisActivity`; #595) | coverage track ← the alignment it covers | `anvil_activity` (ENCORE `Track: bedGraphToBigWig`) | — |
+| `VariantFilterActivity` (ours, under the abstract `VariantProcessingActivity`; #610) | filtered callset ← the callset it filtered | submitter same-row (T2T `chromosome`: raw → recalibrated → PASS, on CHM13 and GRCh38) | — |
 | `LiftoverActivity` (ours, under `AnalysisActivity`) | lifted file ← the file it was lifted from | a source naming the parent (schema changes, `source_assembly`) | `lifted_over_from` |
 | `AssemblyActivity` (ours) | assembly ← reads | HPRC assembly sample sheets, where the output resolves to a held assembly (Open) | `assembled_from` |
 | `SequenceActivity` | reads ← sample id | `anvil_activity` `Sequencing`, submitter tables (#357) | `sample_of`, for reads |
@@ -200,6 +201,19 @@ for review, and nothing is inherited across that activity until it is settled. F
 takes many, the parents every source names are pooled into one set of inputs, each listing in `named_by`
 the sources that named it (decision 6) — except where inference names that role: its step names every input
 of the step it read, so a source naming another set there is an edge conflict too (#609, contract 4.9).
+
+**A term exists where what passes differs, and is named for what the step does** (#610). Many tools
+fall under one term: `AlignmentActivity` is bwa, STAR or minimap2. A family of steps that pass the same
+shares one **abstract** parent that declares, once, what passes, and each step is a child named for what
+it does, declaring only its reason. `VariantProcessingActivity` is such a parent (a callset in, a callset
+out, its samples, reads and reference unchanged); `VariantFilterActivity` is its first child (GATK's
+ApplyVQSR labelling every row, `bcftools view -f PASS` keeping the passing ones). Annotation,
+normalization and a population subset would be further children, each one enum line. No step names an
+abstract term: `activities.require_writable` refuses one in an activity-map row, and every edge rule is
+held to it. Which operation a step was can also be read by comparing its input with its output (rows
+removed, samples dropped, annotation fields added), so the leaves need not multiply past what a reader
+asks for. *Rejected (#610): one broad term, `VariantProcessingActivity`, written on records*: it says
+nothing a scientist can use.
 
 *Rejected (#580): verbs on file-to-file edges*, which this decision first minted. The sources state
 lineage as steps: `anvil_activity` has one row per step, and FSS's Activity table is its model. What
@@ -307,7 +321,7 @@ authority, and this table is its reading when #580 wrote it, amended where a row
 
 | activity | `data_modality` | `assay_type` | `platform` | `instrument_model` | `reference_assembly` |
 |---|---|---|---|---|---|
-| `IndexActivity`, `QualityControlActivity`, `CoverageActivity` (amended by #595), `MergeActivity`, `VariantCallActivity` | yes | yes | yes | yes | yes |
+| `IndexActivity`, `QualityControlActivity`, `CoverageActivity` (amended by #595), `MergeActivity`, `VariantCallActivity`, `VariantFilterActivity` (#610, from its parent `VariantProcessingActivity`) | yes | yes | yes | yes | yes |
 | `AlignmentActivity` | yes, from `reads` | yes, from `reads` | yes, from `reads` | yes, from `reads` | from its `reference` input only, not from the reads |
 | `LiftoverActivity` | yes | yes | yes | yes | **no** — liftover changes it |
 | `AssemblyActivity` | yes | yes | yes | yes | **no** — an assembly is its own reference |

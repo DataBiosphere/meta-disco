@@ -44,6 +44,17 @@ datasets:
       - {child: {column: mosdepth_regions_bed_idx}, parent: {column: mosdepth_regions_bed}}
       - {child: {column: cram}, parent: {column: read_1_fastq}}
       - {child: {column: cram}, parent: {column: read_2_fastq}}
+    # One row per 100-kb region of the joint calling: its GenomicsDB workspace tar and
+    # the region VCF genotyped from it (#610).
+    interval:
+      - {child: {column: genotyped_bgzip}, parent: {column: genomics_db_tar}}
+    # One row per chromosome, holding two joint callsets side by side: T2T's on CHM13 and
+    # NYGC's on GRCh38. Each is paired only within its own chain; a CHM13 file is never
+    # made from the GRCh38 file beside it (#610, #617).
+    chromosome:
+      - {child: {column: chm13_recalibrated_vcf_gz}, parent: {column: chm13_raw_vcf_gz}}
+      - {child: {column: chm13_pass_vcf_gz}, parent: {column: chm13_recalibrated_vcf_gz}}
+      - {child: {column: grch38_pass_vcf_gz}, parent: {column: grch38_recalibrated_vcf_gz}}
   ANVIL_T2T_CHRY:
     anvil_activity: *fss_activity
     1KGP_CHM13v2_sample:

@@ -20,22 +20,25 @@ with a step the parse could not read (its tool undeclared) is declined: that ste
 inputs and output are unknown, so the chain cannot be read.
 
 **Which producing step is a step we write** is :data:`STEP_RULES`: a ``HaplotypeCaller``
-with exactly one alignment input is a ``VariantCallActivity``, its parent found by file
-name within the child's dataset (#438's rule). Every other producing step gives no step
-yet (#610). Each file's outcome is one of :data:`OUTCOMES`, which the VCF producer counts
-per dataset.
+with exactly one alignment input is a ``VariantCallActivity``, and a bcftools ``concat``
+whose inputs are all VCFs is a ``MergeActivity`` with each input a ``shard`` (#610). Each
+parent is found by file name within the child's dataset (#438's rule), and a step is
+written only when every input names exactly one file there. Every other producing step
+gives no step. Each file's outcome is one of :data:`OUTCOMES`, which the VCF producer
+counts per dataset.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import PurePosixPath
 
 from . import code_rules, edges
 from .code_rules import EdgeRule
 from .record_keys import RecordKey, input_key_value
 from .records import dataset_of
-from .validators.command_lines import Step
+from .validators.command_lines import BCFTOOLS, GATK, GATK3, Step
 from .validators.header_extractors import VCFHeader
 
 # Why a file got the step it did, or none. Counted per dataset by the VCF producer.
@@ -58,10 +61,23 @@ OUTCOMES = (
     PARENT_AMBIGUOUS,
 )
 
-# The producing steps that are a step we write: the tool, the edge rule that states it,
-# and the kind (`edges.parent_kind_of`) its one input must be. Any family of the tool.
-STEP_RULES: dict[str, tuple[EdgeRule, str]] = {
-    "HaplotypeCaller": (code_rules.VARIANT_CALL_BY_HEADER, "alignment"),
+
+@dataclass(frozen=True)
+class StepRule:
+    """A producing step we write: the edge rule that states it, the tool families it is read
+    from, the kind (`edges.parent_kind_of`) every input must be, and whether it takes several
+    inputs or exactly one."""
+
+    edge_rule: EdgeRule
+    families: frozenset[str]
+    kind: str
+    many: bool = False
+
+
+# The producing steps that are a step we write, by tool.
+STEP_RULES: dict[str, StepRule] = {
+    "HaplotypeCaller": StepRule(code_rules.VARIANT_CALL_BY_HEADER, frozenset({GATK, GATK3}), "alignment"),
+    "concat": StepRule(code_rules.MERGE_BY_HEADER, frozenset({BCFTOOLS}), "variants", many=True),
 }
 
 
@@ -131,7 +147,7 @@ class HeaderSteps:
 
     @classmethod
     def for_run(cls, records: Iterable[dict], key: RecordKey) -> HeaderSteps:
-        kinds = {kind for _, kind in STEP_RULES.values()}
+        kinds = {rule.kind for rule in STEP_RULES.values()}
         # Each kept record's key is checked here, so a drifted one stops the run before
         # any file is classified, rather than failing the VCF whose parent it turns out to be.
         parents = (
@@ -148,22 +164,32 @@ class HeaderSteps:
     def __call__(self, header: VCFHeader, file_name: str, dataset_id: str) -> tuple[dict | None, str]:
         """A VCF's ``generated_by`` from its header, and the outcome (one of :data:`OUTCOMES`).
 
-        A producing step in :data:`STEP_RULES` with exactly one input of the kind its rule
-        names gives that rule's step, its parent the one file of ``dataset_id`` carrying the
-        input's base name, case-folded. None or several such files give no step. Any other
-        producing step gives none either, as :data:`NO_ACTIVITY`.
+        A producing step in :data:`STEP_RULES`, of a family its rule names, reading nothing
+        from stdin, whose inputs are all of the kind its rule names (exactly one, unless the
+        rule takes several) gives that rule's step, each parent the one file of
+        ``dataset_id`` carrying the input's base name, case-folded. A path listed twice is
+        one input. An input no such file carries gives no step, as :data:`PARENT_NOT_FOUND`;
+        otherwise an input several files carry, or two inputs at different paths with one
+        name, give none, as :data:`PARENT_AMBIGUOUS`. Any other producing step gives none
+        either, as :data:`NO_ACTIVITY`.
         """
         step, outcome = producing_step(header, file_name)
         if step is None:
             return None, outcome
         rule = STEP_RULES.get(step.tool)
-        if rule is None or len(step.inputs) != 1:
+        if rule is None or step.family not in rule.families or step.stdin:
             return None, NO_ACTIVITY
-        edge_rule, kind = rule
-        parent_name = PurePosixPath(step.inputs[0]).name
-        if edges.parent_kind_of(parent_name) != kind:
+        paths = list(dict.fromkeys(step.inputs))
+        if not paths or (len(paths) > 1 and not rule.many):
             return None, NO_ACTIVITY
-        parents = edges.matches(self.index, dataset_id, parent_name)
-        if len(parents) != 1:
-            return None, PARENT_NOT_FOUND if not parents else PARENT_AMBIGUOUS
-        return edges.generated_by(edge_rule, parents[0], self.key), STEPPED
+        names = [PurePosixPath(path).name for path in paths]
+        if any(edges.parent_kind_of(name) != rule.kind for name in names):
+            return None, NO_ACTIVITY
+        found = [edges.matches(self.index, dataset_id, name) for name in names]
+        if any(not parents for parents in found):
+            return None, PARENT_NOT_FOUND
+        # Two paths with one name (scatter shards all called `out.vcf.gz`) cannot be told
+        # apart by name, so neither can be matched to a file.
+        if len({name.lower() for name in names}) < len(names) or any(len(parents) > 1 for parents in found):
+            return None, PARENT_AMBIGUOUS
+        return edges.generated_by(rule.edge_rule, [parents[0] for parents in found], self.key), STEPPED

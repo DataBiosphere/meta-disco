@@ -131,12 +131,29 @@ def value_ancestors(field: str, value: str) -> tuple[str, ...]:
     term or loops, and the same errors as ``dimension_values`` for an unrecognized
     field or a missing enum.
     """
-    parent = _term_spec(field, value).get("is_a")  # validates the field and value first
-    values = _load_schema_enums()[DIMENSION_ENUMS[field]]
+    _term_spec(field, value)  # validates the field and value first
+    return _ancestors(_load_schema_enums()[DIMENSION_ENUMS[field]], value, field)
+
+
+def activity_ancestors(term: str) -> tuple[str, ...]:
+    """The activity terms above ``term`` in ``activity_type_enum``'s ``is_a`` hierarchy, nearest first.
+
+    ``VariantFilterActivity``'s are ``VariantProcessingActivity``, ``AnalysisActivity``
+    and ``Activity``. Raises ValueError for a term outside the enum or a broken chain.
+    """
+    values = _load_schema_enums()[ACTIVITY_TYPE_ENUM]
+    if term not in values:
+        raise ValueError(f"{term!r} is not an {ACTIVITY_TYPE_ENUM} term")
+    return _ancestors(values, term, ACTIVITY_TYPE_ENUM)
+
+
+def _ancestors(values: dict, value: str, label: str) -> tuple[str, ...]:
+    """The ``is_a`` chain above ``value`` among ``values``, nearest first; ValueError where it names a missing term or loops."""
+    parent = (values[value] or {}).get("is_a")
     ancestors: list[str] = []
     while parent is not None:
         if parent not in values or parent in ancestors or parent == value:
-            raise ValueError(f"{field} term {value!r} has a broken is_a chain at {parent!r}")
+            raise ValueError(f"{label} term {value!r} has a broken is_a chain at {parent!r}")
         ancestors.append(parent)
         parent = (values[parent] or {}).get("is_a")
     return tuple(ancestors)

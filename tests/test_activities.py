@@ -7,7 +7,7 @@ bundled file's rows: which dimensions a term passes is the file's to say.
 import pytest
 import yaml
 
-from meta_disco import activities, schema_vocab
+from meta_disco import activities, code_rules, schema_vocab
 from meta_disco.models import CLASSIFICATION_FIELDS
 from meta_disco.schema_vocab import activity_values
 
@@ -64,6 +64,17 @@ def test_passes_is_every_role_s_in_classification_fields_order():
             _every_term(IndexActivity=_entry("IndexActivity", [_input(form=["identifier"], passes=["platform"])])),
             "nothing to pass",
         ),
+        (
+            _every_term(IndexActivity={"term": "IndexActivity", "output": {"form": ["file"]}, "reason": "why"}),
+            "declares one of output and inputs",
+        ),
+        (
+            _every_term(
+                VariantProcessingActivity={"term": "VariantProcessingActivity", "abstract": True, "reason": "why"}
+            ),
+            "abstract, so it declares",
+        ),
+        (_every_term(Activity={"term": "Activity", "reason": "why"}), "no ancestor does"),
     ],
     ids=[
         "missing-term",
@@ -77,6 +88,9 @@ def test_passes_is_every_role_s_in_classification_fields_order():
         "repeated-role",
         "unknown-step-passes",
         "identifier-passes",
+        "output-without-inputs",
+        "abstract-takes",
+        "nothing-to-take",
     ],
 )
 def test_the_loader_refuses(entries, message):
@@ -88,3 +102,40 @@ def test_the_loader_refuses_a_key_given_twice():
     text = _text(_every_term()) + "- term: Activity\n  reason: a\n  reason: b\n"
     with pytest.raises(ValueError, match="duplicate key"):
         activities.load_activities(text)
+
+
+def _taking(term):
+    """``term`` declared by its reason alone, taking its output and inputs from an ancestor."""
+    return {"term": term, "reason": f"{term}'s own reason"}
+
+
+def test_a_term_declared_by_its_reason_alone_takes_its_abstract_parents_inputs():
+    parent = _entry("VariantProcessingActivity", [_input("processed", passes=["platform"])], abstract=True)
+    entries = _every_term(VariantProcessingActivity=parent, VariantFilterActivity=_taking("VariantFilterActivity"))
+    loaded = activities.load_activities(_text(entries))
+    assert loaded["VariantFilterActivity"].inputs == loaded["VariantProcessingActivity"].inputs
+    assert activities._passes(loaded["VariantFilterActivity"]) == ("platform",)
+    assert not loaded["VariantFilterActivity"].abstract
+
+
+def test_a_term_declared_by_its_reason_alone_under_a_concrete_parent_is_refused():
+    """A concrete term's children declare their own (AnalysisActivity's do), so none silently takes its parent's."""
+    entries = _every_term(VariantProcessingActivity=_taking("VariantProcessingActivity"))
+    with pytest.raises(ValueError, match="'VariantProcessingActivity': declares no output or inputs, and its parent"):
+        activities.load_activities(_text(entries))
+
+
+def test_a_step_may_not_name_an_abstract_term():
+    entries = _every_term(
+        VariantProcessingActivity=_entry("VariantProcessingActivity", abstract=True),
+        VariantFilterActivity=_taking("VariantFilterActivity"),
+    )
+    loaded = activities.load_activities(_text(entries))
+    with pytest.raises(ValueError, match=r"row x: 'VariantProcessingActivity' is abstract; .*VariantFilterActivity"):
+        activities.require_writable("VariantProcessingActivity", "row x", loaded)
+    activities.require_writable("VariantFilterActivity", "row x", loaded)
+
+
+def test_no_edge_rule_names_an_abstract_term():
+    for rule in code_rules.EDGE_RULES:
+        activities.require_writable(rule.activity, rule.id)

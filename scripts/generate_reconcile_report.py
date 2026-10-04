@@ -733,12 +733,13 @@ def _header_steps_section(rows: list[dict]) -> list[str]:
         "",
         "Inference reads a VCF's producer command lines, chains them by matching outputs to inputs, and takes the "
         "one end of that flow as the step that made the file (#609). *stepped*: a `HaplotypeCaller` gave a "
-        "`VariantCallActivity` whose parent resolved; *no_command_line* / *unknown_tool*: nothing to read, or a "
-        "tool whose arguments are not declared; *no_single_end* / *output_not_this_file*: the flow has no one end "
-        "that made this file; *no_activity*: a producer found that no rule turns into a step yet, or a "
-        "`HaplotypeCaller` without exactly one alignment input; "
-        "*parent_not_found* / *parent_ambiguous*: no file, or more than one, of the dataset carries the input's "
-        "name.",
+        "`VariantCallActivity`, or a bcftools `concat` a `MergeActivity` (#610), whose parents all resolved; "
+        "*no_command_line* / *unknown_tool*: nothing to read, or a tool whose arguments are not declared; "
+        "*no_single_end* / *output_not_this_file*: the flow has no one end that made this file; *no_activity*: a "
+        "producer found that no rule turns into a step, a `HaplotypeCaller` without exactly one alignment input, "
+        "or a `concat` with an input that is not a VCF or is read from stdin; "
+        "*parent_not_found* / *parent_ambiguous*: an input's name no file of the dataset carries, or more than "
+        "one does (or two inputs share it).",
         "",
     ]
     if not rows:
