@@ -5,7 +5,7 @@ import json
 import pytest
 import validate_metadata
 
-from meta_disco.pipeline import load_records
+from meta_disco.inputs import load_records
 from tests.metadata_fixtures import valid_record as _valid
 
 
@@ -16,7 +16,7 @@ def _write(path, records, key="files", metadata=None):
 
 
 class TestLoadRecords:
-    """The loader the gate reads through (`pipeline.load_snapshot` is its envelope half)."""
+    """The loader the gate reads through (`inputs.load_snapshot` is its envelope half)."""
 
     def test_reads_files_envelope(self, tmp_path):
         path = _write(tmp_path / "m.json", [_valid()], key="files")

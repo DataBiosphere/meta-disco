@@ -22,21 +22,15 @@ from pathlib import Path
 
 from meta_disco import edges
 from meta_disco.deployments import PROD
+from meta_disco.inputs import load_envelope
 from meta_disco.metadata_schema import (
     classification_blocking_reasons,
     validation_failed_classifications,
 )
 from meta_disco.models import FileInfo
-from meta_disco.pipeline import (
-    RecordKey,
-    input_key_value,
-    keyed_rows,
-    load_classifiable_records,
-    load_envelope,
-    record_key,
-    repeated_key_values,
-)
+from meta_disco.pipeline import load_classifiable_records
 from meta_disco.producers import PRODUCERS
+from meta_disco.record_keys import RecordKey, input_key_value, keyed_rows, record_key, repeated_key_values
 from meta_disco.records import InvalidRecord, OutputRecord, RunMetadata
 from meta_disco.rule_engine import RuleEngine
 
@@ -44,7 +38,7 @@ from meta_disco.rule_engine import RuleEngine
 def load_already_classified(classification_paths: list[Path], key: RecordKey) -> set[str]:
     """The identities already carrying a classification record from another producer.
 
-    Keyed on the source's record key (``pipeline.SOURCE_RECORD_KEYS``, which says which
+    Keyed on the source's record key (``record_keys.SOURCE_RECORD_KEYS``, which says which
     field and why), never on ``file_name``: a name identifies a file only about 60% of
     the time in the AnVIL corpus, so a name-keyed set skips a file because a *different*
     file elsewhere shares its name, and that file then appears in no ``classifications``

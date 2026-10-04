@@ -28,6 +28,7 @@ from meta_disco.rule_engine import (
     evaluate_claims,
     make_claim,
 )
+from meta_disco.validators.header_extractors import parse_vcf_header
 from tests.engine_fixtures import assert_dimensions
 
 # A stand-in external source for the claim-record tests. One definition rather
@@ -94,7 +95,7 @@ class TestVariantFiles:
         """
         ext_info = ExtendedFileInfo(
             name=FileName.parse("sample.vcf.gz"),
-            vcf_header="##contig=<ID=chr1,length=248956422,assembly=GRCh38>",
+            vcf_header=parse_vcf_header("##contig=<ID=chr1,length=248956422,assembly=GRCh38>"),
         )
         result = engine.classify_extended(ext_info, include_tier3=True)
         assert result.reference_assembly == "GRCh38"
@@ -115,7 +116,7 @@ class TestVariantFiles:
         """##contig assembly aliases classify to the same set as ##reference (#221)."""
         ext_info = ExtendedFileInfo(
             name=FileName.parse("sample.vcf.gz"),
-            vcf_header=f"##contig=<ID=chr1,length=248956422,assembly={assembly}>",
+            vcf_header=parse_vcf_header(f"##contig=<ID=chr1,length=248956422,assembly={assembly}>"),
         )
         result = engine.classify_extended(ext_info, include_tier3=True)
         assert result.reference_assembly == expected
@@ -132,7 +133,7 @@ class TestVariantFiles:
         ],
     )
     def test_vcf_gca_accession_version_maps_to_correct_assembly(self, engine, header_line, expected):
-        ext_info = ExtendedFileInfo(name=FileName.parse("sample.vcf.gz"), vcf_header=header_line)
+        ext_info = ExtendedFileInfo(name=FileName.parse("sample.vcf.gz"), vcf_header=parse_vcf_header(header_line))
         result = engine.classify_extended(ext_info, include_tier3=True)
         assert result.reference_assembly == expected
 

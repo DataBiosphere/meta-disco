@@ -102,7 +102,7 @@ Each format has a field that exists to name the reference — SAM ``@SQ UR``,
 VCF ``##reference`` — and it is read first. Many headers leave it empty (issue
 #354 has the corpus counts) while the command line of the aligner or caller
 (``@PG CL``, ``##GATKCommandLine``) names the reference anyway, so the
-observers fall back to that, format-neutrally: :func:`reference_from_command_line` knows two
+observers fall back to that, format-neutrally: :func:`reference_from_command_words` knows two
 conventions (a reference flag, else the first FASTA-looking argument) and no
 tool names. What makes a command-line name safe to record is not the parse but
 the guards around it — a header with no contigs takes none, command lines that
@@ -114,7 +114,7 @@ source (``name_source``) so a consumer can weight the two differently.
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, astuple, dataclass, fields
 from itertools import pairwise
 from pathlib import PurePosixPath
@@ -128,9 +128,7 @@ from .header_extractors import (
     is_lifted,
     parse_sam_header,
     parse_vcf_header,
-    sam_command_lines,
-    split_command_line,
-    vcf_command_lines,
+    sam_command_words,
 )
 
 # A SAM ``M5`` is the hex MD5 of the sequence. Header text is untrusted — the tag
@@ -151,7 +149,7 @@ NAME_SOURCE_REFERENCE_FIELD = "reference_field"
 NAME_SOURCE_COMMAND_LINE = "command_line"
 
 # The reference-flag spellings issue #354 names, and what a reference path
-# looks like; the rule that uses them is :func:`reference_from_command_line`.
+# looks like; the rule that uses them is :func:`reference_from_command_words`.
 # The extension set is kept apart from ``file_name.EXTENSION_TO_FORMAT`` on
 # purpose: that vocabulary says which files this pipeline classifies, and a
 # spelling added here for a command-line path would change classification if
@@ -332,7 +330,7 @@ def observe_sam_header(header: SAMHeader) -> tuple[list[ContigSignature], Declar
     # first record that has one speaks for the file.
     declared = _declared_from_field(next((sq["UR"] for sq in sq_records if sq.get("UR")), None))
     if declared is None:
-        declared = _declared_from_command_lines(sam_command_lines(header), signatures)
+        declared = _declared_from_command_lines(sam_command_words(header), signatures)
     return signatures, declared
 
 
@@ -366,7 +364,7 @@ def observe_vcf_header(header: VCFHeader) -> tuple[list[ContigSignature], Declar
     # A lifted VCF's command lines name the reference the *caller* was given,
     # which is the pre-liftover build, so they are not consulted.
     if declared is None and not is_lifted(header):
-        declared = _declared_from_command_lines(vcf_command_lines(header), signatures)
+        declared = _declared_from_command_lines([command.words for command in header.commands], signatures)
     return signatures, declared
 
 
@@ -377,7 +375,7 @@ def _declared_from_field(reference: str | None) -> DeclaredReference | None:
 
 
 def _declared_from_command_lines(
-    command_lines: list[str], signatures: list[ContigSignature]
+    command_words: Iterable[Sequence[str]], signatures: list[ContigSignature]
 ) -> DeclaredReference | None:
     """The one reference name a header's command lines agree on, or ``None`` (#354).
 
@@ -391,19 +389,20 @@ def _declared_from_command_lines(
       cannot be reduced to one declaration without knowing which tool's word
       counts, and this function does not know tools. Accuracy over coverage.
 
-    Each command line contributes at most one name, via
-    :func:`reference_from_command_line`; lines naming nothing are ignored.
+    Each command line, split into words (a VCF's by ``VCFHeader.commands``, a SAM
+    header's by ``sam_command_words``), contributes at most one name, via
+    :func:`reference_from_command_words`; lines naming nothing are ignored.
     """
     if not signatures:
         return None
-    names = {name for name in map(reference_from_command_line, command_lines) if name}
+    names = {name for name in map(reference_from_command_words, command_words) if name}
     if len(names) != 1:
         return None
     return DeclaredReference(names.pop(), NAME_SOURCE_COMMAND_LINE)
 
 
-def reference_from_command_line(command_line: str) -> str | None:
-    """The reference filename a program command line names, or ``None`` (#354).
+def reference_from_command_words(argv: Sequence[str]) -> str | None:
+    """The reference filename a program command line names, from its words, or ``None`` (#354).
 
     Deliberately tool-agnostic — two conventions and no aligner or caller
     names:
@@ -425,13 +424,13 @@ def reference_from_command_line(command_line: str) -> str | None:
     A name only ever breaks a tie the signatures left open, and the generator
     warns on a name it cannot map, so the cost is a wrong observation, not a
     wrong build. Precision comes from :func:`_declared_from_command_lines`'s
-    guards, not from this parse. Splitting is ``str.split`` unless the line contains a quote
-    character: ``shlex`` is two hundred times slower, and what it contributes
-    is stripping the quotes, so that ``--reference="/ref/x.fa"`` yields a
-    token the FASTA check can match. A line ``shlex`` rejects (an unbalanced
-    quote) falls back to whitespace splitting.
+    guards, not from this reading. The words come split by
+    ``command_lines.split_command_line`` (a VCF's through ``VCFHeader.commands``, read
+    once per header; a SAM header's through ``sam_command_words``, split per call),
+    balanced quotes stripped, so that ``--reference="/ref/x.fa"`` yields a token the
+    FASTA check can match. A line with an unbalanced quote is split on whitespace
+    instead and keeps its quotes.
     """
-    argv = split_command_line(command_line)
     # ``--reference=path`` as the two tokens the flag loop expects.
     argv = [part for arg in argv for part in (arg.split("=", 1) if arg.startswith("--reference=") else (arg,))]
     for flag, value in pairwise(argv):

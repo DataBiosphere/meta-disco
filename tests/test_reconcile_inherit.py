@@ -22,7 +22,6 @@ from meta_disco.models import (
     SOURCE_DERIVATION_INHERITANCE,
     build_field_entry,
 )
-from meta_disco.pipeline import SOURCE_RECORD_KEYS
 from meta_disco.reconcile import INHERITED, ReconcileError, reconcile_run
 from meta_disco.reconcile_inherit import (
     DECLARED,
@@ -32,6 +31,7 @@ from meta_disco.reconcile_inherit import (
     Answer,
     settle_parents,
 )
+from meta_disco.record_keys import SOURCE_RECORD_KEYS
 from meta_disco.rule_engine import make_claim
 from meta_disco.schema.classification_model import ClassificationRecord
 from tests.lineage_fixtures import drs, reconcile_fixture, sample_line, sample_lines

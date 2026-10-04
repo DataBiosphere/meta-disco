@@ -12,8 +12,8 @@ import requests
 
 from meta_disco import azul_manifest as am
 from meta_disco.deployments import Deployment
+from meta_disco.inputs import load_records
 from meta_disco.metadata_schema import validate_record
-from meta_disco.pipeline import load_records
 from meta_disco.tdr import Snapshot
 from tests.metadata_fixtures import valid_record
 

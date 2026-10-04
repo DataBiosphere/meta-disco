@@ -7,7 +7,7 @@ key (#445). The check turns that into a failed run.
 
 from meta_disco.classify_run import _check_one_row_per_file
 from meta_disco.output_utils import CLASSIFICATION_FILES, row_identities
-from meta_disco.pipeline import SOURCE_RECORD_KEYS
+from meta_disco.record_keys import SOURCE_RECORD_KEYS
 from tests.run_fixtures import write_run
 
 ANVIL_KEY = SOURCE_RECORD_KEYS["anvil"]

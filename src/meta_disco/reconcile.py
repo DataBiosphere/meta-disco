@@ -25,7 +25,7 @@ ambiguous, and the report names every carrier for the first few such lines per f
 dataset when it names one.
 An evidence file none of whose lines match is an error naming its source and dataset:
 silence is not success (5.3). The record's identity in the report is the repository's
-record key (``pipeline.SOURCE_RECORD_KEYS``), never a hard-coded field.
+record key (``record_keys.SOURCE_RECORD_KEYS``), never a hard-coded field.
 
 **Which evidence applies** is read from the input envelope the run was classified from:
 a file applies when its ``target.system`` is the envelope's ``repository``. Where the
@@ -62,8 +62,10 @@ from pathlib import Path
 
 from . import activities
 from .activity_map import ActivityMap, load_activity_map
+from .azul_manifest import REPOSITORY as ANVIL_REPOSITORY
 from .deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS
 from .edges import LineageStep, StepConflict, generic_only, merge_steps, misfits
+from .inputs import load_envelope
 from .lineage_evidence import DEFAULT_LINEAGE_EVIDENCE_ROOT
 from .models import (
     CLASSIFICATION_FIELDS,
@@ -90,7 +92,6 @@ from .output_utils import (
     run_file_metadata,
     write_reconciled_file,
 )
-from .pipeline import ANVIL_REPOSITORY, PUBLISHED_TABLES, RecordKey, is_key_value, load_envelope, record_key
 from .reconcile_inherit import (
     REFERENCE_ASSEMBLY,
     InheritanceCycle,
@@ -104,6 +105,7 @@ from .reconcile_inherit import (
     reference_build,
 )
 from .reconcile_lineage import Carrier, Locator, PendingLineage, applies, resolve_lineage, translate_lineage
+from .record_keys import PUBLISHED_TABLES, RecordKey, is_key_value, record_key
 from .records import JOIN_KEY_OUTPUT_FIELDS, STEP_OUTCOMES_KEY
 from .rule_engine import CONFLICT_MARKER, make_claim
 from .schema.classification_model import EvidenceFileEnvelope
@@ -799,7 +801,7 @@ class Report:
 
         Read off the evidence lines, except for the published source: it is one table with
         the same columns in every dataset of its repository (contract 7.12,
-        ``pipeline.PUBLISHED_TABLES``), and its importer skips an empty cell and writes no
+        ``record_keys.PUBLISHED_TABLES``), and its importer skips an empty cell and writes no
         file for a dataset whose columns are all empty. So it speaks to every slot its
         published slot map declares, and every slot it has a line for, in every dataset
         of the run — a dataset with no published file is one where the repository

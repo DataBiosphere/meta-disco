@@ -7,294 +7,31 @@ which carries extension filters, fetcher, classifier, and summary printer.
 
 import json
 from collections import Counter, defaultdict
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Lock
 from typing import Any, NamedTuple, TypeGuard
 
-from .azul_manifest import PUBLISHED_TABLE as ANVIL_PUBLISHED_TABLE
-from .azul_manifest import REPOSITORY as ANVIL_REPOSITORY
 from .exclusions import MD5_RE, partition_records, write_excluded
 from .fetchers import FetchError
 from .file_name import FileName
 from .file_types import FileTypeConfig
 from .header_classifier import classify_without_content
+from .inputs import load_envelope, load_records
 from .metadata_schema import (
     classification_blocking_reasons,
     validation_failed_classifications,
 )
-from .models import JOIN_KEY_FILE_ID, JOIN_KEY_FILE_MD5SUM
-from .output_utils import leading_metadata
 from .producers import producer_for
+from .record_keys import record_key
 from .records import (
-    OUTPUT_MD5SUM_FIELD,
     STEP_OUTCOMES_KEY,
     ClassifierRecord,
     InvalidRecord,
     OutputRecord,
     RunMetadata,
 )
-
-
-def load_records(input_path: Path) -> list:
-    """Load the record list from an input file's envelope.
-
-    Elements are not guaranteed to be dicts — an NDJSON line, or an entry inside the
-    envelope's ``files``/``results`` list, may be any JSON value. (The envelope itself
-    must be an object: a top-level JSON array is rejected by :func:`load_snapshot`.)
-    Hence ``list``, not ``list[dict]``: this is the raw read, which the
-    ``validate_metadata`` gate also takes (through :func:`load_snapshot`, beside the
-    envelope) because it must see every element to report on it. Classification
-    producers read :func:`load_classifiable_records` instead, which calls this and does
-    narrow the element type.
-
-    A ``.ndjson`` file is one record per line; otherwise a JSON object with a
-    ``files`` (or legacy ``results``) list. The envelope handling is
-    :func:`load_snapshot`'s, so it lives in one place.
-    """
-    return load_snapshot(input_path)[1]
-
-
-def load_snapshot(input_path: Path) -> tuple[dict, list]:
-    """Load an input file's ``metadata`` block and its record list in one parse.
-
-    Same envelope handling and same errors as :func:`load_records`, which is this
-    function's record half — a caller that also needs the envelope facts (which
-    catalog a snapshot captured, when it was pulled) gets them without parsing a
-    several-hundred-megabyte file a second time.
-
-    The metadata block is ``{}`` for an ``.ndjson`` input, which carries no
-    envelope, and for a JSON envelope that has no ``metadata`` key. Either loads
-    here, but neither can start a classification run, which needs the envelope to
-    name its repository (:func:`record_key`); the ``.ndjson`` twin the AnVIL
-    downloader writes serves the reports, not the run.
-    """
-    with input_path.open() as f:
-        if input_path.suffix == ".ndjson":
-            return {}, [json.loads(line) for line in f if line.strip()]
-        data = json.load(f)
-    if not isinstance(data, dict):
-        raise TypeError(f"Expected JSON object with 'results' or 'files' key, got {type(data).__name__}")
-    metadata = data.get("metadata") or {}
-    if not isinstance(metadata, dict):
-        metadata = {}
-    # Check key presence explicitly rather than `results or files`: a present but
-    # empty `results: []` is a valid empty corpus, not a missing key — the truthy
-    # fallback would misreport it as "must contain a key".
-    for key in ("results", "files"):
-        if key in data:
-            records = data[key]
-            if not isinstance(records, list):
-                raise TypeError(f"'{key}' must be a list of records, got {type(records).__name__}")
-            return metadata, records
-    raise ValueError("JSON object must contain a 'results' or 'files' key")
-
-
-class RecordKey(NamedTuple):
-    """The field a source guarantees unique per file, in both spellings a run uses.
-
-    ``input_field`` is its name on an input record; ``output_field`` its name on the
-    output row a producer writes. They differ only where ``records.OutputRecord``
-    renames a field on the way out (``file_md5sum`` becomes ``md5sum``).
-    """
-
-    input_field: str
-    output_field: str
-
-
-HPRC_REPOSITORY = "hprc"
-
-# One declaration per source of the identity that names a file exactly once in that
-# source's snapshot, keyed by the ``repository`` its input envelope carries (#446). It
-# serves the input gate (``scripts/validate_metadata.py``, which checks the key is
-# unique), the catch-all producer's skip set, the index producer's parent join (#486)
-# and the post-run one-row-per-file check (#445), and each reads it through
-# :func:`record_key`, never a hard-coded field, because the unique field differs by
-# source:
-#
-# - AnVIL: ``file_id``, the repository's own durable identifier — unique on every
-#   record and unchanged by a catalog re-index (#433), which is why the duplicate check
-#   chose it. Not ``entry_id``, equally unique but regenerated per index: one key serves
-#   every reader only if it is the durable one. Not ``file_name``, which identifies a
-#   file only about 60% of the time there.
-# - HPRC: ``file_md5sum``. The HPRC catalogs issue no file identifier and none is
-#   minted — ``entry_id``, ``file_id`` and ``drs_uri`` are Azul's catalog identity and
-#   stay null on an HPRC record. What the source does guarantee unique is the file's
-#   URL, and ``scripts/classify_hprc_files.py`` writes its hash into ``file_md5sum``.
-#   So this key is a hash of the full URL, not a content checksum: identical bytes at
-#   two paths are two keys, and the value cannot be compared with a real md5.
-SOURCE_RECORD_KEYS: dict[str, RecordKey] = {
-    ANVIL_REPOSITORY: RecordKey(JOIN_KEY_FILE_ID, JOIN_KEY_FILE_ID),
-    HPRC_REPOSITORY: RecordKey(JOIN_KEY_FILE_MD5SUM, OUTPUT_MD5SUM_FIELD),
-}
-
-# The other per-repository declaration: the table that is the repository's published
-# source (#497, contract 7.12 — why exactly one, and why not the compact manifest, is
-# there), keyed like the record keys by the repository whose files it is about. Read by
-# the run's preflight (`source_evidence.require_one_published_source`), which must judge
-# files no map wrote; an importer reads its own repository's entry from that
-# repository's module (`azul_manifest.PUBLISHED_TABLE`) rather than this dict, so it
-# need not import the classification stack. HPRC's is not declared yet.
-PUBLISHED_TABLES: dict[str, str] = {
-    ANVIL_REPOSITORY: ANVIL_PUBLISHED_TABLE,
-}
-
-
-def _declared_key(metadata: dict) -> RecordKey | None:
-    """The :data:`SOURCE_RECORD_KEYS` entry for the repository the envelope names, or
-    ``None`` where it names no declared one. The one lookup behind :func:`key_field`,
-    which tolerates ``None``, and :func:`record_key`, which refuses it."""
-    repository = metadata.get("repository")
-    return SOURCE_RECORD_KEYS.get(repository) if isinstance(repository, str) else None
-
-
-def key_field(metadata: dict) -> str | None:
-    """The input-record field the envelope's repository declares as its record key, or
-    ``None`` where the envelope names no declared repository (an ``.ndjson`` input, a
-    pre-#424 snapshot). For a diagnostic that names a record: the durable identity
-    differs by source (AnVIL's ``file_id``, HPRC's ``file_md5sum``, per
-    :data:`SOURCE_RECORD_KEYS`), so no diagnostic may hard-code one. Unlike
-    :func:`record_key` this does not refuse — a report over a file with no usable
-    envelope still wants to run, and labels its records as unidentified."""
-    key = _declared_key(metadata)
-    return None if key is None else key.input_field
-
-
-def record_key(metadata: dict, input_path: Path) -> RecordKey:
-    """The :data:`SOURCE_RECORD_KEYS` entry for the repository an input envelope names.
-
-    Raises ``ValueError`` naming ``input_path`` when the envelope names no repository —
-    an ``.ndjson`` input, or a JSON snapshot written before #424 added the field — or
-    one the table does not declare. Unlike :func:`key_field`, this cannot be
-    ``None``: a reader that needs the key cannot do its job without one, and guessing
-    a field is how a file gets a second row.
-    """
-    key = _declared_key(metadata)
-    if key is None:
-        repository = metadata.get("repository")
-        raise ValueError(
-            f"{input_path}: the input envelope names repository {repository!r}, which declares no "
-            f"record key — the field that identifies a file uniquely, which a run needs to know "
-            f"which files are already classified and to check that no file has two rows. Declare "
-            f'`"metadata": {{"repository": ...}}` as one of {sorted(SOURCE_RECORD_KEYS)} '
-            f"(pipeline.SOURCE_RECORD_KEYS)."
-        )
-    return key
-
-
-def is_key_value(value) -> TypeGuard[str]:
-    """Whether ``value`` can serve as a record key: a non-empty string, nothing else."""
-    return isinstance(value, str) and bool(value)
-
-
-def keyed_rows(paths: Iterable[Path], key: RecordKey) -> Iterator[tuple[str, dict]]:
-    """``(key value, row)`` for every row of the ``*_classifications.json`` files named.
-
-    For a reader keyed on :data:`SOURCE_RECORD_KEYS` over another producer's output.
-    The key is read under its output spelling. A row without it raises rather than
-    being skipped, because a skip is silent: the caller sees one row fewer and cannot
-    tell. How a row comes to lack it differs by source. AnVIL's ``file_id`` is
-    deliberately *not* classifier-relevant (``records.ClassifierRecord``), so a drifted
-    one reaches the valid stream and is echoed into a producer's row untouched;
-    ``make validate-metadata`` rejects it before ``make classify``, so seeing one means
-    that gate was bypassed. HPRC's key is the checksum field, which the shared load
-    excludes when unusable (#376), so a row without one means the producer omitted the
-    field.
-
-    A path that is not a file yields nothing: a run writes only the producers that ran.
-    The envelope's record list is read under ``classifications``, then a legacy
-    ``results``, the precedence ``output_utils._records_in`` uses; unlike that tolerant
-    reader, a file of any other shape — no list under either key, a bare list, a
-    non-dict row — raises rather than reading as empty, since a reader keyed on identity
-    cannot count a row it did not read.
-    """
-    for path in paths:
-        if not path.is_file():
-            continue
-        with path.open() as f:
-            data = json.load(f)
-        rows = data.get("classifications", data.get("results")) if isinstance(data, dict) else None
-        if not isinstance(rows, list):
-            raise ValueError(
-                f"{path}: not a classification file — no list under `classifications` (or the "
-                f"legacy `results`); a reader keyed on identity cannot treat that as empty."
-            )
-        for row in rows:
-            if not isinstance(row, dict):
-                raise ValueError(f"{path}: classification row is not an object: {row!r}")
-            value = row.get(key.output_field)
-            if not is_key_value(value):
-                raise ValueError(
-                    f"{path}: classification row for {row.get('file_name')!r} has "
-                    f"{key.output_field} {value!r}; this reader keys on it and cannot skip the "
-                    f"row. Either the input carried a drifted {key.input_field} that no gate "
-                    f"refused, or the producer that wrote this file omitted the field and "
-                    f"needs re-running."
-                )
-            yield value, row
-
-
-def input_key_value(record: dict, key: RecordKey, purpose: str) -> str:
-    """The source's key as an input record carries it, or a ``ValueError``.
-
-    The input side of :func:`keyed_rows`: a producer that compares its input records
-    against rows keyed that way. A drifted key here would match nothing, silently, so
-    it raises instead. ``purpose`` completes "this producer keys on it to ..." in the
-    message. The input gate rejects such a record before ``make classify``; reaching
-    here means that gate was bypassed.
-    """
-    value = record.get(key.input_field)
-    if not is_key_value(value):
-        raise ValueError(
-            f"input record for {record.get('file_name', '')!r} has {key.input_field} {value!r}; "
-            f"this producer keys on it to {purpose}. `make validate-metadata` rejects this "
-            f"before `make classify` runs."
-        )
-    return value
-
-
-def repeated_key_values(records: list, key: RecordKey) -> dict[str, int]:
-    """Values of the source's key that more than one input record carries, with counts.
-
-    What the declaration in :data:`SOURCE_RECORD_KEYS` promises and this checks: the
-    key is unique per file in the source's snapshot. Values that are not non-empty
-    strings are not counted — the record contract reports those. Read by the input
-    gate (``scripts/validate_metadata.py``), so a repeated key stops a run before it
-    starts rather than failing it at the post-run one-row-per-file check (#445).
-    """
-    from collections import Counter
-
-    counts = Counter(
-        value
-        for record in records
-        if isinstance(record, dict)
-        for value in (record.get(key.input_field),)
-        if is_key_value(value)
-    )
-    return {value: n for value, n in counts.items() if n > 1}
-
-
-def load_envelope(input_path: Path) -> dict:
-    """An input file's ``metadata`` block without parsing its records.
-
-    Both writers put the block first — ``azul_manifest.write_input_files`` emits the
-    literal ``{"metadata": `` before it, and the HPRC builder's ``json.dump`` keeps that
-    insertion order — so it decodes off the file's head alone. That is a writer detail,
-    not a contract, so a file laid out any other way falls back to :func:`load_snapshot`
-    and gives the same answer at the cost of the full parse. Worth having because one
-    caller is the run's preflight, whose process lives for the whole run: a full parse
-    there leaves the corpus's heap resident beside the producers for its duration, for
-    two keys' worth of information. The other is the catch-all producer, which refuses
-    an input on this before it loads the records.
-
-    ``{}`` for an ``.ndjson`` input, which carries no envelope, decided by suffix rather
-    than by parsing every line to find that out.
-    """
-    if input_path.suffix == ".ndjson":
-        return {}
-    block = leading_metadata(input_path)
-    return block if block is not None else load_snapshot(input_path)[0]
 
 
 def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> list[dict]:
@@ -318,16 +55,16 @@ def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> 
     caller with no run directory to write into (a test, an ad-hoc load).
 
     The ``validate_metadata`` gate deliberately does *not* call this — it reads
-    :func:`load_snapshot` unfiltered, or it could never report the very records it
+    :func:`inputs.load_snapshot` unfiltered, or it could never report the very records it
     exists to report.
 
-    Unlike :func:`load_records`, every element of the result is a ``dict``: a non-dict
+    Unlike :func:`inputs.load_records`, every element of the result is a ``dict``: a non-dict
     element cannot carry a checksum, so the exclusion removes it. That is why the
     producers downstream — the catch-all reads records with ``.get`` — no longer need
     to defend against one.
 
     The index and catch-all producers also need the source's record key, an envelope
-    fact; they read it through :func:`load_envelope` before this load, because resolving
+    fact; they read it through :func:`inputs.load_envelope` before this load, because resolving
     it is a refusal where no repository is named and that refusal belongs before the
     parse.
     """
@@ -377,7 +114,9 @@ def _fetch_and_classify(
     """Fetch a file's content and classify it.
 
     Returns ``(classifications, content_unreadable, payload)``, ``payload`` being what
-    the fetcher returned, for a type that reads more from it (``FileTypeConfig.step``):
+    the classifier read — the fetcher's payload, or its parse for a type with a
+    ``FileTypeConfig.parser``, made once here (#615) — for a type that reads more from it
+    (``FileTypeConfig.step``):
 
     * content read        -> ``(classifications, False, payload)``
     * content unreadable  -> ``(all-not_classified classifications, True, None)``, when the
@@ -414,8 +153,9 @@ def _fetch_and_classify(
         print(f"Content unreadable, classified as nothing — {file_name or md5sum}: {e.reason}")
         return classify_without_content(e.reason), True, None
 
-    classifications = config.classifier(raw_data, name=name, file_size=file_size, file_format=file_format)
-    return classifications, False, raw_data
+    content = raw_data if config.parser is None else config.parser(raw_data)
+    classifications = config.classifier(content, name=name, file_size=file_size, file_format=file_format)
+    return classifications, False, content
 
 
 class NdjsonWriter:

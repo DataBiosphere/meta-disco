@@ -7,13 +7,17 @@ import json
 
 import pytest
 
-from meta_disco import code_rules
+from meta_disco import code_rules, header_classifier
 from meta_disco import producer_steps as ps
 from meta_disco.file_types import VCF_CONFIG
 from meta_disco.models import SOURCE_CONTENT_READ
 from meta_disco.output_utils import run_file_metadata
-from meta_disco.pipeline import ClassifyPipeline, RecordKey
+from meta_disco.pipeline import ClassifyPipeline
 from meta_disco.reconcile import header_step_counts
+from meta_disco.record_keys import RecordKey
+from meta_disco.validators import header_extractors, reference_builds
+from meta_disco.validators.command_lines import GATK, GATK3, Step
+from meta_disco.validators.header_extractors import VCFHeader, parse_vcf_header
 from tests.metadata_fixtures import write_metadata
 
 KEY = RecordKey("file_id", "file_id")
@@ -23,18 +27,22 @@ def gatk4(tool: str, command: str) -> str:
     return f'##GATKCommandLine=<ID={tool},CommandLine="{tool} {command}",Version="4.1.9.0",Date="April 12, 2021">'
 
 
-def header(*lines: str) -> str:
+def header_text(*lines: str) -> str:
     return "\n".join(["##fileformat=VCFv4.2", *lines, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"])
 
 
-def steps(text: str) -> list[ps.Step]:
-    found = ps.steps_of(text)
+def header(*lines: str) -> VCFHeader:
+    return parse_vcf_header(header_text(*lines))
+
+
+def steps(parsed: VCFHeader) -> list[Step]:
+    found = ps.steps_of(parsed)
     assert found is not None
     return found
 
 
-def made(text: str, file_name: str) -> ps.Step:
-    step, outcome = ps.producing_step(text, file_name)
+def made(parsed: VCFHeader, file_name: str) -> Step:
+    step, outcome = ps.producing_step(parsed, file_name)
     assert outcome == ps.STEPPED and step is not None
     return step
 
@@ -79,14 +87,12 @@ PASS = (
 
 def test_a_gatk4_line_is_its_tools_inputs_and_output():
     (step,) = steps(header(HC))
-    assert step == ps.Step(ps.GATK, "HaplotypeCaller", ("./HG00096.cram",), "HG00096.chr10.hc.vcf")
+    assert step == Step(GATK, "HaplotypeCaller", ("./HG00096.cram",), "HG00096.chr10.hc.vcf")
 
 
 def test_a_gatk3_line_reads_its_key_value_options_and_names_no_output():
     (step,) = steps(header(GATK3_HC))
-    assert step == ps.Step(
-        ps.GATK3, "HaplotypeCaller", ("/data/analysis/Sample_HG04164/analysis/HG04164.final.bam",), None
-    )
+    assert step == Step(GATK3, "HaplotypeCaller", ("/data/analysis/Sample_HG04164/analysis/HG04164.final.bam",), None)
 
 
 def test_a_bcftools_line_takes_positional_inputs_past_options_with_and_without_values():
@@ -226,7 +232,7 @@ def test_the_edge_rule_is_declared_with_the_others():
 # --- the VCF producer --------------------------------------------------------------------
 
 
-def test_the_vcf_producer_writes_the_step_and_counts_every_outcome(tmp_path):
+def test_the_vcf_producer_writes_the_step_and_counts_every_outcome(tmp_path, monkeypatch):
     records: list[dict] = [
         {"file_id": "c1", "file_name": "HG00096.cram", "dataset_id": "D", "dataset_title": "T"},
         {"file_id": "c2", "file_name": "HG00097.cram", "dataset_id": "D", "dataset_title": "T"},
@@ -237,14 +243,28 @@ def test_the_vcf_producer_writes_the_step_and_counts_every_outcome(tmp_path):
     for n, record in enumerate(records):
         record.update(file_md5sum=f"{n:032x}", file_size=1, file_format=record["file_name"].split(".", 1)[1])
     headers = {
-        f"{3:032x}": header(HC),
-        f"{4:032x}": header(HC.replace("HG00096", "HG00097")),
+        f"{3:032x}": header_text(HC),
+        f"{4:032x}": header_text(HC.replace("HG00096", "HG00097")),
     }
 
     def fetch(evidence_dir, md5, **kwargs):
         return headers[md5]
 
-    config = dataclasses.replace(VCF_CONFIG, fetcher=fetch)
+    # Every parse of a VCF header through a binding of `parse_vcf_header` the run can reach:
+    # the config's parser, the classifier's own (it parses a header handed over as text),
+    # the name `rule_engine` imports when it parses, and the one `reference_builds`
+    # holds. The classifier and the step reader share the pipeline's one parse per file
+    # (#615), so neither makes a second.
+    parses: list[str] = []
+
+    def counting_parse(text):
+        parses.append(text)
+        return parse_vcf_header(text)
+
+    monkeypatch.setattr(header_extractors, "parse_vcf_header", counting_parse)
+    monkeypatch.setattr(reference_builds, "parse_vcf_header", counting_parse)
+    monkeypatch.setattr(header_classifier, "parse_vcf_header", counting_parse)
+    config = dataclasses.replace(VCF_CONFIG, fetcher=fetch, parser=counting_parse)
     pipeline = ClassifyPipeline(
         config,
         write_metadata(tmp_path / "in.json", records),
@@ -253,6 +273,7 @@ def test_the_vcf_producer_writes_the_step_and_counts_every_outcome(tmp_path):
         workers=1,
     )
     rows = {r["file_id"]: r for r in pipeline.run()}
+    assert sorted(parses) == sorted(headers.values())
     assert rows["v1"]["generated_by"]["inputs"][0]["parent_key"] == "c1"
     assert rows["v2"]["generated_by"] is None
     written = json.loads((tmp_path / "vcf.json").read_text())
@@ -320,3 +341,8 @@ def test_a_step_whose_input_is_its_own_output_less_gz_is_still_an_end():
     hc = gatk4("HaplotypeCaller", "--input ./HG00096.cram --output HG00096.chr1.hc.vcf")
     recompress = "##bcftools_viewCommand=view -Oz -o HG00096.chr1.hc.vcf.gz HG00096.chr1.hc.vcf; Date=x"
     assert made(header(hc, recompress), "HG00096.chr1.hc.vcf.gz").tool == "view"
+
+
+def test_a_file_type_that_reads_a_step_must_declare_the_parser_it_reads_it_from():
+    with pytest.raises(ValueError, match="parser"):
+        dataclasses.replace(VCF_CONFIG, parser=None)

@@ -67,7 +67,7 @@ def coerce_identity(value: Any) -> str:
 CATALOG_IDENTITY_FIELDS = ("entry_id", "file_id", "drs_uri")
 
 # The output row's name for the input's ``file_md5sum`` — the one field ``OutputRecord``
-# renames on the way out. A reader that keys output rows on it (``pipeline.SOURCE_RECORD_KEYS``,
+# renames on the way out. A reader that keys output rows on it (``record_keys.SOURCE_RECORD_KEYS``,
 # for HPRC) spells it from here; ``test_records`` pins it to the record's field.
 OUTPUT_MD5SUM_FIELD = "md5sum"
 

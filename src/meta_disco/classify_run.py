@@ -18,9 +18,10 @@ from datetime import datetime
 from pathlib import Path
 
 from meta_disco.exclusions import EXCLUDED_FILE, read_excluded
+from meta_disco.inputs import load_envelope
 from meta_disco.output_utils import row_identities
-from meta_disco.pipeline import PUBLISHED_TABLES, RecordKey, load_envelope, record_key
 from meta_disco.producers import PRODUCERS, output_paths, producers_in_phase, validate_registry
+from meta_disco.record_keys import PUBLISHED_TABLES, RecordKey, record_key
 from meta_disco.source_evidence import (
     DEFAULT_SOURCE_EVIDENCE_ROOT,
     report_evidence_files,
@@ -119,7 +120,7 @@ _DUPLICATES_SHOWN = 10
 def _check_one_row_per_file(output_dir: Path, key: RecordKey) -> bool:
     """Print whether every value of the source's key in the run is unique; False if any repeats.
 
-    ``key`` is the source's record key (``pipeline.SOURCE_RECORD_KEYS``), read from the
+    ``key`` is the source's record key (``record_keys.SOURCE_RECORD_KEYS``), read from the
     run's input envelope. A repeated value means the run holds more than one row for a
     file, so every count over the output double-counts it and no identifier is a primary
     key. The files listed beside each value say which producers wrote those rows — two
@@ -179,9 +180,9 @@ def run_all_classifications(
     Raises ``ValueError`` before any of that if two producers claim overlapping
     extensions (:func:`producers.validate_registry`) — a run that cannot say who owns a
     file must not start one — or if the input envelope names no repository with a
-    declared record key (:func:`pipeline.record_key`), since Phase 3 would refuse the
+    declared record key (:func:`record_keys.record_key`), since Phase 3 would refuse the
     same input after every earlier phase had run (#446). That preflight reads the
-    envelope alone (:func:`pipeline.load_envelope`), not the records.
+    envelope alone (:func:`inputs.load_envelope`), not the records.
 
     After those two refusals and before the run directory exists, it reports the
     evidence files under ``source_evidence_root``

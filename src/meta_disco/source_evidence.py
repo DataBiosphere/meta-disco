@@ -822,7 +822,7 @@ def report_evidence_files(root: Path, now: datetime | None = None) -> list[Evide
 def require_one_published_source(statuses: list[EvidenceFileStatus], published_tables: Mapping[str, str]) -> None:
     """Refuse the current evidence unless each repository's published source is the one declared (#497).
 
-    ``published_tables`` is ``pipeline.PUBLISHED_TABLES`` — the repository whose files
+    ``published_tables`` is ``record_keys.PUBLISHED_TABLES`` — the repository whose files
     the evidence is about (``EvidenceTarget.system``) to its published table — or a
     test's stand-in; taken as a parameter so this module stays free of the pipeline
     and of any one repository's constants. Over the

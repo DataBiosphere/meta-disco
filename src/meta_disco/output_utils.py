@@ -95,7 +95,7 @@ def leading_metadata(path: Path) -> dict | None:
     Every writer of an input envelope and of a run's classification files puts the block
     first, compact or indented. That is a writer detail, not a contract, so a caller falls
     back to a full parse of its own when this gives None. Shared by
-    ``pipeline.load_envelope`` and :func:`run_file_metadata`, whose files run to most of a GB.
+    ``inputs.load_envelope`` and :func:`run_file_metadata`, whose files run to most of a GB.
     """
     with path.open(encoding="utf-8") as f:
         head = f.read(_METADATA_HEAD_BYTES)
@@ -241,7 +241,7 @@ def row_identities(run_dir: Path, key: str) -> RowIdentities:
     """Report which values of ``key`` more than one of a run's rows carries.
 
     ``key`` is the output-row spelling of the source's record key
-    (``pipeline.SOURCE_RECORD_KEYS``). No default: one source's field is not a fallback.
+    (``record_keys.SOURCE_RECORD_KEYS``). No default: one source's field is not a fallback.
     """
     # Only the first source per key value is kept until a second row claims it: a
     # duplicate is the exception, so the list is paid for only where one occurs.

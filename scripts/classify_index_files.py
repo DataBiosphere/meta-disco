@@ -45,6 +45,7 @@ from pathlib import Path
 
 from meta_disco import activities, code_rules, edges
 from meta_disco.deployments import PROD
+from meta_disco.inputs import load_envelope
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
@@ -52,13 +53,9 @@ from meta_disco.models import (
     SOURCE_FILENAME_RULE,
     build_field_entry,
 )
-from meta_disco.pipeline import (
-    load_classifiable_records,
-    load_envelope,
-    record_key,
-    repeated_key_values,
-)
+from meta_disco.pipeline import load_classifiable_records
 from meta_disco.producers import INDEX_TO_PARENT, PRODUCERS
+from meta_disco.record_keys import record_key, repeated_key_values
 from meta_disco.records import OutputRecord, RunMetadata, coerce_identity, dataset_of, identity_from
 from meta_disco.rule_engine import make_claim
 from meta_disco.rule_loader import get_unified_rules

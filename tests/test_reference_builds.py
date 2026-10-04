@@ -24,6 +24,7 @@ from meta_disco import schema_vocab
 from meta_disco.header_classifier import classify_from_header, classify_from_vcf_header
 from meta_disco.models import field_status, field_value
 from meta_disco.rule_loader import KEY_CONTIGS, SIGNATURE_FIELDS, RuleLoader, get_unified_rules
+from meta_disco.validators.command_lines import split_command_line
 from meta_disco.validators.reference_builds import (
     BUILD_TERMS,
     IDENTITY_FIELDS,
@@ -40,7 +41,7 @@ from meta_disco.validators.reference_builds import (
     identity_from_vcf,
     observe_sam,
     observe_vcf,
-    reference_from_command_line,
+    reference_from_command_words,
     resolve_identity,
 )
 
@@ -344,6 +345,29 @@ class TestCommandLineName:
         _, declared = observe_vcf(header)
         assert declared == DeclaredReference("GRCh38_no_alt.fa", NAME_SOURCE_COMMAND_LINE)
 
+    def test_a_quote_escaped_inside_a_quoted_attribute_is_read_as_a_quote(self):
+        """Inside a structured line's quoted ``CommandLine="…"`` a quote is written ``\\"``
+        (#615); read as written, it stuck to the path and no FASTA name was found."""
+        header = (
+            "##fileformat=VCFv4.2\n"
+            '##GATKCommandLine=<ID=HaplotypeCaller,CommandLine="HaplotypeCaller '
+            '--reference \\"/ref/GRCh38.fa\\" -I a.cram -O x.vcf">\n'
+            "##contig=<ID=chr1,length=248956422>\n"
+        )
+        _, declared = observe_vcf(header)
+        assert declared == DeclaredReference("GRCh38.fa", NAME_SOURCE_COMMAND_LINE)
+
+    def test_bcftools_trailing_date_is_not_part_of_its_last_argument(self):
+        """bcftools appends ``; Date=…`` to its line (#615); read as written, the last
+        argument was ``GRCh38.fa;``, which no FASTA check matches."""
+        header = (
+            "##fileformat=VCFv4.2\n"
+            "##bcftools_normCommand=norm -m -any -f /ref/GRCh38.fa; Date=Mon Apr 12 10:00:00 2021\n"
+            "##contig=<ID=chr1,length=248956422>\n"
+        )
+        _, declared = observe_vcf(header)
+        assert declared == DeclaredReference("GRCh38.fa", NAME_SOURCE_COMMAND_LINE)
+
     def test_source_is_null_when_there_is_no_name(self):
         identity = identity_from_sam("@SQ\tSN:chr1\tLN:248387328\tM5:e469247288ceb332aee524caec92bb22\n")
         assert identity.name is None and identity.name_source is None
@@ -353,9 +377,9 @@ class TestCommandLineName:
         assert entry["build"]["name_source"] == NAME_SOURCE_REFERENCE_FIELD
 
 
-class TestReferenceFromCommandLine:
-    """The parse itself, tool by tool. Corpus lines, trimmed, except the three
-    marked synthetic."""
+class TestReferenceFromCommandWords:
+    """The parse itself, tool by tool, over a line split as the header parse splits it.
+    Corpus lines, trimmed, except the ones marked synthetic."""
 
     @pytest.mark.parametrize(
         ("command_line", "expected"),
@@ -397,8 +421,8 @@ class TestReferenceFromCommandLine:
             ("bwa mem -R '@RG\\tID:x /ref/GRCh38.fa r1.fq", "GRCh38.fa"),
         ],
     )
-    def test_reference_from_command_line(self, command_line, expected):
-        assert reference_from_command_line(command_line) == expected
+    def test_reference_from_command_words(self, command_line, expected):
+        assert reference_from_command_words(split_command_line(command_line)) == expected
 
 
 class TestBuildDecidesTheValue:
