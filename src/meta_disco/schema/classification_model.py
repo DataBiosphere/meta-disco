@@ -421,7 +421,7 @@ class CreditedToEnum(str, Enum):
 
 class ActivityTypeEnum(str, Enum):
     """
-    The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its released LinkML schema spells them, plus five of our own, each under the FSS term it narrows. `meaning` is TerraCore's class, else EDAM's operation for the same step; a near EDAM operation is a close mapping. What each passes is in `rules/activities.yaml`.
+    The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its released LinkML schema spells them, plus seven of our own, each under the term it narrows. `meaning` is TerraCore's class, else EDAM's operation for the same step; a near EDAM operation is a close mapping. What each passes is in `rules/activities.yaml`.
     """
     Activity = "Activity"
     """
@@ -438,6 +438,9 @@ class ActivityTypeEnum(str, Enum):
     """
     AlignmentActivity = "AlignmentActivity"
     VariantCallActivity = "VariantCallActivity"
+    """
+    Calling variants or genotypes from alignments or gVCFs. EDAM's Variant calling is a close step, and its Genotyping is close for a joint genotyping step (GenotypeGVCFs).
+    """
     ExpressionActivity = "ExpressionActivity"
     """
     Quantifying expression. EDAM's RNA-Seq quantification is one kind of it, not the same step.
@@ -458,11 +461,19 @@ class ActivityTypeEnum(str, Enum):
     """
     CoverageActivity = "CoverageActivity"
     """
-    The read coverage of one alignment file at each position, as a signal track: ENCORE's per-strand STAR signal bigWigs (#595). Our own term, under FSS's AnalysisActivity; it is not a report on the file, so not QualityControlActivity.
+    The read coverage of one alignment file at each position, as a signal track: ENCORE's per-strand STAR signal bigWigs (#595). Our own term, under FSS's AnalysisActivity; it is not a report on the file, so not QualityControlActivity. EDAM's Read depth analysis analyses depth rather than writing it, so it is close.
     """
     LiftoverActivity = "LiftoverActivity"
     """
-    Moving a file's coordinates to another reference. Our own term; neither TerraCore nor EDAM has one.
+    Moving a file's coordinates to another reference. Our own term; TerraCore has no such class, and EDAM's Sequence coordinate conversion is the same step.
+    """
+    VariantProcessingActivity = "VariantProcessingActivity"
+    """
+    Variants in, variants out, every call kept made from the same reads against the same reference: filtering, annotating, normalizing or subsetting a callset (a subset drops samples). Our own term, under FSS's AnalysisActivity; a record names one of its children (#610). Neither TerraCore nor EDAM has this class, so no id is recorded.
+    """
+    VariantFilterActivity = "VariantFilterActivity"
+    """
+    Labelling a callset's rows by a filter (GATK's ApplyVQSR) or keeping only those that pass (`bcftools view -f PASS`). Our own term; TerraCore has no such class, and EDAM's Variant filtering is the same step.
     """
     MergeActivity = "MergeActivity"
     """
@@ -1455,8 +1466,9 @@ class ActivityDeclaration(ConfiguredBaseModel):
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
     term: ActivityTypeEnum = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityDeclaration']} })
-    output: ActivityEnd = Field(default=..., description="""What the step makes.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityDeclaration']} })
-    inputs: list[InputRole] = Field(default=..., description="""The step's input roles.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityDeclaration']} })
+    output: Optional[ActivityEnd] = Field(default=None, description="""What the step makes. Absent: taken with `inputs` from the nearest `is_a` ancestor that declares both, which must be `abstract`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityDeclaration']} })
+    inputs: Optional[list[InputRole]] = Field(default=None, description="""The step's input roles. Absent, with `output`: the term takes both from its nearest `is_a` ancestor that declares both, which must be `abstract` (#610).""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityDeclaration']} })
+    abstract: Optional[bool] = Field(default=None, description="""True for a term that only declares what its children pass; no step is written with it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityDeclaration']} })
     reason: str = Field(default=..., description="""Why the step passes what it passes.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'ActivityDeclaration']} })
 
 

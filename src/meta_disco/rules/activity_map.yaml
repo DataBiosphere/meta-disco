@@ -55,6 +55,28 @@ rows:
       (`cram_index` the `cram`, `chr1_hcvcf_index` the `chr1_hcvcf_gz`). The two lists match
       every combination, not only those pairs: no other pair occurs, and any index of one of
       these files is an index of it.
+  - id: activity.t2t_joint_genotype
+    match: {source_type: repository_metadata, table: interval, child_column: genotyped_bgzip, parent_column: genomics_db_tar}
+    declares: {activity: VariantCallActivity, role: calls_from}
+    reason: >-
+      The interval row's VCF is its GenomicsDB workspace genotyped across every sample (GATK
+      GenotypeGVCFs reads the workspace) and trimmed to the interval (SelectVariants). The
+      VCF's header carries the workspace's GenomicsDBImport line and SelectVariants', but not
+      GenotypeGVCFs', so the row is what states the link (#610).
+  - id: activity.t2t_variant_filter
+    match:
+      source_type: repository_metadata
+      table: chromosome
+      child_column: [chm13_recalibrated_vcf_gz, chm13_pass_vcf_gz, grch38_pass_vcf_gz]
+      parent_column: [chm13_raw_vcf_gz, chm13_recalibrated_vcf_gz, grch38_recalibrated_vcf_gz]
+    declares: {activity: VariantFilterActivity, role: processed}
+    reason: >-
+      On a chromosome row, the recalibrated callset is the raw one with every row labelled by
+      GATK's ApplyVQSR (its header records both passes), and the PASS callset is the
+      recalibrated one with only its passing rows kept (`bcftools view -f PASS`). The row
+      holds CHM13's raw, recalibrated and PASS callsets and GRCh38's recalibrated and PASS
+      ones. The lists match every combination, but the lineage map pairs each chain
+      only within itself, so no line pairs a CHM13 file with a GRCh38 one (#610).
   - id: activity.igvf_index
     match: {source_type: repository_metadata, table: file, child_column: file_path, parent_column: derived_from, child_data_type: index, parent_data_type: [alignments, fragments]}
     declares: {activity: IndexActivity, role: indexed}

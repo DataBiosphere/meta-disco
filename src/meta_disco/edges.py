@@ -26,7 +26,7 @@ returns the one ``generated_by`` they agree on, or the conflict that prevents on
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 
 from . import activities, code_rules
@@ -110,22 +110,24 @@ def _category_of(file_name: str) -> str | None:
     return None
 
 
-def generated_by(rule: EdgeRule, parent: dict, key: RecordKey) -> dict:
-    """The child's ``generated_by``: ``rule``'s step, with ``parent`` as its one input.
+def generated_by(rule: EdgeRule, parents: Sequence[dict], key: RecordKey) -> dict:
+    """The child's ``generated_by``: ``rule``'s step, with each of ``parents`` an input in ``rule``'s role.
 
     ``parent_file`` is the catalog's spelling, not the folded name (#455); a parent with
     no record key raises rather than giving an ungrounded input.
     """
-    parent_name = parent["file_name"]
     named_by = [{"source_type": rule.source_type, "rule_id": rule.id}]
-    used = {
-        "role": rule.role,
-        "parent_file": parent_name,
-        "parent_key": input_key_value(parent, key, f"ground a {rule.activity} input on its parent"),
-        "parent_kind": parent_kind_of(parent_name),
-        "named_by": named_by,
-    }
-    return {"activity": rule.activity, "named_by": [dict(n) for n in named_by], "inputs": [used]}
+    inputs = [
+        {
+            "role": rule.role,
+            "parent_file": parent["file_name"],
+            "parent_key": input_key_value(parent, key, f"ground a {rule.activity} input on its parent"),
+            "parent_kind": parent_kind_of(parent["file_name"]),
+            "named_by": [dict(n) for n in named_by],
+        }
+        for parent in parents
+    ]
+    return {"activity": rule.activity, "named_by": [dict(n) for n in named_by], "inputs": inputs}
 
 
 def matches(index: NameIndex, dataset_id: str, name: str) -> list[dict]:
@@ -153,7 +155,7 @@ def checksum_generated_by(record: dict, name: FileName, index: NameIndex, key: R
     parent = resolve(index, dataset_of(record), name.stem)
     if parent is None:
         return None
-    return generated_by(code_rules.CHECKSUM_BY_NAME, parent, key)
+    return generated_by(code_rules.CHECKSUM_BY_NAME, [parent], key)
 
 
 # --- merging every source's step (#577) ------------------------------------------------

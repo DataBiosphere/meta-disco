@@ -61,11 +61,11 @@ from pathlib import Path
 
 import yaml
 
-from .activities import declarations
+from .activities import Declared, declarations, require_writable
 from .lineage_evidence import DEFAULT_LINEAGE_EVIDENCE_ROOT, LINEAGE_SOURCE_TYPES, iter_lineage, read_lineage_envelope
 from .manifest_survey import name_tokens
 from .models import SOURCE_REPOSITORY_ACTIVITY, SOURCE_REPOSITORY_METADATA
-from .schema.classification_model import ActivityDeclaration, EvidenceFileEnvelope, LineageRow
+from .schema.classification_model import EvidenceFileEnvelope, LineageRow
 from .source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT, discover, is_generation, iter_evidence, read_envelope
 from .summaries import ReportColumn, md_rows
 from .yaml_rows import (
@@ -174,9 +174,7 @@ def _sort_key(value: Value) -> tuple[bool, str]:
 # --- loading ----------------------------------------------------------------------
 
 
-def load_activity_map(
-    path: Path | None = None, activities: Mapping[str, ActivityDeclaration] | None = None
-) -> ActivityMap:
+def load_activity_map(path: Path | None = None, activities: Mapping[str, Declared] | None = None) -> ActivityMap:
     """Load and check the table (the bundled one by default) against ``activities`` (the bundled declarations).
 
     The first violation raises ``ValueError`` naming the row, by id where it has one.
@@ -195,7 +193,7 @@ def load_activity_map(
     return ActivityMap(rows=tuple(rows), digest=hashlib.sha256(text.encode("utf-8")).hexdigest())
 
 
-def _row(node: yaml.Node, n: int, declared: Mapping[str, ActivityDeclaration]) -> Row:
+def _row(node: yaml.Node, n: int, declared: Mapping[str, Declared]) -> Row:
     at = f"{_WHERE} row {n}"
     entries = mapping(node, at)
     if "id" not in entries:
@@ -250,7 +248,7 @@ def _values(node: yaml.Node, at: str) -> frozenset[Value]:
 
 
 def _declares(
-    node: yaml.Node | None, at: str, authored: bool, declared: Mapping[str, ActivityDeclaration]
+    node: yaml.Node | None, at: str, authored: bool, declared: Mapping[str, Declared]
 ) -> tuple[str | None, str | None]:
     if node is None:
         if authored:
@@ -265,6 +263,7 @@ def _declares(
     role = scalar(entries["role"], f"{at} declares role")
     if activity not in declared:
         raise ValueError(f"{at}: declares activity {activity!r}, which activities.yaml does not declare")
+    require_writable(activity, at, declared)
     roles = [i.role for i in declared[activity].inputs]
     if role not in roles:
         raise ValueError(f"{at}: declares role {role!r}, which {activity} does not declare; its roles are {roles}")
@@ -397,7 +396,7 @@ def seed(
     lineage_root: Path = DEFAULT_LINEAGE_EVIDENCE_ROOT,
     evidence_root: Path = DEFAULT_SOURCE_EVIDENCE_ROOT,
     datasets: Iterable[str] | None = None,
-    activities: Mapping[str, ActivityDeclaration] | None = None,
+    activities: Mapping[str, Declared] | None = None,
 ) -> SeedResult:
     """Append one seeded row per key the lineage carries and no row matches.
 

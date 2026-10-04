@@ -283,6 +283,11 @@ def test_rows_apart_on_a_shared_part_load(tmp_path):
             "    match: {source_type: repository_activity}\n    declares: {activity: IndexActivity}\n    reason: why.\n",
             "it declares exactly ['activity', 'role']",
         ),
+        (
+            "    match: {source_type: repository_activity}\n"
+            "    declares: {activity: VariantProcessingActivity, role: processed}\n    reason: why.\n",
+            "'VariantProcessingActivity' is abstract",
+        ),
     ],
 )
 def test_a_malformed_row_is_refused_naming_it(tmp_path, row_text, message):

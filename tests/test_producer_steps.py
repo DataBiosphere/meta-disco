@@ -212,21 +212,89 @@ def test_a_gatk3_haplotypecaller_resolves_by_the_inputs_base_name():
     assert step["inputs"][0]["parent_file"] == "HG04164.final.bam"
 
 
-def test_any_other_producing_step_gives_no_step_yet():
-    step = reader(("chr1.genotyped.vcf.gz", "D"))(header(IMPORT, SELECT, CONCAT), "chr1.genotyped.vcf.gz", "D")
+def test_a_haplotypecaller_with_two_inputs_gives_no_step():
+    two = HC.replace("--input ./HG00096.cram", "--input ./HG00096.cram --input ./HG00097.cram")
+    entries = (("HG00096.cram", "D"), ("HG00097.cram", "D"))
+    assert reader(*entries)(header(two), "HG00096.chr10.hc.vcf.gz", "D") == (None, ps.NO_ACTIVITY)
+
+
+def test_a_path_listed_twice_is_one_input():
+    twice = HC.replace("--input ./HG00096.cram", "--input ./HG00096.cram --input ./HG00096.cram")
+    step, outcome = reader(("HG00096.cram", "D"))(header(twice), "HG00096.chr10.hc.vcf.gz", "D")
+    assert outcome == ps.STEPPED and step is not None and len(step["inputs"]) == 1
+
+
+def test_a_tool_of_a_family_its_rule_does_not_name_gives_no_step(monkeypatch):
+    bcftools_only = dataclasses.replace(ps.STEP_RULES["HaplotypeCaller"], families=frozenset({"bcftools"}))
+    monkeypatch.setitem(ps.STEP_RULES, "HaplotypeCaller", bcftools_only)
+    assert reader(("HG00096.cram", "D"))(header(HC), "HG00096.chr10.hc.vcf.gz", "D") == (None, ps.NO_ACTIVITY)
+
+
+REGIONS = (("chr1.1_100000.genotyped.vcf.gz", "D"), ("chr1.100000001_100100000.genotyped.vcf.gz", "D"))
+
+
+def test_a_concat_merges_every_region_vcf_it_names_as_a_shard():
+    step, outcome = reader(*REGIONS)(header(IMPORT, SELECT, CONCAT), "chr1.genotyped.vcf.gz", "D")
+    assert outcome == ps.STEPPED and step is not None
+    assert step["activity"] == "MergeActivity"
+    assert [(i["role"], i["parent_file"], i["parent_key"]) for i in step["inputs"]] == [
+        ("shard", "chr1.1_100000.genotyped.vcf.gz", "f0"),
+        ("shard", "chr1.100000001_100100000.genotyped.vcf.gz", "f1"),
+    ]
+    assert step["named_by"] == [{"source_type": SOURCE_CONTENT_READ, "rule_id": code_rules.MERGE_BY_HEADER.id}]
+
+
+@pytest.mark.parametrize(
+    ("entries", "outcome"),
+    [
+        (REGIONS[:1], ps.PARENT_NOT_FOUND),
+        ((*REGIONS, ("CHR1.1_100000.genotyped.vcf.gz", "D")), ps.PARENT_AMBIGUOUS),
+    ],
+)
+def test_a_concat_with_an_input_no_file_or_two_files_carry_gives_no_step(entries, outcome):
+    assert reader(*entries)(header(IMPORT, SELECT, CONCAT), "chr1.genotyped.vcf.gz", "D") == (None, outcome)
+
+
+def test_a_concat_of_two_paths_with_one_name_gives_no_step():
+    """Scatter shards share a name (`shard-0/out.vcf.gz`, `shard-1/out.vcf.gz`): one file carrying it is not both."""
+    shards = CONCAT.replace("/cromwell_root/y/chr1.100000001_100100000", "/cromwell_root/y/chr1.1_100000")
+    assert reader(*REGIONS)(header(shards), "chr1.genotyped.vcf.gz", "D") == (None, ps.PARENT_AMBIGUOUS)
+
+
+def test_a_concat_reading_an_input_from_stdin_gives_no_step():
+    piped = CONCAT.replace(" /cromwell_root/x/chr1.1_100000.genotyped.vcf.gz", " -")
+    assert steps(header(piped))[0].stdin
+    assert reader(*REGIONS)(header(piped), "chr1.genotyped.vcf.gz", "D") == (None, ps.NO_ACTIVITY)
+
+
+def test_a_concat_of_one_vcf_is_not_a_merge():
+    """`concat -o out.vcf.gz in.vcf.gz` recompresses one file; a merge joins two or more."""
+    one = CONCAT.replace(" /cromwell_root/y/chr1.100000001_100100000.genotyped.vcf.gz", "")
+    assert reader(*REGIONS)(header(one), "chr1.genotyped.vcf.gz", "D") == (None, ps.NO_ACTIVITY)
+
+
+def test_a_concat_naming_an_input_that_is_not_a_vcf_gives_no_step():
+    listed = CONCAT.replace("/cromwell_root/x/chr1.1_100000.genotyped.vcf.gz", "/cromwell_root/x/shards.txt")
+    entries = (("shards.txt", "D"), *REGIONS)
+    assert reader(*entries)(header(listed), "chr1.genotyped.vcf.gz", "D") == (None, ps.NO_ACTIVITY)
+
+
+def test_any_other_producing_step_gives_no_step():
+    file_name = "1kgp.chr1.recalibrated.snp_indel.vcf.gz"
+    step = reader(("chr1.genotyped.vcf.gz", "D"))(header(VQSR_SNP, VQSR_INDEL), file_name, "D")
     assert step == (None, ps.NO_ACTIVITY)
 
 
 def test_the_reader_keeps_only_the_records_a_rule_could_take_as_a_parent():
     held = reader(("HG00096.cram", "D"), ("HG00096.chr1.hc.vcf.gz", "D"), ("notes.txt", "D")).index
-    assert [name for _, name in held] == ["hg00096.cram"]
-    ((record,),) = held.values()
-    assert record == {"file_name": "HG00096.cram", "file_id": "f0", "dataset_id": "D"}
+    assert sorted(name for _, name in held) == ["hg00096.chr1.hc.vcf.gz", "hg00096.cram"]
+    assert held[("D", "hg00096.cram")] == [{"file_name": "HG00096.cram", "file_id": "f0", "dataset_id": "D"}]
 
 
-def test_the_edge_rule_is_declared_with_the_others():
-    assert code_rules.VARIANT_CALL_BY_HEADER in code_rules.EDGE_RULES
-    assert code_rules.VARIANT_CALL_BY_HEADER.source_type == SOURCE_CONTENT_READ
+def test_the_edge_rules_are_declared_with_the_others():
+    for rule in (code_rules.VARIANT_CALL_BY_HEADER, code_rules.MERGE_BY_HEADER):
+        assert rule in code_rules.EDGE_RULES
+        assert rule.source_type == SOURCE_CONTENT_READ
 
 
 # --- the VCF producer --------------------------------------------------------------------

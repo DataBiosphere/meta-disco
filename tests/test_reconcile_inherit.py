@@ -72,7 +72,7 @@ def rec(n: int, name: str, generated_by: dict | None = None, build: dict | None 
 def step_of(rule, parent: int, parent_file: str) -> dict:
     """The step inference writes from a child's name by ``rule``, as ``edges.generated_by`` writes it."""
     return edges.generated_by(
-        rule, {"file_name": parent_file, "file_id": f"file-{parent}"}, SOURCE_RECORD_KEYS["anvil"]
+        rule, [{"file_name": parent_file, "file_id": f"file-{parent}"}], SOURCE_RECORD_KEYS["anvil"]
     )
 
 

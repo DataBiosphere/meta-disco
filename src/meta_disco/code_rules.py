@@ -357,7 +357,26 @@ VARIANT_CALL_BY_HEADER = EdgeRule(
     ),
 )
 
-EDGE_RULES = (INDEX_BY_NAME, CHECKSUM_BY_NAME, VARIANT_CALL_BY_HEADER)
+MERGE_BY_HEADER = EdgeRule(
+    id="merge_by_header",
+    module=PRODUCER_STEPS,
+    activity=activities.MERGE,
+    role="shard",
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "the VCF's own header, its producing step found as for variant_call_by_header; where that "
+        "step is bcftools concat, each of its input VCFs' base names, matched case-insensitively "
+        "within the dataset"
+    ),
+    rationale=(
+        "bcftools concat records its inputs in its own command line, written into the VCF it writes: "
+        "T2T's chromosome VCFs name every region VCF they join. The step is taken only when it joins "
+        "two or more VCFs, none read from stdin, and every input is a VCF that exactly one file of the "
+        "dataset carries, so a merge never names part of its inputs (#610)."
+    ),
+)
+
+EDGE_RULES = (INDEX_BY_NAME, CHECKSUM_BY_NAME, VARIANT_CALL_BY_HEADER, MERGE_BY_HEADER)
 
 FETCH_FAILED = CodeMarker(
     id="fetch_failed",

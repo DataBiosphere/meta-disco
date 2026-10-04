@@ -97,7 +97,8 @@ class Step:
     line names no single output (GATK 3's HaplotypeCaller names none). ``read`` is False
     for a line whose tool :data:`TOOL_ARGUMENTS` does not declare; such a step names no
     input or output. ``family`` is None for a line that is neither GATK's nor bcftools', and
-    ``tool`` is then the line's ``ID``, or empty.
+    ``tool`` is then the line's ``ID``, or empty. ``stdin`` is True where a positional
+    argument is ``-``: an input read from stdin, which names no file and is not in ``inputs``.
     """
 
     family: str | None
@@ -105,6 +106,7 @@ class Step:
     inputs: tuple[str, ...]
     output: str | None
     read: bool = True
+    stdin: bool = False
 
 
 # A VCF header line that records how the file was produced. GATK writes
@@ -252,14 +254,18 @@ def _option_step(family: str, tool: str, words: Sequence[str], arguments: ToolAr
         words = words[1:]
     inputs: list[str] = []
     outputs: list[str] = []
+    stdin = False
     i = 0
     while i < len(words):
         word = words[i]
         i += 1
         if not word.startswith("-") or word == "-":
             # A positional argument; `-` is stdin, which names no file.
-            if arguments.positional and word != "-":
-                inputs.append(word)
+            if arguments.positional:
+                if word == "-":
+                    stdin = True
+                else:
+                    inputs.append(word)
             continue
         if word.startswith("--") and "=" in word:
             option, value = word.split("=", 1)
@@ -275,7 +281,7 @@ def _option_step(family: str, tool: str, words: Sequence[str], arguments: ToolAr
             inputs.append(value)
         elif value is not None and option in arguments.outputs:
             outputs.append(value)
-    return Step(family, tool, tuple(inputs), _sole(outputs))
+    return Step(family, tool, tuple(inputs), _sole(outputs), stdin=stdin)
 
 
 def _sole(paths: list[str]) -> str | None:

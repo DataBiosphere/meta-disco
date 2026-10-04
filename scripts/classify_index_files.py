@@ -446,7 +446,7 @@ def propagate_to_index_files(metadata_path: Path, output_path: Path):
             OutputRecord.from_record(
                 record,
                 every_field({DATA_TYPE: index_data_type_entry(index_ext)}),
-                generated_by=edges.generated_by(code_rules.INDEX_BY_NAME, parent, key),
+                generated_by=edges.generated_by(code_rules.INDEX_BY_NAME, [parent], key),
             ).to_dict()
         )
 

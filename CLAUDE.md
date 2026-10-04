@@ -324,11 +324,14 @@ evidence}` entry — plus the controlled vocabulary:
     resolves** (#450, #356, #580, ADR-0002): an `activity` (a term of `activity_type_enum`,
     AnVIL FSS's activity types, never a verb) and its `inputs`, each in a `role` the
     activity declares. What each role passes is `rules/activities.yaml`'s to say, read
-    through `meta_disco.activities` and trusted by its readers. Inference states three
-    (`code_rules.EDGE_RULES`): two from the child's own name through `meta_disco.edges`, the
-    index producer's `IndexActivity` and the catch-all's `ChecksumActivity` for a `.md5`, and
-    one from a VCF's header through `meta_disco.producer_steps` (#609): the end of the
-    header's data flow (ADR-0002 decision 6), a `HaplotypeCaller` giving `VariantCallActivity`.
+    through `meta_disco.activities` and trusted by its readers; a term may take its
+    declaration from an abstract parent, and no step names an abstract term (#610). Inference
+    states four (`code_rules.EDGE_RULES`): two from the child's own name through
+    `meta_disco.edges`, the index producer's `IndexActivity` and the catch-all's
+    `ChecksumActivity` for a `.md5`, and two from a VCF's header through
+    `meta_disco.producer_steps` (#609, #610): the end of the header's data flow (ADR-0002
+    decision 6), a `HaplotypeCaller` giving `VariantCallActivity` and a bcftools `concat`
+    giving `MergeActivity` with every input VCF a `shard`.
     Its outcomes per dataset are in the VCF producer's `metadata.details.producer_steps`.
     **A VCF's command lines are read once, on first use, by `VCFHeader.commands`** (#615),
     which gives each line's words and its step, through `validators.command_lines` and its

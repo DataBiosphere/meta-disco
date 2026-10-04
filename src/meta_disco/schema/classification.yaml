@@ -872,14 +872,21 @@ classes:
       output:
         range: ActivityEnd
         inlined: true
-        required: true
-        description: What the step makes.
+        description: >-
+          What the step makes. Absent: taken with `inputs` from the nearest `is_a` ancestor
+          that declares both, which must be `abstract`.
       inputs:
         range: InputRole
         multivalued: true
         inlined_as_list: true
-        required: true
-        description: The step's input roles.
+        description: >-
+          The step's input roles. Absent, with `output`: the term takes both from its
+          nearest `is_a` ancestor that declares both, which must be `abstract` (#610).
+      abstract:
+        range: boolean
+        description: >-
+          True for a term that only declares what its children pass; no step is written
+          with it.
       reason:
         required: true
         description: Why the step passes what it passes.
@@ -1576,7 +1583,7 @@ enums:
   activity_type_enum:
     description: >-
       The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its
-      released LinkML schema spells them, plus five of our own, each under the FSS term it
+      released LinkML schema spells them, plus seven of our own, each under the term it
       narrows. `meaning` is TerraCore's class,
       else EDAM's operation for the same step; a near EDAM operation is a close mapping.
       What each passes is in `rules/activities.yaml`.
@@ -1602,10 +1609,15 @@ enums:
         close_mappings:
           - EDAM:operation_3198
       VariantCallActivity:
+        description: >-
+          Calling variants or genotypes from alignments or gVCFs. EDAM's Variant calling is
+          a close step, and its Genotyping is close for a joint genotyping step
+          (GenotypeGVCFs).
         is_a: Activity
         meaning: TerraCore:VariantCallActivity
         close_mappings:
           - EDAM:operation_3227
+          - EDAM:operation_3196
       ExpressionActivity:
         description: >-
           Quantifying expression. EDAM's RNA-Seq quantification is one kind of it, not the
@@ -1640,12 +1652,31 @@ enums:
           The read coverage of one alignment file at each position, as a signal track:
           ENCORE's per-strand STAR signal bigWigs (#595). Our own term, under FSS's
           AnalysisActivity; it is not a report on the file, so not QualityControlActivity.
+          EDAM's Read depth analysis analyses depth rather than writing it, so it is close.
         is_a: AnalysisActivity
+        close_mappings:
+          - EDAM:operation_3230
       LiftoverActivity:
         description: >-
-          Moving a file's coordinates to another reference. Our own term; neither
-          TerraCore nor EDAM has one.
+          Moving a file's coordinates to another reference. Our own term; TerraCore has no
+          such class, and EDAM's Sequence coordinate conversion is the same step.
         is_a: AnalysisActivity
+        meaning: EDAM:operation_3267
+      VariantProcessingActivity:
+        description: >-
+          Variants in, variants out, every call kept made from the same reads against the
+          same reference: filtering, annotating, normalizing or subsetting a callset (a
+          subset drops samples). Our own term, under
+          FSS's AnalysisActivity; a record names one of its children (#610). Neither
+          TerraCore nor EDAM has this class, so no id is recorded.
+        is_a: AnalysisActivity
+      VariantFilterActivity:
+        description: >-
+          Labelling a callset's rows by a filter (GATK's ApplyVQSR) or keeping only those
+          that pass (`bcftools view -f PASS`). Our own term; TerraCore has no such class,
+          and EDAM's Variant filtering is the same step.
+        is_a: VariantProcessingActivity
+        meaning: EDAM:operation_3675
       MergeActivity:
         description: >-
           Joining several files of one kind into one: window VCFs into a chromosome VCF,

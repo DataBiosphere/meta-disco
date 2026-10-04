@@ -141,7 +141,7 @@ decision 1 rejects.
 *Amended by #580.* A step is named by its **activity**, not by a verb between two files. The
 vocabulary is `activity_type_enum`: AnVIL FSS's `ActivityTypes`, spelled as FSS's released LinkML schema
 spells them (`DataBiosphere/biocore-data-model`, `AnVILDataSubmissionFindabilitySubsetSchema.linkml.yaml`),
-plus four of our own (five since #595 added `CoverageActivity`). FSS's values spreadsheet spells three differently (`VariantCallingActivity`,
+plus seven of our own (`CoverageActivity` added by #595; `VariantProcessingActivity` and `VariantFilterActivity` by #610). FSS's values spreadsheet spells three differently (`VariantCallingActivity`,
 `ImagingActivity`, `IndexingActivity`); the schema a submission is validated against wins. A term's `meaning` is the Terra
 Interoperability Model's class where it has one, else EDAM's operation where EDAM defines the same step.
 TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `generated_file_id` are PROV's
@@ -154,14 +154,33 @@ TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `gener
 | `ChecksumActivity` | checksum ← checked file | filename convention, `anvil_activity` `Checksum` | `checksum_of` |
 | `QualityControlActivity` (ours, under `AnalysisActivity`) | QC report ← the file it reports on | submitter same-row (T2T `samtools_stats`, `mosdepth_*` → `cram`) | `summarizes` |
 | `AlignmentActivity` | alignment ← reads | submitter same-row, `@PG`, `anvil_activity` (ENCORE `Alignment: STAR`) | `aligned_from` |
-| `VariantCallActivity` | variants ← alignments or gVCFs | VCF caller command lines, submitter same-row (1000G `cram` → `gvcf`) | `called_from` |
-| `MergeActivity` (ours) | merged file ← shards | headers and filenames (T2T chromosome VCF ← window VCFs), `anvil_activity` (ENCORE `Merger: multiple FASTQ files`, #595) | `merged_from` |
+| `VariantCallActivity` | variants ← alignments or gVCFs | VCF caller command lines, submitter same-row (1000G `cram` → `gvcf`; T2T `interval`: region VCF ← GenomicsDB tar, #610) | `called_from` |
+| `MergeActivity` (ours) | merged file ← shards | VCF headers (T2T chromosome VCF ← region VCFs, its `bcftools concat` line, #610), `anvil_activity` (ENCORE `Merger: multiple FASTQ files`, #595) | `merged_from` |
 | `CoverageActivity` (ours, under `AnalysisActivity`; #595) | coverage track ← the alignment it covers | `anvil_activity` (ENCORE `Track: bedGraphToBigWig`) | — |
+| `VariantFilterActivity` (ours, under the abstract `VariantProcessingActivity`; #610) | filtered callset ← the callset it filtered | submitter same-row (T2T `chromosome`: raw → recalibrated → PASS on CHM13; recalibrated → PASS on GRCh38, whose raw callset the table does not hold) | — |
 | `LiftoverActivity` (ours, under `AnalysisActivity`) | lifted file ← the file it was lifted from | a source naming the parent (schema changes, `source_assembly`) | `lifted_over_from` |
 | `AssemblyActivity` (ours) | assembly ← reads | HPRC assembly sample sheets, where the output resolves to a held assembly (Open) | `assembled_from` |
 | `SequenceActivity` | reads ← sample id | `anvil_activity` `Sequencing`, submitter tables (#357) | `sample_of`, for reads |
 | `SampleCollectionActivity` | sample id ← donor id | the sample's row: `anvil_biosample.donor_id`, a submitter donor column (#361) | `donor_of` |
 | `Activity` | related, step unknown | IGVF `file.derived_from` between content types no term names, `anvil_activity` `Unknown` | `derived_from` |
+
+**EDAM operations for steps not yet linked** (looked up in EBI OLS, 2026-10-04, #610). A term added
+for one of these takes the id as its `meaning`, by the rule above, rather than searching again:
+
+| step | EDAM operation | where AnVIL holds it |
+|---|---|---|
+| methylation calling | `operation_3919` Methylation calling | HPRC methylation BAMs (#481) |
+| peak calling | `operation_3222` Peak calling | ATAC-seq and ChIP-seq peaks |
+| base-calling | `operation_3185` Base-calling | ONT `fast5` → reads (NIA_CARD, HPRC; #605) |
+| demultiplexing | `operation_3933` Demultiplexing | per-sample reads from a pooled run |
+| read pre-processing, trimming | `operation_3219` Read pre-processing; `operation_3192` Sequence trimming | ENCORE's trimmed FASTQs |
+| a population or sample subset of a callset | `operation_3695` Data filtering | T2T's per-population PASS VCFs (`…pass.AFR.vcf.gz`) |
+| variant annotation or classification | `operation_3225` Variant classification | none annotated yet; `operation_0331` Variant effect prediction is about protein structure, not this |
+
+EDAM has no operation for variant normalization, joint genotyping as a step of its own (Genotyping,
+`operation_3196`, is a close mapping on `VariantCallActivity`), a GenomicsDB import, a cohort
+definition, or a file's checksum (`operation_3348` checksums a sequence). A term for one of these
+records no id.
 
 FSS's other types (`SampleCollectionActivity`, `SampleTreatmentActivity`, `ExpressionActivity`,
 `AnalysisActivity`, `ImageActivity`) are in the vocabulary, though when this ADR was written no
@@ -187,7 +206,7 @@ or methods section says about a collection. A sample that a file's own header na
 columns) says which sample the data is about, not which step made the file; how it is recorded is #357's
 (Open).
 
-**Each activity declares its output and its inputs by role**, in `rules/activities.yaml`, whose shape is
+**Each activity declares its output and its inputs by role**, or takes them from an abstract ancestor (#610), in `rules/activities.yaml`, whose shape is
 the LinkML class `ActivityDeclarations`. The output is a file or an identifier, and for a file the
 `data_type` kinds it may be. Each input role says the same, and whether the step always has it
 (`required`), whether an output has several in that role (`many`), and what the output takes from it
@@ -200,6 +219,20 @@ for review, and nothing is inherited across that activity until it is settled. F
 takes many, the parents every source names are pooled into one set of inputs, each listing in `named_by`
 the sources that named it (decision 6) — except where inference names that role: its step names every input
 of the step it read, so a source naming another set there is an edge conflict too (#609, contract 4.9).
+
+**A term exists where what passes differs, and is named for what the step does** (#610). Many tools
+fall under one term: `AlignmentActivity` is bwa, STAR or minimap2. A family of steps that pass the same
+shares one **abstract** parent that declares, once, what passes, and each step is a child named for what
+it does, declaring only its reason. `VariantProcessingActivity` is such a parent (a callset in, a callset
+out, every call it keeps made from the same reads against the same reference, though a subset drops
+samples); `VariantFilterActivity` is its first child (GATK's
+ApplyVQSR labelling every row, `bcftools view -f PASS` keeping the passing ones). Annotation,
+normalization and a population subset would be further children, each one enum line. No step names an
+abstract term: `activities.require_writable` refuses one in an activity-map row, and every edge rule is
+held to it. Which operation a step was can also be read by comparing its input with its output (rows
+removed, samples dropped, annotation fields added), so the leaves need not multiply past what a reader
+asks for. *Rejected (#610): one broad term, `VariantProcessingActivity`, written on records*: it says
+nothing a scientist can use.
 
 *Rejected (#580): verbs on file-to-file edges*, which this decision first minted. The sources state
 lineage as steps: `anvil_activity` has one row per step, and FSS's Activity table is its model. What
@@ -307,7 +340,7 @@ authority, and this table is its reading when #580 wrote it, amended where a row
 
 | activity | `data_modality` | `assay_type` | `platform` | `instrument_model` | `reference_assembly` |
 |---|---|---|---|---|---|
-| `IndexActivity`, `QualityControlActivity`, `CoverageActivity` (amended by #595), `MergeActivity`, `VariantCallActivity` | yes | yes | yes | yes | yes |
+| `IndexActivity`, `QualityControlActivity`, `CoverageActivity` (amended by #595), `MergeActivity`, `VariantCallActivity`, `VariantFilterActivity` (#610, from its parent `VariantProcessingActivity`) | yes | yes | yes | yes | yes |
 | `AlignmentActivity` | yes, from `reads` | yes, from `reads` | yes, from `reads` | yes, from `reads` | from its `reference` input only, not from the reads |
 | `LiftoverActivity` | yes | yes | yes | yes | **no** — liftover changes it |
 | `AssemblyActivity` | yes | yes | yes | yes | **no** — an assembly is its own reference |
