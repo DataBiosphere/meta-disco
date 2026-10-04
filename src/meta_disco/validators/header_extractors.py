@@ -78,8 +78,9 @@ class VCFHeader:
         Read once, on first use, from ``other_meta`` and then ``unkeyed_meta`` — together,
         every ``##`` line :func:`parse_vcf_header` does not route to a named field. The
         order is grouped, not the header's: each list keeps its own lines in header order,
-        but every ``unkeyed_meta`` line (a GATK 3 dotted key) comes after every
-        ``other_meta`` line, however they interleave in the header. Its readers do not
+        but every ``unkeyed_meta`` line (one whose key the line parser rejects, such as
+        GATK 3's dotted ``##GATKCommandLine.<Tool>``) comes after every ``other_meta``
+        line, however they interleave in the header. Its readers do not
         depend on the order. Each gives its words and its step (``command_lines.VcfCommand``).
         """
         return vcf_commands((self.other_meta or []) + (self.unkeyed_meta or []))

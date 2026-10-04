@@ -389,8 +389,9 @@ def _declared_from_command_lines(
       cannot be reduced to one declaration without knowing which tool's word
       counts, and this function does not know tools. Accuracy over coverage.
 
-    Each command line, as the header parse split it into words, contributes at most
-    one name, via :func:`reference_from_command_words`; lines naming nothing are ignored.
+    Each command line, split into words (a VCF's by ``VCFHeader.commands``, a SAM
+    header's by ``sam_command_words``), contributes at most one name, via
+    :func:`reference_from_command_words`; lines naming nothing are ignored.
     """
     if not signatures:
         return None
@@ -426,8 +427,9 @@ def reference_from_command_words(argv: Sequence[str]) -> str | None:
     guards, not from this reading. The words come split by
     ``command_lines.split_command_line`` (a VCF's through ``VCFHeader.commands``, read
     once per header; a SAM header's through ``sam_command_words``, split per call),
-    quotes stripped, so that ``--reference="/ref/x.fa"`` yields a token the FASTA check
-    can match.
+    balanced quotes stripped, so that ``--reference="/ref/x.fa"`` yields a token the
+    FASTA check can match. A line with an unbalanced quote is split on whitespace
+    instead and keeps its quotes.
     """
     # ``--reference=path`` as the two tokens the flag loop expects.
     argv = [part for arg in argv for part in (arg.split("=", 1) if arg.startswith("--reference=") else (arg,))]

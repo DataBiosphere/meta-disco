@@ -93,8 +93,10 @@ class ExtendedFileInfo:
 
     # Header data (populated when available)
     bam_header: str | None = None
-    # A VCF header arrives parsed: its one parse per file is the pipeline's, which the
-    # step reader shares (#615), so it is held as given rather than parsed here.
+    # A VCF header arrives parsed and is held as given, not parsed here: in a run it is
+    # the pipeline's one parse per file, which the step reader shares (#615); a caller
+    # holding text (``classify_from_vcf_header``, ``classify_with_vcf_header``) parses it
+    # first.
     vcf_header: "VCFHeader | None" = None
     fastq_first_read: str | None = None
     fasta_contig_names: list[str] | None = None
