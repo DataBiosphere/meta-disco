@@ -206,7 +206,8 @@ of the step it read, so a source naming another set there is an edge conflict to
 fall under one term: `AlignmentActivity` is bwa, STAR or minimap2. A family of steps that pass the same
 shares one **abstract** parent that declares, once, what passes, and each step is a child named for what
 it does, declaring only its reason. `VariantProcessingActivity` is such a parent (a callset in, a callset
-out, its samples, reads and reference unchanged); `VariantFilterActivity` is its first child (GATK's
+out, every call it keeps made from the same reads against the same reference, though a subset drops
+samples); `VariantFilterActivity` is its first child (GATK's
 ApplyVQSR labelling every row, `bcftools view -f PASS` keeping the passing ones). Annotation,
 normalization and a population subset would be further children, each one enum line. No step names an
 abstract term: `activities.require_writable` refuses one in an activity-map row, and every edge rule is

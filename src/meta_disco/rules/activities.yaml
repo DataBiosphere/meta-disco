@@ -152,13 +152,13 @@ activities:
         many: false
         passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
     reason: >-
-      A callset processed into another keeps its samples, its reads and its reference: rows
-      are labelled, removed or annotated, and nothing about where the calls came from
-      changes.
+      A callset processed into another keeps the calls it keeps as they were made: rows are
+      labelled, removed or annotated, or some samples are dropped, but every call left came
+      from the same reads, aligned to the same reference, so what those say still holds.
   - term: VariantFilterActivity
     reason: >-
-      A filter labels or drops rows and changes nothing about the samples, reads or
-      reference behind them, so it passes what its parent declares.
+      A filter labels or drops rows and changes nothing about the reads or reference behind
+      the rows it keeps, so it passes what its parent declares.
   - term: MergeActivity
     output: {form: [file]}
     inputs:

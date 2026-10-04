@@ -462,11 +462,11 @@ class ActivityTypeEnum(str, Enum):
     """
     LiftoverActivity = "LiftoverActivity"
     """
-    Moving a file's coordinates to another reference. Our own term; neither TerraCore nor EDAM has one.
+    Moving a file's coordinates to another reference. Our own term; TerraCore has no such class, and EDAM's Sequence coordinate conversion is the same step.
     """
     VariantProcessingActivity = "VariantProcessingActivity"
     """
-    Variants in, variants out, with the samples, reads and reference unchanged: filtering, annotating, normalizing or subsetting a callset. Our own term, under FSS's AnalysisActivity; a record names one of its children (#610). Neither TerraCore nor EDAM has this class, so no id is recorded.
+    Variants in, variants out, every call kept made from the same reads against the same reference: filtering, annotating, normalizing or subsetting a callset (a subset drops samples). Our own term, under FSS's AnalysisActivity; a record names one of its children (#610). Neither TerraCore nor EDAM has this class, so no id is recorded.
     """
     VariantFilterActivity = "VariantFilterActivity"
     """
