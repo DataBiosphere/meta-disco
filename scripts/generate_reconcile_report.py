@@ -735,9 +735,9 @@ def _header_steps_section(rows: list[dict]) -> list[str]:
         "one end of that flow as the step that made the file (#609). *stepped*: a `HaplotypeCaller` gave a "
         "`VariantCallActivity`, or a bcftools `concat` a `MergeActivity` (#610), whose parents all resolved; "
         "*no_command_line* / *unknown_tool*: nothing to read, or a tool whose arguments are not declared; "
-        "*no_single_end* / *output_not_this_file*: the flow has no one end that made this file; *no_activity*: a "
-        "producer found that no rule turns into a step, a `HaplotypeCaller` without exactly one alignment input, "
-        "or a `concat` with an input that is not a VCF or is read from stdin; "
+        "*no_single_end* / *output_not_this_file*: the flow has no one end that made this file; *no_activity*: the "
+        "producing step is not one a rule takes: no rule for its tool in that family, a `HaplotypeCaller` without "
+        "exactly one alignment input, or a `concat` that does not join two or more VCFs or reads one from stdin; "
         "*parent_not_found* / *parent_ambiguous*: an input's name no file of the dataset carries, or more than "
         "one does (or two inputs share it).",
         "",

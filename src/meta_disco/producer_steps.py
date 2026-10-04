@@ -21,7 +21,7 @@ inputs and output are unknown, so the chain cannot be read.
 
 **Which producing step is a step we write** is :data:`STEP_RULES`: a ``HaplotypeCaller``
 with exactly one alignment input is a ``VariantCallActivity``, and a bcftools ``concat``
-whose inputs are all VCFs is a ``MergeActivity`` with each input a ``shard`` (#610). Each
+joining two or more VCFs is a ``MergeActivity`` with each input a ``shard`` (#610). Each
 parent is found by file name within the child's dataset (#438's rule), and a step is
 written only when every input names exactly one file there. Every other producing step
 gives no step. Each file's outcome is one of :data:`OUTCOMES`, which the VCF producer
@@ -66,7 +66,7 @@ OUTCOMES = (
 class StepRule:
     """A producing step we write: the edge rule that states it, the tool families it is read
     from, the kind (`edges.parent_kind_of`) every input must be, and whether it takes several
-    inputs or exactly one."""
+    inputs (two or more: a merge of one file is not a merge) or exactly one."""
 
     edge_rule: EdgeRule
     families: frozenset[str]
@@ -165,8 +165,8 @@ class HeaderSteps:
         """A VCF's ``generated_by`` from its header, and the outcome (one of :data:`OUTCOMES`).
 
         A producing step in :data:`STEP_RULES`, of a family its rule names, reading nothing
-        from stdin, whose inputs are all of the kind its rule names (exactly one, unless the
-        rule takes several) gives that rule's step, each parent the one file of
+        from stdin, whose inputs are all of the kind its rule names (exactly one, or two or
+        more where the rule takes several) gives that rule's step, each parent the one file of
         ``dataset_id`` carrying the input's base name, case-folded. A path listed twice is
         one input. An input no such file carries gives no step, as :data:`PARENT_NOT_FOUND`;
         otherwise an input several files carry, or two inputs at different paths with one
@@ -180,7 +180,7 @@ class HeaderSteps:
         if rule is None or step.family not in rule.families or step.stdin:
             return None, NO_ACTIVITY
         paths = list(dict.fromkeys(step.inputs))
-        if not paths or (len(paths) > 1 and not rule.many):
+        if not paths or (len(paths) > 1) != rule.many:
             return None, NO_ACTIVITY
         names = [PurePosixPath(path).name for path in paths]
         if any(edges.parent_kind_of(name) != rule.kind for name in names):

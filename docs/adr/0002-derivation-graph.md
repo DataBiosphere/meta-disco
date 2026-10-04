@@ -154,10 +154,10 @@ TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `gener
 | `ChecksumActivity` | checksum ← checked file | filename convention, `anvil_activity` `Checksum` | `checksum_of` |
 | `QualityControlActivity` (ours, under `AnalysisActivity`) | QC report ← the file it reports on | submitter same-row (T2T `samtools_stats`, `mosdepth_*` → `cram`) | `summarizes` |
 | `AlignmentActivity` | alignment ← reads | submitter same-row, `@PG`, `anvil_activity` (ENCORE `Alignment: STAR`) | `aligned_from` |
-| `VariantCallActivity` | variants ← alignments or gVCFs | VCF caller command lines, submitter same-row (1000G `cram` → `gvcf`) | `called_from` |
-| `MergeActivity` (ours) | merged file ← shards | headers and filenames (T2T chromosome VCF ← window VCFs), `anvil_activity` (ENCORE `Merger: multiple FASTQ files`, #595) | `merged_from` |
+| `VariantCallActivity` | variants ← alignments or gVCFs | VCF caller command lines, submitter same-row (1000G `cram` → `gvcf`; T2T `interval`: region VCF ← GenomicsDB tar, #610) | `called_from` |
+| `MergeActivity` (ours) | merged file ← shards | VCF headers (T2T chromosome VCF ← region VCFs, its `bcftools concat` line, #610), `anvil_activity` (ENCORE `Merger: multiple FASTQ files`, #595) | `merged_from` |
 | `CoverageActivity` (ours, under `AnalysisActivity`; #595) | coverage track ← the alignment it covers | `anvil_activity` (ENCORE `Track: bedGraphToBigWig`) | — |
-| `VariantFilterActivity` (ours, under the abstract `VariantProcessingActivity`; #610) | filtered callset ← the callset it filtered | submitter same-row (T2T `chromosome`: raw → recalibrated → PASS, on CHM13 and GRCh38) | — |
+| `VariantFilterActivity` (ours, under the abstract `VariantProcessingActivity`; #610) | filtered callset ← the callset it filtered | submitter same-row (T2T `chromosome`: raw → recalibrated → PASS on CHM13; recalibrated → PASS on GRCh38, whose raw callset the table does not hold) | — |
 | `LiftoverActivity` (ours, under `AnalysisActivity`) | lifted file ← the file it was lifted from | a source naming the parent (schema changes, `source_assembly`) | `lifted_over_from` |
 | `AssemblyActivity` (ours) | assembly ← reads | HPRC assembly sample sheets, where the output resolves to a held assembly (Open) | `assembled_from` |
 | `SequenceActivity` | reads ← sample id | `anvil_activity` `Sequencing`, submitter tables (#357) | `sample_of`, for reads |
@@ -188,7 +188,7 @@ or methods section says about a collection. A sample that a file's own header na
 columns) says which sample the data is about, not which step made the file; how it is recorded is #357's
 (Open).
 
-**Each activity declares its output and its inputs by role**, in `rules/activities.yaml`, whose shape is
+**Each activity declares its output and its inputs by role**, or takes them from an abstract ancestor (#610), in `rules/activities.yaml`, whose shape is
 the LinkML class `ActivityDeclarations`. The output is a file or an identifier, and for a file the
 `data_type` kinds it may be. Each input role says the same, and whether the step always has it
 (`required`), whether an output has several in that role (`many`), and what the output takes from it

@@ -6,11 +6,12 @@ term, ``Activity`` passing nothing, no role that can only be an identifier passi
 anything, and no role passing ``data_type``, which describes the file itself (contract
 4.9). Readers trust the result.
 
-**A term may take its declaration from an abstract parent** (#610). A term declared
+**A term may take its declaration from an abstract ancestor** (#610). A term declared
 with a reason but no ``output`` and ``inputs`` takes both from its nearest ``is_a``
 ancestor that declares them, which must be **abstract**, so a family of steps that pass
-the same (filtering, annotating a callset) states what passes once. No step names an
-abstract term (:func:`require_writable`).
+the same (filtering, annotating a callset) states what passes once. Terms in between that
+declare by reason only are passed over. No step names an abstract term
+(:func:`require_writable`).
 """
 
 from __future__ import annotations
@@ -94,8 +95,8 @@ def load_activities(text: str | None = None) -> dict[str, Declared]:
 def _inherited(term: str, given: dict[str, ActivityDeclaration]) -> Declared:
     """``term``'s declaration, its output and inputs taken from its nearest declaring ancestor where it states none.
 
-    That ancestor must be abstract: a concrete term's declaration is its own, and a term
-    under it declares its own too (``AnalysisActivity``'s children do).
+    That ancestor must be abstract: a term may not take a concrete term's declaration, so
+    a child of one that declares (``AnalysisActivity``) declares its own.
     """
     declaration = given[term]
     for source in (declaration, *(given[a] for a in activity_ancestors(term))):

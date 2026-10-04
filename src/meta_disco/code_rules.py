@@ -370,9 +370,9 @@ MERGE_BY_HEADER = EdgeRule(
     ),
     rationale=(
         "bcftools concat records its inputs in its own command line, written into the VCF it writes: "
-        "T2T's chromosome VCFs name every region VCF they join. The step is taken only when every "
-        "input is a VCF that exactly one file of the dataset carries, so a merge never names part "
-        "of its inputs (#610)."
+        "T2T's chromosome VCFs name every region VCF they join. The step is taken only when it joins "
+        "two or more VCFs, none read from stdin, and every input is a VCF that exactly one file of the "
+        "dataset carries, so a merge never names part of its inputs (#610)."
     ),
 )
 

@@ -872,14 +872,16 @@ classes:
       output:
         range: ActivityEnd
         inlined: true
-        description: "What the step makes. Absent: taken with `inputs` from the nearest declared ancestor."
+        description: >-
+          What the step makes. Absent: taken with `inputs` from the nearest `is_a` ancestor
+          that declares both, which must be `abstract`.
       inputs:
         range: InputRole
         multivalued: true
         inlined_as_list: true
         description: >-
           The step's input roles. Absent, with `output`: the term takes both from its
-          nearest declared `is_a` ancestor (#610).
+          nearest `is_a` ancestor that declares both, which must be `abstract` (#610).
       abstract:
         range: boolean
         description: >-
@@ -1655,14 +1657,16 @@ enums:
         description: >-
           Variants in, variants out, with the samples, reads and reference unchanged:
           filtering, annotating, normalizing or subsetting a callset. Our own term, under
-          FSS's AnalysisActivity; a record names one of its children (#610).
+          FSS's AnalysisActivity; a record names one of its children (#610). Neither
+          TerraCore nor EDAM has this class, so no id is recorded.
         is_a: AnalysisActivity
       VariantFilterActivity:
         description: >-
           Labelling a callset's rows by a filter (GATK's ApplyVQSR) or keeping only those
-          that pass (`bcftools view -f PASS`). Our own term; no TerraCore or EDAM id is
-          recorded.
+          that pass (`bcftools view -f PASS`). Our own term; TerraCore has no such class,
+          and EDAM's Variant filtering is the same step.
         is_a: VariantProcessingActivity
+        meaning: EDAM:operation_3675
       MergeActivity:
         description: >-
           Joining several files of one kind into one: window VCFs into a chromosome VCF,

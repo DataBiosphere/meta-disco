@@ -218,6 +218,18 @@ def test_a_haplotypecaller_with_two_inputs_gives_no_step():
     assert reader(*entries)(header(two), "HG00096.chr10.hc.vcf.gz", "D") == (None, ps.NO_ACTIVITY)
 
 
+def test_a_path_listed_twice_is_one_input():
+    twice = HC.replace("--input ./HG00096.cram", "--input ./HG00096.cram --input ./HG00096.cram")
+    step, outcome = reader(("HG00096.cram", "D"))(header(twice), "HG00096.chr10.hc.vcf.gz", "D")
+    assert outcome == ps.STEPPED and step is not None and len(step["inputs"]) == 1
+
+
+def test_a_tool_of_a_family_its_rule_does_not_name_gives_no_step(monkeypatch):
+    bcftools_only = dataclasses.replace(ps.STEP_RULES["HaplotypeCaller"], families=frozenset({"bcftools"}))
+    monkeypatch.setitem(ps.STEP_RULES, "HaplotypeCaller", bcftools_only)
+    assert reader(("HG00096.cram", "D"))(header(HC), "HG00096.chr10.hc.vcf.gz", "D") == (None, ps.NO_ACTIVITY)
+
+
 REGIONS = (("chr1.1_100000.genotyped.vcf.gz", "D"), ("chr1.100000001_100100000.genotyped.vcf.gz", "D"))
 
 
@@ -253,6 +265,12 @@ def test_a_concat_reading_an_input_from_stdin_gives_no_step():
     piped = CONCAT.replace(" /cromwell_root/x/chr1.1_100000.genotyped.vcf.gz", " -")
     assert steps(header(piped))[0].stdin
     assert reader(*REGIONS)(header(piped), "chr1.genotyped.vcf.gz", "D") == (None, ps.NO_ACTIVITY)
+
+
+def test_a_concat_of_one_vcf_is_not_a_merge():
+    """`concat -o out.vcf.gz in.vcf.gz` recompresses one file; a merge joins two or more."""
+    one = CONCAT.replace(" /cromwell_root/y/chr1.100000001_100100000.genotyped.vcf.gz", "")
+    assert reader(*REGIONS)(header(one), "chr1.genotyped.vcf.gz", "D") == (None, ps.NO_ACTIVITY)
 
 
 def test_a_concat_naming_an_input_that_is_not_a_vcf_gives_no_step():

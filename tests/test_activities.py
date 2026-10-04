@@ -119,7 +119,7 @@ def test_a_term_declared_by_its_reason_alone_takes_its_abstract_parents_inputs()
 
 
 def test_a_term_declared_by_its_reason_alone_under_a_concrete_parent_is_refused():
-    """A concrete term's children declare their own (AnalysisActivity's do), so none silently takes its parent's."""
+    """The nearest ancestor that declares is concrete (AnalysisActivity), so its declaration is not taken."""
     entries = _every_term(VariantProcessingActivity=_taking("VariantProcessingActivity"))
     with pytest.raises(ValueError, match="'VariantProcessingActivity': declares no output or inputs, and its parent"):
         activities.load_activities(_text(entries))
@@ -139,3 +139,14 @@ def test_a_step_may_not_name_an_abstract_term():
 def test_no_edge_rule_names_an_abstract_term():
     for rule in code_rules.EDGE_RULES:
         activities.require_writable(rule.activity, rule.id)
+
+
+def test_an_activitys_ancestors_are_its_is_a_chain_nearest_first():
+    assert schema_vocab.activity_ancestors("VariantFilterActivity") == (
+        "VariantProcessingActivity",
+        "AnalysisActivity",
+        "Activity",
+    )
+    assert schema_vocab.activity_ancestors("Activity") == ()
+    with pytest.raises(ValueError, match="CoffeeActivity"):
+        schema_vocab.activity_ancestors("CoffeeActivity")
