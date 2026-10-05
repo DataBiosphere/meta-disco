@@ -9,8 +9,8 @@ import pytest
 
 from meta_disco.models import SOURCE_REPOSITORY_METADATA
 from meta_disco.output_utils import RECONCILED_DIR
-from meta_disco.pipeline import HPRC_REPOSITORY
 from meta_disco.reconcile import FILLED_GROUPS, REPORT_FILE, UNFILLED_CATEGORIES
+from meta_disco.record_keys import HPRC_REPOSITORY
 from meta_disco.summaries import md_code
 from tests.run_fixtures import write_run
 from tests.test_reconcile import DATASET, TABLE, drs, go, published, record, write_evidence
