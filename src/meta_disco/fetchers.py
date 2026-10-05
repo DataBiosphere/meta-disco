@@ -1301,8 +1301,10 @@ def fetch_sample_map(
     if payload is not None:
         return payload
 
-    stream, raw = _open_stream(md5sum, url=url, is_gzipped=is_gzipped, compressed_cap=MAX_DECOMPRESSED + 1)
-    text, truncated = _read_head_text(stream, raw, cap=MAX_DECOMPRESSED)
+    # One byte past the cap, so a map of exactly ``MAX_DECOMPRESSED`` bytes is read to its end
+    # and seen whole, and only a longer one stops short.
+    stream, raw = _open_stream(md5sum, url=url, is_gzipped=is_gzipped, compressed_cap=MAX_DECOMPRESSED + 2)
+    text, truncated = _read_head_text(stream, raw, cap=MAX_DECOMPRESSED + 1)
     if truncated:
         raise FetchError(f"sample map larger than {MAX_DECOMPRESSED} bytes; not read whole")
 

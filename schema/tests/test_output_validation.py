@@ -8,8 +8,8 @@ contract at the schema level: ``status`` is required and drawn from
 ``classification_status_enum``, and ``value`` is either null or a member of that
 dimension's enum.
 
-**Two fixtures, all eleven producers** (#465), and a third holding both fixtures' rows as
-the reconcile stage writes them (#432), so a reconciled record is held to the same schema. The golden carries the seven
+**Two fixtures, all twelve producers** (#465), and a third holding both fixtures' rows as
+the reconcile stage writes them (#432), so a reconciled record is held to the same schema. The golden carries the eight
 ``ClassifyPipeline`` writes; ``standalone_output.json`` carries the four standalone
 ones, which until #465 reached no schema validation at all. Between them they also put
 the block only two producers emit in front of the schema as records they wrote:
@@ -146,7 +146,7 @@ def _records_in(path: Path):
 
 
 def _fixture_records():
-    """Yield (label, record) for every record in the fixtures — all eleven producers, inferred and reconciled."""
+    """Yield (label, record) for every record in the fixtures — all twelve producers, inferred and reconciled."""
     yield from _records_in(_GOLDEN)
     yield from _records_in(_STANDALONE)
     for label, record in _records_in(_RECONCILED):
@@ -247,7 +247,10 @@ def test_an_inferred_value_outside_its_dimensions_enum_is_refused(validator):
         *((m, {k: v for k, v in _STEP.items() if k != m} | {"inputs": [_INPUT]}) for m in _STEP),
         ("inputs", dict(_STEP)),
         *((m, _generated_by({k: v for k, v in _INPUT.items() if k != m})) for m in ("role", "parent_file", "named_by")),
-        *((m, _generated_by(_INPUT, named_by=[{k: v for k, v in _NAMED_BY[0].items() if k != m}])) for m in _NAMED_BY[0]),
+        *(
+            (m, _generated_by(_INPUT, named_by=[{k: v for k, v in _NAMED_BY[0].items() if k != m}]))
+            for m in _NAMED_BY[0]
+        ),
     ],
 )
 def test_a_generated_by_missing_a_required_member_is_refused(validator, member, step):
@@ -265,7 +268,7 @@ def test_a_generated_by_missing_a_required_member_is_refused(validator, member, 
 
 
 def test_output_records_validate_against_schema(validator):
-    # Whole-record gate (#134): every record from both fixtures — all eleven producers
+    # Whole-record gate (#134): every record from both fixtures — all twelve producers
     # (#465) — validates against ClassificationRecord, exercising the `classifications`
     # container end to end, and with it the `generated_by` those records carry.
     failures = []

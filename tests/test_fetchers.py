@@ -1000,3 +1000,9 @@ def test_a_suffix_read_refuses_a_server_that_ignored_the_range(monkeypatch, resp
     _patch_get(monkeypatch, resp)
     with pytest.raises(FetchError, match=message):
         fetchers._fetch_suffix(MD5, 8, url=None)
+
+
+def test_a_sample_map_of_exactly_the_cap_is_read_whole(monkeypatch, evidence_dir):
+    _install(monkeypatch, b"s\tx.vcf\n" * 8)
+    monkeypatch.setattr(fetchers, "MAX_DECOMPRESSED", 64)
+    assert fetch_sample_map(evidence_dir, MD5, use_cache=False) == "s\tx.vcf\n" * 8
