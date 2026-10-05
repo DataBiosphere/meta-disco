@@ -651,8 +651,8 @@ def _fetch_suffix(md5sum: str, length: int, *, url: str | None, timeout: int = 6
     is the whole file, from 0. Raises ``FetchError`` on any other status, a 206 whose
     ``Content-Range`` names no start, or a body of either longer than ``length``: a server
     that ignored the range would otherwise hand over a multi-gigabyte tar to find one small
-    member. The body is streamed, so such a reply is refused after at most ``length + 1``
-    bytes.
+    member. The body is streamed in 64 KiB chunks and checked after each, so such a reply is
+    refused after at most ``length`` bytes plus one chunk.
     """
     fetch_url, source = _range_target(md5sum, url)
     with requests.get(fetch_url, headers={"Range": f"bytes=-{length}"}, timeout=timeout, stream=True) as resp:
@@ -1203,9 +1203,10 @@ def fetch_tar_headers(
     passes it; where the walk stopped first, an uncompressed tar is read in its first and last
     :data:`TAR_MEMBER_WINDOW` bytes (:func:`_read_member`), the tail first unless the walk saw
     the member's name. Whether it was looked for is cached with the names, found or not
-    (``TarEvidence.vcf_header_read``), so a cached entry from before #621 that reaches this
-    fetcher has only the member read (``--skip-cached`` never hands it one), and a member
-    not found is not looked for again. With no ``kept_member`` nothing is
+    (``TarEvidence.vcf_header_read``), so a cached entry from before #621 of an uncompressed
+    tar that reaches this fetcher has only the member read (``--skip-cached`` never hands it
+    one), while one of a compressed tar is walked again from its head; and a member not found
+    is not looked for again. With no ``kept_member`` nothing is
     looked for, and the entry records that it was not.
 
     A failed read of the member alone (an HTTP error or a dropped connection) does not fail the
@@ -1276,8 +1277,8 @@ def _read_kept(
 
     The tail is read first unless ``member_names`` show the member, which then lies in the
     head. A failed read (an HTTP error or a dropped connection) is returned, not raised: the
-    names are evidence the tar already had. Its partial bytes are not counted, since a
-    failed read saves nothing.
+    names are evidence the tar already had. A failed read's bytes are not counted in
+    ``raw_bytes_fetched``.
     """
     tail_first = member not in {PurePosixPath(n).name for n in member_names}
     try:

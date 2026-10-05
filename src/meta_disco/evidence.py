@@ -291,7 +291,8 @@ class TarEvidence(CachedEvidence):
     member_names: list[str]
     # Whether `vcfheader.vcf` was looked for, and its text where found (#621). An entry
     # written before #621 has no `vcf_header` key, so ``vcf_header_read`` is False and the
-    # fetcher reads the member alone; a key holding null is "looked for, not found", which
+    # fetcher reads the member alone (an uncompressed tar's; a compressed one is walked again
+    # from its head); a key holding null is "looked for, not found", which
     # is never looked for again. Only a GenomicsDB store is searched: a fresh read of
     # another tar records null, and an older entry of one is left as it was.
     vcf_header: str | None = None

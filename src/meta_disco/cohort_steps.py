@@ -5,7 +5,8 @@ T2T joint-called its gVCFs region by region: GATK's ``GenomicsDBImport`` merged 
 Two steps are read here, each from the file's own content:
 
 - **A sample map's step** is a ``CohortDefinitionActivity`` with each gVCF it lists a
-  ``member``. The map is two tab-separated columns, a sample name and a VCF path; the paths
+  ``member``. The map is tab-separated columns, a sample name and a VCF path, and
+  optionally the VCF's index path, which is no member; the paths
   are where the workflow ran, so each is matched by base name within the map's dataset.
   The map is the record of who was computed together (#619). It passes nothing itself.
 - **A workspace tar's step** is a ``CohortMergeActivity`` with the map its one ``input_list``,
