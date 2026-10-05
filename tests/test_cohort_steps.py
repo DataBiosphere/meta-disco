@@ -142,6 +142,9 @@ def test_a_sample_map_is_two_tab_separated_columns_naming_vcfs():
     assert cs.parse_sample_map("HG00096\tgs://b/HG00096.chr1.hc.vcf.gz\tgs://b/HG00096.chr1.hc.vcf.gz.tbi\n") == (
         ("HG00096", "gs://b/HG00096.chr1.hc.vcf.gz"),
     )
+    assert cs.parse_sample_map("HG00096\tgs://b/HG00096.chr1.hc.vcf.gz\tgs://b/HG00096.chr1.hc.vcf.gz.csi\n") == (
+        ("HG00096", "gs://b/HG00096.chr1.hc.vcf.gz"),
+    )
 
 
 @pytest.mark.parametrize(

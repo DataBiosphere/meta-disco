@@ -692,30 +692,34 @@ def _member_in_window(data: bytes, base: int, member: str) -> tuple[int, int, by
     return None
 
 
-def _read_member(md5sum: str, member: str, *, url: str | None, tail_first: bool) -> str | None:
-    """The text of the member named ``member`` in an uncompressed tar, looked for in its first and last ``TAR_MEMBER_WINDOW`` bytes (#621).
+def _read_member(md5sum: str, member: str, *, url: str | None, tail_first: bool) -> tuple[str | None, int]:
+    """The text of the member named ``member`` in an uncompressed tar, looked for in its first and last ``TAR_MEMBER_WINDOW`` bytes (#621), and the bytes the reads pulled.
 
     ``tail_first`` reads the tail first. Where the window cuts the body short, one more range
-    reads the rest. None where neither window holds the member's header, or its body is over
-    ``MAX_TAR_MEMBER_TEXT`` bytes.
+    reads the rest. The text is None where neither window holds the member's header, or its
+    body is over ``MAX_TAR_MEMBER_TEXT`` bytes.
     """
+    fetched = 0
     for window in ("tail", "head") if tail_first else ("head", "tail"):
         if window == "tail":
             data, base = _fetch_suffix(md5sum, TAR_MEMBER_WINDOW, url=url)
         else:
             data, base = _fetch_range(md5sum, TAR_MEMBER_WINDOW - 1, url=url), 0
+        fetched += len(data)
         found = _member_in_window(data, base, member)
         if found is None:
             continue
         offset, size, held = found
         if size > MAX_TAR_MEMBER_TEXT:
-            return None
+            return None, fetched
         if len(held) < size:
-            held += _fetch_range(md5sum, offset + size - 1, url=url, start_byte=offset + len(held))
+            rest = _fetch_range(md5sum, offset + size - 1, url=url, start_byte=offset + len(held))
+            fetched += len(rest)
+            held += rest
         if len(held) < size:
             raise FetchError(f"tar member {member} cut short: {len(held)} of {size} bytes")
-        return _decode_bytes(held)
-    return None
+        return _decode_bytes(held), fetched
+    return None, fetched
 
 
 def _load_cached(evidence_cls, evidence_dir, md5sum: str, use_cache: bool):
@@ -730,17 +734,20 @@ def _load_cached(evidence_cls, evidence_dir, md5sum: str, use_cache: bool):
     return cached.payload if cached is not None else None
 
 
-def _save_head_evidence(evidence_cls, evidence_dir, *, md5sum, file_name, raw, url, **payload) -> None:
+def _save_head_evidence(
+    evidence_cls, evidence_dir, *, md5sum, file_name, raw, url, extra_bytes: int = 0, **payload
+) -> None:
     """Persist a fetched head as its typed evidence, filling the fields every fetcher shares.
 
     ``payload`` carries the type-specific field(s) — e.g. ``read_names=...``, plus VCF's extra
-    ``max_positions``; ``md5sum`` / ``file_name`` / ``raw_bytes_fetched`` (from ``raw``) /
-    ``source_url`` are the common provenance all five fetchers record identically.
+    ``max_positions``; ``md5sum`` / ``file_name`` / ``raw_bytes_fetched`` (from ``raw``, plus
+    ``extra_bytes`` a fetcher pulled outside it, #621) / ``source_url`` are the common
+    provenance every fetcher records identically.
     """
     evidence_cls(
         md5sum=md5sum,
         file_name=file_name,
-        raw_bytes_fetched=raw.bytes_fetched,
+        raw_bytes_fetched=raw.bytes_fetched + extra_bytes,
         source_url=url,
         **payload,
     ).save(evidence_dir)
@@ -1219,9 +1226,10 @@ def fetch_tar_headers(
         if member is None:
             return TarHead(cached.member_names, None)
         if not is_gzipped:
-            text, unread = _read_kept(md5sum, member, cached.member_names, url=url)
+            text, unread, fetched = _read_kept(md5sum, member, cached.member_names, url=url)
             if unread is None:
-                replace(cached, vcf_header=text, vcf_header_read=True).save(evidence_dir)
+                total = (cached.raw_bytes_fetched or 0) + fetched
+                replace(cached, vcf_header=text, vcf_header_read=True, raw_bytes_fetched=total).save(evidence_dir)
             return TarHead(cached.member_names, text, unread)
         # A compressed tar's member is read only by walking it again from its head.
 
@@ -1237,13 +1245,13 @@ def fetch_tar_headers(
         # asserting the cap truncated the list. Warn so an under-sampled head is not silent.
         print(f"tar member scan reached the {MAX_TAR_MEMBERS}-member cap for {file_name or md5sum}; may have more")
     member = kept_member(member_names) if kept_member is not None else None
-    unread = None
+    unread, fetched = None, 0
     if member is not None and text is None:
         if isinstance(stream, gzip.GzipFile):
             # A compressed tar cannot be entered at its tail, and nothing past the head walk
             # reads it, so its step cannot be read: the tar is unreadable, not "looked for".
             raise FetchError(f"compressed tar: {member} not in the head read, and a compressed tail is not read")
-        text, unread = _read_kept(md5sum, member, member_names, url=url)
+        text, unread, fetched = _read_kept(md5sum, member, member_names, url=url)
 
     _save_head_evidence(
         TarEvidence,
@@ -1252,6 +1260,7 @@ def fetch_tar_headers(
         file_name=file_name,
         raw=raw,
         url=url,
+        extra_bytes=fetched,
         member_names=member_names,
         vcf_header=text,
         # A member whose read failed is not recorded as looked for, so the next run reads it.
@@ -1260,20 +1269,24 @@ def fetch_tar_headers(
     return TarHead(member_names, text, unread)
 
 
-def _read_kept(md5sum: str, member: str, member_names: list[str], *, url: str | None) -> tuple[str | None, str | None]:
-    """The kept member's text (:func:`_read_member`), and None; or None and why its read failed.
+def _read_kept(
+    md5sum: str, member: str, member_names: list[str], *, url: str | None
+) -> tuple[str | None, str | None, int]:
+    """The kept member's text (:func:`_read_member`), None, and the bytes pulled; or None, why its read failed, and 0.
 
     The tail is read first unless ``member_names`` show the member, which then lies in the
     head. A failed read (an HTTP error or a dropped connection) is returned, not raised: the
-    names are evidence the tar already had.
+    names are evidence the tar already had. Its partial bytes are not counted, since a
+    failed read saves nothing.
     """
     tail_first = member not in {PurePosixPath(n).name for n in member_names}
     try:
-        return _read_member(md5sum, member, url=url, tail_first=tail_first), None
+        text, fetched = _read_member(md5sum, member, url=url, tail_first=tail_first)
+        return text, None, fetched
     except FetchError as e:
-        return None, e.reason
+        return None, e.reason, 0
     except requests.RequestException as e:
-        return None, f"{type(e).__name__}: {e}"
+        return None, f"{type(e).__name__}: {e}", 0
 
 
 # =============================================================================

@@ -47,7 +47,7 @@ SAMPLE_MAP_SUFFIX = "_sample_map.tsv"
 # The kind (`edges.parent_kind_of`) every path a sample map lists must be.
 MEMBER_KIND = "variants"
 # What a sample map's optional third column, a member's index, may end in.
-INDEX_SUFFIXES = (".tbi", ".idx")
+INDEX_SUFFIXES = (".tbi", ".csi", ".idx")
 GENOMICSDB_IMPORT = "GenomicsDBImport"
 
 # Why a file got the step it did, or none, beside `producer_steps`' outcomes.
@@ -94,7 +94,7 @@ def parse_sample_map(text: str) -> tuple[tuple[str, str], ...] | None:
 
     A sample map is lines of two tab-separated fields, a sample name and the path of a VCF
     (a name ``edges.parent_kind_of`` calls ``variants``), or of three, the third the path of
-    that VCF's index (``.tbi`` or ``.idx``), which GATK's map allows and which is no member;
+    that VCF's index (``.tbi``, ``.csi`` or ``.idx``), which GATK's map allows and which is no member;
     blank lines are skipped. A file with no row, or any other line, is not one.
     """
     rows: list[tuple[str, str]] = []

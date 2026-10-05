@@ -803,7 +803,8 @@ def test_the_member_is_read_from_the_tail_before_the_head(monkeypatch):
     _serve(monkeypatch, _workspace(header_first=False), calls)
     # Wider than the end-of-archive padding tar writes (up to a 10 KiB record).
     monkeypatch.setattr(fetchers, "TAR_MEMBER_WINDOW", 12288)
-    assert fetchers._read_member(MD5, "vcfheader.vcf", url=None, tail_first=True) == HEADER_TEXT
+    text, fetched = fetchers._read_member(MD5, "vcfheader.vcf", url=None, tail_first=True)
+    assert text == HEADER_TEXT and fetched == 12288
     assert calls == [("suffix", 12288)]
 
 
@@ -811,7 +812,8 @@ def test_the_member_is_read_from_the_head_when_the_tail_lacks_it(monkeypatch):
     calls: list = []
     _serve(monkeypatch, _workspace(header_first=True), calls)
     monkeypatch.setattr(fetchers, "TAR_MEMBER_WINDOW", 2048)
-    assert fetchers._read_member(MD5, "vcfheader.vcf", url=None, tail_first=True) == HEADER_TEXT
+    text, fetched = fetchers._read_member(MD5, "vcfheader.vcf", url=None, tail_first=True)
+    assert text == HEADER_TEXT and fetched == 2048 + 2048
     assert calls == [("suffix", 2048), (0, 2047)]
 
 
@@ -825,7 +827,7 @@ def test_a_member_in_neither_window_is_none(monkeypatch):
     )
     _serve(monkeypatch, obj)
     monkeypatch.setattr(fetchers, "TAR_MEMBER_WINDOW", 2048)
-    assert fetchers._read_member(MD5, "vcfheader.vcf", url=None, tail_first=False) is None
+    assert fetchers._read_member(MD5, "vcfheader.vcf", url=None, tail_first=False)[0] is None
 
 
 def test_a_member_body_the_window_cuts_short_is_read_to_its_end(monkeypatch):
@@ -833,7 +835,8 @@ def test_a_member_body_the_window_cuts_short_is_read_to_its_end(monkeypatch):
     calls: list = []
     _serve(monkeypatch, _make_tar([("ws/vcfheader.vcf", body), ("ws/callset.json", b"z" * 9000)]), calls)
     monkeypatch.setattr(fetchers, "TAR_MEMBER_WINDOW", 2048)
-    assert fetchers._read_member(MD5, "vcfheader.vcf", url=None, tail_first=False) == body.decode()
+    text, fetched = fetchers._read_member(MD5, "vcfheader.vcf", url=None, tail_first=False)
+    assert text == body.decode() and fetched == 2048 + (512 + 3000 - 2048)
     # The head window held the header and the body's first 1,536 bytes; one range read the rest.
     assert calls == [(0, 2047), (2048, 512 + 3000 - 1)]
 
@@ -860,6 +863,8 @@ def test_an_entry_from_before_621_reads_only_the_member_and_is_saved_with_it(mon
     head = fetch_tar_headers(evidence_dir, MD5, is_gzipped=False, kept_member=_workspace_member)
     assert head == TarHead(["ws/callset.json"], HEADER_TEXT)
     assert calls == [("suffix", fetchers.TAR_MEMBER_WINDOW)]
+    # The member's read is added to the bytes the entry says were pulled.
+    assert TarEvidence.load(evidence_dir, MD5).raw_bytes_fetched == len(_workspace(header_first=False))
     # Saved: the next read makes no request.
     monkeypatch.setattr(fetchers, "_fetch_suffix", _raise_transport)
     monkeypatch.setattr(fetchers, "_fetch_range", _raise_transport)
