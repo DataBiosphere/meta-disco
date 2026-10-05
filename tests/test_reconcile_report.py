@@ -360,9 +360,9 @@ def test_the_content_steps_are_listed_per_producer_and_dataset_in_outcome_order_
     assert rows is not None
     md = "\n".join(rr._lineage_section(rows))
     assert "### Steps read from file content" in md
-    # Columns: the VCF reader's eight outcomes, then the cohort readers' three of their own.
-    assert f"| `tar` | `{DATASET}` | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 5 | 0 | 0 |" in md
-    assert f"| `vcf` | `{DATASET}` | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 |" in md
+    # Columns: the VCF reader's nine outcomes, then the cohort readers' three of their own.
+    assert f"| `tar` | `{DATASET}` | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 5 | 0 | 0 |" in md
+    assert f"| `vcf` | `{DATASET}` | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 |" in md
     # A report written before the reader (#609) has no step block at all.
     rows = rr.lineage_rows(lineage_report())
     assert rows is not None and rows["content_steps"] == []

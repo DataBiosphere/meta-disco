@@ -330,7 +330,9 @@ evidence}` entry — plus the controlled vocabulary:
     `meta_disco.edges`, the index producer's `IndexActivity` and the catch-all's
     `ChecksumActivity` for a `.md5`, two from a VCF's header through
     `meta_disco.producer_steps` (#609, #610): the end of the header's data flow (ADR-0002
-    decision 6), a `HaplotypeCaller` giving `VariantCallActivity` and a bcftools `concat`
+    decision 6), a `HaplotypeCaller` giving `VariantCallActivity` (an input name several
+    alignments carry settled by which one's `@SQ` contigs all fit the VCF's `##contig`s, read
+    from the BAM producer's cache or with samtools into it on a miss, #620) and a bcftools `concat`
     giving `MergeActivity` with every input VCF a `shard`, and two of T2T's joint-calling
     cohort through `meta_disco.cohort_steps` (#621): a GATK sample-name map's rows giving
     `CohortDefinitionActivity` with every listed gVCF a `member` (the `sample_map` producer),

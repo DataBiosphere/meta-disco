@@ -214,6 +214,7 @@ class ClassifyPipeline:
         self.producer = producer_for(config)
         self.input_path = input_path
         self.output_path = output_path
+        self.evidence_base = evidence_base
         self.evidence_dir = evidence_base / config.name
         self.limit = limit
         self.resume = resume
@@ -284,7 +285,7 @@ class ClassifyPipeline:
             self.config.preflight()
 
         if self.config.step is not None:
-            self._step = self.config.step(loaded, key)
+            self._step = self.config.step(loaded, key, self.evidence_base)
         # The step reader keeps what it needs of the input; the rest need not outlive the load.
         del loaded
 

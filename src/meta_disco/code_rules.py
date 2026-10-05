@@ -362,14 +362,19 @@ VARIANT_CALL_BY_HEADER = EdgeRule(
         "the VCF's own header: its producer command lines (##GATKCommandLine, ##bcftools_*Command) "
         "chained by matching outputs to inputs, the one end of that flow being the step that made the "
         "file; where that step is HaplotypeCaller with one alignment input, the input's base name, "
-        "matched case-insensitively within the dataset"
+        "matched case-insensitively within the dataset; where several alignments carry that name, the "
+        "VCF's ##contig names and lengths and each of those alignments' @SQ names and lengths"
     ),
     rationale=(
         "HaplotypeCaller records the alignment it called from in its own command line, written into "
         "the VCF it writes. A file that carries several command lines carries its inputs' too, and GATK "
         "sorts them, so the step is the end of the data flow, never the last line. The paths are where "
         "the workflow ran, so only the name is matched, and a name two files of the dataset carry names "
-        "neither (#438)."
+        "neither (#438), unless exactly one of them fits the VCF's contigs: GATK refuses an alignment "
+        "with a contig its reference lacks or gives another length (unless the line turns that check "
+        "off, which no header we hold does), and writes that reference's contigs into the VCF, so of two "
+        "re-alignments of one sample's reads the one whose every contig is the VCF's, at its length, is "
+        "its parent (#620)."
     ),
 )
 

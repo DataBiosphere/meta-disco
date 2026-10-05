@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from . import code_rules, edges
 from .evidence import TarHead
@@ -135,7 +135,8 @@ class _StepReader:
         raise NotImplementedError
 
     @classmethod
-    def for_run(cls, records: Iterable[dict], key: RecordKey):
+    def for_run(cls, records: Iterable[dict], key: RecordKey, evidence_base: Path):
+        # ``evidence_base`` is every step reader's third argument; these read no other file's content.
         return cls(edges.parent_index(records, key, cls.keeps, cls.PURPOSE), key)
 
 
