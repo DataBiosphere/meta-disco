@@ -429,3 +429,116 @@ these, and flag any that overclaim.
   without it. **Identity is the environment's, never meta-disco's**: the module docstring
   of `meta_disco.tdr` is the authority on how, and is cited rather than restated.
 - Schema (`schema/`): a separate uv project (Python 3.10+) with linkml/linkml-validator; kept out of the runtime env
+
+<!-- cc:shared:general:begin -->
+
+## Team
+
+The people working a repo, and their GitHub handles, are recorded in that
+repo's `.claude/issue-tracking.md` (its Staff section). "Assign to Fran" always
+means that person's handle there. Never guess a handle, and never infer the
+team from raw write access; if someone is not listed, ask.
+
+## Design principles
+
+- Write small, composable functions, each testable on its own.
+- Model data with a known shape (parameters, return values, records, held
+  state) as a typed object, not a loose dict or map, and use that type
+  everywhere the shape matters. A free-form dict or map is for genuinely
+  dynamic data only.
+
+## Error handling philosophy
+
+Validate at trust boundaries only, and trust everything inside them.
+
+- The trust boundaries are: user input, network responses, file contents,
+  environment variables, CLI arguments, and data crossing a public API.
+  Validate at the boundary, once, and fail with a clear error that names
+  what was wrong.
+- Inside the boundary, where our functions call our functions, do NOT check
+  for null, undefined, or wrong types. A caller passing bad input is a bug
+  in the caller, so let the code throw. A stack trace at the real call site
+  is what enables the fix. A defensive fallback hides the bug.
+- Never silently coerce, default, or catch-and-continue to "handle" bad
+  input. Do not use `?? defaultValue` to paper over a missing value. Do not
+  write a try/catch whose handler just logs and proceeds. Do not keep a
+  compatibility shim or redirect for a renamed or moved interface; update
+  the callers.
+- A crash with a good message is the correct behavior for a contract
+  violation.
+
+When a reviewer, Copilot or human, suggests defensive handling of internal
+inputs, a silent default, or a compatibility shim, decline the suggestion and
+cite this section.
+
+## Commits and pull request titles
+
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/), using
+the full type set: `feat`, `fix`, `perf`, `revert`, `docs`, `style`, `refactor`,
+`test`, `build`, `ci`, `chore`. Nothing outside that set — a title release-please
+cannot classify ships with no changelog entry and no error.
+
+Merges are squashed. The **pull request title becomes the commit subject** and
+the **description becomes the commit body**, so the pull request title is what
+must be conventional. A `BREAKING CHANGE:` footer goes in the description.
+
+Do not start a line in a pull request description with a Conventional Commit
+header — `fix:`, `feat:`, `feat(api):`, `chore(deps):`, any type, scoped or not.
+release-please reads those out of the commit body as additional changes. Indent
+or reword them.
+
+## Communication
+
+- Do not use analogies or metaphors.
+- Lead with the outcome in one sentence.
+- Keep status updates to one line.
+- Flag your assumptions explicitly.
+
+## GitHub API discipline
+
+- Never enumerate a full project board, and never paginate more than two pages
+  to find one item. The board(s) a repo uses, and their node and field IDs, are
+  recorded in that repo's `.claude/issue-tracking.md`; read IDs from there
+  rather than re-scanning. If one is missing, fetch it once and add it.
+- Never fetch issues or pull requests in a loop. Use a single search or list
+  call with filters instead.
+- If you get a rate-limit response, STOP and tell the user. Do not retry.
+
+<!-- cc:shared:general:end -->
+
+<!-- cc:shared:python:begin -->
+
+## Python conventions
+
+Ruff and Pyright enforce the mechanical rules in CI, so do not re-argue
+formatting or import order in review. For judgment-level style, the canon is
+*Effective Python* (Brett Slatkin, 3rd ed.); cite item numbers in reviews
+and declines the way this section is cited.
+
+## Docstrings and comments
+
+Ruff's `D` rules own docstring presence and format. The prose-ratio check
+fails a file whose docstring and whole-line comment lines exceed 30% of its
+non-blank lines; when it fails, cut prose rather than exempt the file.
+
+- The default is one summary line. Add lines only for behavior the
+  signature does not show: edge cases, units and formats, invariants, or a
+  short example.
+- A docstring states the contract and nothing else: what the caller gets
+  and what raises. Rationale, history, issue numbers, and how the code
+  works go in the pull request.
+- Private helpers, dunder methods, and tests get no docstring unless the
+  signature does not carry the contract.
+- Every sentence is a claim the code keeps. "every", "all", "always",
+  "never", and "only" must match the code exactly. If a claim needs a
+  qualifier to be true, delete the claim.
+- Let the signature speak: do not restate a type hint. Write an `Args:` or
+  `Returns:` entry only where the name and type do not carry the meaning.
+  Name every exception the function raises or lets propagate under
+  `Raises:`.
+- A comment records a decision the code cannot show. Delete a comment that
+  restates the line below it.
+- Re-read every docstring and comment you touched against the final code
+  before committing.
+
+<!-- cc:shared:python:end -->
