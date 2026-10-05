@@ -103,8 +103,8 @@ VCF_CONFIG = FileTypeConfig(
     summary_printer=print_vcf_summary,
     parser=parse_vcf_header,
     # A HaplotypeCaller's input several alignments carry is settled from their headers: the
-    # BAM producer's cache, or samtools into it on a miss (#620), so a run that fetches VCF headers
-    # checks for samtools first.
+    # BAM producer's cache, or samtools into it on a miss (#620), so every VCF run with work
+    # checks for samtools first, its own headers cached or not.
     step=partial(HeaderSteps.for_run, alignments=BAM_CONFIG.name),
     preflight=require_samtools,
 )

@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 from meta_disco.exclusions import EXCLUDED_FILE, read_excluded
+from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.inputs import load_envelope
 from meta_disco.output_utils import row_identities
 from meta_disco.producers import PRODUCERS, output_paths, producers_in_phase, validate_registry
@@ -157,6 +158,17 @@ def _check_one_row_per_file(output_dir: Path, key: RecordKey) -> bool:
     return False
 
 
+def require_environment() -> None:
+    """Run every file type's ``preflight`` (samtools, for the BAM and VCF producers).
+
+    Called by a run before it reads its input, whatever that input holds, so a run
+    that cannot read a header does not start (#620). Raises what a ``preflight`` raises.
+    """
+    for config in FILE_TYPE_REGISTRY.values():
+        if config.preflight is not None:
+            config.preflight()
+
+
 def run_all_classifications(
     metadata: Path,
     output_dir_base: Path,
@@ -182,12 +194,13 @@ def run_all_classifications(
     file must not start one — or if the input envelope names no repository with a
     declared record key (:func:`record_keys.record_key`), since Phase 3 would refuse the
     same input after every earlier phase had run (#446). That preflight reads the
-    envelope alone (:func:`inputs.load_envelope`), not the records.
+    envelope alone (:func:`inputs.load_envelope`), not the records. Between the two it
+    raises what :func:`require_environment` raises (a missing samtools, ``RuntimeError``).
 
-    After those two refusals and before the run directory exists, it reports the
+    After those refusals and before the run directory exists, it reports the
     evidence files under ``source_evidence_root``
     (:func:`source_evidence.report_evidence_files`), which says what each one is and how old
-    it is — so a run those two refuse reports none. Then, with every file named, it
+    it is — so a run those refuse reports none. Then, with every file named, it
     refuses the run (``ValueError``, before the run directory exists) if
     :func:`source_evidence.require_one_published_source` does (#497).
     Reporting there, ahead of the run directory, puts what the run found at the top of
@@ -207,6 +220,8 @@ def run_all_classifications(
     # at the end, hours in (#445) — the whole point of checking here is that the answer
     # costs nothing and arrives first.
     validate_registry()
+    # Each producer's environment, too: checked before any input is read (#620).
+    require_environment()
     # Same reasoning for the record key: the catch-all raises without one, and the
     # duplicate check reads the same field, so an input that cannot name it fails here.
     key = record_key(load_envelope(metadata), metadata)

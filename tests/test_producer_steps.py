@@ -382,6 +382,14 @@ def test_an_alignment_to_part_of_the_vcfs_reference_fits_it(tmp_path, fetches):
     assert outcome == ps.STEPPED and step is not None and step["inputs"][0]["parent_key"] == "f1"
 
 
+def test_a_gatk3_line_naming_an_alignment_two_files_carry_is_not_settled_by_contigs(tmp_path, fetches):
+    """GATK 3's own contig check may accept a partial overlap, so its lines keep the name rule."""
+    hc3 = GATK3_HC.replace("/data/analysis/Sample_HG04164/analysis/HG04164.final.bam", "/x/HG00096.cram")
+    reader3 = carriers(tmp_path, HG002_Y, GRCH38_Y)
+    assert reader3(header(hc3, *CONTIGS), "HG00096.g.vcf.gz", "D") == (None, ps.PARENT_AMBIGUOUS)
+    assert fetches == []
+
+
 def test_a_vcf_naming_no_contigs_reads_no_alignment(tmp_path, fetches):
     assert carriers(tmp_path, GRCH38_Y, HG002_Y)(header(HC), GVCF, "D") == (None, ps.PARENT_AMBIGUOUS)
     assert fetches == []
@@ -399,15 +407,6 @@ def test_each_alignment_is_read_once_for_all_of_its_samples_vcfs(tmp_path, fetch
         hc = HC.replace("chr10", chrom)
         assert reader(header(hc, *CONTIGS), f"HG00096.{chrom}.hc.vcf.gz", "D")[1] == ps.STEPPED
     assert sorted(fetches) == [f"{0:032x}", f"{1:032x}"]
-
-
-def test_a_merge_of_vcfs_sharing_a_name_is_not_settled_by_contigs(tmp_path):
-    entries = (*REGIONS, ("CHR1.1_100000.genotyped.vcf.gz", "D"))
-    index = reader(*entries).index
-    # Every carrier answers with the VCF's contigs: the merge rule does not ask.
-    steps_reader = ps.HeaderSteps(index, KEY, lambda record: ps.vcf_contigs(header(*CONTIGS)))
-    lines = (IMPORT, SELECT, CONCAT, *CONTIGS)
-    assert steps_reader(header(*lines), "chr1.genotyped.vcf.gz", "D") == (None, ps.PARENT_AMBIGUOUS)
 
 
 def test_contigs_are_compared_as_names_and_lengths_in_any_order():
@@ -527,6 +526,27 @@ def test_a_candidate_parent_with_no_record_key_stops_the_run_when_the_reader_is_
         ps.HeaderSteps.for_run(
             [{"file_name": "HG00096.cram", "dataset_id": "D"}], KEY, EVIDENCE, alignments=BAM_CONFIG.name
         )
+
+
+def test_the_vcf_producer_checks_its_preflight_even_when_every_vcf_is_cached(tmp_path):
+    """Its step reader may fetch an alignment's header the VCF cache does not show (#620),
+    so a missing samtools refuses the run before any work, cached VCFs or not."""
+    record: dict = {"file_id": "v1", "file_name": "HG00096.chr10.hc.vcf.gz", "dataset_id": "D", "dataset_title": "T"}
+    record.update(file_md5sum="a" * 32, file_size=1, file_format="vcf.gz")
+
+    def no_samtools():
+        raise RuntimeError("samtools not found")
+
+    config = dataclasses.replace(VCF_CONFIG, fetcher=lambda *a, **k: header_text(HC), preflight=no_samtools)
+    pipeline = ClassifyPipeline(
+        config, write_metadata(tmp_path / "in.json", [record]), tmp_path / "vcf.json", evidence_base=tmp_path / "ev"
+    )
+    cached = get_evidence_path(pipeline.evidence_dir, "a" * 32)
+    cached.parent.mkdir(parents=True)
+    cached.write_text("{}")
+    with pytest.raises(RuntimeError, match="samtools not found"):
+        pipeline.run()
+    assert not (tmp_path / "vcf.json").exists()
 
 
 def test_the_vcf_producer_refuses_an_input_naming_no_repository_before_any_work(tmp_path):

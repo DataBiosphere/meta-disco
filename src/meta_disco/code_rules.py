@@ -370,7 +370,7 @@ VARIANT_CALL_BY_HEADER = EdgeRule(
         "the VCF it writes. A file that carries several command lines carries its inputs' too, and GATK "
         "sorts them, so the step is the end of the data flow, never the last line. The paths are where "
         "the workflow ran, so only the name is matched, and a name two files of the dataset carry names "
-        "neither (#438), unless exactly one of them fits the VCF's contigs: GATK refuses an alignment "
+        "neither (#438), unless, on a GATK 4 line, exactly one of them fits the VCF's contigs: GATK 4 refuses an alignment "
         "with a contig its reference lacks or gives another length (unless the line turns that check "
         "off, which no header we hold does), and writes that reference's contigs into the VCF, so of two "
         "re-alignments of one sample's reads the one whose every contig is the VCF's, at its length, is "

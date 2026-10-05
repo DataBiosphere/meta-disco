@@ -27,17 +27,18 @@ written only when every input names exactly one file there. Every other producin
 gives no step. Each file's outcome is one of :data:`OUTCOMES`, which the VCF producer
 counts per dataset.
 
-**A name several alignments carry is settled by their contigs** (#620). GATK refuses an
-alignment with a contig its reference lacks or gives another length (unless the line turns
+**A name several alignments carry is settled by their contigs** (#620), on a GATK 4 line
+(GATK 3's own check is not relied on). GATK 4 refuses an alignment with a contig its reference lacks or gives another length (unless the line turns
 that check off, which no header we hold does), and writes that reference's contigs into the VCF as ``##contig``
 lines. So where a ``HaplotypeCaller``'s input names several alignments of the dataset
 (T2T's re-alignments of one sample to two references share a name), the parent is the
 one whose every ``@SQ`` name and length is among the VCF's ``##contig`` names and
-lengths, read from that alignment's own header: from the BAM producer's cache, or on a
-miss fetched with samtools into it, as the BAM producer fetches it. The reader declines
-as :data:`PARENT_AMBIGUOUS` when none or several fit, or when the VCF names no contig with
-a length; and as :data:`PARENT_UNREADABLE` when a
-candidate's header cannot be read or names no contig with a length (it may be the parent,
+lengths, read from that alignment's own header: from the BAM header cache (``bam/``
+under the run's evidence base), or on a miss fetched with samtools into it, as the BAM
+producer fetches it. The reader declines
+as :data:`PARENT_AMBIGUOUS` when none or several fit, or when the VCF names no contig or
+any contig without a length; and as :data:`PARENT_UNREADABLE` when a candidate's header
+cannot be read, or names no contig or any contig without a length (it may be the parent,
 so no other is taken).
 """
 
@@ -201,7 +202,7 @@ class AlignmentContigs:
         self._lock = threading.Lock()
 
     def __call__(self, record: dict) -> Contigs | None:
-        """The alignment's contigs; None if its header cannot be read, or names none with a length."""
+        """The alignment's contigs; None if its header cannot be read, or names no contig or any without a length."""
         md5 = record["file_md5sum"]
         with self._lock:
             if md5 not in self._read:
@@ -253,8 +254,8 @@ class HeaderSteps:
         one input. An input no such file carries gives no step, as :data:`PARENT_NOT_FOUND`;
         otherwise an input several files carry, or two inputs at different paths with one
         name, give none, as :data:`PARENT_AMBIGUOUS` — except that, for a rule that settles a
-        shared name by contigs, the one input's parent is the one carrier whose contigs fit
-        the VCF's (:meth:`by_contigs`). Any other producing step gives none, as
+        shared name by contigs, a GATK 4 line's one input's parent is the one carrier whose
+        contigs fit the VCF's (:meth:`by_contigs`). Any other producing step gives none, as
         :data:`NO_ACTIVITY`.
         """
         step, outcome = producing_step(header, file_name)
@@ -270,7 +271,9 @@ class HeaderSteps:
         if any(edges.parent_kind_of(name) != rule.kind for name in names):
             return None, NO_ACTIVITY
         parents, outcome = resolve_names(self.index, dataset_id, names)
-        if outcome == PARENT_AMBIGUOUS and rule.same_contigs:
+        # GATK 4 refuses an alignment with a contig its reference lacks; GATK 3's check is
+        # not relied on (it may accept a partial overlap), so its lines keep the name rule.
+        if outcome == PARENT_AMBIGUOUS and rule.same_contigs and step.family == GATK:
             parents, outcome = self.by_contigs(header, dataset_id, names[0])
         if parents is None:
             return None, outcome
@@ -280,9 +283,10 @@ class HeaderSteps:
         """The one file of ``dataset_id`` carrying ``name`` whose contigs fit the VCF's, and :data:`STEPPED`.
 
         A carrier fits where each of its contigs is among the VCF's, with the same length.
-        ``(None, PARENT_UNREADABLE)`` where a carrier's contigs cannot be read; otherwise
-        ``(None, PARENT_AMBIGUOUS)`` where the VCF names no contigs with lengths, or none or
-        several carriers fit.
+        ``(None, PARENT_AMBIGUOUS)`` where the VCF names no contig or any contig without a
+        length (no carrier is then read); otherwise ``(None, PARENT_UNREADABLE)`` where a
+        carrier's header cannot be read, or names no contig or any contig without a length;
+        otherwise ``(None, PARENT_AMBIGUOUS)`` where none or several carriers fit.
         """
         contigs = vcf_contigs(header)
         if contigs is None:

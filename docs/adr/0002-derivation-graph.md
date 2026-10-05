@@ -294,12 +294,13 @@ bytes (input kind 1), and reconcile merges it with the steps the tables state.
 
 *Amended by #620 (2026-10-05): a name several alignments carry is settled by their contigs.* T2T
 re-aligned some samples' reads to a second reference under the same file name, so a `HaplotypeCaller`'s
-input names two CRAMs. GATK refuses an alignment with a contig its reference lacks or gives another
-length (unless the line turns that check off, which no header we hold does), and writes that reference's
+input names two CRAMs. On a GATK 4 line (GATK 3's own check is not relied on), GATK refuses an
+alignment with a contig its reference lacks or gives another length (unless the line turns that check off, which no header we hold does), and writes that reference's
 contigs into the VCF, so the parent is the one carrier whose every `@SQ` name and length is among the
 VCF's `##contig` names and lengths, read from the carrier's own header (the BAM producer's cache, or
-samtools into it on a miss). None or several fitting, or a VCF naming no contig lengths, gives no step
-(`parent_ambiguous`); so does a carrier whose header cannot be read (`parent_unreadable`). This is the file's bytes on both sides, not a name; a
+samtools into it on a miss). None or several fitting, or a VCF naming no contig or any contig without a
+length, gives no step (`parent_ambiguous`); so does a carrier whose header cannot be read, or names no
+contig or any contig without a length (`parent_unreadable`). This is the file's bytes on both sides, not a name; a
 `concat`'s VCF inputs are not settled this way.
 
 *Rejected: the last line.* T2T's `1kgp.chr1.recalibrated.snp_indel.vcf.gz` ends in the `bcftools concat`
