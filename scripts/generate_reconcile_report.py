@@ -763,11 +763,11 @@ def _content_steps_section(rows: list[dict]) -> list[str]:
         "exactly one alignment input, or a `concat` that does not join two or more VCFs or reads one from stdin; "
         "*parent_not_found* / *parent_ambiguous*: an input's name no file of the dataset carries, or more than "
         "one does (or two inputs share it). The tar and sample-map producers read T2T's joint-calling cohort "
-        "(#621): a GenomicsDB workspace tar's `vcfheader.vcf` gives a `MergeActivity` from its sample map, and a "
+        "(#621): a GenomicsDB workspace tar's `vcfheader.vcf` gives a `CohortMergeActivity` from its sample map, and a "
         "sample map's rows a `CohortDefinitionActivity` of its gVCFs; a tar that is no GenomicsDB workspace is not "
         "counted; *no_vcf_header*: the workspace has no `vcfheader.vcf` where it was looked for; *vcf_header_unreadable*: reading it failed, and the next run "
         "reads it again; *output_not_this_file*, for a tar: the import's workspace names another directory; *not_a_list*: the file "
-        "is not two tab-separated columns naming VCFs.",
+        "is not two tab-separated columns naming VCFs, or three with an index path.",
         "",
     ]
     if not rows:

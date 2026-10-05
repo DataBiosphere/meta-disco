@@ -828,7 +828,8 @@ def classify_sample_map(
 
     result = _get_engine().classify_extended(ExtendedFileInfo(name=name, file_size=file_size))
     if rows is not None:
-        why = f"{len(rows)} rows of a sample name and a VCF path: a list of files, not their data"
+        rows_said = "1 row" if len(rows) == 1 else f"{len(rows)} rows"
+        why = f"{rows_said} of a sample name and a VCF path: a list of files, not their data"
         # Each field written out, so `test_code_rules` reads what this rule claims.
         result.add_claim(
             "data_type",

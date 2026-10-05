@@ -1621,7 +1621,7 @@
             "credited_to": "not_applicable",
             "evidence": [
               {
-                "reason": "1 rows of a sample name and a VCF path: a list of files, not their data",
+                "reason": "1 row of a sample name and a VCF path: a list of files, not their data",
                 "rule_id": "sample_map_content",
                 "source_type": "content_read",
                 "status": "not_applicable",
@@ -1640,7 +1640,7 @@
             "credited_to": "not_applicable",
             "evidence": [
               {
-                "reason": "1 rows of a sample name and a VCF path: a list of files, not their data",
+                "reason": "1 row of a sample name and a VCF path: a list of files, not their data",
                 "rule_id": "sample_map_content",
                 "source_type": "content_read",
                 "status": "not_applicable",
@@ -1659,7 +1659,7 @@
             "credited_to": "filled_by_inference",
             "evidence": [
               {
-                "reason": "1 rows of a sample name and a VCF path: a list of files, not their data",
+                "reason": "1 row of a sample name and a VCF path: a list of files, not their data",
                 "rule_id": "sample_map_content",
                 "source_type": "content_read",
                 "tier": 4,
@@ -1678,7 +1678,7 @@
             "credited_to": "not_applicable",
             "evidence": [
               {
-                "reason": "1 rows of a sample name and a VCF path: a list of files, not their data",
+                "reason": "1 row of a sample name and a VCF path: a list of files, not their data",
                 "rule_id": "sample_map_content",
                 "source_type": "content_read",
                 "status": "not_applicable",
@@ -1697,7 +1697,7 @@
             "credited_to": "conflict_sources",
             "evidence": [
               {
-                "reason": "1 rows of a sample name and a VCF path: a list of files, not their data",
+                "reason": "1 row of a sample name and a VCF path: a list of files, not their data",
                 "rule_id": "sample_map_content",
                 "source_type": "content_read",
                 "status": "not_applicable",
@@ -1730,7 +1730,7 @@
             "credited_to": "not_applicable",
             "evidence": [
               {
-                "reason": "1 rows of a sample name and a VCF path: a list of files, not their data",
+                "reason": "1 row of a sample name and a VCF path: a list of files, not their data",
                 "rule_id": "sample_map_content",
                 "source_type": "content_read",
                 "status": "not_applicable",
