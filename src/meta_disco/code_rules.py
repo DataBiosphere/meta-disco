@@ -65,6 +65,7 @@ INDEX_PRODUCER = "scripts/classify_index_files.py"
 RECONCILE_INHERIT = "src/meta_disco/reconcile_inherit.py"
 EDGES = "src/meta_disco/edges.py"
 PRODUCER_STEPS = "src/meta_disco/producer_steps.py"
+COHORT_STEPS = "src/meta_disco/cohort_steps.py"
 METADATA_SCHEMA = "src/meta_disco/metadata_schema.py"
 
 
@@ -258,6 +259,20 @@ TAR_INNER_FORMAT = CodeRule(
         "extension."
     ),
 )
+SAMPLE_MAP_CONTENT = CodeRule(
+    id="sample_map_content",
+    module=HEADER_CLASSIFIER,
+    basis=BASIS_CONTENT,
+    source_type=SOURCE_CONTENT_READ,
+    reads="a GATK sample-name map's rows: two or three tab-separated columns, the second a VCF path",
+    sets=("data_type", "data_modality", "reference_assembly", "assay_type", "platform", "instrument_model"),
+    rationale=(
+        "A file whose rows are a sample name and a VCF path is a list of files, not their "
+        "data (#621): its data_type is sample_map, and the five dimensions of the data do "
+        "not apply to it, as for a checksum (#596). Read from the content, so a file that "
+        "is only named like a map keeps what its name says."
+    ),
+)
 INDEX_BY_EXTENSION = CodeRule(
     id="index_by_extension",
     module=INDEX_PRODUCER,
@@ -297,6 +312,7 @@ CODE_RULES = (
     FASTA_MANY_CONTIGS,
     RGFA_STABLE_RANK_REFERENCE,
     TAR_INNER_FORMAT,
+    SAMPLE_MAP_CONTENT,
     INDEX_BY_EXTENSION,
     INHERITED_FROM_PARENT,
 )
@@ -376,7 +392,53 @@ MERGE_BY_HEADER = EdgeRule(
     ),
 )
 
-EDGE_RULES = (INDEX_BY_NAME, CHECKSUM_BY_NAME, VARIANT_CALL_BY_HEADER, MERGE_BY_HEADER)
+MERGE_BY_WORKSPACE_HEADER = EdgeRule(
+    id="merge_by_workspace_header",
+    module=COHORT_STEPS,
+    activity=activities.COHORT_MERGE,
+    role="input_list",
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "a GenomicsDB workspace tar's own vcfheader.vcf member: its one GenomicsDBImport command line, "
+        "whose --genomicsdb-workspace-path names the tar (its name less .tar) and whose --sample-name-map "
+        "names the list of gVCFs it imported, that list's base name matched case-insensitively among the "
+        "dataset's sample maps"
+    ),
+    rationale=(
+        "GenomicsDBImport writes its own command line into the workspace it builds, so the tar says "
+        "which list of gVCFs it merged. The tar names the list, not each gVCF: one step per tar with "
+        "3,202 inputs would be about 100M links, so the list is the input and its members' answers are "
+        "read through it (#621). A workspace naming another directory than the tar, or given gVCFs one "
+        "by one, gives no step."
+    ),
+)
+
+COHORT_BY_SAMPLE_MAP = EdgeRule(
+    id="cohort_by_sample_map",
+    module=COHORT_STEPS,
+    activity=activities.COHORT_DEFINITION,
+    role="member",
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "a GATK sample-name map's own rows, each a sample name and a VCF path, tab-separated; each path's "
+        "base name matched case-insensitively within the dataset"
+    ),
+    rationale=(
+        "A sample-name map lists the gVCFs one joint calling imports: it is the record of who was "
+        "computed together. The paths are where the workflow ran, so only the name is matched. A file "
+        "that is not such a list, or a member no file or two files of the dataset carry, gives no step: "
+        "a cohort missing a member is not the cohort (#621)."
+    ),
+)
+
+EDGE_RULES = (
+    INDEX_BY_NAME,
+    CHECKSUM_BY_NAME,
+    VARIANT_CALL_BY_HEADER,
+    MERGE_BY_HEADER,
+    MERGE_BY_WORKSPACE_HEADER,
+    COHORT_BY_SAMPLE_MAP,
+)
 
 FETCH_FAILED = CodeMarker(
     id="fetch_failed",

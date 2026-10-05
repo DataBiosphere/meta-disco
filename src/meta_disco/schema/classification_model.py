@@ -180,6 +180,10 @@ class DataTypeEnum(str, Enum):
     """
     log = "log"
     interval_set = "interval_set"
+    sample_map = "sample_map"
+    """
+    A list naming the files processed together, one per sample: a GATK sample-name map, each row a sample name and its gVCF's path (#621). No `meaning`: EDAM has no data term for it.
+    """
 
 
 class ReferenceAssemblyEnum(str, Enum):
@@ -421,7 +425,7 @@ class CreditedToEnum(str, Enum):
 
 class ActivityTypeEnum(str, Enum):
     """
-    The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its released LinkML schema spells them, plus seven of our own, each under the term it narrows. `meaning` is TerraCore's class, else EDAM's operation for the same step; a near EDAM operation is a close mapping. What each passes is in `rules/activities.yaml`.
+    The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its released LinkML schema spells them, plus nine of our own, each under the term it narrows. `meaning` is TerraCore's class, else EDAM's operation for the same step; a near EDAM operation is a close mapping. What each passes is in `rules/activities.yaml`.
     """
     Activity = "Activity"
     """
@@ -478,6 +482,14 @@ class ActivityTypeEnum(str, Enum):
     MergeActivity = "MergeActivity"
     """
     Joining several files of one kind into one: window VCFs into a chromosome VCF, FASTQs into one. Our own term; EDAM's Sequence merging (operation_0232) merges sequences, not files.
+    """
+    CohortMergeActivity = "CohortMergeActivity"
+    """
+    Joining the files a cohort's list names into one, the list the step's input rather than each file: a GenomicsDB workspace built from the gVCFs of a GATK sample-name map (#621). Our own term; neither TerraCore nor EDAM has this class, so no id is recorded.
+    """
+    CohortDefinitionActivity = "CohortDefinitionActivity"
+    """
+    Listing the files that are processed together: a GATK sample-name map naming the gVCFs one GenomicsDB import joint-calls (#621). A processing cohort, who was computed together, not a research cohort a user builds. Our own term; neither TerraCore nor EDAM has this class, so no id is recorded.
     """
     AssemblyActivity = "AssemblyActivity"
     """
@@ -1492,6 +1504,7 @@ class InputRole(ActivityEnd):
     required: bool = Field(default=..., description="""Whether the step always has this input.""", json_schema_extra = { "linkml_meta": {'domain_of': ['InputRole']} })
     many: bool = Field(default=..., description="""Whether an output has several inputs in this role.""", json_schema_extra = { "linkml_meta": {'domain_of': ['InputRole']} })
     passes: Optional[list[PassedDimensionEnum]] = Field(default=None, description="""What the output takes from an input in this role. Absent: nothing.""", json_schema_extra = { "linkml_meta": {'domain_of': ['InputRole']} })
+    read_through: Optional[str] = Field(default=None, description="""A role of the parent's own step whose inputs this role takes its values from, in place of the parent's own (#621): a sample map passes nothing itself, and a GenomicsDB workspace's `input_list` takes what the map's `member`s settle to. Absent: the parents' own answers.""", json_schema_extra = { "linkml_meta": {'domain_of': ['InputRole']} })
     form: list[ActivityFormEnum] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityEnd']} })
     kind: Optional[list[DataTypeEnum]] = Field(default=None, description="""The `data_type` terms a file here may carry, dotted children included. Absent: any kind.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityEnd']} })
 

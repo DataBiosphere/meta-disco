@@ -94,7 +94,8 @@ class RecordOutcome(NamedTuple):
     content_unreadable: bool
     validation_failed: bool
     # Why the file got the step it did, or none, where its type states one
-    # (``FileTypeConfig.step``, #609); None for every other type and for a file not read.
+    # (``FileTypeConfig.step``, #609); None for every other type, for a file not read, and
+    # for a file its type's step reader does not apply to.
     step_outcome: str | None = None
 
 
@@ -147,6 +148,7 @@ def _fetch_and_classify(
             is_gzipped=is_gzipped,
             use_cache=use_cache,
             head_detector=config.head_detector,
+            kept_member=config.kept_member,
             url=url,
         )
     except FetchError as e:

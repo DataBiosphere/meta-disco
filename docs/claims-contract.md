@@ -292,6 +292,13 @@ Importers say what was written. Rules say what it means. Only rules make claims.
       `conflict` passes nothing either (#571, which folded in #413): the conflict is the parent's to
       settle, and is listed on the parent rather than repeated on its companions.
 
+    A role may **read through** its parents (`read_through` in `rules/activities.yaml`, #621): its parent
+    is a list of files, which passes nothing itself, and the role takes what the list's own step's inputs in
+    the role named settle to, by the rule above, in place of the list's answer. A GenomicsDB workspace's
+    `input_list` parent is the sample map GATK imported, and the workspace takes what the map's `member`
+    gVCFs settle to. The declaration is credited to the list, not to its members; a list with no step naming
+    its members passes nothing.
+
     Which activity carries which dimension is its `passes` in `rules/activities.yaml`, the one place
     code reads it (ADR-0002 decision 8 records the reasoning, #580); `data_type` is never carried. Sources that name different parents for an
     input role that takes one are an edge conflict, across which nothing is

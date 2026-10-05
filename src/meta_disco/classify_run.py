@@ -2,7 +2,7 @@
 
 A source (AnVIL, HPRC, …) maps its native metadata into the meta-disco record shape and
 calls :func:`run_all_classifications`; there is no per-source classifier. This module holds
-the orchestration — Phase 1 (the nine producers that route on their own), Phase 2
+the orchestration — Phase 1 (the ten producers that route on their own), Phase 2
 (index files and their parent edges), Phase 3 (the remaining catch-all). Which producers those are, and
 how each is invoked, is declared in :mod:`meta_disco.producers`. ``scripts/rerun_all_classifications.py``
 (AnVIL) and ``scripts/classify_hprc_files.py`` (HPRC) are thin CLI wrappers over it, so the

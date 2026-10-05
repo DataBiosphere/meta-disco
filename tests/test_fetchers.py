@@ -20,7 +20,7 @@ import pytest
 import requests
 
 import meta_disco.fetchers as fetchers
-from meta_disco.evidence import VcfEvidence
+from meta_disco.evidence import TarEvidence, TarHead, VcfEvidence
 from meta_disco.fetchers import (
     FetchError,
     RangeNotSatisfiable,
@@ -39,6 +39,7 @@ from meta_disco.fetchers import (
     fetch_fasta_headers,
     fetch_fastq_reads,
     fetch_gfa_segment_tags,
+    fetch_sample_map,
     fetch_tar_headers,
     fetch_vcf_header,
     require_samtools,
@@ -225,14 +226,16 @@ class TestTarFetcher:
     def test_returns_member_names_from_the_head(self, monkeypatch, evidence_dir):
         data = _make_tar_named(["g/callset.json", "g/vcfheader.vcf"])
         _patch_get(monkeypatch, _partial(data, 0, len(data) - 1))
-        names = fetch_tar_headers(evidence_dir, MD5, file_name="x.tar", is_gzipped=False, use_cache=False)
+        names = fetch_tar_headers(evidence_dir, MD5, file_name="x.tar", is_gzipped=False, use_cache=False).member_names
         assert names == ["g/callset.json", "g/vcfheader.vcf"]
 
     def test_gzipped_tar_head_is_decompressed_then_parsed(self, monkeypatch, evidence_dir):
         # A .tar.gz: is_gzipped=True must decompress the head before the tar walk.
         gz = _make_tar_named(["g/callset.json", "g/vidmap.json"], gzipped=True)
         _patch_get(monkeypatch, _partial(gz, 0, len(gz) - 1))
-        names = fetch_tar_headers(evidence_dir, MD5, file_name="x.tar.gz", is_gzipped=True, use_cache=False)
+        names = fetch_tar_headers(
+            evidence_dir, MD5, file_name="x.tar.gz", is_gzipped=True, use_cache=False
+        ).member_names
         assert names == ["g/callset.json", "g/vidmap.json"]
 
     def test_non_2xx_raises_fetcherror(self, monkeypatch, evidence_dir):
@@ -244,7 +247,10 @@ class TestTarFetcher:
         # A readable-but-unparseable head is an empty member list (not_classified),
         # not a FetchError — the range read itself succeeded.
         _patch_get(monkeypatch, _Resp(200, b"garbage, not a tar"))
-        assert fetch_tar_headers(evidence_dir, MD5, file_name="x.tar", is_gzipped=False, use_cache=False) == []
+        assert (
+            fetch_tar_headers(evidence_dir, MD5, file_name="x.tar", is_gzipped=False, use_cache=False).member_names
+            == []
+        )
 
 
 # =============================================================================
@@ -436,7 +442,7 @@ def test_walk_tar_stops_at_stage_boundary_when_conclusive(monkeypatch):
     # member 0, and the detector is consulted there.
     _install(monkeypatch, _make_tar_named(["a.vcf", "b.txt", "c.bam"]))
     stream, raw = _open_stream(MD5, url=None, is_gzipped=False, compressed_cap=1 << 20)
-    names = _walk_tar_members(stream, raw, detector=lambda ns: "a.vcf" in ns, max_members=200, stages=(1,))
+    names = _walk_tar_members(stream, raw, detector=lambda ns: "a.vcf" in ns, max_members=200, stages=(1,)).member_names
     assert names == ["a.vcf"]
 
 
@@ -446,7 +452,9 @@ def test_walk_tar_does_not_cut_at_first_recognized_member(monkeypatch):
     # head is voted on — all members are returned, not just the leading outlier.
     _install(monkeypatch, _make_tar_named(["outlier.fasta", "v1.vcf", "v2.vcf", "v3.vcf"]))
     stream, raw = _open_stream(MD5, url=None, is_gzipped=False, compressed_cap=1 << 20)
-    names = _walk_tar_members(stream, raw, detector=lambda ns: True, max_members=200, stages=fetchers.TAR_HEAD_STAGES)
+    names = _walk_tar_members(
+        stream, raw, detector=lambda ns: True, max_members=200, stages=fetchers.TAR_HEAD_STAGES
+    ).member_names
     assert names == ["outlier.fasta", "v1.vcf", "v2.vcf", "v3.vcf"]
 
 
@@ -458,28 +466,28 @@ def test_walk_tar_stage_boundary_tracks_consumed_not_fetched_bytes(monkeypatch):
     # far, so the head is voted on many members and the walk still stops before reading all 100.
     _install(monkeypatch, _make_tar_named([f"m{i}.dat" for i in range(100)]))
     stream, raw = _open_stream(MD5, url=None, is_gzipped=False, compressed_cap=1 << 20)
-    names = _walk_tar_members(stream, raw, detector=lambda ns: True, max_members=200, stages=(30_000,))
+    names = _walk_tar_members(stream, raw, detector=lambda ns: True, max_members=200, stages=(30_000,)).member_names
     assert 1 < len(names) < 100
 
 
 def test_walk_tar_stops_at_max_members(monkeypatch):
     _install(monkeypatch, _make_tar_named(["m0", "m1", "m2", "m3"]))
     stream, raw = _open_stream(MD5, url=None, is_gzipped=False, compressed_cap=1 << 20)
-    names = _walk_tar_members(stream, raw, detector=lambda ns: False, max_members=2, stages=(1,))
+    names = _walk_tar_members(stream, raw, detector=lambda ns: False, max_members=2, stages=(1,)).member_names
     assert names == ["m0", "m1"]
 
 
 def test_walk_tar_reads_gzipped_archive(monkeypatch):
     _install(monkeypatch, _make_tar_named(["only.vcf"], gzipped=True))
     stream, raw = _open_stream(MD5, url=None, is_gzipped=True, compressed_cap=1 << 20)
-    names = _walk_tar_members(stream, raw, detector=lambda ns: False, max_members=200, stages=(1,))
+    names = _walk_tar_members(stream, raw, detector=lambda ns: False, max_members=200, stages=(1,)).member_names
     assert names == ["only.vcf"]
 
 
 def test_walk_tar_non_tar_head_is_empty(monkeypatch):
     _install(monkeypatch, b"not a tar at all, just bytes")
     stream, raw = _open_stream(MD5, url=None, is_gzipped=False, compressed_cap=1 << 20)
-    assert _walk_tar_members(stream, raw, detector=lambda ns: False, max_members=200, stages=(1,)) == []
+    assert _walk_tar_members(stream, raw, detector=lambda ns: False, max_members=200, stages=(1,)).member_names == []
 
 
 # --- scan driver -------------------------------------------------------------------
@@ -653,11 +661,14 @@ def test_fetch_tar_reads_whole_small_head(monkeypatch, evidence_dir):
     obj = _make_tar_named(["x.vcf", "y.vcf"])
 
     _install(monkeypatch, obj)
-    assert fetch_tar_headers(evidence_dir / "a", MD5, is_gzipped=False, use_cache=False) == ["x.vcf", "y.vcf"]
+    assert fetch_tar_headers(evidence_dir / "a", MD5, is_gzipped=False, use_cache=False).member_names == [
+        "x.vcf",
+        "y.vcf",
+    ]
 
     both = fetch_tar_headers(
         evidence_dir / "b", MD5, is_gzipped=False, use_cache=False, head_detector=lambda ns: len(ns) >= 2
-    )
+    ).member_names
     assert both == ["x.vcf", "y.vcf"]
 
 
@@ -674,7 +685,9 @@ def test_fetch_tar_escalates_to_a_deep_signal(monkeypatch, evidence_dir):
     monkeypatch.setattr(fetchers, "FIRST_CHUNK", 2048)  # force multi-fetch so bytes_served lags
     _install(monkeypatch, obj)
 
-    names_out = fetch_tar_headers(evidence_dir, MD5, is_gzipped=False, use_cache=False, head_detector=detector)
+    names_out = fetch_tar_headers(
+        evidence_dir, MD5, is_gzipped=False, use_cache=False, head_detector=detector
+    ).member_names
     assert "signal.vcf" in names_out  # escalated to and concluded on the deep signal
 
 
@@ -682,7 +695,7 @@ def test_fetch_tar_warns_when_member_cap_reached(monkeypatch, evidence_dir, caps
     # A tar with more members than the cap truncates to MAX_TAR_MEMBERS; the walk must warn so an
     # under-sampled head is not silent (bodies are empty, so all headers sit inside one range).
     _install(monkeypatch, _make_tar_named([f"m{i}.dat" for i in range(fetchers.MAX_TAR_MEMBERS + 5)]))
-    names = fetch_tar_headers(evidence_dir, MD5, file_name="big.tar", is_gzipped=False, use_cache=False)
+    names = fetch_tar_headers(evidence_dir, MD5, file_name="big.tar", is_gzipped=False, use_cache=False).member_names
     assert len(names) == fetchers.MAX_TAR_MEMBERS
     out = capsys.readouterr().out
     assert "reached the" in out and "big.tar" in out
@@ -709,3 +722,292 @@ class TestFetchContentLength:
         monkeypatch.setattr(fetchers.requests, "head", lambda *a, **k: _Resp(403))
         with pytest.raises(FetchError):
             fetchers.fetch_content_length("https://example.org/o.bam")
+
+
+# =============================================================================
+# a GenomicsDB workspace's vcfheader.vcf, and the sample map (#621)
+# =============================================================================
+
+HEADER_TEXT = "##fileformat=VCFv4.2\n##GATKCommandLine=<ID=GenomicsDBImport>\n"
+
+
+def _make_tar(members: list[tuple[str, bytes]]) -> bytes:
+    """An in-memory uncompressed tar of ``(name, body)`` members, in order."""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tar:
+        for name, body in members:
+            info = tarfile.TarInfo(name)
+            info.size = len(body)
+            tar.addfile(info, io.BytesIO(body))
+    return buf.getvalue()
+
+
+def _workspace(header_first: bool) -> bytes:
+    """A GenomicsDB workspace tar of ~10 KiB, its vcfheader.vcf first or last."""
+    filler = [(f"ws/c{i}/__book_keeping.tdb.gz", b"z" * 1000) for i in range(8)]
+    header = [("ws/vcfheader.vcf", HEADER_TEXT.encode())]
+    return _make_tar(
+        [*header, ("ws/callset.json", b"{}"), *filler]
+        if header_first
+        else [("ws/callset.json", b"{}"), *filler, *header]
+    )
+
+
+def _serve(monkeypatch, obj: bytes, calls: list | None = None) -> None:
+    """Serve ``obj`` to both the range reader and the suffix read, recording each read in ``calls``."""
+    monkeypatch.setattr(fetchers, "_fetch_range", _range_server(obj, calls))
+
+    def suffix(md5sum, length, *, url, timeout=60):
+        if calls is not None:
+            calls.append(("suffix", length))
+        start = max(0, len(obj) - length)
+        return obj[start:], start
+
+    monkeypatch.setattr(fetchers, "_fetch_suffix", suffix)
+
+
+def _workspace_member(names):
+    return "vcfheader.vcf" if any(n.endswith(("callset.json", "vcfheader.vcf")) for n in names) else None
+
+
+def test_walk_keeps_the_named_members_text(monkeypatch):
+    _install(monkeypatch, _workspace(header_first=True))
+    stream, raw = _open_stream(MD5, url=None, is_gzipped=False, compressed_cap=1 << 20)
+    walk = _walk_tar_members(
+        stream, raw, detector=lambda ns: False, max_members=200, stages=(1,), kept_member=_workspace_member
+    )
+    assert walk.kept_text == HEADER_TEXT
+    assert walk.member_names[0] == "ws/vcfheader.vcf"
+
+
+def test_walk_keeps_nothing_unless_asked(monkeypatch):
+    _install(monkeypatch, _workspace(header_first=True))
+    stream, raw = _open_stream(MD5, url=None, is_gzipped=False, compressed_cap=1 << 20)
+    assert _walk_tar_members(stream, raw, detector=lambda ns: False, max_members=200, stages=(1,)).kept_text is None
+
+
+def test_a_member_header_is_found_on_the_files_512_byte_boundaries():
+    obj = _workspace(header_first=False)
+    # A window starting mid-block: the headers sit on the file's boundaries, not the window's.
+    base = 700
+    found = fetchers._member_in_window(obj[base:], base, "vcfheader.vcf")
+    assert found is not None
+    offset, size, held = found
+    assert (size, held) == (len(HEADER_TEXT), HEADER_TEXT.encode())
+    assert obj[offset : offset + size] == HEADER_TEXT.encode()
+    assert fetchers._member_in_window(obj[base:], base, "absent.vcf") is None
+
+
+def test_the_member_is_read_from_the_tail_before_the_head(monkeypatch):
+    calls: list = []
+    _serve(monkeypatch, _workspace(header_first=False), calls)
+    # Wider than the end-of-archive padding tar writes (up to a 10 KiB record).
+    monkeypatch.setattr(fetchers, "TAR_MEMBER_WINDOW", 12288)
+    text, fetched = fetchers._read_member(MD5, "vcfheader.vcf", url=None, tail_first=True)
+    assert text == HEADER_TEXT and fetched == 12288
+    assert calls == [("suffix", 12288)]
+
+
+def test_the_member_is_read_from_the_head_when_the_tail_lacks_it(monkeypatch):
+    calls: list = []
+    _serve(monkeypatch, _workspace(header_first=True), calls)
+    monkeypatch.setattr(fetchers, "TAR_MEMBER_WINDOW", 2048)
+    text, fetched = fetchers._read_member(MD5, "vcfheader.vcf", url=None, tail_first=True)
+    assert text == HEADER_TEXT and fetched == 2048 + 2048
+    assert calls == [("suffix", 2048), (0, 2047)]
+
+
+def test_a_member_in_neither_window_is_none(monkeypatch):
+    obj = _make_tar(
+        [
+            *[(f"f{i}", b"z" * 4000) for i in range(3)],
+            ("ws/vcfheader.vcf", b"x"),
+            *[(f"g{i}", b"z" * 4000) for i in range(3)],
+        ]
+    )
+    _serve(monkeypatch, obj)
+    monkeypatch.setattr(fetchers, "TAR_MEMBER_WINDOW", 2048)
+    assert fetchers._read_member(MD5, "vcfheader.vcf", url=None, tail_first=False)[0] is None
+
+
+def test_a_member_body_the_window_cuts_short_is_read_to_its_end(monkeypatch):
+    body = b"#" * 3000
+    calls: list = []
+    _serve(monkeypatch, _make_tar([("ws/vcfheader.vcf", body), ("ws/callset.json", b"z" * 9000)]), calls)
+    monkeypatch.setattr(fetchers, "TAR_MEMBER_WINDOW", 2048)
+    text, fetched = fetchers._read_member(MD5, "vcfheader.vcf", url=None, tail_first=False)
+    assert text == body.decode() and fetched == 2048 + (512 + 3000 - 2048)
+    # The head window held the header and the body's first 1,536 bytes; one range read the rest.
+    assert calls == [(0, 2047), (2048, 512 + 3000 - 1)]
+
+
+def test_a_workspace_whose_walk_stopped_short_has_its_header_read_from_the_tail(monkeypatch, evidence_dir):
+    calls: list = []
+    _serve(monkeypatch, _workspace(header_first=False), calls)
+    monkeypatch.setattr(fetchers, "TAR_HEAD_STAGES", (1,))
+    head = fetch_tar_headers(
+        evidence_dir, MD5, is_gzipped=False, head_detector=lambda ns: True, kept_member=_workspace_member
+    )
+    assert head.member_names == ["ws/callset.json"]
+    assert head.vcf_header == HEADER_TEXT
+    assert ("suffix", fetchers.TAR_MEMBER_WINDOW) in calls
+    cached = TarEvidence.load(evidence_dir, MD5)
+    assert cached is not None and cached.vcf_header_read and cached.vcf_header == HEADER_TEXT
+
+
+def test_an_entry_from_before_621_reads_only_the_member_and_is_saved_with_it(monkeypatch, evidence_dir):
+    TarEvidence(md5sum=MD5, file_name="x.tar", member_names=["ws/callset.json"]).save(evidence_dir)
+    assert "vcf_header" not in TarEvidence.load(evidence_dir, MD5).to_json()
+    calls: list = []
+    _serve(monkeypatch, _workspace(header_first=False), calls)
+    head = fetch_tar_headers(evidence_dir, MD5, is_gzipped=False, kept_member=_workspace_member)
+    assert head == TarHead(["ws/callset.json"], HEADER_TEXT)
+    assert calls == [("suffix", fetchers.TAR_MEMBER_WINDOW)]
+    # The member's read is added to the bytes the entry says were pulled.
+    assert TarEvidence.load(evidence_dir, MD5).raw_bytes_fetched == len(_workspace(header_first=False))
+    # Saved: the next read makes no request.
+    monkeypatch.setattr(fetchers, "_fetch_suffix", _raise_transport)
+    monkeypatch.setattr(fetchers, "_fetch_range", _raise_transport)
+    assert fetch_tar_headers(evidence_dir, MD5, is_gzipped=False, kept_member=_workspace_member) == head
+
+
+def test_a_member_looked_for_and_not_found_is_not_looked_for_again(monkeypatch, evidence_dir):
+    _serve(monkeypatch, _make_tar([("ws/callset.json", b"{}")]))
+    head = fetch_tar_headers(evidence_dir, MD5, is_gzipped=False, kept_member=_workspace_member)
+    assert head.vcf_header is None
+    assert TarEvidence.load(evidence_dir, MD5).to_json()["vcf_header"] is None
+    monkeypatch.setattr(fetchers, "_fetch_suffix", _raise_transport)
+    monkeypatch.setattr(fetchers, "_fetch_range", _raise_transport)
+    assert fetch_tar_headers(evidence_dir, MD5, is_gzipped=False, kept_member=_workspace_member) == head
+
+
+def test_a_cached_tar_that_is_no_workspace_reads_nothing(monkeypatch, evidence_dir):
+    TarEvidence(md5sum=MD5, file_name="x.tar", member_names=["reads/a.fastq"]).save(evidence_dir)
+    monkeypatch.setattr(fetchers, "_fetch_suffix", _raise_transport)
+    monkeypatch.setattr(fetchers, "_fetch_range", _raise_transport)
+    assert fetch_tar_headers(evidence_dir, MD5, is_gzipped=False, kept_member=_workspace_member) == TarHead(
+        ["reads/a.fastq"], None
+    )
+
+
+def test_a_compressed_workspace_is_walked_again_for_its_header(monkeypatch, evidence_dir):
+    TarEvidence(md5sum=MD5, file_name="x.tar.gz", member_names=["ws/callset.json"]).save(evidence_dir)
+    buf = io.BytesIO()
+    with gzip.GzipFile(fileobj=buf, mode="wb") as gz:
+        gz.write(_workspace(header_first=True))
+    _serve(monkeypatch, buf.getvalue())
+    head = fetch_tar_headers(evidence_dir, MD5, is_gzipped=True, kept_member=_workspace_member)
+    assert head.vcf_header == HEADER_TEXT
+
+
+def test_without_a_kept_member_nothing_is_looked_for_and_the_entry_says_so(monkeypatch, evidence_dir):
+    _serve(monkeypatch, _workspace(header_first=True))
+    assert fetch_tar_headers(evidence_dir, MD5, is_gzipped=False).vcf_header is None
+    assert "vcf_header" not in TarEvidence.load(evidence_dir, MD5).to_json()
+
+
+def test_the_sample_map_is_read_whole_and_cached(monkeypatch, evidence_dir):
+    text = "HG00096\tgs://b/HG00096.chr1.hc.vcf.gz\nHG00097\tgs://b/HG00097.chr1.hc.vcf.gz\n"
+    _install(monkeypatch, text.encode())
+    assert fetch_sample_map(evidence_dir, MD5) == text
+    monkeypatch.setattr(fetchers, "_fetch_range", _raise_transport)
+    assert fetch_sample_map(evidence_dir, MD5) == text
+
+
+def test_a_sample_map_past_the_cap_is_refused_not_read_in_part(monkeypatch, evidence_dir):
+    _install(monkeypatch, b"s\tx.vcf\n" * 100)
+    monkeypatch.setattr(fetchers, "MAX_DECOMPRESSED", 64)
+    with pytest.raises(FetchError, match="not read whole"):
+        fetch_sample_map(evidence_dir, MD5, use_cache=False)
+
+
+def _reset(*_args, **_kwargs):
+    raise requests.exceptions.ConnectionError("Connection reset by peer")
+
+
+def test_a_failed_member_read_on_a_cached_entry_keeps_the_names_and_retries_next_run(monkeypatch, evidence_dir):
+    TarEvidence(md5sum=MD5, file_name="x.tar", member_names=["ws/callset.json"]).save(evidence_dir)
+    monkeypatch.setattr(fetchers, "_fetch_suffix", _reset)
+    head = fetch_tar_headers(evidence_dir, MD5, is_gzipped=False, kept_member=_workspace_member)
+    assert head.member_names == ["ws/callset.json"] and head.vcf_header is None
+    assert head.vcf_header_unread is not None and "Connection reset" in head.vcf_header_unread
+    # Not marked looked for: the next run reads the member.
+    assert "vcf_header" not in TarEvidence.load(evidence_dir, MD5).to_json()
+    _serve(monkeypatch, _workspace(header_first=False))
+    assert (
+        fetch_tar_headers(evidence_dir, MD5, is_gzipped=False, kept_member=_workspace_member).vcf_header == HEADER_TEXT
+    )
+
+
+def test_a_failed_member_read_after_a_fresh_walk_keeps_the_names_and_retries_next_run(monkeypatch, evidence_dir):
+    _serve(monkeypatch, _workspace(header_first=False))
+    monkeypatch.setattr(fetchers, "TAR_HEAD_STAGES", (1,))
+    monkeypatch.setattr(fetchers, "_fetch_suffix", _reset)
+    head = fetch_tar_headers(
+        evidence_dir, MD5, is_gzipped=False, head_detector=lambda ns: True, kept_member=_workspace_member
+    )
+    assert head == TarHead(["ws/callset.json"], None, head.vcf_header_unread) and head.vcf_header_unread
+    cached = TarEvidence.load(evidence_dir, MD5)
+    assert cached is not None and cached.member_names == ["ws/callset.json"] and not cached.vcf_header_read
+
+
+def test_a_compressed_workspace_whose_header_the_head_walk_missed_is_unreadable(monkeypatch, evidence_dir):
+    buf = io.BytesIO()
+    with gzip.GzipFile(fileobj=buf, mode="wb") as gz:
+        gz.write(_workspace(header_first=False))
+    _serve(monkeypatch, buf.getvalue())
+    monkeypatch.setattr(fetchers, "TAR_HEAD_STAGES", (1,))
+    with pytest.raises(FetchError, match="compressed tar"):
+        fetch_tar_headers(
+            evidence_dir, MD5, is_gzipped=True, head_detector=lambda ns: True, kept_member=_workspace_member
+        )
+    # Nothing cached: a later run reads it again.
+    assert TarEvidence.load(evidence_dir, MD5) is None
+
+
+class _StreamResp(_Resp):
+    """A streamed response: ``iter_content`` in chunks, usable as a context manager."""
+
+    def iter_content(self, chunk_size=1):
+        for i in range(0, len(self.content), chunk_size):
+            yield self.content[i : i + chunk_size]
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+@pytest.mark.parametrize(
+    ("resp", "expected"),
+    [
+        (_StreamResp(206, b"tail", headers={"Content-Range": "bytes 96-99/100"}), (b"tail", 96)),
+        # A file shorter than the window: the 200 is the whole of it.
+        (_StreamResp(200, b"small"), (b"small", 0)),
+    ],
+)
+def test_a_suffix_read_returns_its_window_and_where_it_starts(monkeypatch, resp, expected):
+    _patch_get(monkeypatch, resp)
+    assert fetchers._fetch_suffix(MD5, 8, url=None) == expected
+
+
+@pytest.mark.parametrize(
+    ("resp", "message"),
+    [
+        (_StreamResp(200, b"x" * 9), "Range ignored"),
+        (_StreamResp(206, b"x" * 9, headers={"Content-Range": "bytes 0-8/9"}), "Range ignored"),
+        (_StreamResp(206, b"tail"), "no Content-Range start"),
+        (_StreamResp(503), "503"),
+    ],
+)
+def test_a_suffix_read_refuses_a_server_that_ignored_the_range(monkeypatch, resp, message):
+    _patch_get(monkeypatch, resp)
+    with pytest.raises(FetchError, match=message):
+        fetchers._fetch_suffix(MD5, 8, url=None)
+
+
+def test_a_sample_map_of_exactly_the_cap_is_read_whole(monkeypatch, evidence_dir):
+    _install(monkeypatch, b"s\tx.vcf\n" * 8)
+    monkeypatch.setattr(fetchers, "MAX_DECOMPRESSED", 64)
+    assert fetch_sample_map(evidence_dir, MD5, use_cache=False) == "s\tx.vcf\n" * 8

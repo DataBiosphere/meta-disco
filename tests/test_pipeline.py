@@ -575,7 +575,7 @@ class TestPipelineRun:
         assert result["md5sum"] == "test_md5"
         assert "classifications" in result
         # classify_single emits the same canonical envelope as every other producer
-        # (#204, widened to all eleven by #450). Every field it has no input record to
+        # (#204, widened to every producer by #450). Every field it has no input record to
         # carry is present and None: dataset_title/entry_id, file_id/drs_uri (#433),
         # and generated_by (#450, #580).
         assert set(result) == RECORD_KEYS
@@ -634,11 +634,11 @@ class TestFileTypeConfigs:
     def test_all_configs_exist(self):
         from meta_disco.file_types import FILE_TYPE_REGISTRY
 
-        assert set(FILE_TYPE_REGISTRY.keys()) == {"bam", "vcf", "fastq", "fasta", "gfa", "tar", "bed"}
+        assert set(FILE_TYPE_REGISTRY.keys()) == {"bam", "vcf", "fastq", "fasta", "gfa", "tar", "bed", "sample_map"}
 
     def test_a_registered_type_routes_as_its_registry_producer(self, tmp_path):
         """The pipeline does not route with a predicate of its own: it is one of the
-        eleven producers, and asks the same question they all ask (#449)."""
+        twelve producers, and asks the same question they all ask (#449)."""
         from meta_disco.file_types import FILE_TYPE_REGISTRY
         from meta_disco.producers import PRODUCERS
 

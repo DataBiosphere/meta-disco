@@ -3,8 +3,9 @@
 Its shape is the schema's ``ActivityDeclarations``, enforced by the generated model.
 The checks it cannot state are here: every term declared once, roles unique within a
 term, ``Activity`` passing nothing, no role that can only be an identifier passing
-anything, and no role passing ``data_type``, which describes the file itself (contract
-4.9). Readers trust the result.
+anything, no role passing ``data_type``, which describes the file itself (contract
+4.9), and a ``read_through`` role (#621) passing something, through a role some term
+declares that passes nothing. Readers trust the result.
 
 **A term may take its declaration from an abstract ancestor** (#610). A term declared
 with a reason but no ``output`` and ``inputs`` takes both from its nearest ``is_a``
@@ -34,6 +35,8 @@ INDEXING = "IndexActivity"
 CHECKSUM = "ChecksumActivity"
 VARIANT_CALL = "VariantCallActivity"
 MERGE = "MergeActivity"
+COHORT_MERGE = "CohortMergeActivity"
+COHORT_DEFINITION = "CohortDefinitionActivity"
 
 
 _UniqueKeyLoader = unique_key_loader("activities file")
@@ -89,7 +92,35 @@ def load_activities(text: str | None = None) -> dict[str, Declared]:
     unknown = _passes(declared[UNKNOWN])
     if unknown:
         raise ValueError(f"activity {UNKNOWN!r}: the step not known passes nothing, not {unknown}")
+    _check_read_through(declared)
     return declared
+
+
+def _check_read_through(declared: dict[str, Declared]) -> None:
+    """Raise unless each ``read_through`` role passes something, through a role some term declares that passes nothing.
+
+    The role read through is the parent's, whichever term the parent's step names, so it is
+    checked against every term's; one passing something would make the parent's own answer
+    and its members' two routes for one value.
+    """
+    roles = {i.role for d in declared.values() for i in d.inputs}
+    passing = {i.role for d in declared.values() for i in d.inputs if i.passes}
+    for term, declaration in declared.items():
+        for i in declaration.inputs:
+            if i.read_through is None:
+                continue
+            if not i.passes:
+                raise ValueError(
+                    f"activity {term!r}: role {i.role!r} reads through {i.read_through!r} but passes nothing"
+                )
+            if i.read_through not in roles:
+                raise ValueError(
+                    f"activity {term!r}: role {i.role!r} reads through {i.read_through!r}, which no term declares"
+                )
+            if i.read_through in passing:
+                raise ValueError(
+                    f"activity {term!r}: role {i.role!r} reads through {i.read_through!r}, which passes from its own inputs"
+                )
 
 
 def _inherited(term: str, given: dict[str, ActivityDeclaration]) -> Declared:
@@ -149,6 +180,15 @@ def role_passes(term: str) -> dict[str, tuple[str, ...]]:
     Cached, since reconcile asks once per child; callers must not change the dict.
     """
     return {i.role: _ordered(_role_slots(i)) for i in declarations()[term].inputs if i.passes}
+
+
+@cache
+def read_through(term: str) -> dict[str, str]:
+    """Per input role of ``term`` that reads through its parent, the role of the parent's own step it reads (#621).
+
+    Cached; callers must not change the dict.
+    """
+    return {i.role: str(i.read_through) for i in declarations()[term].inputs if i.read_through is not None}
 
 
 def carried() -> tuple[str, ...]:

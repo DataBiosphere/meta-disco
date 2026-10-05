@@ -285,8 +285,49 @@ class TarEvidence(CachedEvidence):
     """
 
     PAYLOAD_KEY: ClassVar[str] = "member_names"
+    # The on-disk key of a GenomicsDB workspace's `vcfheader.vcf` text (#621).
+    VCF_HEADER_KEY: ClassVar[str] = "vcf_header"
 
     member_names: list[str]
+    # Whether `vcfheader.vcf` was looked for, and its text where found (#621). An entry
+    # written before #621 has no `vcf_header` key, so ``vcf_header_read`` is False and the
+    # fetcher reads the member alone (an uncompressed tar's; a compressed one is walked again
+    # from its head); a key holding null is "looked for, not found", which
+    # is never looked for again. Only a GenomicsDB store is searched: a fresh read of
+    # another tar records null, and an older entry of one is left as it was.
+    vcf_header: str | None = None
+    vcf_header_read: bool = False
+
+    def to_json(self) -> dict:
+        data = super().to_json()
+        if self.vcf_header_read:
+            data[self.VCF_HEADER_KEY] = self.vcf_header
+        return data
+
+    @classmethod
+    def from_json(cls, data: object) -> Any:
+        base = super().from_json(data)
+        if base is None:
+            return None
+        assert isinstance(data, dict)  # base returned non-None ⇒ data parsed as a dict
+        return replace(base, vcf_header=data.get(cls.VCF_HEADER_KEY), vcf_header_read=cls.VCF_HEADER_KEY in data)
+
+
+@dataclass(frozen=True, kw_only=True)
+class SampleMapEvidence(CachedEvidence):
+    """Cached text of a GATK sample-name map (#621): the whole file, read to its end.
+
+    Empty text is a valid hit (an empty file), which the parse reads as not a list.
+    """
+
+    PAYLOAD_KEY: ClassVar[str] = "text"
+
+    text: str
+
+    @property
+    def count(self) -> int:
+        """Line count."""
+        return len(self.text.splitlines())
 
 
 @dataclass(frozen=True)
@@ -369,6 +410,20 @@ class GfaEvidence(CachedEvidence):
         if not isinstance(payload, list) or not all(isinstance(x, dict) for x in payload):
             return None
         return replace(base, gfa_segment_tags=[SegmentTag.from_json(x) for x in payload])
+
+
+@dataclass(frozen=True)
+class TarHead:
+    """What the tar fetcher returns: the member names its head read saw, and a GenomicsDB
+    workspace's ``vcfheader.vcf`` text where it was looked for and found (#621).
+
+    ``vcf_header_unread`` is why the member could not be read, where the read failed: the
+    names still classify the tar, and the member is looked for again next run.
+    """
+
+    member_names: list[str]
+    vcf_header: str | None = None
+    vcf_header_unread: str | None = None
 
 
 @dataclass(frozen=True)

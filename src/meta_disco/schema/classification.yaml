@@ -924,6 +924,12 @@ classes:
         range: passed_dimension_enum
         multivalued: true
         description: "What the output takes from an input in this role. Absent: nothing."
+      read_through:
+        description: >-
+          A role of the parent's own step whose inputs this role takes its values from, in
+          place of the parent's own (#621): a sample map passes nothing itself, and a
+          GenomicsDB workspace's `input_list` takes what the map's `member`s settle to.
+          Absent: the parents' own answers.
 
 # =============================================================================
 # SLOTS
@@ -1274,6 +1280,11 @@ enums:
         meaning: EDAM:data_3914
       log:
       interval_set:
+      sample_map:
+        description: >-
+          A list naming the files processed together, one per sample: a GATK sample-name
+          map, each row a sample name and its gVCF's path (#621). No `meaning`: EDAM has no
+          data term for it.
 
   reference_assembly_enum:
     description: >-
@@ -1583,7 +1594,7 @@ enums:
   activity_type_enum:
     description: >-
       The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its
-      released LinkML schema spells them, plus seven of our own, each under the term it
+      released LinkML schema spells them, plus nine of our own, each under the term it
       narrows. `meaning` is TerraCore's class,
       else EDAM's operation for the same step; a near EDAM operation is a close mapping.
       What each passes is in `rules/activities.yaml`.
@@ -1682,6 +1693,20 @@ enums:
           Joining several files of one kind into one: window VCFs into a chromosome VCF,
           FASTQs into one. Our own term; EDAM's Sequence merging (operation_0232) merges
           sequences, not files.
+        is_a: Activity
+      CohortMergeActivity:
+        description: >-
+          Joining the files a cohort's list names into one, the list the step's input rather
+          than each file: a GenomicsDB workspace built from the gVCFs of a GATK sample-name
+          map (#621). Our own term; neither TerraCore nor EDAM has this class, so no id is
+          recorded.
+        is_a: MergeActivity
+      CohortDefinitionActivity:
+        description: >-
+          Listing the files that are processed together: a GATK sample-name map naming the
+          gVCFs one GenomicsDB import joint-calls (#621). A processing cohort, who was
+          computed together, not a research cohort a user builds. Our own term; neither
+          TerraCore nor EDAM has this class, so no id is recorded.
         is_a: Activity
       AssemblyActivity:
         description: >-

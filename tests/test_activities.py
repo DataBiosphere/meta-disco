@@ -150,3 +150,42 @@ def test_an_activitys_ancestors_are_its_is_a_chain_nearest_first():
     assert schema_vocab.activity_ancestors("Activity") == ()
     with pytest.raises(ValueError, match="CoffeeActivity"):
         schema_vocab.activity_ancestors("CoffeeActivity")
+
+
+# --- read-through (#621) -------------------------------------------------------------------
+
+
+def _read_through_terms(through=None, member=None):
+    """Every term, MergeActivity's one role reading through CohortDefinitionActivity's ``member``."""
+    lst = {**_input("input_list", read_through="member", passes=["platform"]), **(through or {})}
+    listed = {**_input("member", many=True), **(member or {})}
+    return _every_term(
+        MergeActivity=_entry("MergeActivity", [lst]),
+        CohortDefinitionActivity=_entry("CohortDefinitionActivity", [listed]),
+    )
+
+
+def test_a_role_reads_through_a_role_some_term_declares():
+    loaded = activities.load_activities(_text(_read_through_terms()))
+    assert [i.read_through for i in loaded["MergeActivity"].inputs] == ["member"]
+
+
+@pytest.mark.parametrize(
+    "entries, message",
+    [
+        (_read_through_terms(through={"passes": None}), "reads through 'member' but passes nothing"),
+        (_read_through_terms(through={"read_through": "listed"}), "which no term declares"),
+        (_read_through_terms(member={"passes": ["platform"]}), "passes from its own inputs"),
+    ],
+    ids=["passes-nothing", "undeclared-role", "role-passes-itself"],
+)
+def test_the_loader_refuses_a_read_through(entries, message):
+    with pytest.raises(ValueError, match=message):
+        activities.load_activities(_text(entries))
+
+
+def test_read_through_names_each_role_of_a_term_that_reads_through_its_parent():
+    roles = activities.read_through(activities.COHORT_MERGE)
+    assert roles and set(roles) <= {i.role for i in activities.declarations()[activities.COHORT_MERGE].inputs}
+    for through in roles.values():
+        assert any(through in {i.role for i in d.inputs} for d in activities.declarations().values())

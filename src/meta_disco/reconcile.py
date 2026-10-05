@@ -82,7 +82,6 @@ from .models import (
     field_label,
 )
 from .output_utils import (
-    CLASSIFICATION_FILES,
     RECONCILED_DIR,
     find_latest_run,
     iter_records,
@@ -92,6 +91,7 @@ from .output_utils import (
     run_file_metadata,
     write_reconciled_file,
 )
+from .producers import PRODUCERS
 from .reconcile_inherit import (
     REFERENCE_ASSEMBLY,
     InheritanceCycle,
@@ -463,22 +463,25 @@ class Joined:
 _Key = Locator
 
 
-def header_step_counts(run_dir: Path) -> dict[str, dict[str, int]]:
-    """Per dataset, the outcomes of inference's producer-step reader (#609), summed over the run's files.
+def content_step_counts(run_dir: Path) -> dict[str, dict[str, dict[str, int]]]:
+    """Per producer and dataset, the outcomes of the producer's step reader (#609, #621).
 
     Read from each classification file's ``metadata.details.producer_steps``, which a
-    producer whose type states a step writes (``FileTypeConfig.step``); empty for a run
-    written before it, or with no such producer.
+    producer whose type states a step writes (``FileTypeConfig.step``): the VCF producer's
+    outcomes are ``producer_steps.OUTCOMES``, the tar and sample-map producers'
+    ``cohort_steps.OUTCOMES``, so each producer's are kept apart. Empty for a run written
+    before the readers, or with no such producer.
     """
-    totals: dict[str, Counter] = defaultdict(Counter)
-    for fname in CLASSIFICATION_FILES:
-        path = run_dir / fname
+    found: dict[str, dict[str, dict[str, int]]] = {}
+    for producer in PRODUCERS.values():
+        path = run_dir / producer.output
         if not path.exists():
             continue
         details = (run_file_metadata(path) or {}).get("details") or {}
-        for dataset, counts in (details.get(STEP_OUTCOMES_KEY) or {}).items():
-            totals[dataset].update(counts)
-    return {dataset: dict(counts) for dataset, counts in sorted(totals.items())}
+        per_dataset = details.get(STEP_OUTCOMES_KEY) or {}
+        if per_dataset:
+            found[producer.name] = {dataset: dict(counts) for dataset, counts in sorted(per_dataset.items())}
+    return found
 
 
 def join(
@@ -778,9 +781,10 @@ class Report:
     # first few with who said what; per (dataset, activity, problem, detail), the steps that
     # do not fit their declaration (`edges.misfits`).
     lineage_counts: dict = field(default_factory=dict)
-    # Per dataset, what inference's producer-step reader made of each file's header
-    # (`producer_steps.OUTCOMES`, #609), as the producers' metadata records it.
-    header_steps: dict = field(default_factory=dict)
+    # Per producer and dataset, what its step reader made of each file's content
+    # (`producer_steps.OUTCOMES`, #609; `cohort_steps.OUTCOMES`, #621), as the producers'
+    # metadata records it.
+    content_steps: dict = field(default_factory=dict)
     steps: dict = field(default_factory=lambda: defaultdict(Counter))
     step_conflicts: dict = field(
         default_factory=lambda: defaultdict(lambda: defaultdict(lambda: {"files": 0, "examples": []}))
@@ -792,6 +796,10 @@ class Report:
     # Inheritance (#571): per dataset and slot, what each role's parents gave a child
     # (`reconcile_inherit.OUTCOMES`), once per role that passes the slot.
     inheritance: dict = field(default_factory=lambda: defaultdict(lambda: defaultdict(Counter)))
+    # The same, per dataset, role and slot (#621): what one role gave, apart from the rest.
+    inheritance_by_role: dict = field(
+        default_factory=lambda: defaultdict(lambda: defaultdict(lambda: defaultdict(Counter)))
+    )
     # Per (dataset, slot), the source types whose evidence speaks to it: only those are
     # scored there.
     _covering: dict[tuple[str, str], tuple[str, ...]] = field(default_factory=dict)
@@ -853,11 +861,12 @@ class Report:
             if published_silent and settled["status"] == CLASSIFIED:
                 self.added_over_published[dataset][slot] += 1
 
-    def add_inheritance(self, reconciled: dict, outcomes: Iterable[tuple[str, str]]) -> None:
-        """Count what each role's parents gave one child, per slot (``reconcile_inherit.OUTCOMES``)."""
+    def add_inheritance(self, reconciled: dict, outcomes: Iterable[tuple[str, str, str]]) -> None:
+        """Count what each role's parents gave one child, per slot and per role and slot (``reconcile_inherit.OUTCOMES``)."""
         dataset = str(reconciled.get("dataset_title") or "")
-        for slot, outcome in outcomes:
+        for role, slot, outcome in outcomes:
             self.inheritance[dataset][slot][outcome] += 1
+            self.inheritance_by_role[dataset][role][slot][outcome] += 1
 
     def add_step(self, reconciled: dict, conflict: StepConflict | None, steps: list[LineageStep]) -> None:
         """Count one record's settled step: who named it, a conflict with who said what, or how it misfits.
@@ -1010,7 +1019,7 @@ class Report:
             },
             "lineage": {
                 "sources": plain(self.lineage_counts),
-                "header_steps": self.header_steps,
+                "content_steps": self.content_steps,
                 "steps": plain(self.steps),
                 "conflicts": {
                     dataset: {kind: dict(tally) for kind, tally in sorted(per_kind.items())}
@@ -1023,6 +1032,7 @@ class Report:
                 ],
             },
             "inheritance": plain(self.inheritance),
+            "inheritance_by_role": plain(self.inheritance_by_role),
             "coverage": {
                 source_type: {
                     dataset or EVERY_DATASET: sorted(slot for d, slot in pairs if d == dataset)
@@ -1174,7 +1184,7 @@ def reconcile_run(
         coverage=joined.coverage,
         published_slots=published_slots(repository),
         lineage_counts=lineage.counts,
-        header_steps=header_step_counts(run_dir),
+        content_steps=content_step_counts(run_dir),
     )
 
     root = evidence_root or Path()

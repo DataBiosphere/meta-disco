@@ -96,11 +96,11 @@ rules:
   # --- 6. auxiliary-type inertness (checksum/log; index deferred to #312) ------
   - id: auxiliary_inert
     description: >-
-      A checksum or log describes another file and carries no signal of its own,
+      A checksum, log or sample map describes other files and carries no signal of its own,
       so modality / reference / assay / platform / instrument model must not be
       classified (e.g. a .md5 classified genomic is inconsistent). Index inertness
       is the #312 propagation question and is intentionally out of scope here.
-    when: {data_type: {value_in: ["checksum", "log"]}}
+    when: {data_type: {value_in: ["checksum", "log", "sample_map"]}}
     require:
       data_modality: {status_not: "classified"}
       reference_assembly: {status_not: "classified"}

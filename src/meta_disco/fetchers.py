@@ -39,7 +39,9 @@ import subprocess
 import tarfile
 import zlib
 from collections import defaultdict
-from pathlib import Path
+from dataclasses import replace
+from pathlib import Path, PurePosixPath
+from typing import NamedTuple
 
 import requests
 
@@ -50,8 +52,10 @@ from .evidence import (
     FastaEvidence,
     FastqEvidence,
     GfaEvidence,
+    SampleMapEvidence,
     SegmentTag,
     TarEvidence,
+    TarHead,
     VcfEvidence,
 )
 
@@ -175,6 +179,11 @@ def fetch_content_length(url: str, timeout: int = 60) -> int:
     return int(length)
 
 
+def _range_target(md5sum: str, url: str | None) -> tuple[str, str]:
+    """Where a range read goes, and how its errors name it: ``url`` where given, else the AnVIL S3 mirror."""
+    return (url, "source URL") if url else (f"{S3_MIRROR_URL}/{md5sum}.md5", "AnVIL S3 mirror")
+
+
 def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None = None, start_byte: int = 0) -> bytes:
     """Fetch bytes ``start_byte`` through ``end_byte`` (inclusive) from S3. Returns raw bytes.
 
@@ -197,10 +206,9 @@ def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None 
     *wrong* answer, so it raises rather than guess. (Fewer bytes than requested is fine —
     the object is shorter than the range; the caller reads that as EOF.)
     """
-    fetch_url = url or f"{S3_MIRROR_URL}/{md5sum}.md5"
+    fetch_url, source = _range_target(md5sum, url)
     headers = {"Range": f"bytes={start_byte}-{end_byte}"}
     resp = requests.get(fetch_url, headers=headers, timeout=timeout)
-    source = "source URL" if url else "AnVIL S3 mirror"
     if resp.status_code == 416:  # start_byte at/past EOF — the escalating reader treats this as end-of-file
         raise RangeNotSatisfiable(f"HTTP 416 from {source} range request")
     if start_byte > 0 and resp.status_code == 200:
@@ -570,7 +578,16 @@ def _scan_lines(stream, raw: "_RawRangeReader", *, cap: int, matcher):
     return matcher
 
 
-def _walk_tar_members(stream, raw: "_RawRangeReader", *, detector, max_members: int, stages) -> list[str]:
+class TarWalk(NamedTuple):
+    """What a tar head walk read: the member names, and the text of the one member it was asked to keep, if read."""
+
+    member_names: list[str]
+    kept_text: str | None = None
+
+
+def _walk_tar_members(
+    stream, raw: "_RawRangeReader", *, detector, max_members: int, stages, kept_member=None
+) -> TarWalk:
     """Member names from the head of a streamed, already-decompressed tar archive.
 
     ``detector`` gates *escalation*, not per-member stopping: it is consulted only once the
@@ -588,17 +605,32 @@ def _walk_tar_members(stream, raw: "_RawRangeReader", *, detector, max_members: 
     #263 stage-2 shadow-diff over the sampled corpus (an observed result, not a guarantee for
     every possible archive/detector).
 
+    ``kept_member`` (#621), given the names read so far, returns the base name of the member
+    whose text to keep, or None; a regular member of that base name, of at most
+    ``MAX_TAR_MEMBER_TEXT`` bytes, is read as it passes, the first one only.
+
     Walking stops when the detector is conclusive at a stage boundary, at ``max_members``, or
     when the stream ends / is cut short (a truncated or non-tar head raises ``TarError`` /
     ``EOFError`` / a gzip error, caught here — the names read before the cut are the result). A
-    non-tar head yields ``[]``.
+    non-tar head yields no names.
     """
     names: list[str] = []
+    kept: str | None = None
     pending = list(stages)
     try:
         with tarfile.open(fileobj=stream, mode="r|") as tar:
             for member in tar:
                 names.append(member.name)
+                if (
+                    kept is None
+                    and kept_member is not None
+                    and member.isfile()
+                    and member.size <= MAX_TAR_MEMBER_TEXT
+                    and PurePosixPath(member.name).name == kept_member(names)
+                ):
+                    body = tar.extractfile(member)
+                    if body is not None:
+                        kept = _decode_bytes(body.read())
                 if len(names) >= max_members:
                     break
                 crossed = False
@@ -609,7 +641,85 @@ def _walk_tar_members(stream, raw: "_RawRangeReader", *, detector, max_members: 
                     break
     except (tarfile.TarError, EOFError, zlib.error, gzip.BadGzipFile):
         pass
-    return names
+    return TarWalk(names, kept)
+
+
+def _fetch_suffix(md5sum: str, length: int, *, url: str | None, timeout: int = 60) -> tuple[bytes, int]:
+    """The last ``length`` bytes of a file, and the offset of the first of them (#621).
+
+    A suffix range (``bytes=-N``). A 206 names its window's start in ``Content-Range``; a 200
+    is the whole file, from 0. Raises ``FetchError`` on any other status, a 206 whose
+    ``Content-Range`` names no start, or a body of either longer than ``length``: a server
+    that ignored the range would otherwise hand over a multi-gigabyte tar to find one small
+    member. The body is streamed in 64 KiB chunks and checked after each, so such a reply is
+    refused after at most ``length`` bytes plus one chunk.
+    """
+    fetch_url, source = _range_target(md5sum, url)
+    with requests.get(fetch_url, headers={"Range": f"bytes=-{length}"}, timeout=timeout, stream=True) as resp:
+        if resp.status_code not in (200, 206):
+            raise FetchError(f"HTTP {resp.status_code} from {source} suffix range request")
+        start = 0
+        if resp.status_code == 206:
+            found = _content_range_start(resp.headers.get("Content-Range", ""))
+            if found is None:
+                raise FetchError(f"suffix range from {source} with no Content-Range start")
+            start = found
+        body = b""
+        for chunk in resp.iter_content(chunk_size=65536):
+            body += chunk
+            if len(body) > length:
+                raise FetchError(
+                    f"HTTP {resp.status_code} from {source} suffix range request past {length} bytes (Range ignored)"
+                )
+        return body, start
+
+
+def _member_in_window(data: bytes, base: int, member: str) -> tuple[int, int, bytes] | None:
+    """The first regular member named ``member`` whose tar header lies in ``data``: its body's offset, size and the part of it ``data`` holds.
+
+    ``base`` is ``data``'s offset in the file; headers sit on 512-byte boundaries of the
+    file. A block counts as a header only where ``tarfile`` accepts it, checksum included,
+    so a body's bytes are not read as one by chance.
+    """
+    for i in range((-base) % 512, len(data) - 511, 512):
+        try:
+            info = tarfile.TarInfo.frombuf(data[i : i + 512], "utf-8", "surrogateescape")
+        except tarfile.HeaderError:
+            continue
+        if info.isfile() and PurePosixPath(info.name).name == member:
+            body = i + 512
+            return base + body, info.size, data[body : body + info.size]
+    return None
+
+
+def _read_member(md5sum: str, member: str, *, url: str | None, tail_first: bool) -> tuple[str | None, int]:
+    """The text of the member named ``member`` in an uncompressed tar, looked for in its first and last ``TAR_MEMBER_WINDOW`` bytes (#621), and the bytes the reads pulled.
+
+    ``tail_first`` reads the tail first. Where the window cuts the body short, one more range
+    reads the rest. The text is None where neither window holds the member's header, or its
+    body is over ``MAX_TAR_MEMBER_TEXT`` bytes.
+    """
+    fetched = 0
+    for window in ("tail", "head") if tail_first else ("head", "tail"):
+        if window == "tail":
+            data, base = _fetch_suffix(md5sum, TAR_MEMBER_WINDOW, url=url)
+        else:
+            data, base = _fetch_range(md5sum, TAR_MEMBER_WINDOW - 1, url=url), 0
+        fetched += len(data)
+        found = _member_in_window(data, base, member)
+        if found is None:
+            continue
+        offset, size, held = found
+        if size > MAX_TAR_MEMBER_TEXT:
+            return None, fetched
+        if len(held) < size:
+            rest = _fetch_range(md5sum, offset + size - 1, url=url, start_byte=offset + len(held))
+            fetched += len(rest)
+            held += rest
+        if len(held) < size:
+            raise FetchError(f"tar member {member} cut short: {len(held)} of {size} bytes")
+        return _decode_bytes(held), fetched
+    return None, fetched
 
 
 def _load_cached(evidence_cls, evidence_dir, md5sum: str, use_cache: bool):
@@ -624,17 +734,20 @@ def _load_cached(evidence_cls, evidence_dir, md5sum: str, use_cache: bool):
     return cached.payload if cached is not None else None
 
 
-def _save_head_evidence(evidence_cls, evidence_dir, *, md5sum, file_name, raw, url, **payload) -> None:
+def _save_head_evidence(
+    evidence_cls, evidence_dir, *, md5sum, file_name, raw, url, extra_bytes: int = 0, **payload
+) -> None:
     """Persist a fetched head as its typed evidence, filling the fields every fetcher shares.
 
     ``payload`` carries the type-specific field(s) — e.g. ``read_names=...``, plus VCF's extra
-    ``max_positions``; ``md5sum`` / ``file_name`` / ``raw_bytes_fetched`` (from ``raw``) /
-    ``source_url`` are the common provenance all five fetchers record identically.
+    ``max_positions``; ``md5sum`` / ``file_name`` / ``raw_bytes_fetched`` (from ``raw``, plus
+    ``extra_bytes`` a fetcher pulled outside it, #621) / ``source_url`` are the common
+    provenance every fetcher records identically.
     """
     evidence_cls(
         md5sum=md5sum,
         file_name=file_name,
-        raw_bytes_fetched=raw.bytes_fetched,
+        raw_bytes_fetched=raw.bytes_fetched + extra_bytes,
         source_url=url,
         **payload,
     ).save(evidence_dir)
@@ -1043,6 +1156,16 @@ MAX_TAR_MEMBERS = 200
 TAR_HEAD_STAGES = (HEAD_BYTES, 1024 * 1024, 10 * 1024 * 1024, TAR_COMPRESSED_CAP)
 
 
+# A GenomicsDB workspace's ``vcfheader.vcf`` sits in the first or the last MiB of its tar,
+# whichever order tar stored the directory in: so it was in each of 106 tars measured on
+# 2026-10-04 (50 of ANVIL_T2T, then 56 of ANVIL_T2T and ANVIL_T2T_CHRY), and of the 56 whose
+# offsets were recorded the deepest was 0.33 MB from the start or 0.48 MB from the end (#621).
+TAR_MEMBER_WINDOW = 1024 * 1024
+# The most text a kept tar member may hold; the corpus's `vcfheader.vcf` bodies are 14 KB
+# and 181 KB.
+MAX_TAR_MEMBER_TEXT = MAX_DECOMPRESSED
+
+
 @wrap_as_fetch_error("TAR head")
 def fetch_tar_headers(
     evidence_dir: Path,
@@ -1052,15 +1175,16 @@ def fetch_tar_headers(
     use_cache: bool = True,
     url: str | None = None,
     head_detector=None,
+    kept_member=None,
     **kwargs,
-) -> list[str]:
-    """Read member names from the head of a tar / tar.gz archive on S3 (#255, #260).
+) -> TarHead:
+    """Read member names from the head of a tar / tar.gz archive on S3 (#255, #260), and one member's text (#621).
 
     If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
-    Returns the member names visible in the read head; an empty list (a truncated or
-    non-tar head) is a readable result, not a failure. Raises ``FetchError`` naming the
-    cause when the range read itself fails, so the record is kept as a ``not_classified``
-    row instead of vanishing (#155).
+    Returns the member names visible in the read head; no names (a truncated or non-tar
+    head) is a readable result, not a failure. Raises ``FetchError`` naming the cause when a
+    range read itself fails, so the record is kept as a ``not_classified`` row instead of
+    vanishing (#155).
 
     The head is streamed and members are walked (:func:`_walk_tar_members`); ``head_detector``
     gates escalation at :data:`TAR_HEAD_STAGES` byte crossings — the walk reads deeper only
@@ -1073,23 +1197,132 @@ def fetch_tar_headers(
     decompressed on the fly
     (BGZF-aware); a container carries no format of its own (#245) — the archive is classified
     from its inner members.
+
+    ``kept_member``, injected the same way (``FileTypeConfig.kept_member``), names from the
+    member names the one member whose text to keep, or None. Its text is read as the walk
+    passes it; where the walk stopped first, an uncompressed tar is read in its first and last
+    :data:`TAR_MEMBER_WINDOW` bytes (:func:`_read_member`), the tail first unless the walk saw
+    the member's name. Whether it was looked for is cached with the names, found or not
+    (``TarEvidence.vcf_header_read``), so a cached entry from before #621 of an uncompressed
+    tar that reaches this fetcher has only the member read (``--skip-cached`` never hands it
+    one), while one of a compressed tar is walked again from its head; and a member not found
+    is not looked for again. With no ``kept_member`` nothing is
+    looked for, and the entry records that it was not.
+
+    A failed read of the member alone (an HTTP error or a dropped connection) does not fail the
+    tar: its names are returned with the cause in ``TarHead.vcf_header_unread``, and the entry
+    is not marked looked for, so the next run reads the member again. The names are evidence
+    the tar already had; a blip on the extra read must not unclassify it.
+
+    A compressed tar whose kept member the head walk did not reach raises ``FetchError``: a
+    gzip stream cannot be entered at its tail, so the member was not looked for, and the tar
+    is written unreadable (every dimension ``not_classified``, no step) rather than recorded
+    as searched. Nothing is cached, so a later run reads it again.
     """
-    payload = _load_cached(TarEvidence, evidence_dir, md5sum, use_cache)
-    if payload is not None:
-        return payload
+    cached = TarEvidence.load(evidence_dir, md5sum) if use_cache else None
+    if cached is not None:
+        if cached.vcf_header_read or kept_member is None:
+            return TarHead(cached.member_names, cached.vcf_header)
+        member = kept_member(cached.member_names)
+        if member is None:
+            return TarHead(cached.member_names, None)
+        if not is_gzipped:
+            text, unread, fetched = _read_kept(md5sum, member, cached.member_names, url=url)
+            if unread is None:
+                total = (cached.raw_bytes_fetched or 0) + fetched
+                replace(cached, vcf_header=text, vcf_header_read=True, raw_bytes_fetched=total).save(evidence_dir)
+            return TarHead(cached.member_names, text, unread)
+        # A compressed tar's member is read only by walking it again from its head.
 
     detector = head_detector or (lambda _members: True)
     stream, raw = _open_stream(md5sum, url=url, is_gzipped=is_gzipped, compressed_cap=TAR_COMPRESSED_CAP)
-    member_names = _walk_tar_members(
-        stream, raw, detector=detector, max_members=MAX_TAR_MEMBERS, stages=TAR_HEAD_STAGES
+    walk = _walk_tar_members(
+        stream, raw, detector=detector, max_members=MAX_TAR_MEMBERS, stages=TAR_HEAD_STAGES, kept_member=kept_member
     )
+    member_names, text = walk.member_names, walk.kept_text
     if len(member_names) >= MAX_TAR_MEMBERS:
         # `>=` reaches the cap; the walk does not report whether more members followed, so this
         # may also fire for an archive of exactly that many — hence "may have more" rather than
         # asserting the cap truncated the list. Warn so an under-sampled head is not silent.
         print(f"tar member scan reached the {MAX_TAR_MEMBERS}-member cap for {file_name or md5sum}; may have more")
+    member = kept_member(member_names) if kept_member is not None else None
+    unread, fetched = None, 0
+    if member is not None and text is None:
+        if isinstance(stream, gzip.GzipFile):
+            # A compressed tar cannot be entered at its tail, and nothing past the head walk
+            # reads it, so its step cannot be read: the tar is unreadable, not "looked for".
+            raise FetchError(f"compressed tar: {member} not in the head read, and a compressed tail is not read")
+        text, unread, fetched = _read_kept(md5sum, member, member_names, url=url)
 
     _save_head_evidence(
-        TarEvidence, evidence_dir, md5sum=md5sum, file_name=file_name, raw=raw, url=url, member_names=member_names
+        TarEvidence,
+        evidence_dir,
+        md5sum=md5sum,
+        file_name=file_name,
+        raw=raw,
+        url=url,
+        extra_bytes=fetched,
+        member_names=member_names,
+        vcf_header=text,
+        # A member whose read failed is not recorded as looked for, so the next run reads it.
+        vcf_header_read=kept_member is not None and unread is None,
     )
-    return member_names
+    return TarHead(member_names, text, unread)
+
+
+def _read_kept(
+    md5sum: str, member: str, member_names: list[str], *, url: str | None
+) -> tuple[str | None, str | None, int]:
+    """The kept member's text (:func:`_read_member`), None, and the bytes pulled; or None, why its read failed, and 0.
+
+    The tail is read first unless ``member_names`` show the member, which then lies in the
+    head. A failed read (an HTTP error or a dropped connection) is returned, not raised: the
+    names are evidence the tar already had. A failed read's bytes are not counted in
+    ``raw_bytes_fetched``.
+    """
+    tail_first = member not in {PurePosixPath(n).name for n in member_names}
+    try:
+        text, fetched = _read_member(md5sum, member, url=url, tail_first=tail_first)
+        return text, None, fetched
+    except FetchError as e:
+        return None, e.reason, 0
+    except requests.RequestException as e:
+        return None, f"{type(e).__name__}: {e}", 0
+
+
+# =============================================================================
+# SAMPLE MAP FETCHER (#621)
+# =============================================================================
+
+
+@wrap_as_fetch_error("sample map")
+def fetch_sample_map(
+    evidence_dir: Path,
+    md5sum: str,
+    file_name: str = "",
+    is_gzipped: bool = False,
+    use_cache: bool = True,
+    url: str | None = None,
+    **kwargs,
+) -> str:
+    """Read a GATK sample-name map whole: its text, to the file's end.
+
+    If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
+    Raises ``FetchError`` when the read fails or stops at ``MAX_DECOMPRESSED`` bytes before
+    the end: a list read in part names part of a cohort.
+    """
+    payload = _load_cached(SampleMapEvidence, evidence_dir, md5sum, use_cache)
+    if payload is not None:
+        return payload
+
+    # One byte past the cap, so a map of exactly ``MAX_DECOMPRESSED`` bytes is read to its end
+    # and seen whole, and only a longer one stops short.
+    stream, raw = _open_stream(md5sum, url=url, is_gzipped=is_gzipped, compressed_cap=MAX_DECOMPRESSED + 2)
+    text, truncated = _read_head_text(stream, raw, cap=MAX_DECOMPRESSED + 1)
+    if truncated:
+        raise FetchError(f"sample map larger than {MAX_DECOMPRESSED} bytes; not read whole")
+
+    _save_head_evidence(
+        SampleMapEvidence, evidence_dir, md5sum=md5sum, file_name=file_name, raw=raw, url=url, text=text
+    )
+    return text

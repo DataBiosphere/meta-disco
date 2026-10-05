@@ -282,7 +282,7 @@ def write_excluded(run_dir: Path, excluded: list[ExcludedFile], *, total_input: 
 
     **Written by every producer, concurrently, and that is safe.** Each producer of a
     run writes this as it loads (``pipeline.load_classifiable_records``), and a full
-    ``make classify`` runs nine of them in parallel into one run directory. They all
+    ``make classify`` runs ten of them in parallel into one run directory. They all
     read the same input and apply the same predicate, so they all compute the same
     content — the writes are idempotent, and the only hazard is a reader catching a
     half-written file. Hence the write-then-``os.replace``: the rename is atomic within
@@ -306,7 +306,7 @@ def write_excluded(run_dir: Path, excluded: list[ExcludedFile], *, total_input: 
         "excluded": [e.to_dict() for e in excluded],
     }
     # Write to a sibling temp file, then rename onto the target: see the docstring for
-    # why. mkstemp because the temp name must be unique — nine producers write this file
+    # why. mkstemp because the temp name must be unique — ten producers write this file
     # concurrently, and a fixed ".tmp" name would let one rename a file another still
     # holds open. It also opens O_EXCL, so a name planted in advance cannot be followed.
     # The temp shares a directory with the target so the rename stays within one

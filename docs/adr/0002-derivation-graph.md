@@ -136,12 +136,21 @@ files it was built from. There is **no callset node**:
 no source names a callset as a thing of its own, and inventing one would be the entity scaffolding
 decision 1 rejects.
 
+*Amended by #621.* A merge may name its inputs through a **list** rather than one by one: T2T's
+GenomicsDB workspace tars each merge the gVCFs of one chromosome's GATK sample-name map, and the tar's own
+`vcfheader.vcf` names the map. The tar's step is a `CohortMergeActivity`, a `MergeActivity` whose one
+input is the map, in the role `input_list`, and the map's own step, a `CohortDefinitionActivity`, has each listed gVCF as a `member`.
+Linking each of 31,155 tars to each of its 3,202 gVCFs would be about 100M inputs; the map is the record of
+who was joint-called together (a comparability factor, #619), and the tar reads its members' answers
+**through** it (decision 8, contract 4.9). The map is a list of names, not data, so it passes nothing of
+its own.
+
 ### 5. Activities
 
 *Amended by #580.* A step is named by its **activity**, not by a verb between two files. The
 vocabulary is `activity_type_enum`: AnVIL FSS's `ActivityTypes`, spelled as FSS's released LinkML schema
 spells them (`DataBiosphere/biocore-data-model`, `AnVILDataSubmissionFindabilitySubsetSchema.linkml.yaml`),
-plus seven of our own (`CoverageActivity` added by #595; `VariantProcessingActivity` and `VariantFilterActivity` by #610). FSS's values spreadsheet spells three differently (`VariantCallingActivity`,
+plus nine of our own (`CoverageActivity` added by #595; `VariantProcessingActivity` and `VariantFilterActivity` by #610; `CohortDefinitionActivity` and `CohortMergeActivity` by #621). FSS's values spreadsheet spells three differently (`VariantCallingActivity`,
 `ImagingActivity`, `IndexingActivity`); the schema a submission is validated against wins. A term's `meaning` is the Terra
 Interoperability Model's class where it has one, else EDAM's operation where EDAM defines the same step.
 TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `generated_file_id` are PROV's
@@ -156,6 +165,8 @@ TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `gener
 | `AlignmentActivity` | alignment ← reads | submitter same-row, `@PG`, `anvil_activity` (ENCORE `Alignment: STAR`) | `aligned_from` |
 | `VariantCallActivity` | variants ← alignments or gVCFs | VCF caller command lines, submitter same-row (1000G `cram` → `gvcf`; T2T `interval`: region VCF ← GenomicsDB tar, #610) | `called_from` |
 | `MergeActivity` (ours) | merged file ← shards | VCF headers (T2T chromosome VCF ← region VCFs, its `bcftools concat` line, #610), `anvil_activity` (ENCORE `Merger: multiple FASTQ files`, #595) | `merged_from` |
+| `CohortMergeActivity` (ours, under `MergeActivity`; #621) | merged file ← the cohort's list naming its inputs (`input_list`) | a GenomicsDB workspace's `vcfheader.vcf` (T2T tar ← its chromosome's sample map, its `GenomicsDBImport` line) | — |
+| `CohortDefinitionActivity` (ours; #621) | list ← each file it lists (`member`) | a GATK sample-name map's own rows (T2T `chrN_sample_map.tsv` ← its gVCFs) | — |
 | `CoverageActivity` (ours, under `AnalysisActivity`; #595) | coverage track ← the alignment it covers | `anvil_activity` (ENCORE `Track: bedGraphToBigWig`) | — |
 | `VariantFilterActivity` (ours, under the abstract `VariantProcessingActivity`; #610) | filtered callset ← the callset it filtered | submitter same-row (T2T `chromosome`: raw → recalibrated → PASS on CHM13; recalibrated → PASS on GRCh38, whose raw callset the table does not hold) | — |
 | `LiftoverActivity` (ours, under `AnalysisActivity`) | lifted file ← the file it was lifted from | a source naming the parent (schema changes, `source_assembly`) | `lifted_over_from` |
@@ -345,7 +356,10 @@ authority, and this table is its reading when #580 wrote it, amended where a row
 | `LiftoverActivity` | yes | yes | yes | yes | **no** — liftover changes it |
 | `AssemblyActivity` | yes | yes | yes | yes | **no** — an assembly is its own reference |
 | `ExpressionActivity` (amended by #595) | yes | yes | yes | yes | **no** — quantified against a transcriptome |
-| `Activity`, `ChecksumActivity` (amended by #596), `SequenceActivity`, `SampleCollectionActivity`, `SampleTreatmentActivity`, `ImageActivity`, `AnalysisActivity` | no | no | no | no | no |
+| `Activity`, `ChecksumActivity` (amended by #596), `CohortDefinitionActivity` (#621), `SequenceActivity`, `SampleCollectionActivity`, `SampleTreatmentActivity`, `ImageActivity`, `AnalysisActivity` | no | no | no | no | no |
+
+`CohortMergeActivity`'s `input_list` role (#621) passes all five, read through its list: what the list's
+`member`s settle to, not the list's own answer (contract 4.9).
 
 - Carrying `reference_assembly` carries the build's identity — `ReferenceBuild.base` and `version` —
   so a child describes its reference as precisely as its parents agree on it. The build's observations
