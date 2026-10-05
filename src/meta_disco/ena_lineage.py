@@ -273,14 +273,15 @@ def stats_counts(text: str) -> tuple[int, int]:
 def read_stats(md5: str) -> tuple[int, int]:
     """The counts of the ``samtools stats`` file with this md5, read from the AnVIL S3 mirror.
 
-    A dropped connection or a failed name lookup is tried :data:`STATS_ATTEMPTS` times in
-    all, then raises ``FetchError``; any other failure (an HTTP status, a file that is not
-    samtools stats) raises at once.
+    A transport failure (a dropped connection, a failed name lookup, a body cut off
+    mid-read: any ``requests`` exception) is tried :data:`STATS_ATTEMPTS` times in all, then
+    raises ``FetchError``; any other failure (an HTTP status, a file that is not samtools
+    stats) raises at once.
     """
     for attempt in range(1, STATS_ATTEMPTS + 1):
         try:
             return stats_counts(fetch_head_text(md5, STATS_HEAD_BYTES))
-        except (requests.ConnectionError, requests.Timeout) as exc:
+        except requests.RequestException as exc:
             if attempt == STATS_ATTEMPTS:
                 raise FetchError(f"head: {type(exc).__name__}: {exc}") from exc
             time.sleep(attempt)

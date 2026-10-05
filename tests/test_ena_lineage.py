@@ -540,6 +540,20 @@ def test_a_dropped_connection_reading_a_stats_file_is_retried(monkeypatch):
     assert el.read_stats("m") == (5, 750) and len(calls) == el.STATS_ATTEMPTS
 
 
+def test_a_body_cut_off_mid_read_is_retried_too(monkeypatch):
+    monkeypatch.setattr(el.time, "sleep", lambda _s: None)
+    calls = []
+
+    def head(md5, length):
+        calls.append(md5)
+        if len(calls) == 1:
+            raise requests.exceptions.ChunkedEncodingError("cut off")
+        return "SN\traw total sequences:\t5\nSN\ttotal length:\t750\n"
+
+    monkeypatch.setattr(el, "fetch_head_text", head)
+    assert el.read_stats("m") == (5, 750) and len(calls) == 2
+
+
 def test_a_connection_dropped_on_every_try_is_a_fetch_error(monkeypatch):
     monkeypatch.setattr(el.time, "sleep", lambda _s: None)
 
