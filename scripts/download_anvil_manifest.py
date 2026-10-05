@@ -53,7 +53,7 @@ anvil14 was — still rebuilds, and the live count is reported beside the stored
 when the two differ. A parity mismatch exits non-zero and leaves the input files
 untouched. A rate-limit or gateway error is waited out, honoring the server's
 ``Retry-After``, for up to ``--max-wait`` seconds per request (see
-``azul_manifest._request``); ``--pause`` seconds separate consecutive jobs.
+``azul_manifest.request_with_retries``); ``--pause`` seconds separate consecutive jobs.
 
 Usage:
     python scripts/download_anvil_manifest.py

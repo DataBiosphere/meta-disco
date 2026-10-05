@@ -35,6 +35,12 @@ rows:
     match: {source_type: repository_metadata, table: [1KGP_CHM13v2_sample, SGDP_CHM13v2_sample, SGDP_GRCh38_sample, participant], child_column: cram, parent_column: [read_1_fastq, read_2_fastq]}
     declares: {activity: AlignmentActivity, role: reads}
     reason: The sample row's CRAM is its two FASTQs aligned.
+  - id: activity.ena_run_bwa_mem
+    match: {source_type: external_ground_truth, table: read_run, raw_activity: bwa mem, child_column: cram, parent_column: fastq_ftp}
+    declares: {activity: AlignmentActivity, role: reads}
+    reason: >-
+      A T2T_CHRY CRAM holds the ENA run whose read and base counts its samtools stats
+      equal, and its own @PG says bwa mem took FASTQs: the run's reads, aligned (#594).
   - id: activity.t2t_variant_call
     match:
       source_type: repository_metadata

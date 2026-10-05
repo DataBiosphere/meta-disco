@@ -154,7 +154,7 @@ Sleep = Callable[[float], None]
 Log = Callable[[str], None]
 
 
-def _request(
+def request_with_retries(
     http: HttpSession,
     method: str,
     url: str,
@@ -236,7 +236,7 @@ def discover_datasets(
     Sorted by file count descending, then title, so a run's order is stable.
     """
     http: HttpSession = session if session is not None else requests.Session()
-    resp = _request(
+    resp = request_with_retries(
         http, "get", files_url(service), sleep, max_wait, log, params={"catalog": catalog, "size": 1}, timeout=60
     )
     terms = resp.json()["termFacets"]["datasets.title"]["terms"]
@@ -270,7 +270,7 @@ def fetch_manifest(
     temporary file in chunks and renamed into place when complete — the largest
     verbatim manifest is half a gigabyte, and a download that dies partway must
     not leave a truncated file that a rerun would take for a finished one. Each
-    HTTP call goes through :func:`_request`, so a 429 or gateway error is waited
+    HTTP call goes through :func:`request_with_retries`, so a 429 or gateway error is waited
     out for up to ``max_wait`` seconds per call, each wait reported through
     ``log``. Returns the bytes written. Raises ``TimeoutError`` if the job has
     not finished after ``timeout`` seconds of polling, and ``RuntimeError`` on
@@ -279,7 +279,7 @@ def fetch_manifest(
     if fmt not in FORMATS:
         raise ValueError(f"unknown manifest format {fmt!r}; expected one of {FORMATS}")
     http: HttpSession = session if session is not None else requests.Session()
-    call = partial(_request, http, sleep=sleep, max_wait=max_wait, log=log)
+    call = partial(request_with_retries, http, sleep=sleep, max_wait=max_wait, log=log)
     resp = call(
         "put",
         manifest_url(service),

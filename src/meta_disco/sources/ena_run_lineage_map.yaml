@@ -1,0 +1,16 @@
+# The run lineage map (#594). Shape and checks: src/meta_disco/run_lineage_map.py; the importer: ena_lineage.py.
+# Each entry declares that a table's alignments hold an ENA run's reads, found by the read
+# and base counts of the same row's samtools stats file among the listed studies' runs, and
+# that the run's reads are files of `reads_in`, another dataset. It is the one place a
+# lineage parent may be in another dataset (ADR-0002 decision 2); reconcile refuses any other.
+catalog: anvil15
+# The archive whose lineage lines may name a parent in another dataset.
+source: ena
+datasets:
+  ANVIL_T2T_CHRY:
+    1KGP_CHM13v2_sample:
+      - child: {column: cram}
+        counts: {column: full_samtools_stats}
+        # NYGC's 1000 Genomes 30x runs: the 2,504 phase 3 samples and the 698 related.
+        ena_studies: [PRJEB31736, PRJEB36890]
+        reads_in: ANVIL_T2T

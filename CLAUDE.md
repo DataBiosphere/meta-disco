@@ -200,6 +200,19 @@ evidence}` entry — plus the controlled vocabulary:
     ENA's response is kept beside each generation (`read_run.response.json`, not evidence), and
     `--response` re-imports from it offline. `scripts/validate_ena_accessions.py` measures
     inference (contract 6.9) and refuses a `reconciled/` input, which carries ENA's own values.
+  - **ENA run lineage** (#594) is the one place a lineage parent may be in another dataset
+    (ADR-0002 decision 2). `ena_lineage` (`make check-ena-lineage-map` /
+    `make import-ena-lineage`, network) links each alignment that `sources/ena_run_lineage_map.yaml`
+    declares (T2T_CHRY's 1KGP CRAMs) to the one ENA run of the declared studies whose read and
+    base counts equal its `samtools stats` file's (contract 2.10). It writes, under
+    `data/lineage_evidence/ena/`, a line per FASTQ of that run in the map's `reads_in` dataset
+    (ANVIL_T2T), carrying `parent_dataset`, with the CRAM's own `@PG` step (`bwa mem`) as
+    `raw_activity`. It keeps what it read beside each generation (`--inputs` re-imports
+    offline). The map is declared and checked in `run_lineage_map` (no network, which is all
+    reconcile imports): it names the `source` whose lines may cross, refuses a loop among its
+    datasets, and refuses a run holding a child dataset without its `reads_in` dataset.
+    Reconcile resolves `parent_dataset` only for a declared pair from that source
+    (`RunLineageMap.declares`) and counts any other line naming one `undeclared_dataset`.
   - **Every repository has exactly one published source** (contract 7.12), declared in
     `record_keys.PUBLISHED_TABLES` beside the record keys, each repository's own entry in
     its module (`azul_manifest.PUBLISHED_TABLE`); `anvil_evidence.check` holds both maps to it

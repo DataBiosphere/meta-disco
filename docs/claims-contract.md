@@ -113,6 +113,13 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     attaches evidence by itself, and a candidate the checksum does not confirm is counted, not written.
     ENA's archive-generated FASTQs are the case that set it (#606): `ERR3240114_1.fastq.gz` is looked
     up as run ERR3240114, and is ENA's file only because ENA's `fastq_md5` for it equals the catalog's md5.
+    An alignment holds no file of a run, so its identity is the run's **read and base counts**, both
+    equal (#594): a T2T_CHRY CRAM whose own `samtools stats` gives 697,525,866 reads and
+    104,628,879,900 bases holds run ERR3239446's reads, the one run of its declared studies with exactly
+    those counts. A sequencing run happens once, so no other reads give both; a CRAM matching no run, or
+    several, is counted, not linked. Such a link is lineage to the run's reads, not values on the
+    alignment, and its parent may be in another dataset only where `sources/ena_run_lineage_map.yaml`
+    declares it (ADR-0002 decision 2).
     A source keyed by a field the target publishes (a file name within a dataset) joins on that field
     as it is.
 

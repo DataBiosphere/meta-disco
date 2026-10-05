@@ -190,6 +190,10 @@ Lineage lines (a file made from a parent) whose step no authored activity-map ro
 | 2 | `'file'` |  | `'file_path'` | `'derived_from'` | `'barcode replacement'` | `'barcode onlist'` | `AnVIL_IGVF_Mouse_R1` | activity.file_file_path_derived_from_barcode_replacement_barcode_onlist |
 | 2 | `'file'` |  | `'file_path'` | `'derived_from'` | `'fragments'` | `'seqspec'` | `AnVIL_IGVF_Mouse_R1` | activity.file_file_path_derived_from_fragments_seqspec |
 
+### Archive: an archive's run records (ENA's, #594)
+
+No unreviewed steps.
+
 ### Authored activity mappings
 
 | lines | rule | matches | declares | reason |
@@ -201,6 +205,7 @@ Lineage lines (a file made from a parent) whose step no authored activity-map ro
 | 31,155 | activity.t2t_joint_genotype | `source_type: 'repository_metadata'; table: 'interval'; child_column: 'genotyped_bgzip'; parent_column: 'genomics_db_tar'` | VariantCallActivity / calls_from | The interval row's VCF is its GenomicsDB workspace genotyped across every sample (GATK GenotypeGVCFs reads the workspace) and trimmed to the interval (SelectVariants). The VCF's header carries the workspace's GenomicsDBImport line and SelectVariants', but not GenotypeGVCFs', so the row is what states the link (#610). |
 | 14,174 | activity.checksum | `source_type: 'repository_activity'; table: 'anvil_activity'; raw_activity: 'Checksum'; parent_column: 'used_file_id'` | ChecksumActivity / checked | AnVIL's Checksum step makes the checksum file of the one file it used. |
 | 7,520 | activity.t2t_alignment | `source_type: 'repository_metadata'; table: '1KGP_CHM13v2_sample' · 'SGDP_CHM13v2_sample' · 'SGDP_GRCh38_sample' · 'participant'; child_column: 'cram'; parent_column: 'read_1_fastq' · 'read_2_fastq'` | AlignmentActivity / reads | The sample row's CRAM is its two FASTQs aligned. |
+| 6,404 | activity.ena_run_bwa_mem | `source_type: 'external_ground_truth'; table: 'read_run'; raw_activity: 'bwa mem'; child_column: 'cram'; parent_column: 'fastq_ftp'` | AlignmentActivity / reads | A T2T_CHRY CRAM holds the ENA run whose read and base counts its samtools stats equal, and its own @PG says bwa mem took FASTQs: the run's reads, aligned (#594). |
 | 2,536 | activity.track_bedgraphtobigwig | `source_type: 'repository_activity'; table: 'anvil_activity'; raw_activity: 'Track: bedGraphToBigWig'; parent_column: 'used_file_id'` | CoverageActivity / covered | Each step used one STAR BAM and generated its four `Signal.{Unique,UniqueMultiple}.strand±` bigWigs: STAR's per-strand coverage of that BAM, converted by bedGraphToBigWig, so the raw words name the conversion, not what was computed. |
 | 1,268 | activity.alignment_star | `source_type: 'repository_activity'; table: 'anvil_activity'; raw_activity: 'Alignment: STAR'; parent_column: 'used_file_id'` | AlignmentActivity / reads | STAR aligns reads; every file this step used in anvil15 is a trimmed FASTQ. Its sample parents (`used_biosample_id`) are not matched here. |
 | 1,268 | activity.quantification_salmon | `source_type: 'repository_activity'; table: 'anvil_activity'; raw_activity: 'Quantificatioin: salmon'; parent_column: 'used_file_id'` | ExpressionActivity / quantified | salmon quantifies the reads it used; every file this step used in anvil15 is a trimmed FASTQ. `Quantificatioin` is AnVIL's spelling, matched as written. |

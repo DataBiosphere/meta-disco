@@ -23,7 +23,8 @@ slot line.
 **The rules the generated model cannot carry** are :func:`check_row`'s, run at write
 and at read: at least one of ``parent`` and ``parent_source_identifier``;
 ``parent_key_type`` exactly when ``parent``; ``raw_activity_column`` exactly when
-``raw_activity``. The envelope's kind must be one of :data:`LINEAGE_SOURCE_TYPES`.
+``raw_activity``; ``parent_dataset`` only with ``parent``, and never the envelope's own
+target dataset (#594). The envelope's kind must be one of :data:`LINEAGE_SOURCE_TYPES`.
 """
 
 from __future__ import annotations
@@ -34,7 +35,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from .models import SOURCE_REPOSITORY_ACTIVITY, SOURCE_REPOSITORY_METADATA
+from .models import SOURCE_EXTERNAL_GROUND_TRUTH, SOURCE_REPOSITORY_ACTIVITY, SOURCE_REPOSITORY_METADATA
 from .schema.classification_model import EvidenceFileEnvelope, LineageRow
 from .source_evidence import (
     DEFAULT_SOURCE_EVIDENCE_ROOT,
@@ -49,8 +50,9 @@ from .source_evidence import (
 DEFAULT_LINEAGE_EVIDENCE_ROOT = DEFAULT_SOURCE_EVIDENCE_ROOT.parent / "lineage_evidence"
 
 # The kinds a lineage file may declare: a submitter's table (T2T's sample rows, IGVF's
-# `file.derived_from`) and the repository's own record of a step (`anvil_activity`).
-LINEAGE_SOURCE_TYPES = frozenset({SOURCE_REPOSITORY_METADATA, SOURCE_REPOSITORY_ACTIVITY})
+# `file.derived_from`), the repository's own record of a step (`anvil_activity`), and an
+# archive's run record (ENA's, naming whose reads an alignment holds; `ena_lineage`, #594).
+LINEAGE_SOURCE_TYPES = frozenset({SOURCE_REPOSITORY_METADATA, SOURCE_REPOSITORY_ACTIVITY, SOURCE_EXTERNAL_GROUND_TRUTH})
 
 # Members a line would carry if it declared an answer, each with why it may not.
 _REFUSED_LINE_KEYS = {
@@ -74,6 +76,15 @@ def check_row(row: LineageRow, where: str) -> None:
         raise ValueError(f"{where}: parent_key_type is present exactly when parent is")
     if (row.raw_activity is None) != (row.raw_activity_column is None):
         raise ValueError(f"{where}: raw_activity_column is present exactly when raw_activity is")
+    if row.parent_dataset is not None and row.parent is None:
+        raise ValueError(f"{where}: parent_dataset names where parent is, so it is present only with parent")
+
+
+def _check_row_in(row: LineageRow, envelope: EvidenceFileEnvelope, where: str) -> None:
+    """:func:`check_row`, and a ``parent_dataset`` other than the child's own (the envelope's target)."""
+    check_row(row, where)
+    if row.parent_dataset is not None and row.parent_dataset == envelope.target.dataset:
+        raise ValueError(f"{where}: parent_dataset is the child's own dataset; it names only another")
 
 
 def _check_envelope(envelope: EvidenceFileEnvelope, where: str) -> None:
@@ -90,19 +101,21 @@ def write_lineage_file(path: Path, envelope: EvidenceFileEnvelope, rows: Iterabl
 
     Written through ``source_evidence.write_ndjson``, the slot writer's own path: to a
     temporary name, renamed into place only once every row is out. Every row is checked
-    (:func:`check_row`) as it is written, so this cannot write a file :func:`iter_lineage`
-    refuses.
+    (:func:`check_row`, and its ``parent_dataset`` against the envelope's dataset) as it is
+    written, so this cannot write a file :func:`iter_lineage` refuses.
     """
     if path.suffix != EVIDENCE_FILE_SUFFIX:
         raise ValueError(f"{path.name}: a lineage file must end in {EVIDENCE_FILE_SUFFIX}, or discover never finds it")
     _check_envelope(envelope, "lineage file envelope")
-    return write_ndjson(path, envelope, (_line(row, f"{path.name} row {n}") for n, row in enumerate(rows, start=1)))
+    return write_ndjson(
+        path, envelope, (_line(row, envelope, f"{path.name} row {n}") for n, row in enumerate(rows, start=1))
+    )
 
 
-def _line(row: LineageRow, where: str) -> dict:
+def _line(row: LineageRow, envelope: EvidenceFileEnvelope, where: str) -> dict:
     if not isinstance(row, LineageRow):
         raise ValueError(f"{where}: is a {type(row).__name__}, not a LineageRow")
-    check_row(row, where)
+    _check_row_in(row, envelope, where)
     return row.model_dump(exclude_none=True)
 
 
@@ -119,10 +132,12 @@ def iter_lineage(path: Path) -> Iterator[LineageRow]:
 
     A blank line is passed over. Any other line that will not parse, carries an
     answer (:data:`_REFUSED_LINE_KEYS`), carries a member ``LineageRow`` does not
-    have, or breaks :func:`check_row` raises ``ValueError`` naming the file and line.
+    have, breaks :func:`check_row`, or names the child's own dataset as ``parent_dataset``
+    raises ``ValueError`` naming the file and line.
     """
     with path.open("rb") as f:
-        _check_envelope(read_envelope_from(path, f), f"{path.name} line 1")
+        envelope = read_envelope_from(path, f)
+        _check_envelope(envelope, f"{path.name} line 1")
         for n, raw in enumerate(f, start=2):
             where = f"{path.name} line {n}"
             line = decode_line(raw, where)
@@ -146,5 +161,5 @@ def iter_lineage(path: Path) -> Iterator[LineageRow]:
                     for e in exc.errors()
                 )
                 raise ValueError(f"{where}: {faults}") from None
-            check_row(row, where)
+            _check_row_in(row, envelope, where)
             yield row

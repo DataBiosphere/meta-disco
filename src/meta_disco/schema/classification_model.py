@@ -1210,7 +1210,8 @@ class LineageRow(ConfiguredBaseModel):
     target_key_value: str = Field(default=..., description="""The child, as the envelope's `target_key` names it: AnVIL's `file_id` for `anvil_activity`, the DRS URI for a submitter table.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'LineageRow']} })
     parent: Optional[str] = Field(default=None, description="""The parent, in the form `parent_key_type` names. Written whether or not it is one of the dataset's files: reconcile (#577) will report a parent outside the dataset, and dropping it here would hide it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
     parent_key_type: Optional[LineageParentKeyEnum] = Field(default=None, description="""Which kind of value `parent` is. Named `_type` because `ActivityInput.parent_key` is a value, the parent's record key.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
-    parent_source_identifier: Optional[str] = Field(default=None, description="""The source's own identifier for the parent, where the source named the parent by one (IGVF's `derived_from` accessions), kept beside the locator the importer found for it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
+    parent_source_identifier: Optional[str] = Field(default=None, description="""The source's own identifier for the parent, where the source named the parent by one (IGVF's `derived_from` accessions, or the ENA run whose reads a T2T_CHRY CRAM holds), kept beside the locator the importer found for it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
+    parent_dataset: Optional[str] = Field(default=None, description="""The dataset the parent is in, where it is not the child's own (#594). Absent on every line whose parent is looked for in the child's dataset. Written only by the ENA run lineage importer (`ena_lineage`), for a pair of datasets its map declares (`sources/ena_run_lineage_map.yaml`); reconcile resolves a line carrying it only where that map declares the child's dataset taking its reads from this one, and counts any other as `undeclared_dataset`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
     raw_activity: Optional[str] = Field(default=None, description="""What the source calls the step, verbatim (contract 1.4), where the source names it — `anvil_activity`'s `activity_type`, e.g. `Indexing` or `Quantificatioin: salmon`. The empty string is kept; a null or empty-list cell is omitted. No pattern and no enum, for `EvidenceRow.raw_value`'s reason.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
     activity_id: Optional[str] = Field(default=None, description="""The source's id for the step, where it has one (`anvil_activity`'s `activity_id`), so lines from one step can be told apart from another's.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow', 'Attribution']} })
     child_column: str = Field(default=..., description="""The column the child was read from.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
@@ -1253,6 +1254,19 @@ class LineageRow(ConfiguredBaseModel):
                     raise ValueError(err_msg)
         elif isinstance(v, str) and not pattern.match(v):
             err_msg = f"Invalid parent_source_identifier format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('parent_dataset')
+    def pattern_parent_dataset(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid parent_dataset format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid parent_dataset format: {v}"
             raise ValueError(err_msg)
         return v
 

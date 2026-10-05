@@ -26,9 +26,12 @@ from tests.run_fixtures import write_run
 STAMP = "20260930T062532Z"
 
 
-def envelope(table, source_type=SOURCE_REPOSITORY_ACTIVITY, dataset="D", key="file_id", version="anvil15"):
+def envelope(
+    table, source_type=SOURCE_REPOSITORY_ACTIVITY, dataset="D", key="file_id", version="anvil15", repository="anvil"
+):
+    """A lineage file's envelope about AnVIL's ``dataset``; ``repository`` is the source's (``ena`` for #594's lines)."""
     return EvidenceFileEnvelope(
-        source=EvidenceFileSource(repository="anvil", dataset=dataset, table=table, url="https://azul.test"),
+        source=EvidenceFileSource(repository=repository, dataset=dataset, table=table, url="https://azul.test"),
         source_type=ImporterSourceTypeEnum(source_type),
         source_version=version,
         source_key=key,
@@ -57,8 +60,10 @@ def activity_line(child, parent, raw_activity, parent_column="used_file_id"):
 
 
 def write_lineage(root, table, rows, dataset="D", **envelope_kw):
-    """One lineage file in the generation layout, under the envelope's catalog version (``anvil15`` by default)."""
-    directory = generation_dir(root, "anvil", envelope_kw.get("version", "anvil15"), dataset, STAMP)
+    """One lineage file in the generation layout, under the envelope's source and catalog version (``anvil``, ``anvil15`` by default)."""
+    directory = generation_dir(
+        root, envelope_kw.get("repository", "anvil"), envelope_kw.get("version", "anvil15"), dataset, STAMP
+    )
     directory.mkdir(parents=True, exist_ok=True)
     write_lineage_file(evidence_file_path(directory, table), envelope(table, dataset=dataset, **envelope_kw), rows)
 

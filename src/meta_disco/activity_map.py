@@ -64,7 +64,7 @@ import yaml
 from .activities import Declared, declarations, require_writable
 from .lineage_evidence import DEFAULT_LINEAGE_EVIDENCE_ROOT, LINEAGE_SOURCE_TYPES, iter_lineage, read_lineage_envelope
 from .manifest_survey import name_tokens
-from .models import SOURCE_REPOSITORY_ACTIVITY, SOURCE_REPOSITORY_METADATA
+from .models import SOURCE_EXTERNAL_GROUND_TRUTH, SOURCE_REPOSITORY_ACTIVITY, SOURCE_REPOSITORY_METADATA
 from .schema.classification_model import EvidenceFileEnvelope, LineageRow
 from .source_evidence import DEFAULT_SOURCE_EVIDENCE_ROOT, discover, is_generation, iter_evidence, read_envelope
 from .summaries import ReportColumn, md_rows
@@ -284,13 +284,14 @@ class KeyedLine:
 
     @property
     def dataset(self) -> str:
-        return str(self.envelope.source.dataset)
+        """The child's dataset: the envelope's target, which an archive's source (ENA's) does not name as its own."""
+        return str(self.envelope.target.dataset)
 
 
 def _slot_identity(envelope: EvidenceFileEnvelope) -> tuple:
     """What a lineage file and a slot file must share for the slot file's data_type to speak for its files."""
     s = envelope.source
-    return (s.repository, s.dataset, s.table, str(envelope.source_type), str(envelope.target_key))
+    return (s.repository, envelope.target.dataset, s.table, str(envelope.source_type), str(envelope.target_key))
 
 
 def _data_types(slot_paths: list[Path]) -> dict[str, str]:
@@ -312,7 +313,7 @@ def _data_types(slot_paths: list[Path]) -> dict[str, str]:
 
 
 def lineage_paths(lineage_root: Path, datasets: Iterable[str] | None = None) -> list[Path]:
-    """The current lineage files of the latest catalog, restricted to the envelopes naming one of ``datasets``.
+    """The current lineage files of the latest catalog, restricted to those whose target dataset is one of ``datasets``.
 
     Only the latest catalog is current: once a newer catalog is imported beside an older
     one, the older is history, kept on disk and never read, as ``discover`` treats an
@@ -323,7 +324,7 @@ def lineage_paths(lineage_root: Path, datasets: Iterable[str] | None = None) -> 
     by_catalog: dict[str, list[tuple[Path, str | None]]] = {}
     for path in discover(lineage_root):
         envelope = read_lineage_envelope(path)
-        by_catalog.setdefault(str(envelope.target.version), []).append((path, envelope.source.dataset))
+        by_catalog.setdefault(str(envelope.target.version), []).append((path, envelope.target.dataset))
     if not by_catalog:
         return []
     # The latest catalog is chosen over every dataset first, so a dataset the latest
@@ -358,9 +359,12 @@ def keyed_lines(lineage_root: Path, evidence_root: Path, paths: Iterable[Path]) 
         types = _data_types(slot_files.get(_slot_identity(envelope), []))
         generation = generation_name(lineage_root, path)
         for line in iter_lineage(path):
+            # A parent in another dataset (#594) has no data type in this dataset's slot files.
             parent_type = (
                 types.get(line.parent)
-                if line.parent is not None and str(line.parent_key_type) == str(envelope.target_key)
+                if line.parent is not None
+                and line.parent_dataset is None
+                and str(line.parent_key_type) == str(envelope.target_key)
                 else None
             )
             key = (
@@ -501,6 +505,7 @@ def review(
 QUEUE_GROUP_TEXT = {
     SOURCE_REPOSITORY_ACTIVITY: ("Repository activity", "the repository's own record of each step"),
     SOURCE_REPOSITORY_METADATA: ("Submitter", "the submitter tables"),
+    SOURCE_EXTERNAL_GROUND_TRUTH: ("Archive", "an archive's run records (ENA's, #594)"),
 }
 
 

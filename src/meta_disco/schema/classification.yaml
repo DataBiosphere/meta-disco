@@ -562,8 +562,19 @@ classes:
         pattern: "^[^\\r\\n]+\\Z"
         description: >-
           The source's own identifier for the parent, where the source named the
-          parent by one (IGVF's `derived_from` accessions), kept beside the locator
-          the importer found for it.
+          parent by one (IGVF's `derived_from` accessions, or the ENA run whose
+          reads a T2T_CHRY CRAM holds), kept beside the locator the importer found
+          for it.
+      parent_dataset:
+        pattern: "^[^\\r\\n]+\\Z"
+        description: >-
+          The dataset the parent is in, where it is not the child's own (#594).
+          Absent on every line whose parent is looked for in the child's dataset.
+          Written only by the ENA run lineage importer (`ena_lineage`), for a pair of
+          datasets its map declares (`sources/ena_run_lineage_map.yaml`); reconcile
+          resolves a line carrying it only where that map declares the child's dataset
+          taking its reads from this one, and counts any other as
+          `undeclared_dataset`.
       raw_activity:
         description: >-
           What the source calls the step, verbatim (contract 1.4), where the source
