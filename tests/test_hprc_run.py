@@ -19,6 +19,14 @@ from meta_disco.output_utils import CLASSIFICATION_FILES, iter_records_with_sour
 from meta_disco.record_keys import HPRC_REPOSITORY
 from tests.metadata_fixtures import write_metadata
 
+
+@pytest.fixture(autouse=True)
+def _environment_ready(monkeypatch):
+    """These runs read no header, so the environment check (samtools, #620) is passed over:
+    CI has no samtools. ``test_orchestration`` tests the check itself."""
+    monkeypatch.setattr("meta_disco.classify_run.require_environment", lambda: None)
+
+
 # Catalog rows in the shape the assemblies catalog has (`awsFasta` is its location
 # field, `fileSize` present so no S3 HEAD is made). Names chosen so each lands with a
 # producer that reads no file content: an image, a PLINK auxiliary, an index with no

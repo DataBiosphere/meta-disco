@@ -16,7 +16,7 @@ from meta_disco.pipeline import ClassifyPipeline
 from meta_disco.record_keys import RecordKey
 from meta_disco.validators.command_lines import GATK, Step
 from tests.metadata_fixtures import write_metadata
-from tests.test_producer_steps import IMPORT, SELECT, header, header_text
+from tests.test_producer_steps import EVIDENCE, IMPORT, SELECT, header, header_text
 
 KEY = RecordKey("file_id", "file_id")
 TAR = "chr1.100000001_100100000.tar"
@@ -54,7 +54,7 @@ def test_the_sample_name_map_is_an_input_list_not_an_input():
 
 
 def test_a_workspace_tar_merges_the_gvcfs_its_sample_map_lists():
-    reader = cs.TarSteps.for_run(records((MAP, "D"), (MAP, "OTHER"), ("HG00096.chr1.hc.vcf.gz", "D")), KEY)
+    reader = cs.TarSteps.for_run(records((MAP, "D"), (MAP, "OTHER"), ("HG00096.chr1.hc.vcf.gz", "D")), KEY, EVIDENCE)
     step, outcome = reader(tar_head(IMPORT), TAR, "D")
     assert outcome == cs.STEPPED
     assert step is not None and step["activity"] == "CohortMergeActivity"
@@ -75,11 +75,11 @@ def test_a_workspace_tar_merges_the_gvcfs_its_sample_map_lists():
     ],
 )
 def test_a_list_no_sample_map_or_two_of_the_dataset_carry_gives_no_step(entries, outcome):
-    assert cs.TarSteps.for_run(records(*entries), KEY)(tar_head(IMPORT), TAR, "D") == (None, outcome)
+    assert cs.TarSteps.for_run(records(*entries), KEY, EVIDENCE)(tar_head(IMPORT), TAR, "D") == (None, outcome)
 
 
 def test_a_workspace_naming_another_directory_is_not_this_tars():
-    reader = cs.TarSteps.for_run(records((MAP, "D")), KEY)
+    reader = cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)
     assert reader(tar_head(IMPORT), "chr1.1_100000.tar", "D") == (None, cs.OUTPUT_NOT_THIS_FILE)
 
 
@@ -95,22 +95,22 @@ def test_a_workspace_naming_another_directory_is_not_this_tars():
     ],
 )
 def test_any_other_header_gives_no_step(lines, outcome):
-    assert cs.TarSteps.for_run(records((MAP, "D")), KEY)(tar_head(*lines), TAR, "D") == (None, outcome)
+    assert cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(tar_head(*lines), TAR, "D") == (None, outcome)
 
 
 def test_an_identical_import_line_twice_is_one_step():
-    step, outcome = cs.TarSteps.for_run(records((MAP, "D")), KEY)(tar_head(IMPORT, IMPORT), TAR, "D")
+    step, outcome = cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(tar_head(IMPORT, IMPORT), TAR, "D")
     assert outcome == cs.STEPPED and step is not None
 
 
 def test_a_tar_whose_header_was_not_read_gives_no_step():
     head = cs.ParsedTarHead(["x/callset.json"], None)
-    assert cs.TarSteps.for_run(records((MAP, "D")), KEY)(head, TAR, "D") == (None, cs.NO_VCF_HEADER)
+    assert cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(head, TAR, "D") == (None, cs.NO_VCF_HEADER)
     # A tar that is no GenomicsDB workspace has no step to read, and is not counted.
     other = cs.ParsedTarHead(["reads/a.fastq"], None)
-    assert cs.TarSteps.for_run(records((MAP, "D")), KEY)(other, TAR, "D") == (None, None)
+    assert cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(other, TAR, "D") == (None, None)
     failed = cs.ParsedTarHead(["x/callset.json"], None, "ConnectionError: reset")
-    assert cs.TarSteps.for_run(records((MAP, "D")), KEY)(failed, TAR, "D") == (None, cs.VCF_HEADER_UNREADABLE)
+    assert cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(failed, TAR, "D") == (None, cs.VCF_HEADER_UNREADABLE)
     assert cs.parse_tar_head(TarHead(["a"], None, "reset")).vcf_header_unread == "reset"
 
 
@@ -165,7 +165,7 @@ def test_anything_else_is_not_a_sample_map(text):
 
 
 def map_reader(*entries) -> cs.SampleMapSteps:
-    return cs.SampleMapSteps.for_run(records(*entries), KEY)
+    return cs.SampleMapSteps.for_run(records(*entries), KEY, EVIDENCE)
 
 
 def test_a_sample_map_lists_each_gvcf_of_that_name_in_the_dataset_as_a_member():

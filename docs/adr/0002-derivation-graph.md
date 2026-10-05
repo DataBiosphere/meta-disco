@@ -5,7 +5,7 @@
 - **Extends, and supersedes in part:** `docs/derived-file-data-model.md` (#109), which settled the edge for companion files only; see [What this supersedes](#what-this-supersedes)
 - **Contract:** adds 4.9 to `docs/claims-contract.md` (inheritance) and its entry under "What is not true yet"; amends 2.8, 3.1, 4.1, 4.2 and 6.6 to match
 - **Related:** #356 (companion edges), #357 (sample identity), #358 (alignment ← reads), #359 (variants ← alignments), #360 (assemblies), #361 (sample ← donor), #362 (consistency and coverage), #371 (the edge carries the parent's record key), #413 (index inheritance and contract 1.1), #438 (ambiguous index parents)
-- **Amended by:** [#580](https://github.com/DataBiosphere/meta-disco/issues/580) (2026-09-29): a step is an activity from AnVIL FSS's vocabulary, not a verb between two files (decision 5); [#609](https://github.com/DataBiosphere/meta-disco/issues/609) (2026-10-03): which of a header's command lines made the file (decision 6)
+- **Amended by:** [#580](https://github.com/DataBiosphere/meta-disco/issues/580) (2026-09-29): a step is an activity from AnVIL FSS's vocabulary, not a verb between two files (decision 5); [#609](https://github.com/DataBiosphere/meta-disco/issues/609) (2026-10-03): which of a header's command lines made the file (decision 6); [#620](https://github.com/DataBiosphere/meta-disco/issues/620) (2026-10-05): a header-named alignment several files carry is settled by contigs (decision 6)
 
 ## Context
 
@@ -291,6 +291,17 @@ not declared (`validators.command_lines.TOOL_ARGUMENTS`, about tools, never data
 paths are where the workflow ran, so the parent resolves by name within the child's dataset, as a
 filename edge does. Built at inference, in the VCF producer, from the cached header: it is the file's own
 bytes (input kind 1), and reconcile merges it with the steps the tables state.
+
+*Amended by #620 (2026-10-05): a name several alignments carry is settled by their contigs.* T2T
+re-aligned some samples' reads to a second reference under the same file name, so a `HaplotypeCaller`'s
+input names two CRAMs. On a GATK 4 line (GATK 3's own check is not relied on), GATK refuses an
+alignment with a contig its reference lacks or gives another length (unless the line turns that check off, which no header we hold does), and writes that reference's
+contigs into the VCF, so the parent is the one carrier whose every `@SQ` name and length is among the
+VCF's `##contig` names and lengths, read from the carrier's own header (the BAM producer's cache, or
+samtools into it on a miss). None or several fitting, or a VCF naming no contig or any contig without a
+length, gives no step (`parent_ambiguous`); so does a carrier whose header cannot be read, or names no
+contig or any contig without a length (`parent_unreadable`). This is the file's bytes on both sides, not a name; a
+`concat`'s VCF inputs are not settled this way.
 
 *Rejected: the last line.* T2T's `1kgp.chr1.recalibrated.snp_indel.vcf.gz` ends in the `bcftools concat`
 that made its input, `chr1.genotyped.vcf`; its producer is the indel pass of `ApplyVQSR`, which GATK's

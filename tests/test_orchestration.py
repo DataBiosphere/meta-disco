@@ -10,14 +10,17 @@ they stay derived: each is checked against what a run would actually invoke and 
 the Makefile — still hand-written — against the registry.
 """
 
+import dataclasses
 import json
 from pathlib import Path
 
 import pytest
 
+from meta_disco import classify_run
 from meta_disco.classify_run import (
     _report_exclusions,
     build_parallel_jobs,
+    require_environment,
     run_all_classifications,
 )
 from meta_disco.deployments import PROD
@@ -31,6 +34,13 @@ from tests.test_source_evidence import evidence_file_envelope, published_envelop
 METADATA = PROD.input_file
 OUTPUT_DIR = Path("output/anvil/20260101_000000")
 EVIDENCE_BASE = Path("data/evidence/anvil")
+
+
+@pytest.fixture(autouse=True)
+def _environment_ready(monkeypatch):
+    """These runs read no header, so the run's environment check (samtools, #620) is passed
+    over: CI has no samtools. ``TestTheEnvironmentIsCheckedBeforeTheRunStarts`` tests it."""
+    monkeypatch.setattr("meta_disco.classify_run.require_environment", lambda: None)
 
 
 def _jobs():
@@ -323,6 +333,40 @@ class TestTheRegistryIsCheckedBeforeTheRunStarts:
         """The other half: without the overlap, this input runs — so the assertion above
         is about the check and not about the run."""
         assert self._run(tmp_path) is True
+
+
+class TestTheEnvironmentIsCheckedBeforeTheRunStarts:
+    """A producer that cannot read a header (no samtools) stops the run before it reads its
+    input, whatever the input holds and whatever is cached (#620)."""
+
+    def test_every_file_types_preflight_is_run(self, monkeypatch):
+        ran: list[str] = []
+        registry = {
+            name: dataclasses.replace(config, preflight=lambda name=name: ran.append(name))
+            for name, config in FILE_TYPE_REGISTRY.items()
+        }
+        monkeypatch.setattr(classify_run, "FILE_TYPE_REGISTRY", registry)
+        require_environment()
+        assert ran == list(FILE_TYPE_REGISTRY)
+
+    def test_a_failing_preflight_raises(self, monkeypatch):
+        def no_samtools():
+            raise RuntimeError("stub: samtools not found")
+
+        vcf = dataclasses.replace(FILE_TYPE_REGISTRY["vcf"], preflight=no_samtools)
+        monkeypatch.setattr(classify_run, "FILE_TYPE_REGISTRY", {"vcf": vcf})
+        with pytest.raises(RuntimeError, match="stub: samtools not found"):
+            require_environment()
+
+    def test_a_failed_check_stops_the_run_before_it_writes_anything(self, tmp_path, monkeypatch):
+        def no_samtools():
+            raise RuntimeError("samtools not found")
+
+        monkeypatch.setattr("meta_disco.classify_run.require_environment", no_samtools)
+        metadata, output_base = _empty_run_input(tmp_path)
+        with pytest.raises(RuntimeError, match="samtools not found"):
+            run_all_classifications(metadata, output_base, tmp_path / "evidence")
+        assert not (tmp_path / "output").exists()
 
 
 def test_no_producer_spells_its_output_filename_outside_the_registry():

@@ -759,10 +759,11 @@ def _save_head_evidence(
 
 
 def require_samtools() -> None:
-    """Abort the run if samtools is not on PATH (FileTypeConfig.preflight for BAM).
+    """Abort the run if samtools is not on PATH (``FileTypeConfig.preflight`` for BAM and VCF).
 
-    Run once before the worker pool: a missing tool then fails fast with one clear
-    message, instead of every BAM record's ``samtools`` call raising
+    Run before the worker pool, and by a full run before it reads its input
+    (``classify_run.require_environment``): a missing tool then fails fast with one clear
+    message, instead of every record's ``samtools`` call raising
     ``FileNotFoundError`` and the records vanishing — the disappearance #155 exists
     to prevent. The per-record ``FileNotFoundError`` passthrough in
     ``fetch_bam_header`` remains as a backstop for a tool removed mid-run.

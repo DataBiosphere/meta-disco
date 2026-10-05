@@ -214,6 +214,7 @@ class ClassifyPipeline:
         self.producer = producer_for(config)
         self.input_path = input_path
         self.output_path = output_path
+        self.evidence_base = evidence_base
         self.evidence_dir = evidence_base / config.name
         self.limit = limit
         self.resume = resume
@@ -276,15 +277,17 @@ class ClassifyPipeline:
         # tool. This is keyed on file existence, not evidence validity: a
         # corrupt/partial evidence file is listed yet the fetcher re-fetches — for
         # that case the per-record passthrough (bam's `FileNotFoundError`) is the
-        # backstop, not this guard.
+        # backstop, not this guard. A type with a step reader runs it whatever is
+        # cached: its reader may fetch another file's header (the VCF reader's
+        # alignments, #620), which its own cache does not show.
         will_fetch = any(
             not (self.resume and w.file_md5sum in cached_md5s) for w in work if isinstance(w, ClassifierRecord)
         )
-        if self.config.preflight is not None and will_fetch:
+        if self.config.preflight is not None and (will_fetch or self.config.step is not None):
             self.config.preflight()
 
         if self.config.step is not None:
-            self._step = self.config.step(loaded, key)
+            self._step = self.config.step(loaded, key, self.evidence_base)
         # The step reader keeps what it needs of the input; the rest need not outlive the load.
         del loaded
 

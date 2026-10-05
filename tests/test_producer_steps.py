@@ -4,12 +4,15 @@ a VariantCallActivity whose parent resolves by name within the dataset."""
 
 import dataclasses
 import json
+from pathlib import Path
 
 import pytest
 
 from meta_disco import code_rules, header_classifier
 from meta_disco import producer_steps as ps
-from meta_disco.file_types import VCF_CONFIG
+from meta_disco.evidence import BamEvidence, get_evidence_path
+from meta_disco.fetchers import FetchError
+from meta_disco.file_types import BAM_CONFIG, VCF_CONFIG
 from meta_disco.models import SOURCE_CONTENT_READ
 from meta_disco.output_utils import run_file_metadata
 from meta_disco.pipeline import ClassifyPipeline
@@ -21,6 +24,8 @@ from meta_disco.validators.header_extractors import VCFHeader, parse_vcf_header
 from tests.metadata_fixtures import write_metadata
 
 KEY = RecordKey("file_id", "file_id")
+# A step reader's evidence base, never read where a VCF names no contigs (#620's tests make their own).
+EVIDENCE = Path("no-evidence")
 
 
 def gatk4(tool: str, command: str) -> str:
@@ -178,7 +183,7 @@ def test_a_header_with_no_command_line_or_an_undeclared_tool_declines():
 def reader(*entries) -> ps.HeaderSteps:
     """A run's step reader over these (file name, dataset) records, keyed by ``file_id`` f0, f1, …"""
     records = [{"file_id": f"f{n}", "file_name": name, "dataset_id": ds} for n, (name, ds) in enumerate(entries)]
-    return ps.HeaderSteps.for_run(records, KEY)
+    return ps.HeaderSteps.for_run(records, KEY, EVIDENCE, alignments=BAM_CONFIG.name)
 
 
 def test_a_haplotypecaller_calls_from_the_one_alignment_of_that_name_in_the_dataset():
@@ -297,6 +302,124 @@ def test_the_edge_rules_are_declared_with_the_others():
         assert rule.source_type == SOURCE_CONTENT_READ
 
 
+# --- a name several alignments carry, settled by contigs (#620) ----------------------------
+
+# T2T's re-alignment of one sample's reads to two references, both named HG00096.cram: the
+# first reference's chrY is GRCh38's, the second's HG002's, and the gVCF names the first's.
+CONTIGS = ("##contig=<ID=chr1,length=248387328>", "##contig=<ID=chrY,length=57227415>")
+GRCH38_Y = "@HD\tVN:1.6\n@SQ\tSN:chrY\tLN:57227415\n@SQ\tSN:chr1\tLN:248387328\n"
+HG002_Y = "@HD\tVN:1.6\n@SQ\tSN:chr1\tLN:248387328\n@SQ\tSN:chrY_hg002\tLN:62460029\n"
+GVCF = "HG00096.chr10.hc.vcf.gz"
+
+
+@pytest.fixture
+def fetches(monkeypatch) -> list[str]:
+    """Every alignment header the step reader reads, served from the BAM producer's cache only:
+    one not in it cannot be read, as when the fetch fails."""
+    read: list[str] = []
+    cached = ps.fetch_bam_header
+
+    def fetch(evidence_dir, md5, **kwargs):
+        read.append(md5)
+        if not get_evidence_path(evidence_dir, md5).exists():
+            raise FetchError("not cached")
+        return cached(evidence_dir, md5, **kwargs)
+
+    monkeypatch.setattr(ps, "fetch_bam_header", fetch)
+    return read
+
+
+def carriers(tmp_path, *headers: str | None) -> ps.HeaderSteps:
+    """A step reader over one HG00096.cram of dataset D per header, keyed f0, f1, …, each header
+    in the BAM producer's cache under ``tmp_path`` (None: not cached, so unreadable)."""
+    records = []
+    for n, text in enumerate(headers):
+        md5 = f"{n:032x}"
+        records.append({"file_id": f"f{n}", "file_name": "HG00096.cram", "dataset_id": "D", "file_md5sum": md5})
+        if text is not None:
+            BamEvidence(md5sum=md5, file_name="HG00096.cram", header_text=text).save(tmp_path / BAM_CONFIG.name)
+    return ps.HeaderSteps.for_run(records, KEY, tmp_path, alignments=BAM_CONFIG.name)
+
+
+def test_of_alignments_sharing_a_name_the_parent_is_the_one_with_the_vcfs_contigs(tmp_path, fetches):
+    step, outcome = carriers(tmp_path, HG002_Y, GRCH38_Y)(header(HC, *CONTIGS), GVCF, "D")
+    assert outcome == ps.STEPPED and step is not None
+    (used,) = step["inputs"]
+    assert (used["parent_file"], used["parent_key"]) == ("HG00096.cram", "f1")
+    assert used["named_by"] == [{"source_type": SOURCE_CONTENT_READ, "rule_id": code_rules.VARIANT_CALL_BY_HEADER.id}]
+
+
+@pytest.mark.parametrize(
+    ("headers", "contigs"),
+    [
+        pytest.param((HG002_Y, HG002_Y), CONTIGS, id="none-has-the-vcfs-contigs"),
+        pytest.param((GRCH38_Y, GRCH38_Y), CONTIGS, id="two-have-them"),
+        pytest.param((GRCH38_Y, HG002_Y), CONTIGS[:1], id="the-vcf-names-a-subset"),
+        pytest.param((GRCH38_Y, HG002_Y), ("##contig=<ID=chr1>", CONTIGS[1]), id="the-vcf-names-no-length"),
+    ],
+)
+def test_alignments_sharing_a_name_that_contigs_do_not_tell_apart_give_no_step(tmp_path, fetches, headers, contigs):
+    assert carriers(tmp_path, *headers)(header(HC, *contigs), GVCF, "D") == (None, ps.PARENT_AMBIGUOUS)
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        pytest.param((GRCH38_Y, None), id="one-is-not-cached-and-cannot-be-fetched"),
+        pytest.param((GRCH38_Y, GRCH38_Y.replace("SQ\tSN:chrY\tLN:57227415", "SQ\tSN:chrY")), id="one-names-no-length"),
+    ],
+)
+def test_a_carrier_whose_contigs_cannot_be_read_gives_no_step_and_says_so(tmp_path, fetches, headers):
+    """It may be the parent, so the other is not taken, and the outcome is not a tie (#620)."""
+    assert carriers(tmp_path, *headers)(header(HC, *CONTIGS), GVCF, "D") == (None, ps.PARENT_UNREADABLE)
+
+
+def test_an_alignment_to_part_of_the_vcfs_reference_fits_it(tmp_path, fetches):
+    """GATK takes an alignment whose every contig is the reference's, at its length: the VCF
+    may name more (a decoy the alignment's reference left out)."""
+    decoy = "##contig=<ID=chrEBV,length=171823>"
+    step, outcome = carriers(tmp_path, HG002_Y, GRCH38_Y)(header(HC, *CONTIGS, decoy), GVCF, "D")
+    assert outcome == ps.STEPPED and step is not None and step["inputs"][0]["parent_key"] == "f1"
+
+
+def test_a_gatk3_line_naming_an_alignment_two_files_carry_is_not_settled_by_contigs(tmp_path, fetches):
+    """GATK 3's own contig check may accept a partial overlap, so its lines keep the name rule."""
+    hc3 = GATK3_HC.replace("/data/analysis/Sample_HG04164/analysis/HG04164.final.bam", "/x/HG00096.cram")
+    reader3 = carriers(tmp_path, HG002_Y, GRCH38_Y)
+    assert reader3(header(hc3, *CONTIGS), "HG00096.g.vcf.gz", "D") == (None, ps.PARENT_AMBIGUOUS)
+    assert fetches == []
+
+
+def test_a_vcf_naming_no_contigs_reads_no_alignment(tmp_path, fetches):
+    assert carriers(tmp_path, GRCH38_Y, HG002_Y)(header(HC), GVCF, "D") == (None, ps.PARENT_AMBIGUOUS)
+    assert fetches == []
+
+
+def test_an_alignment_name_one_file_carries_is_taken_without_reading_it(tmp_path, fetches):
+    step, outcome = carriers(tmp_path, HG002_Y)(header(HC, *CONTIGS), GVCF, "D")
+    assert outcome == ps.STEPPED and step is not None and step["inputs"][0]["parent_key"] == "f0"
+    assert fetches == []
+
+
+def test_each_alignment_is_read_once_for_all_of_its_samples_vcfs(tmp_path, fetches):
+    reader = carriers(tmp_path, HG002_Y, GRCH38_Y)
+    for chrom in ("chr10", "chr11"):
+        hc = HC.replace("chr10", chrom)
+        assert reader(header(hc, *CONTIGS), f"HG00096.{chrom}.hc.vcf.gz", "D")[1] == ps.STEPPED
+    assert sorted(fetches) == [f"{0:032x}", f"{1:032x}"]
+
+
+def test_contigs_are_compared_as_names_and_lengths_in_any_order():
+    assert ps.vcf_contigs(header(*CONTIGS)) == ps.sam_contigs(GRCH38_Y) == {("chr1", 248387328), ("chrY", 57227415)}
+    assert ps.sam_contigs("@HD\tVN:1.6\n") is None
+    assert ps.vcf_contigs(header("##contig=<ID=chr1,length=12x>")) is None
+
+
+def test_a_rule_taking_several_inputs_cannot_settle_a_shared_name_by_contigs():
+    with pytest.raises(ValueError, match="several inputs"):
+        dataclasses.replace(ps.STEP_RULES["concat"], same_contigs=True)
+
+
 # --- the VCF producer --------------------------------------------------------------------
 
 
@@ -332,7 +455,8 @@ def test_the_vcf_producer_writes_the_step_and_counts_every_outcome(tmp_path, mon
     monkeypatch.setattr(header_extractors, "parse_vcf_header", counting_parse)
     monkeypatch.setattr(reference_builds, "parse_vcf_header", counting_parse)
     monkeypatch.setattr(header_classifier, "parse_vcf_header", counting_parse)
-    config = dataclasses.replace(VCF_CONFIG, fetcher=fetch, parser=counting_parse)
+    # The stub fetcher reads no alignment, so the preflight guarding samtools is dropped with it.
+    config = dataclasses.replace(VCF_CONFIG, fetcher=fetch, parser=counting_parse, preflight=None)
     pipeline = ClassifyPipeline(
         config,
         write_metadata(tmp_path / "in.json", records),
@@ -399,7 +523,30 @@ def test_an_unnamed_end_beside_one_set_aside_for_another_file_is_not_taken():
 
 def test_a_candidate_parent_with_no_record_key_stops_the_run_when_the_reader_is_built():
     with pytest.raises(ValueError, match="file_id"):
-        ps.HeaderSteps.for_run([{"file_name": "HG00096.cram", "dataset_id": "D"}], KEY)
+        ps.HeaderSteps.for_run(
+            [{"file_name": "HG00096.cram", "dataset_id": "D"}], KEY, EVIDENCE, alignments=BAM_CONFIG.name
+        )
+
+
+def test_the_vcf_producer_checks_its_preflight_even_when_every_vcf_is_cached(tmp_path):
+    """Its step reader may fetch an alignment's header the VCF cache does not show (#620),
+    so a missing samtools refuses the run before any work, cached VCFs or not."""
+    record: dict = {"file_id": "v1", "file_name": "HG00096.chr10.hc.vcf.gz", "dataset_id": "D", "dataset_title": "T"}
+    record.update(file_md5sum="a" * 32, file_size=1, file_format="vcf.gz")
+
+    def no_samtools():
+        raise RuntimeError("samtools not found")
+
+    config = dataclasses.replace(VCF_CONFIG, fetcher=lambda *a, **k: header_text(HC), preflight=no_samtools)
+    pipeline = ClassifyPipeline(
+        config, write_metadata(tmp_path / "in.json", [record]), tmp_path / "vcf.json", evidence_base=tmp_path / "ev"
+    )
+    cached = get_evidence_path(pipeline.evidence_dir, "a" * 32)
+    cached.parent.mkdir(parents=True)
+    cached.write_text("{}")
+    with pytest.raises(RuntimeError, match="samtools not found"):
+        pipeline.run()
+    assert not (tmp_path / "vcf.json").exists()
 
 
 def test_the_vcf_producer_refuses_an_input_naming_no_repository_before_any_work(tmp_path):

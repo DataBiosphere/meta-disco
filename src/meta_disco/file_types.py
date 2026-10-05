@@ -11,6 +11,7 @@ importing ``pipeline`` back.
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import partial
 
 from .cohort_steps import SAMPLE_MAP_SUFFIX, SampleMapSteps, TarSteps, parse_sample_map, parse_tar_head
 from .fetchers import (
@@ -66,7 +67,8 @@ class FileTypeConfig:
     # keeps the raw payload. None hands them the payload as fetched.
     parser: Callable | None = None
     # The step that made a file, read from its fetched content (#609). Called once per run
-    # with every loaded record and the source's record key, it returns the per-file
+    # with every loaded record, the source's record key and the run's evidence base (where a
+    # reader finds another file's cached header, #620), it returns the per-file
     # reader: given the parse, the file's name and dataset, ``(generated_by or None,
     # outcome)``, the outcome None for a file the reader does not apply to (a tar that is no
     # GenomicsDB workspace, #621), which is not counted. None means the type states no step;
@@ -100,7 +102,11 @@ VCF_CONFIG = FileTypeConfig(
     classifier=classify_from_vcf_header,
     summary_printer=print_vcf_summary,
     parser=parse_vcf_header,
-    step=HeaderSteps.for_run,
+    # A HaplotypeCaller's input several alignments carry is settled from their headers: the
+    # BAM producer's cache, or samtools into it on a miss (#620), so every VCF run with work
+    # checks for samtools first, its own headers cached or not.
+    step=partial(HeaderSteps.for_run, alignments=BAM_CONFIG.name),
+    preflight=require_samtools,
 )
 
 FASTQ_CONFIG = FileTypeConfig(

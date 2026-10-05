@@ -84,18 +84,22 @@ def files_by_folded_name(records: Iterable[dict]) -> NameIndex:
     return index
 
 
-def parent_index(records: Iterable[dict], key: RecordKey, keep: Callable[[str], bool], purpose: str) -> NameIndex:
+def parent_index(
+    records: Iterable[dict], key: RecordKey, keep: Callable[[str], bool], purpose: str, also: tuple[str, ...] = ()
+) -> NameIndex:
     """The records whose name ``keep`` takes, by folded name within their dataset, holding only what an edge reads.
 
     For a step reader built once per run from every loaded record. Each kept record's key is
     checked here (``purpose`` names why, for the error), so a drifted one stops the run before
     any file is classified, rather than failing the file whose parent it turns out to be.
+    ``also`` names further fields the reader needs, each kept where the record has it.
     """
     return files_by_folded_name(
         {
             "file_name": r["file_name"],
             key.input_field: input_key_value(r, key, purpose),
             "dataset_id": dataset_of(r),
+            **{field: r[field] for field in also if field in r},
         }
         for r in records
         if isinstance(r.get("file_name"), str) and keep(r["file_name"])
