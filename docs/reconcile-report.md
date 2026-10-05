@@ -19,12 +19,12 @@ The last two columns are extra counts laid over those, not part of the sum:
 
 | dimension | published | published harmonized | submitter | submitter harmonized | external | external harmonized | inference | inherited | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| data_modality | 0 | 6,743 | 0 | 16,664 | 0 | 6,962 | 350,606 | 259,819 | 0 | 0 | 0 | 0 | 20,944 | 46,350 | 634,039 | 22,416 |
-| data_type | 0 | 0 | 464 | 9,796 | 0 | 0 | 678,553 | 0 | 0 | 2 | 0 | 0 | 0 | 19,273 | 688,813 | 3,404 |
-| platform | 0 | 0 | 9,830 | 10,597 | 6,962 | 0 | 26,997 | 390,323 | 0 | 0 | 0 | 0 | 23,209 | 240,170 | 444,709 | 6,863 |
-| reference_assembly | 0 | 4,476 | 46,798 | 263,942 | 0 | 0 | 129,370 | 171,371 | 8 | 0 | 0 | 220 | 63,675 | 28,228 | 611,481 | 215,655 |
-| assay_type | 0 | 6,753 | 12,420 | 0 | 6,962 | 0 | 5,441 | 210,678 | 0 | 6 | 2 | 0 | 23,203 | 442,623 | 235,501 | 25,721 |
-| instrument_model | 0 | 0 | 19,102 | 520 | 6,962 | 0 | 69 | 209,273 | 0 | 0 | 0 | 0 | 23,209 | 448,953 | 235,926 | 25,901 |
+| data_modality | 0 | 6,743 | 0 | 16,664 | 0 | 6,962 | 350,606 | 259,819 | 0 | 0 | 0 | 0 | 20,968 | 46,326 | 634,039 | 22,416 |
+| data_type | 0 | 0 | 464 | 9,796 | 0 | 0 | 678,577 | 0 | 0 | 2 | 0 | 0 | 0 | 19,249 | 688,837 | 3,404 |
+| platform | 0 | 0 | 9,830 | 10,597 | 6,962 | 0 | 26,997 | 390,323 | 0 | 0 | 0 | 0 | 23,233 | 240,146 | 444,709 | 6,863 |
+| reference_assembly | 0 | 4,476 | 46,798 | 263,942 | 0 | 0 | 129,370 | 171,371 | 8 | 0 | 0 | 220 | 63,699 | 28,204 | 611,481 | 215,655 |
+| assay_type | 0 | 6,753 | 12,420 | 0 | 6,962 | 0 | 5,441 | 210,678 | 0 | 6 | 2 | 0 | 23,227 | 442,599 | 235,501 | 25,721 |
+| instrument_model | 0 | 0 | 19,102 | 520 | 6,962 | 0 | 69 | 209,273 | 0 | 0 | 0 | 0 | 23,233 | 448,929 | 235,926 | 25,901 |
 
 ## Conflict rate
 
@@ -65,7 +65,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 | `ANVIL_1000G_high_coverage_2019` | 12,908 | · | · | · | · | 13,008 | 100 | 26,016 | 49.6% | 99.6% |
 | `ANVIL_HPRC` | 4,100 | · | 768 | 160 | · | 4,618 | 13,539 | 23,185 | 21.6% | 41.6% |
 | `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` | 86 | · | · | 28 | · | · | 12,420 | 12,534 | 0.9% | 0.9% |
-| `ANVIL_T2T` | 282,796 | · | · | · | · | · | 6,408 | 289,204 | 97.7% | 97.7% |
+| `ANVIL_T2T` | 282,796 | · | · | · | · | 24 | 6,384 | 289,204 | 97.7% | 97.7% |
 | `ANVIL_T2T_CHRY` | 309,857 | · | · | · | · | · | 122 | 309,979 | 99.9% | 99.9% |
 | `ANVIL_nhp_dGTEx_V1` | 4 | 1,372 | · | · | · | · | 2,215 | 3,591 | 38.3% | 38.3% |
 | `AnVIL_ENCORE_293T` | · | 1,344 | · | · | · | · | 648 | 1,992 | 67.4% | 67.4% |
@@ -73,27 +73,27 @@ What each dataset holds, per dimension: every file counted once, under its recon
 | `AnVIL_HPRC_R2` | 4,237 | 230 | 3,002 | 462 | · | 466 | 7,874 | 16,271 | 48.7% | 51.6% |
 | `AnVIL_IGVF_Mouse_R1` | · | 6,737 | · | · | 18 | · | 31 | 6,786 | 99.5% | 99.5% |
 | `AnVIL_MAGE` | 6 | 1,588 | · | · | · | · | 1,691 | 3,285 | 48.5% | 48.5% |
-| **(every dataset)** | 622,625 | 13,731 | 3,770 | 650 | 18 | 20,944 | 46,350 | 708,088 | 90.4% | 93.4% |
+| **(every dataset)** | 622,625 | 13,731 | 3,770 | 650 | 18 | 20,968 | 46,326 | 708,088 | 90.4% | 93.4% |
 
 ### data_type
 
-21 values, shown with each dotted term under its top-level term (the dashboard shows every term): `variants` = `variants.germline`, `variants`, `variants.structural`; `annotations` = `annotations.coverage`, `annotations`; `pangenome` = `pangenome`, `pangenome.reference`.
+22 values, shown with each dotted term under its top-level term (the dashboard shows every term): `variants` = `variants.germline`, `variants`, `variants.structural`; `annotations` = `annotations.coverage`, `annotations`; `pangenome` = `pangenome`, `pangenome.reference`.
 
-| dataset | `variants` | `index` | `qc_report` | `reads` | `annotations` | `alignments` | `checksum` | `raw_signal` | `genotypes` | `log` | `images` | `assembly` | `quantification` | `expression_matrix` | `pangenome` | `array_signal` | `sequence` | `conflict` | `not_classified` | files | has a value | determined |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| `ANVIL_1000G_PRIMED_data_model` | 46 | 23 | · | · | · | · | · | · | 8,562 | 2,852 | · | · | · | · | · | · | · | · | 10 | 11,493 | 99.9% | 99.9% |
-| `ANVIL_1000G_high_coverage_2019` | 3,252 | 6,454 | · | · | · | 3,202 | 13,008 | · | · | · | · | · | · | · | · | · | · | · | 100 | 26,016 | 99.6% | 99.6% |
-| `ANVIL_HPRC` | 304 | 356 | 45 | 4,756 | 2,171 | 730 | 759 | 115 | · | 785 | 3,074 | 472 | · | · | 471 | 160 | 4 | · | 8,983 | 23,185 | 61.2% | 61.2% |
-| `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` | 59 | · | · | 12 | 28 | · | · | 12,396 | · | · | · | 24 | · | · | · | · | 3 | · | 12 | 12,534 | 99.9% | 99.9% |
-| `ANVIL_T2T` | 141,018 | 116,300 | 17,566 | 6,404 | 3,237 | 3,299 | · | · | · | · | · | · | · | · | · | · | 5 | · | 1,375 | 289,204 | 99.5% | 99.5% |
-| `ANVIL_T2T_CHRY` | 183,798 | 98,144 | 19,937 | 558 | 3,762 | 3,760 | · | · | · | · | · | · | · | · | · | · | 6 | · | 14 | 309,979 | 99.9% | 99.9% |
-| `ANVIL_nhp_dGTEx_V1` | 2 | 756 | · | · | · | 754 | · | · | · | · | · | · | · | · | · | · | · | · | 2,079 | 3,591 | 42.1% | 42.1% |
-| `AnVIL_ENCORE_293T` | · | · | · | 448 | 896 | 224 | · | · | · | · | · | · | 224 | · | · | · | · | · | 200 | 1,992 | 89.9% | 89.9% |
-| `AnVIL_ENCORE_RS293` | · | · | · | 820 | 1,640 | 410 | · | · | · | · | · | · | 410 | · | · | · | · | · | 472 | 3,752 | 87.4% | 87.4% |
-| `AnVIL_HPRC_R2` | 2 | 1,858 | · | 5,868 | 2,772 | 1,124 | 466 | · | · | · | · | 464 | · | · | 6 | · | · | 2 | 3,709 | 16,271 | 77.1% | 77.1% |
-| `AnVIL_IGVF_Mouse_R1` | · | 4 | · | 3,959 | · | 2 | · | 11 | · | · | · | · | 8 | 580 | · | · | · | · | 2,222 | 6,786 | 67.2% | 67.2% |
-| `AnVIL_MAGE` | 3 | 831 | · | 1,558 | 12 | 779 | · | · | · | · | · | · | · | 5 | · | · | · | · | 97 | 3,285 | 97.0% | 97.0% |
-| **(every dataset)** | 328,484 | 224,726 | 37,548 | 24,383 | 14,518 | 14,284 | 14,233 | 12,522 | 8,562 | 3,637 | 3,074 | 960 | 642 | 585 | 477 | 160 | 18 | 2 | 19,273 | 708,088 | 97.2% | 97.2% |
+| dataset | `variants` | `index` | `qc_report` | `reads` | `annotations` | `alignments` | `checksum` | `raw_signal` | `genotypes` | `log` | `images` | `assembly` | `quantification` | `expression_matrix` | `pangenome` | `array_signal` | `sample_map` | `sequence` | `conflict` | `not_classified` | files | has a value | determined |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `ANVIL_1000G_PRIMED_data_model` | 46 | 23 | · | · | · | · | · | · | 8,562 | 2,852 | · | · | · | · | · | · | · | · | · | 10 | 11,493 | 99.9% | 99.9% |
+| `ANVIL_1000G_high_coverage_2019` | 3,252 | 6,454 | · | · | · | 3,202 | 13,008 | · | · | · | · | · | · | · | · | · | · | · | · | 100 | 26,016 | 99.6% | 99.6% |
+| `ANVIL_HPRC` | 304 | 356 | 45 | 4,756 | 2,171 | 730 | 759 | 115 | · | 785 | 3,074 | 472 | · | · | 471 | 160 | · | 4 | · | 8,983 | 23,185 | 61.2% | 61.2% |
+| `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` | 59 | · | · | 12 | 28 | · | · | 12,396 | · | · | · | 24 | · | · | · | · | · | 3 | · | 12 | 12,534 | 99.9% | 99.9% |
+| `ANVIL_T2T` | 141,018 | 116,300 | 17,566 | 6,404 | 3,237 | 3,299 | · | · | · | · | · | · | · | · | · | · | 24 | 5 | · | 1,351 | 289,204 | 99.5% | 99.5% |
+| `ANVIL_T2T_CHRY` | 183,798 | 98,144 | 19,937 | 558 | 3,762 | 3,760 | · | · | · | · | · | · | · | · | · | · | · | 6 | · | 14 | 309,979 | 99.9% | 99.9% |
+| `ANVIL_nhp_dGTEx_V1` | 2 | 756 | · | · | · | 754 | · | · | · | · | · | · | · | · | · | · | · | · | · | 2,079 | 3,591 | 42.1% | 42.1% |
+| `AnVIL_ENCORE_293T` | · | · | · | 448 | 896 | 224 | · | · | · | · | · | · | 224 | · | · | · | · | · | · | 200 | 1,992 | 89.9% | 89.9% |
+| `AnVIL_ENCORE_RS293` | · | · | · | 820 | 1,640 | 410 | · | · | · | · | · | · | 410 | · | · | · | · | · | · | 472 | 3,752 | 87.4% | 87.4% |
+| `AnVIL_HPRC_R2` | 2 | 1,858 | · | 5,868 | 2,772 | 1,124 | 466 | · | · | · | · | 464 | · | · | 6 | · | · | · | 2 | 3,709 | 16,271 | 77.1% | 77.1% |
+| `AnVIL_IGVF_Mouse_R1` | · | 4 | · | 3,959 | · | 2 | · | 11 | · | · | · | · | 8 | 580 | · | · | · | · | · | 2,222 | 6,786 | 67.2% | 67.2% |
+| `AnVIL_MAGE` | 3 | 831 | · | 1,558 | 12 | 779 | · | · | · | · | · | · | · | 5 | · | · | · | · | · | 97 | 3,285 | 97.0% | 97.0% |
+| **(every dataset)** | 328,484 | 224,726 | 37,548 | 24,383 | 14,518 | 14,284 | 14,233 | 12,522 | 8,562 | 3,637 | 3,074 | 960 | 642 | 585 | 477 | 160 | 24 | 18 | 2 | 19,249 | 708,088 | 97.2% | 97.2% |
 
 ### platform
 
@@ -103,7 +103,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 | `ANVIL_1000G_high_coverage_2019` | 12,808 | · | · | 13,008 | 200 | 26,016 | 49.2% | 99.2% |
 | `ANVIL_HPRC` | 3,634 | 585 | 876 | 5,430 | 12,660 | 23,185 | 21.9% | 45.3% |
 | `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` | · | 12,403 | · | 27 | 104 | 12,534 | 98.9% | 99.1% |
-| `ANVIL_T2T` | 180,938 | · | · | 10 | 108,256 | 289,204 | 62.5% | 62.5% |
+| `ANVIL_T2T` | 180,938 | · | · | 34 | 108,232 | 289,204 | 62.5% | 62.5% |
 | `ANVIL_T2T_CHRY` | 216,195 | · | · | 12 | 93,772 | 309,979 | 69.7% | 69.7% |
 | `ANVIL_nhp_dGTEx_V1` | 136 | · | · | · | 3,455 | 3,591 | 3.7% | 3.7% |
 | `AnVIL_ENCORE_293T` | 1,792 | · | · | · | 200 | 1,992 | 89.9% | 89.9% |
@@ -111,7 +111,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 | `AnVIL_HPRC_R2` | 3,202 | 1,409 | 1,919 | 1,870 | 7,871 | 16,271 | 40.1% | 51.6% |
 | `AnVIL_IGVF_Mouse_R1` | 3,952 | 22 | · | · | 2,812 | 6,786 | 58.5% | 58.5% |
 | `AnVIL_MAGE` | 1,558 | · | · | · | 1,727 | 3,285 | 47.4% | 47.4% |
-| **(every dataset)** | 427,495 | 14,419 | 2,795 | 23,209 | 240,170 | 708,088 | 62.8% | 66.0% |
+| **(every dataset)** | 427,495 | 14,419 | 2,795 | 23,233 | 240,146 | 708,088 | 62.8% | 66.0% |
 
 ### reference_assembly
 
@@ -121,7 +121,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 | `ANVIL_1000G_high_coverage_2019` | · | · | 12,908 | · | · | · | · | · | · | · | 13,008 | 100 | 26,016 | 49.6% | 99.6% |
 | `ANVIL_HPRC` | 90 | · | 1,711 | 125 | 190 | · | · | · | 2 | 3 | 11,591 | 9,473 | 23,185 | 9.1% | 59.1% |
 | `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` | · | 24 | 26 | 2 | · | · | · | · | 12 | · | 12,430 | 40 | 12,534 | 0.5% | 99.6% |
-| `ANVIL_T2T` | 273,689 | · | 2,508 | 201 | · | 118 | 70 | 48 | · | 4 | 6,404 | 6,162 | 289,204 | 95.6% | 97.8% |
+| `ANVIL_T2T` | 273,689 | · | 2,508 | 201 | · | 118 | 70 | 48 | · | 4 | 6,428 | 6,138 | 289,204 | 95.6% | 97.8% |
 | `ANVIL_T2T_CHRY` | · | 262,595 | 46,809 | 12 | · | · | · | · | · | 1 | 558 | 4 | 309,979 | 99.8% | 99.9% |
 | `ANVIL_nhp_dGTEx_V1` | · | · | · | · | · | · | · | · | · | · | · | 3,591 | 3,591 | 0.0% | 0.0% |
 | `AnVIL_ENCORE_293T` | · | · | 1,544 | · | · | · | · | · | · | · | 448 | · | 1,992 | 77.5% | 100% |
@@ -129,7 +129,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 | `AnVIL_HPRC_R2` | · | 926 | 1,595 | 469 | · | · | · | · | · | · | 10,036 | 3,245 | 16,271 | 18.3% | 80.0% |
 | `AnVIL_IGVF_Mouse_R1` | · | · | · | · | · | · | · | · | · | · | 3,970 | 2,816 | 6,786 | 0.0% | 58.5% |
 | `AnVIL_MAGE` | · | · | 1,574 | · | · | · | · | · | · | · | 1,558 | 153 | 3,285 | 47.9% | 95.3% |
-| **(every dataset)** | 273,779 | 263,545 | 77,384 | 809 | 190 | 118 | 70 | 48 | 14 | 8 | 63,675 | 28,448 | 708,088 | 86.9% | 95.9% |
+| **(every dataset)** | 273,779 | 263,545 | 77,384 | 809 | 190 | 118 | 70 | 48 | 14 | 8 | 63,699 | 28,424 | 708,088 | 86.9% | 95.9% |
 
 ### assay_type
 
@@ -139,7 +139,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 | `ANVIL_1000G_high_coverage_2019` | 12,808 | · | · | · | · | · | · | 13,008 | 200 | 26,016 | 49.2% | 99.2% |
 | `ANVIL_HPRC` | · | · | · | 160 | · | · | · | 5,430 | 17,595 | 23,185 | 0.6% | 24.1% |
 | `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` | · | · | · | · | · | · | 6 | 21 | 12,507 | 12,534 | 0.0% | 0.1% |
-| `ANVIL_T2T` | 180,868 | · | · | · | · | · | · | 10 | 108,326 | 289,204 | 62.5% | 62.5% |
+| `ANVIL_T2T` | 180,868 | · | · | · | · | · | · | 34 | 108,302 | 289,204 | 62.5% | 62.5% |
 | `ANVIL_T2T_CHRY` | 32,090 | · | · | · | · | · | · | 12 | 277,877 | 309,979 | 10.3% | 10.3% |
 | `ANVIL_nhp_dGTEx_V1` | · | 1,372 | · | · | · | · | · | · | 2,219 | 3,591 | 38.2% | 38.2% |
 | `AnVIL_ENCORE_293T` | · | 1,344 | · | · | · | · | · | · | 648 | 1,992 | 67.4% | 67.4% |
@@ -147,7 +147,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 | `AnVIL_HPRC_R2` | 2,817 | · | · | · | · | · | · | 1,870 | 11,584 | 16,271 | 17.3% | 28.8% |
 | `AnVIL_IGVF_Mouse_R1` | · | · | 6,733 | · | 10 | 10 | 2 | · | 31 | 6,786 | 99.5% | 99.5% |
 | `AnVIL_MAGE` | · | 1,582 | · | · | · | · | · | · | 1,703 | 3,285 | 48.1% | 48.1% |
-| **(every dataset)** | 228,583 | 6,758 | 6,733 | 160 | 10 | 10 | 8 | 23,203 | 442,623 | 708,088 | 34.2% | 37.4% |
+| **(every dataset)** | 228,583 | 6,758 | 6,733 | 160 | 10 | 10 | 8 | 23,227 | 442,599 | 708,088 | 34.2% | 37.4% |
 
 ### instrument_model
 
@@ -157,7 +157,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 | `ANVIL_1000G_high_coverage_2019` | 12,808 | · | · | · | · | · | · | · | · | 13,008 | 200 | 26,016 | 49.2% | 99.2% |
 | `ANVIL_HPRC` | · | · | · | · | · | · | · | · | · | 5,430 | 17,755 | 23,185 | 0.0% | 23.4% |
 | `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` | · | · | · | · | · | · | · | · | · | 27 | 12,507 | 12,534 | 0.0% | 0.2% |
-| `ANVIL_T2T` | 180,868 | · | · | · | · | · | · | · | · | 10 | 108,326 | 289,204 | 62.5% | 62.5% |
+| `ANVIL_T2T` | 180,868 | · | · | · | · | · | · | · | · | 34 | 108,302 | 289,204 | 62.5% | 62.5% |
 | `ANVIL_T2T_CHRY` | · | 32,090 | · | · | · | · | · | · | · | 12 | 277,877 | 309,979 | 10.3% | 10.3% |
 | `ANVIL_nhp_dGTEx_V1` | · | · | 136 | · | · | · | · | · | · | · | 3,455 | 3,591 | 3.7% | 3.7% |
 | `AnVIL_ENCORE_293T` | · | · | · | · | · | · | · | · | · | · | 1,992 | 1,992 | 0.0% | 0.0% |
@@ -165,7 +165,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 | `AnVIL_HPRC_R2` | 3,202 | · | · | 1,235 | 925 | 684 | · | 2 | 2 | 1,870 | 8,351 | 16,271 | 37.1% | 48.6% |
 | `AnVIL_IGVF_Mouse_R1` | 2,000 | · | 1,680 | · | 2 | · | 272 | 20 | · | · | 2,812 | 6,786 | 58.5% | 58.5% |
 | `AnVIL_MAGE` | · | · | · | · | · | · | · | · | · | · | 3,285 | 3,285 | 0.0% | 0.0% |
-| **(every dataset)** | 198,878 | 32,090 | 1,816 | 1,235 | 927 | 684 | 272 | 22 | 2 | 23,209 | 448,953 | 708,088 | 33.3% | 36.5% |
+| **(every dataset)** | 198,878 | 32,090 | 1,816 | 1,235 | 927 | 684 | 272 | 22 | 2 | 23,233 | 448,929 | 708,088 | 33.3% | 36.5% |
 
 ## Change since the previous reconciled run
 
@@ -173,19 +173,30 @@ Against `20261004_135754` (708,088 files; the same translation table). Each cell
 
 | dimension | published | published harmonized | submitter | submitter harmonized | external | external harmonized | inference | inherited | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| data_modality | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| data_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| platform | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 0 | +31,155 | 0 | 0 | 0 | 0 | 0 | -31,155 | +31,155 | 0 |
-| assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| instrument_model | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| data_modality | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | +24 | -24 | 0 | 0 |
+| data_type | 0 | 0 | 0 | 0 | 0 | 0 | +24 | 0 | 0 | 0 | 0 | 0 | 0 | -24 | +24 | 0 |
+| platform | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | +24 | -24 | 0 | 0 |
+| reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 0 | +31,155 | 0 | 0 | 0 | 0 | +24 | -31,179 | +31,155 | 0 |
+| assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | +24 | -24 | 0 | 0 |
+| instrument_model | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | +24 | -24 | 0 | 0 |
 
 ### Values that moved, by dataset
 
 | dataset | dimension | value | before | after | change |
 | --- | --- | --- | --- | --- | --- |
-| `ANVIL_T2T` | reference_assembly | `not_classified` | 37,317 | 6,162 | -31,155 |
+| `ANVIL_T2T` | reference_assembly | `not_classified` | 37,317 | 6,138 | -31,179 |
 | `ANVIL_T2T` | reference_assembly | `t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r` | 242,534 | 273,689 | +31,155 |
+| `ANVIL_T2T` | assay_type | `not_applicable` | 10 | 34 | +24 |
+| `ANVIL_T2T` | assay_type | `not_classified` | 108,326 | 108,302 | -24 |
+| `ANVIL_T2T` | data_modality | `not_applicable` | 0 | 24 | +24 |
+| `ANVIL_T2T` | data_modality | `not_classified` | 6,408 | 6,384 | -24 |
+| `ANVIL_T2T` | data_type | `not_classified` | 1,375 | 1,351 | -24 |
+| `ANVIL_T2T` | data_type | `sample_map` | 0 | 24 | +24 |
+| `ANVIL_T2T` | instrument_model | `not_applicable` | 10 | 34 | +24 |
+| `ANVIL_T2T` | instrument_model | `not_classified` | 108,326 | 108,302 | -24 |
+| `ANVIL_T2T` | platform | `not_applicable` | 10 | 34 | +24 |
+| `ANVIL_T2T` | platform | `not_classified` | 108,256 | 108,232 | -24 |
+| `ANVIL_T2T` | reference_assembly | `not_applicable` | 6,404 | 6,428 | +24 |
 
 ## The join, per evidence file
 
@@ -540,12 +551,12 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 
 | dimension | published | published harmonized | submitter | submitter harmonized | external | external harmonized | inference | inherited | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| data_modality | 0 | 0 | 0 | 0 | 0 | 6,404 | 144,255 | 132,137 | 0 | 0 | 0 | 0 | 0 | 6,408 | 282,796 | 6,404 |
-| data_type | 0 | 0 | 0 | 0 | 0 | 0 | 287,829 | 0 | 0 | 0 | 0 | 0 | 0 | 1,375 | 287,829 | 0 |
-| platform | 0 | 0 | 0 | 0 | 6,404 | 0 | 3,237 | 171,297 | 0 | 0 | 0 | 0 | 10 | 108,256 | 180,938 | 0 |
-| reference_assembly | 0 | 0 | 0 | 48 | 0 | 0 | 113,195 | 163,391 | 4 | 0 | 0 | 0 | 6,404 | 6,162 | 276,634 | 0 |
-| assay_type | 0 | 0 | 0 | 0 | 6,404 | 0 | 0 | 174,464 | 0 | 0 | 0 | 0 | 10 | 108,326 | 180,868 | 6,404 |
-| instrument_model | 0 | 0 | 0 | 0 | 6,404 | 0 | 0 | 174,464 | 0 | 0 | 0 | 0 | 10 | 108,326 | 180,868 | 6,404 |
+| data_modality | 0 | 0 | 0 | 0 | 0 | 6,404 | 144,255 | 132,137 | 0 | 0 | 0 | 0 | 24 | 6,384 | 282,796 | 6,404 |
+| data_type | 0 | 0 | 0 | 0 | 0 | 0 | 287,853 | 0 | 0 | 0 | 0 | 0 | 0 | 1,351 | 287,853 | 0 |
+| platform | 0 | 0 | 0 | 0 | 6,404 | 0 | 3,237 | 171,297 | 0 | 0 | 0 | 0 | 34 | 108,232 | 180,938 | 0 |
+| reference_assembly | 0 | 0 | 0 | 48 | 0 | 0 | 113,195 | 163,391 | 4 | 0 | 0 | 0 | 6,428 | 6,138 | 276,634 | 0 |
+| assay_type | 0 | 0 | 0 | 0 | 6,404 | 0 | 0 | 174,464 | 0 | 0 | 0 | 0 | 34 | 108,302 | 180,868 | 6,404 |
+| instrument_model | 0 | 0 | 0 | 0 | 6,404 | 0 | 0 | 174,464 | 0 | 0 | 0 | 0 | 34 | 108,302 | 180,868 | 6,404 |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |

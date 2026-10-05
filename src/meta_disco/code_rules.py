@@ -259,6 +259,20 @@ TAR_INNER_FORMAT = CodeRule(
         "extension."
     ),
 )
+SAMPLE_MAP_CONTENT = CodeRule(
+    id="sample_map_content",
+    module=HEADER_CLASSIFIER,
+    basis=BASIS_CONTENT,
+    source_type=SOURCE_CONTENT_READ,
+    reads="a GATK sample-name map's rows: two or three tab-separated columns, the second a VCF path",
+    sets=("data_type", "data_modality", "reference_assembly", "assay_type", "platform", "instrument_model"),
+    rationale=(
+        "A file whose rows are a sample name and a VCF path is a list of files, not their "
+        "data (#621): its data_type is sample_map, and the five dimensions of the data do "
+        "not apply to it, as for a checksum (#596). Read from the content, so a file that "
+        "is only named like a map keeps what its name says."
+    ),
+)
 INDEX_BY_EXTENSION = CodeRule(
     id="index_by_extension",
     module=INDEX_PRODUCER,
@@ -298,6 +312,7 @@ CODE_RULES = (
     FASTA_MANY_CONTIGS,
     RGFA_STABLE_RANK_REFERENCE,
     TAR_INNER_FORMAT,
+    SAMPLE_MAP_CONTENT,
     INDEX_BY_EXTENSION,
     INHERITED_FROM_PARENT,
 )

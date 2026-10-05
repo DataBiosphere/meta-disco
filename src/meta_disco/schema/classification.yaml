@@ -1280,6 +1280,11 @@ enums:
         meaning: EDAM:data_3914
       log:
       interval_set:
+      sample_map:
+        description: >-
+          A list naming the files processed together, one per sample: a GATK sample-name
+          map, each row a sample name and its gVCF's path (#621). No `meaning`: EDAM has no
+          data term for it.
 
   reference_assembly_enum:
     description: >-

@@ -250,9 +250,14 @@ def test_the_sample_map_producer_writes_the_cohort_and_classifies_from_the_name(
     assert set(rows) == {"m1", "m2"}
     assert [i["parent_key"] for i in rows["m1"]["generated_by"]["inputs"]] == ["g1", "g2"]
     assert rows["m2"]["generated_by"] is None
-    assert {slot: c["status"] for slot, c in rows["m1"]["classifications"].items()} == dict.fromkeys(
-        rows["m1"]["classifications"], "not_classified"
+    # A map is a list of files: data_type sample_map, the data's five dimensions not applicable.
+    m1 = rows["m1"]["classifications"]
+    assert m1["data_type"]["value"] == "sample_map"
+    assert {slot: c["status"] for slot, c in m1.items() if slot != "data_type"} == dict.fromkeys(
+        [s for s in m1 if s != "data_type"], "not_applicable"
     )
+    # A file named like a map that is not one keeps what its name says: nothing.
+    assert {c["status"] for c in rows["m2"]["classifications"].values()} == {"not_classified"}
     assert details == {"producer_steps": {"T": {cs.STEPPED: 1, cs.NOT_A_LIST: 1}}}
 
 

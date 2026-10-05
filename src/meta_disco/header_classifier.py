@@ -816,15 +816,69 @@ def classify_sample_map(
     file_size: int | None = None,
     file_format: str | None = None,
 ) -> dict:
-    """Classify a GATK sample-name map by its name alone, as the catch-all classified it before #621.
+    """Classify a GATK sample-name map: from its name, and where its content is a map, as a ``sample_map``.
 
-    A list of files is not their data, so ``rows`` (``cohort_steps.parse_sample_map``) give
-    it no dimension; they are the step reader's. ``file_format`` is accepted to match the
-    uniform ``_fetch_and_classify`` call.
+    Where ``rows`` (``cohort_steps.parse_sample_map``) is a map, it is a list of files, not
+    their data: ``data_type`` is ``sample_map`` and the other five dimensions are
+    ``not_applicable``, at ``CONTENT_TIER`` (#621). Where it is None, the file is classified
+    from its name alone. ``file_format`` is accepted to match the uniform
+    ``_fetch_and_classify`` call.
     """
-    from .rule_engine import ExtendedFileInfo
+    from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
-    return _get_engine().classify_extended(ExtendedFileInfo(name=name, file_size=file_size)).to_output_dict()
+    result = _get_engine().classify_extended(ExtendedFileInfo(name=name, file_size=file_size))
+    if rows is not None:
+        why = f"{len(rows)} rows of a sample name and a VCF path: a list of files, not their data"
+        # Each field written out, so `test_code_rules` reads what this rule claims.
+        result.add_claim(
+            "data_type",
+            rule_id=code_rules.SAMPLE_MAP_CONTENT.id,
+            tier=CONTENT_TIER,
+            source_type=SOURCE_CONTENT_READ,
+            reason=why,
+            value="sample_map",
+        )
+        result.add_claim(
+            "data_modality",
+            rule_id=code_rules.SAMPLE_MAP_CONTENT.id,
+            tier=CONTENT_TIER,
+            source_type=SOURCE_CONTENT_READ,
+            reason=why,
+            status=NOT_APPLICABLE,
+        )
+        result.add_claim(
+            "reference_assembly",
+            rule_id=code_rules.SAMPLE_MAP_CONTENT.id,
+            tier=CONTENT_TIER,
+            source_type=SOURCE_CONTENT_READ,
+            reason=why,
+            status=NOT_APPLICABLE,
+        )
+        result.add_claim(
+            "assay_type",
+            rule_id=code_rules.SAMPLE_MAP_CONTENT.id,
+            tier=CONTENT_TIER,
+            source_type=SOURCE_CONTENT_READ,
+            reason=why,
+            status=NOT_APPLICABLE,
+        )
+        result.add_claim(
+            "platform",
+            rule_id=code_rules.SAMPLE_MAP_CONTENT.id,
+            tier=CONTENT_TIER,
+            source_type=SOURCE_CONTENT_READ,
+            reason=why,
+            status=NOT_APPLICABLE,
+        )
+        result.add_claim(
+            "instrument_model",
+            rule_id=code_rules.SAMPLE_MAP_CONTENT.id,
+            tier=CONTENT_TIER,
+            source_type=SOURCE_CONTENT_READ,
+            reason=why,
+            status=NOT_APPLICABLE,
+        )
+    return result.to_output_dict()
 
 
 @cache

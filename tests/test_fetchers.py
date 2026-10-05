@@ -991,6 +991,7 @@ def test_a_suffix_read_returns_its_window_and_where_it_starts(monkeypatch, resp,
     ("resp", "message"),
     [
         (_StreamResp(200, b"x" * 9), "Range ignored"),
+        (_StreamResp(206, b"x" * 9, headers={"Content-Range": "bytes 0-8/9"}), "Range ignored"),
         (_StreamResp(206, b"tail"), "no Content-Range start"),
         (_StreamResp(503), "503"),
     ],

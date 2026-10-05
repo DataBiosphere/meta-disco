@@ -1618,80 +1618,90 @@
       {
         "classifications": {
           "assay_type": {
-            "credited_to": "not_classified",
+            "credited_to": "not_applicable",
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for assay_type",
-                "status": "not_classified"
+                "reason": "1 rows of a sample name and a VCF path: a list of files, not their data",
+                "rule_id": "sample_map_content",
+                "source_type": "content_read",
+                "status": "not_applicable",
+                "tier": 4
               }
             ],
             "inferred": {
-              "status": "not_classified",
+              "status": "not_applicable",
               "value": null
             },
-            "status": "not_classified",
-            "use": "published",
+            "status": "not_applicable",
+            "use": "meta_disco",
             "value": null
           },
           "data_modality": {
-            "credited_to": "not_classified",
+            "credited_to": "not_applicable",
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for data_modality",
-                "status": "not_classified"
+                "reason": "1 rows of a sample name and a VCF path: a list of files, not their data",
+                "rule_id": "sample_map_content",
+                "source_type": "content_read",
+                "status": "not_applicable",
+                "tier": 4
               }
             ],
             "inferred": {
-              "status": "not_classified",
+              "status": "not_applicable",
               "value": null
             },
-            "status": "not_classified",
-            "use": "published",
+            "status": "not_applicable",
+            "use": "meta_disco",
             "value": null
           },
           "data_type": {
-            "credited_to": "not_classified",
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for data_type",
-                "status": "not_classified"
+                "reason": "1 rows of a sample name and a VCF path: a list of files, not their data",
+                "rule_id": "sample_map_content",
+                "source_type": "content_read",
+                "tier": 4,
+                "value": "sample_map"
               }
             ],
             "inferred": {
-              "status": "not_classified",
-              "value": null
+              "status": "classified",
+              "value": "sample_map"
             },
-            "status": "not_classified",
-            "use": "published",
-            "value": null
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "sample_map"
           },
           "instrument_model": {
-            "credited_to": "not_classified",
+            "credited_to": "not_applicable",
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for instrument_model",
-                "status": "not_classified"
+                "reason": "1 rows of a sample name and a VCF path: a list of files, not their data",
+                "rule_id": "sample_map_content",
+                "source_type": "content_read",
+                "status": "not_applicable",
+                "tier": 4
               }
             ],
             "inferred": {
-              "status": "not_classified",
+              "status": "not_applicable",
               "value": null
             },
-            "status": "not_classified",
-            "use": "published",
+            "status": "not_applicable",
+            "use": "meta_disco",
             "value": null
           },
           "platform": {
-            "credited_to": "filled_by_submitter_harmonized",
+            "credited_to": "conflict_sources",
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for platform",
-                "status": "not_classified"
+                "reason": "1 rows of a sample name and a VCF path: a list of files, not their data",
+                "rule_id": "sample_map_content",
+                "source_type": "content_read",
+                "status": "not_applicable",
+                "tier": 4
               },
               {
                 "join_key": "drs_uri",
@@ -1709,28 +1719,30 @@
               }
             ],
             "inferred": {
-              "status": "not_classified",
+              "status": "not_applicable",
               "value": null
             },
-            "status": "classified",
-            "use": "meta_disco",
-            "value": "PACBIO"
+            "status": "conflict",
+            "use": "published",
+            "value": null
           },
           "reference_assembly": {
-            "credited_to": "not_classified",
+            "credited_to": "not_applicable",
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for reference_assembly",
-                "status": "not_classified"
+                "reason": "1 rows of a sample name and a VCF path: a list of files, not their data",
+                "rule_id": "sample_map_content",
+                "source_type": "content_read",
+                "status": "not_applicable",
+                "tier": 4
               }
             ],
             "inferred": {
-              "status": "not_classified",
+              "status": "not_applicable",
               "value": null
             },
-            "status": "not_classified",
-            "use": "published",
+            "status": "not_applicable",
+            "use": "meta_disco",
             "value": null
           }
         },

@@ -147,8 +147,8 @@ TAR_CONFIG = FileTypeConfig(
 )
 
 # GATK sample-name maps (#621): the list of gVCFs one GenomicsDB import joint-calls. Read
-# whole for the cohort step it states; classified from its name as the catch-all did, since
-# a list of files is not their data.
+# whole for the cohort step it states; a file whose content is a map is a `sample_map`, and
+# the data's five dimensions do not apply to it.
 SAMPLE_MAP_CONFIG = FileTypeConfig(
     name="sample_map",
     extensions=(SAMPLE_MAP_SUFFIX,),

@@ -14,7 +14,7 @@ Cross-field invariants over classified records (#314). *Active* is how many reco
 | 0 | 188 | `assay_for_methylation` |
 | 0 | 0 | `imaging_exclusive` _(vacuous)_ |
 | 0 | 47,523 | `sequencing_platform_excludes_imaging` |
-| 0 | 17,870 | `auxiliary_inert` |
+| 0 | 17,894 | `auxiliary_inert` |
 
 ## Examples
 

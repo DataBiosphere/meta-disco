@@ -648,29 +648,30 @@ def _fetch_suffix(md5sum: str, length: int, *, url: str | None, timeout: int = 6
     """The last ``length`` bytes of a file, and the offset of the first of them (#621).
 
     A suffix range (``bytes=-N``). A 206 names its window's start in ``Content-Range``; a 200
-    is the whole file, from 0, accepted only where it is no longer than ``length``. Raises
-    ``FetchError`` on any other status, a 206 whose ``Content-Range`` names no start, or a 200
-    longer than ``length``: a server that ignored the range would otherwise hand over a
-    multi-gigabyte tar to find one small member. The body is streamed, so such a reply is
-    refused after at most ``length + 1`` bytes.
+    is the whole file, from 0. Raises ``FetchError`` on any other status, a 206 whose
+    ``Content-Range`` names no start, or a body of either longer than ``length``: a server
+    that ignored the range would otherwise hand over a multi-gigabyte tar to find one small
+    member. The body is streamed, so such a reply is refused after at most ``length + 1``
+    bytes.
     """
     fetch_url, source = _range_target(md5sum, url)
     with requests.get(fetch_url, headers={"Range": f"bytes=-{length}"}, timeout=timeout, stream=True) as resp:
-        if resp.status_code == 200:
-            body = b""
-            for chunk in resp.iter_content(chunk_size=65536):
-                body += chunk
-                if len(body) > length:
-                    raise FetchError(
-                        f"HTTP 200 (Range ignored) from {source} suffix range request, past {length} bytes"
-                    )
-            return body, 0
-        if resp.status_code != 206:
+        if resp.status_code not in (200, 206):
             raise FetchError(f"HTTP {resp.status_code} from {source} suffix range request")
-        start = _content_range_start(resp.headers.get("Content-Range", ""))
-        if start is None:
-            raise FetchError(f"suffix range from {source} with no Content-Range start")
-        return resp.content, start
+        start = 0
+        if resp.status_code == 206:
+            found = _content_range_start(resp.headers.get("Content-Range", ""))
+            if found is None:
+                raise FetchError(f"suffix range from {source} with no Content-Range start")
+            start = found
+        body = b""
+        for chunk in resp.iter_content(chunk_size=65536):
+            body += chunk
+            if len(body) > length:
+                raise FetchError(
+                    f"HTTP {resp.status_code} from {source} suffix range request past {length} bytes (Range ignored)"
+                )
+        return body, start
 
 
 def _member_in_window(data: bytes, base: int, member: str) -> tuple[int, int, bytes] | None:

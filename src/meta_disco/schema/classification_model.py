@@ -180,6 +180,10 @@ class DataTypeEnum(str, Enum):
     """
     log = "log"
     interval_set = "interval_set"
+    sample_map = "sample_map"
+    """
+    A list naming the files processed together, one per sample: a GATK sample-name map, each row a sample name and its gVCF's path (#621). No `meaning`: EDAM has no data term for it.
+    """
 
 
 class ReferenceAssemblyEnum(str, Enum):
