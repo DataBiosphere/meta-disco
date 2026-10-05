@@ -714,8 +714,9 @@ def render_markdown(data: dict) -> str:
         "**How complete the metadata is.** A slot is one file in one dimension. It is *filled* when it settled "
         "with a value or as not applicable, which is an answer (the dimension does not apply to the file), unlike "
         "not classified. A filled slot is counted once, by where its answer is credited: *original*, a source's "
-        "value spelled exactly as the term its translation row declares (the *published* and *submitter* columns "
-        "above); *mapped*, one spelled differently that its row translates (the *harmonized* columns); "
+        "value spelled exactly as the term its translation row declares (each source's "
+        "own column above); *mapped*, one spelled differently that its row translates (each source's *harmonized* "
+        "column); "
         "*inferred*, inference's, where no source declared it; *inherited*, only the file's parents' across its "
         "`generated_by`; *not applicable*, which is not credited to any input. A slot not classified, published "
         "unreviewed or in conflict is not filled.",
