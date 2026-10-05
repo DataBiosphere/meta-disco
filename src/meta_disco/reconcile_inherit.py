@@ -24,6 +24,14 @@ Before any of these, a role with a parent no record of the run carries passes no
 That cannot happen to a step reconcile built, whose parents all resolved in the run
 (#577), and is counted rather than assumed.
 
+**A role may read through its parents** (``activities.read_through``, #621): a GenomicsDB
+workspace's ``input_list`` parent is a sample map, which passes nothing itself, and the role
+takes what the map's own ``member`` inputs settle to, by the same rule, in place of the
+map's answer. The members of one set of lists settle once and every child reading through
+those lists reuses it: 24 settlements for T2T's 31,155 tars. A list with no step, or none
+naming a member in that role, passes nothing (:data:`LIST_UNRESOLVED`). The inherited
+declaration names the lists as its parents, not their members.
+
 This module holds the graph and the parents' rule; how a child's own declarations and an
 inherited one resolve is reconcile's (``reconcile.resolve_slot``), handed in as a callback,
 so there is one resolution rule.
@@ -47,13 +55,16 @@ DECLARED = "declared"
 PARENT_CONFLICT = "parent_conflict"
 PARENT_NOT_CLASSIFIED = "parent_not_classified"
 PARENT_NOT_IN_RUN = "parent_not_in_run"
-OUTCOMES = (DECLARED, MIXED, PARENT_CONFLICT, PARENT_NOT_CLASSIFIED, PARENT_NOT_IN_RUN)
+LIST_UNRESOLVED = "list_unresolved"
+OUTCOMES = (DECLARED, MIXED, PARENT_CONFLICT, PARENT_NOT_CLASSIFIED, PARENT_NOT_IN_RUN, LIST_UNRESOLVED)
 
 # One slot's settled answer: ``(status, value)``, where status may be ``mixed`` — the
 # slot is ``not_classified`` on the record, marked by its mixed claim, and passes on as
 # mixed. A build is ``(base, version)``, carried with a ``reference_assembly`` value.
 Answer = tuple[str, "str | None"]
 Build = tuple["str | None", "str | None"]
+# What one role's parents gave a slot: the outcome, the declaration made (None where none), and its build.
+Passed = tuple[str, "str | None", "Build | None"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,22 +117,28 @@ class Step:
 
 @dataclass(frozen=True, slots=True)
 class Inherited:
-    """One role's parents' declaration for a slot of a child: a value, ``not_applicable`` or ``mixed``."""
+    """One role's parents' declaration for a slot of a child: a value, ``not_applicable`` or ``mixed``.
+
+    ``through`` is the role of the parents' own steps whose inputs gave it, for a role that
+    reads through its parents (#621); None where the parents' own answers did.
+    """
 
     activity: str
     role: str
     parent_keys: tuple[str, ...]
     declared: str
     build: Build | None = None
+    through: str | None = None
 
     def claim(self) -> dict:
         """The declaration as a claim, through ``make_claim``, naming the step it crossed and the parents."""
         declared = self.declared
         said = "disagree" if declared == MIXED else f"say {declared}"
+        who = f"{self.role} input(s)" if self.through is None else f"{self.role} input(s)' {self.through} inputs"
         return make_claim(
             source_type=SOURCE_DERIVATION_INHERITANCE,
             rule_id=code_rules.INHERITED_FROM_PARENT.id,
-            reason=f"Inherited across {self.activity}: its {self.role} input(s) {said}",
+            reason=f"Inherited across {self.activity}: its {who} {said}",
             value=None if declared in (MIXED, NOT_APPLICABLE) else declared,
             status=NOT_APPLICABLE if declared == NOT_APPLICABLE else None,
             state=MIXED if declared == MIXED else None,
@@ -203,8 +220,8 @@ class Inheritance:
     """What :func:`inherit` found: per child, its inherited declarations by slot, and per child its outcomes."""
 
     declarations: dict[str, dict[str, list[Inherited]]] = field(default_factory=dict)
-    # Per child, one (slot, outcome) per role and slot it passes: the report counts them.
-    outcomes: dict[str, tuple[tuple[str, str], ...]] = field(default_factory=dict)
+    # Per child, one (role, slot, outcome) per role and slot it passes: the report counts them.
+    outcomes: dict[str, tuple[tuple[str, str, str], ...]] = field(default_factory=dict)
 
 
 def inherit(
@@ -225,9 +242,35 @@ def inherit(
     final: dict[str, Settled | None] = {}
     intern = intern or Interner()
     result = Inheritance()
+    # Per set of lists, the role read through them and the slots passed, each slot's (outcome,
+    # declared, build): the lists' members settle once, however many children read through them.
+    through_lists: dict[tuple[tuple[str, ...], str, tuple[str, ...]], dict[str, Passed]] = {}
 
     def settled(key: str) -> Settled | None:
         return final[key] if key in final else base(key)
+
+    def settle_role(parents: list[Settled | None], slots: tuple[str, ...]) -> dict[str, Passed]:
+        builds = [p.build if p is not None else None for p in parents]
+        found: dict[str, Passed] = {}
+        for slot in slots:
+            outcome, declared = settle_parents(slot, [p.answers.get(slot) if p is not None else None for p in parents])
+            found[slot] = (outcome, declared, _parents_build(slot, declared, builds) if declared is not None else None)
+        return found
+
+    def settle_lists(lists: tuple[str, ...], through: str, slots: tuple[str, ...]) -> dict[str, Passed]:
+        """What the members in role ``through`` of ``lists``' own steps settle to, per slot."""
+        if any(settled(k) is None for k in lists):
+            return dict.fromkeys(slots, (PARENT_NOT_IN_RUN, None, None))
+        members = [[p for r, p in steps[k].inputs if r == through] if k in steps else [] for k in lists]
+        if not all(members):
+            return dict.fromkeys(slots, (LIST_UNRESOLVED, None, None))
+        return settle_role([settled(p) for p in dict.fromkeys(p for found in members for p in found)], slots)
+
+    def read_through(lists: tuple[str, ...], through: str, slots: tuple[str, ...]) -> dict[str, Passed]:
+        memo = (lists, through, slots)
+        if memo not in through_lists:
+            through_lists[memo] = settle_lists(lists, through, slots)
+        return through_lists[memo]
 
     def compute(key: str) -> Settled:
         step = steps[key]
@@ -236,22 +279,22 @@ def inherit(
             raise ValueError(f"child {key!r} has a step but no settled answer of its own")
         answers = dict(own.answers)
         by_slot: dict[str, list[Inherited]] = {}
-        outcomes: list[tuple[str, str]] = []
+        outcomes: list[tuple[str, str, str]] = []
+        throughs = activities.read_through(step.activity)
         for role, slots in activities.role_passes(step.activity).items():
             parent_keys = tuple(dict.fromkeys(p for r, p in step.inputs if r == role))
             if not parent_keys:
                 continue
-            parents = [settled(p) for p in parent_keys]
-            builds = [p.build if p is not None else None for p in parents]
+            through = throughs.get(role)
+            if through is None:
+                found = settle_role([settled(p) for p in parent_keys], slots)
+            else:
+                found = read_through(parent_keys, through, slots)
             for slot in slots:
-                outcome, declared = settle_parents(
-                    slot, [p.answers.get(slot) if p is not None else None for p in parents]
-                )
-                outcomes.append((slot, outcome))
+                outcome, declared, build = found[slot]
+                outcomes.append((role, slot, outcome))
                 if declared is not None:
-                    passed = Inherited(
-                        step.activity, role, parent_keys, declared, _parents_build(slot, declared, builds)
-                    )
+                    passed = Inherited(step.activity, role, parent_keys, declared, build, through)
                     by_slot.setdefault(slot, []).append(passed)
         build = own.build
         for slot, inherited in by_slot.items():

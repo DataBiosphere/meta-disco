@@ -1,6 +1,6 @@
 """The producers themselves — how to run each standalone one.
 
-Every producer builds `OutputRecord` now (#450), so a field reaching some of the eleven
+Every producer builds `OutputRecord` now (#450), so a field reaching some of the twelve
 outputs and not others is no longer a thing to sweep for: `test_output_shape` pins the
 record's key set across all of them. What still needs running a producer is what
 structure cannot settle — whose identity a record carries where a producer has two in

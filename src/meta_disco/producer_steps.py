@@ -36,8 +36,7 @@ from pathlib import PurePosixPath
 
 from . import code_rules, edges
 from .code_rules import EdgeRule
-from .record_keys import RecordKey, input_key_value
-from .records import dataset_of
+from .record_keys import RecordKey
 from .validators.command_lines import BCFTOOLS, GATK, GATK3, Step
 from .validators.header_extractors import VCFHeader
 
@@ -148,18 +147,11 @@ class HeaderSteps:
     @classmethod
     def for_run(cls, records: Iterable[dict], key: RecordKey) -> HeaderSteps:
         kinds = {rule.kind for rule in STEP_RULES.values()}
-        # Each kept record's key is checked here, so a drifted one stops the run before
-        # any file is classified, rather than failing the VCF whose parent it turns out to be.
-        parents = (
-            {
-                "file_name": r["file_name"],
-                key.input_field: input_key_value(r, key, "ground a header step's input on its parent"),
-                "dataset_id": dataset_of(r),
-            }
-            for r in records
-            if isinstance(r.get("file_name"), str) and edges.parent_kind_of(r["file_name"]) in kinds
-        )
-        return cls(edges.files_by_folded_name(parents), key)
+
+        def keep(name: str) -> bool:
+            return edges.parent_kind_of(name) in kinds
+
+        return cls(edges.parent_index(records, key, keep, "ground a header step's input on its parent"), key)
 
     def __call__(self, header: VCFHeader, file_name: str, dataset_id: str) -> tuple[dict | None, str]:
         """A VCF's ``generated_by`` from its header, and the outcome (one of :data:`OUTCOMES`).
@@ -185,11 +177,23 @@ class HeaderSteps:
         names = [PurePosixPath(path).name for path in paths]
         if any(edges.parent_kind_of(name) != rule.kind for name in names):
             return None, NO_ACTIVITY
-        found = [edges.matches(self.index, dataset_id, name) for name in names]
-        if any(not parents for parents in found):
-            return None, PARENT_NOT_FOUND
-        # Two paths with one name (scatter shards all called `out.vcf.gz`) cannot be told
-        # apart by name, so neither can be matched to a file.
-        if len({name.lower() for name in names}) < len(names) or any(len(parents) > 1 for parents in found):
-            return None, PARENT_AMBIGUOUS
-        return edges.generated_by(rule.edge_rule, [parents[0] for parents in found], self.key), STEPPED
+        parents, outcome = resolve_names(self.index, dataset_id, names)
+        if parents is None:
+            return None, outcome
+        return edges.generated_by(rule.edge_rule, parents, self.key), STEPPED
+
+
+def resolve_names(index: edges.NameIndex, dataset_id: str, names: list[str]) -> tuple[list[dict] | None, str]:
+    """Each of ``names``' one file in ``dataset_id``, up to case, and :data:`STEPPED`; or None and why not.
+
+    A name no file carries gives :data:`PARENT_NOT_FOUND`; otherwise a name several files
+    carry, or two of ``names`` that are one name, give :data:`PARENT_AMBIGUOUS` (#438's rule).
+    """
+    found = [edges.matches(index, dataset_id, name) for name in names]
+    if any(not parents for parents in found):
+        return None, PARENT_NOT_FOUND
+    # Two paths with one name (scatter shards all called `out.vcf.gz`) cannot be told
+    # apart by name, so neither can be matched to a file.
+    if len({name.lower() for name in names}) < len(names) or any(len(parents) > 1 for parents in found):
+        return None, PARENT_AMBIGUOUS
+    return [parents[0] for parents in found], STEPPED

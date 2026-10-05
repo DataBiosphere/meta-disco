@@ -790,6 +790,43 @@ def classify_from_tar_members(
     return result.to_output_dict()
 
 
+def classify_from_tar_head(head, **kwargs) -> dict:
+    """Classify a tar from its parsed head (``cohort_steps.ParsedTarHead``): from its member names alone, as
+    :func:`classify_from_tar_members`; the ``vcfheader.vcf`` the head may carry is the step reader's (#621)."""
+    return classify_from_tar_members(head.member_names, **kwargs)
+
+
+# The member a GenomicsDB workspace's GenomicsDBImport command line is read from (#621).
+WORKSPACE_HEADER_MEMBER = "vcfheader.vcf"
+
+
+def workspace_header_member(member_names: list[str]) -> str | None:
+    """The base name of the member whose text the tar fetcher keeps (``FileTypeConfig.kept_member``), or None.
+
+    ``vcfheader.vcf`` where the members read so far are a GenomicsDB variant store
+    (:func:`_is_genomicsdb_variant_store`), whose step is read from it; no other tar's.
+    """
+    return WORKSPACE_HEADER_MEMBER if _is_genomicsdb_variant_store(member_names) else None
+
+
+def classify_sample_map(
+    rows,
+    *,
+    name: FileName = FileName.EMPTY,
+    file_size: int | None = None,
+    file_format: str | None = None,
+) -> dict:
+    """Classify a GATK sample-name map by its name alone, as the catch-all classified it before #621.
+
+    A list of files is not their data, so ``rows`` (``cohort_steps.parse_sample_map``) give
+    it no dimension; they are the step reader's. ``file_format`` is accepted to match the
+    uniform ``_fetch_and_classify`` call.
+    """
+    from .rule_engine import ExtendedFileInfo
+
+    return _get_engine().classify_extended(ExtendedFileInfo(name=name, file_size=file_size)).to_output_dict()
+
+
 @cache
 def _get_ref_chrom_names() -> set[str]:
     """Get cached set of all known reference chromosome names."""

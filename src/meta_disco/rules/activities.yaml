@@ -170,6 +170,33 @@ activities:
     reason: >-
       Files of one kind joined into one keep what they share; where the inputs differ, the
       output is mixed (ADR-0002 decision 8).
+  - term: CohortMergeActivity
+    output: {form: [file]}
+    inputs:
+      - role: input_list
+        form: [file]
+        required: true
+        many: false
+        read_through: member
+        passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
+    reason: >-
+      A merge of the files a cohort's list names (a GenomicsDB workspace built from a GATK
+      sample-name map, #621): its input is the list, not each file, and the list passes
+      nothing of its own, so the output takes what the list's members settle to, read
+      through it, as a merge takes what its shards share.
+  - term: CohortDefinitionActivity
+    output: {form: [file]}
+    inputs:
+      - role: member
+        form: [file]
+        kind: [variants]
+        required: true
+        many: true
+    reason: >-
+      A list of the files processed together (a GATK sample-name map, #621) is not their
+      data: a list of names is not Illumina data, so it passes nothing, as a checksum
+      passes nothing (#596). A step given the list reads its members' answers through it
+      (`read_through`).
   - term: AssemblyActivity
     output: {form: [file], kind: [assembly]}
     inputs:

@@ -1,10 +1,12 @@
 """Derivation edges inference states, and the name index their parents resolve in (ADR-0002, #356).
 
-Three producers write one. Two work out the parent's name from the child's own: the index
+Five producers write one. Two work out the parent's name from the child's own: the index
 producer (``IndexActivity``; its candidates are its own, ``get_parent_candidates``) and the
 catch-all, for a checksum file (``ChecksumActivity``). The VCF producer reads it from a
-command line in the child's header (``producer_steps``, #609). Each looks the name up in
-the child's dataset; the name index, that lookup and the edge it yields are built here.
+command line in the child's header (``producer_steps``, #609); the tar and sample-map
+producers from a GenomicsDB workspace's ``vcfheader.vcf`` and a sample map's rows
+(``cohort_steps``, #621). Each looks the name up in the child's dataset; the name index,
+that lookup and the edge it yields are built here.
 
 **An edge is written only where the parent resolves**: exactly one file of the child's
 dataset carries the name. The edge then carries the parent's record key
@@ -26,7 +28,7 @@ returns the one ``generated_by`` they agree on, or the conflict that prevents on
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, replace
 
 from . import activities, code_rules
@@ -80,6 +82,24 @@ def files_by_folded_name(records: Iterable[dict]) -> NameIndex:
         if isinstance(name, str) and name:
             index[(dataset_of(record), name.lower())].append(record)
     return index
+
+
+def parent_index(records: Iterable[dict], key: RecordKey, keep: Callable[[str], bool], purpose: str) -> NameIndex:
+    """The records whose name ``keep`` takes, by folded name within their dataset, holding only what an edge reads.
+
+    For a step reader built once per run from every loaded record. Each kept record's key is
+    checked here (``purpose`` names why, for the error), so a drifted one stops the run before
+    any file is classified, rather than failing the file whose parent it turns out to be.
+    """
+    return files_by_folded_name(
+        {
+            "file_name": r["file_name"],
+            key.input_field: input_key_value(r, key, purpose),
+            "dataset_id": dataset_of(r),
+        }
+        for r in records
+        if isinstance(r.get("file_name"), str) and keep(r["file_name"])
+    )
 
 
 def parent_kind_of(parent_name: str) -> str | None:

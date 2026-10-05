@@ -36,11 +36,11 @@ value; the golden would silently record the unrefined result.
 This guards output *shape*; it is not a substitute for the content-driven
 classification tests in ``tests/test_evals.py``.
 
-**Two committed fixtures, one regen command.** The golden covers the seven producers
+**Two committed fixtures, one regen command.** The golden covers the eight producers
 ``ClassifyPipeline`` writes; ``standalone_output.json`` covers the four standalone ones
 (#465), which have no golden and so reached no schema validation at all. Both are read
 across the component boundary by ``schema/tests/test_output_validation.py``, whose gate
-is what makes them cover all eleven — ``test_the_schema_gate_covers_every_producer``
+is what makes them cover all twelve — ``test_the_schema_gate_covers_every_producer``
 pins that union against ``producers.PRODUCERS``. Regenerate with::
 
     python -m tests.test_output_shape   # writes both fixtures under tests/fixtures/golden/
@@ -59,7 +59,7 @@ from pathlib import Path
 import pytest
 
 from meta_disco import activities, schema_vocab
-from meta_disco.evidence import BedSignals, SegmentTag
+from meta_disco.evidence import BedSignals, SegmentTag, TarHead
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
@@ -128,6 +128,13 @@ def _golden_record(md5_seed: str, **fields):
     )
 
 
+# A GATK sample-name map, the cohort the golden tar's GenomicsDBImport line names (#621). It
+# sits in the tar's snapshot too, so the tar's `input_list` input resolves, and its one
+# member is the golden's `sample.vcf.gz`, so the map's `member` input resolves.
+SAMPLE_MAP_RECORD = _golden_record(
+    "0", file_name="chr5_sample_map.tsv", file_size=320, file_format=".tsv", entry_id="g-sample-map-1"
+)
+
 GOLDEN_INPUTS = {
     "fasta": [
         _golden_record(
@@ -175,6 +182,7 @@ GOLDEN_INPUTS = {
         _golden_record(
             "f", file_name="chr5.136400001_136500001.tar", file_size=45516800, file_format=".tar", entry_id="g-tar-1"
         ),
+        SAMPLE_MAP_RECORD,
     ],
     "bed": [
         _golden_record(
@@ -182,6 +190,7 @@ GOLDEN_INPUTS = {
         ),
     ],
 }
+GOLDEN_INPUTS["sample_map"] = [SAMPLE_MAP_RECORD, GOLDEN_INPUTS["vcf"][0]]
 
 # The index producer's inputs. Both its record paths reach the schema gate: a matched
 # index carries an `IndexActivity` edge, a declined one none. `sample.flnc.bam` is the
@@ -216,8 +225,16 @@ STUB_PAYLOADS = {
     "fastq": [STUB_HEADER],
     "fasta": [STUB_HEADER],
     "gfa": [SegmentTag(sn="chr1", sr="0")],
-    # tar returns member names (list[str]); a GenomicsDB-store marker set.
-    "tar": ["chr5.1_2/callset.json", "chr5.1_2/vidmap.json", "chr5.1_2/vcfheader.vcf"],
+    # tar returns a TarHead: a GenomicsDB-store marker set, and the workspace's vcfheader.vcf
+    # naming the golden sample map (#621).
+    "tar": TarHead(
+        ["chr5.1_2/callset.json", "chr5.1_2/vidmap.json", "chr5.1_2/vcfheader.vcf"],
+        "##fileformat=VCFv4.2\n"
+        '##GATKCommandLine=<ID=GenomicsDBImport,CommandLine="GenomicsDBImport --genomicsdb-workspace-path '
+        './chr5.136400001_136500001 --sample-name-map gs://b/sample_maps/chr5_sample_map.tsv",Version="4.1.8.0">\n',
+    ),
+    # sample_map returns the map's text: one row, naming the golden's `sample.vcf.gz`.
+    "sample_map": "HG00096\tgs://b/hc_vcfs/sample.vcf.gz\n",
     # bed returns BedSignals; bare (no-'chr'-prefix) standard chromosome names are the
     # GRCh37/b37 naming convention, so coordinate inference resolves reference_assembly to
     # GRCh37 — exercising the pipeline -> bed classifier -> value envelope path end-to-end.
@@ -451,7 +468,7 @@ def test_standalone_output_matches_fixture(standalone_output):
 
 
 def test_the_schema_gate_covers_every_producer():
-    """The gate's input is these two fixtures; together they must be all eleven.
+    """The gate's input is these two fixtures; together they must be all twelve.
 
     Read off the committed files rather than off the builders above, because the files
     are what `schema/tests/test_output_validation.py` actually validates — a fixture
@@ -552,9 +569,9 @@ def test_output_values_in_vocabulary(output):
 
 @pytest.mark.parametrize("producer,name,fmt", STANDALONE_PRODUCERS)
 def test_a_standalone_producer_emits_the_record_keys(tmp_path, producer, name, fmt):
-    """All eleven output files carry one record shape (#450).
+    """All twelve output files carry one record shape (#450).
 
-    The golden fixture covers the seven the pipeline writes; this covers the four that
+    The golden fixture covers the eight the pipeline writes; this covers the four that
     used to assemble dicts by hand and so could each carry a different set. That is what
     the catalog identity (#433) needed a sweep for, and what building `OutputRecord`
     makes structural instead.
@@ -591,7 +608,7 @@ def test_the_index_producer_emits_the_metadata_keys(tmp_path):
 
 
 def test_the_pipeline_emits_the_metadata_keys(output):
-    """The seven header types, off the golden run, so all eleven are covered."""
+    """The eight header types, off the golden run, so all twelve are covered."""
     for ftype, payload in output.items():
         assert list(payload["metadata"]) == METADATA_KEYS, ftype
 
@@ -698,7 +715,7 @@ if __name__ == "__main__":
 
 
 def test_every_rule_id_in_the_output_is_declared(output, standalone_output):
-    """Every ``rule_id`` the golden output of the eleven producers carries is declared (#572).
+    """Every ``rule_id`` the golden output of the twelve producers carries is declared (#572).
 
     Declared means a YAML rule, or a rule or marker in ``code_rules``. This is the output
     half of the check that ``test_code_rules`` makes on the source: it catches an id

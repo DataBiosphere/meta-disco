@@ -34,17 +34,19 @@ BCFTOOLS = "bcftools"
 
 @dataclass(frozen=True)
 class ToolArguments:
-    """Which of a tool's arguments name its data inputs and its output.
+    """Which of a tool's arguments name its data inputs, the files listing its inputs, and its output.
 
     ``inputs`` and ``outputs`` are option names whose value is a file (GATK 3's are its
-    ``key=value`` keys). ``positional`` marks a tool whose inputs are its positional
-    arguments; ``no_value`` then lists the options that take no value, so a positional
+    ``key=value`` keys). ``input_lists`` are option names whose value is a file listing the
+    inputs (GATK's ``--sample-name-map``, #621): the list is not data the tool reads.
+    ``positional`` marks a tool whose inputs are its positional arguments; ``no_value`` then lists the options that take no value, so a positional
     argument is told from an option's value. An option not in ``no_value`` is read as
     taking one.
     """
 
     inputs: tuple[str, ...] = ()
     outputs: tuple[str, ...] = ()
+    input_lists: tuple[str, ...] = ()
     positional: bool = False
     no_value: frozenset[str] = field(default_factory=frozenset)
 
@@ -61,7 +63,7 @@ TOOL_ARGUMENTS: dict[tuple[str, str], ToolArguments] = {
     (GATK, "GenotypeGVCFs"): _GATK_VARIANTS,
     (GATK, "CombineGVCFs"): _GATK_VARIANTS,
     (GATK, "GenomicsDBImport"): ToolArguments(
-        inputs=("-V", "--variant", "--sample-name-map"), outputs=("--genomicsdb-workspace-path",)
+        inputs=("-V", "--variant"), outputs=("--genomicsdb-workspace-path",), input_lists=("--sample-name-map",)
     ),
     (GATK3, "HaplotypeCaller"): ToolArguments(inputs=("input_file",), outputs=("out",)),
     (GATK3, "GenotypeGVCFs"): ToolArguments(inputs=("variant",), outputs=("out",)),
@@ -93,6 +95,9 @@ TOOL_ARGUMENTS: dict[tuple[str, str], ToolArguments] = {
 class Step:
     """One command line as a step: the tool, its inputs and its output, each a path as the line wrote it.
 
+    ``input_lists`` are the files listing its inputs (:attr:`ToolArguments.input_lists`),
+    never among ``inputs``.
+
     ``output`` is None where the tool wrote to stdout (bcftools with no ``-o``) or the
     line names no single output (GATK 3's HaplotypeCaller names none). ``read`` is False
     for a line whose tool :data:`TOOL_ARGUMENTS` does not declare; such a step names no
@@ -107,6 +112,7 @@ class Step:
     output: str | None
     read: bool = True
     stdin: bool = False
+    input_lists: tuple[str, ...] = ()
 
 
 # A VCF header line that records how the file was produced. GATK writes
@@ -254,6 +260,7 @@ def _option_step(family: str, tool: str, words: Sequence[str], arguments: ToolAr
         words = words[1:]
     inputs: list[str] = []
     outputs: list[str] = []
+    input_lists: list[str] = []
     stdin = False
     i = 0
     while i < len(words):
@@ -281,7 +288,9 @@ def _option_step(family: str, tool: str, words: Sequence[str], arguments: ToolAr
             inputs.append(value)
         elif value is not None and option in arguments.outputs:
             outputs.append(value)
-    return Step(family, tool, tuple(inputs), _sole(outputs), stdin=stdin)
+        elif value is not None and option in arguments.input_lists:
+            input_lists.append(value)
+    return Step(family, tool, tuple(inputs), _sole(outputs), stdin=stdin, input_lists=tuple(input_lists))
 
 
 def _sole(paths: list[str]) -> str | None:

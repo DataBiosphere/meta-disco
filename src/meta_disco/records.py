@@ -35,7 +35,7 @@ named rather than pointed at.)
 The module also holds the two write-side dataclasses every producer serializes at its
 output boundary, which follow the same frozen / field-order-is-output-order /
 ``to_dict`` discipline: :class:`OutputRecord`, the per-file output envelope (#204,
-widened to all eleven producers by #450), and :class:`RunMetadata`, the per-run tally
+widened to every producer by #450), and :class:`RunMetadata`, the per-run tally
 block (#205).
 """
 
@@ -263,9 +263,9 @@ class OutputRecord:
     **It is the shape of every classification record in a run** (#450). #204 covered the
     seven file types the pipeline classifies; the four standalone producers assembled
     their own dicts and emitted wider records, so a run held three record shapes and a
-    field wired into the pipeline reached some of the eleven outputs and not others.
+    field wired into the pipeline reached some of the outputs and not others.
     They build this now, through :meth:`from_record`, and
-    ``metadata_fixtures.RECORD_KEYS`` pins all eleven against it.
+    ``metadata_fixtures.RECORD_KEYS`` pins all twelve against it.
 
     The index producer adds the one envelope key that is not a record: ``unmatched_files``,
     its diagnostic array for files it took no parent for.

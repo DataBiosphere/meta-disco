@@ -1613,7 +1613,7 @@
       }
     ]
   },
-  "tar": {
+  "sample_map": {
     "classifications": [
       {
         "classifications": {
@@ -1635,6 +1635,172 @@
             "value": null
           },
           "data_modality": {
+            "credited_to": "not_classified",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for data_modality",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "data_type": {
+            "credited_to": "not_classified",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for data_type",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "instrument_model": {
+            "credited_to": "not_classified",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for instrument_model",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "platform": {
+            "credited_to": "filled_by_submitter_harmonized",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for platform",
+                "status": "not_classified"
+              },
+              {
+                "join_key": "drs_uri",
+                "match_exact": true,
+                "raw_value": "PacBio",
+                "rule_id": "platform.golden",
+                "source": {
+                  "column": "platform",
+                  "dataset": "AnVIL_GOLDEN",
+                  "name": "anvil",
+                  "table": "sequencing"
+                },
+                "source_type": "repository_metadata",
+                "value": "PACBIO"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "PACBIO"
+          },
+          "reference_assembly": {
+            "credited_to": "not_classified",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for reference_assembly",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "drs_uri": "drs://golden/v2_g-object-0",
+        "entry_id": "g-sample-map-1",
+        "file_format": ".tsv",
+        "file_id": "g-file-0",
+        "file_name": "chr5_sample_map.tsv",
+        "file_size": 320,
+        "generated_by": {
+          "activity": "CohortDefinitionActivity",
+          "inputs": [
+            {
+              "named_by": [
+                {
+                  "rule_id": "cohort_by_sample_map",
+                  "source_type": "content_read"
+                }
+              ],
+              "parent_file": "sample.vcf.gz",
+              "parent_key": "g-file-c",
+              "parent_kind": "variants",
+              "role": "member"
+            }
+          ],
+          "named_by": [
+            {
+              "rule_id": "cohort_by_sample_map",
+              "source_type": "content_read"
+            }
+          ]
+        },
+        "md5sum": "00000000000000000000000000000000"
+      }
+    ]
+  },
+  "tar": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "credited_to": "not_classified",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for assay_type",
+                "status": "not_classified"
+              },
+              {
+                "activity": "CohortMergeActivity",
+                "claim_state": "mixed",
+                "parent_keys": [
+                  "g-file-0"
+                ],
+                "parent_role": "input_list",
+                "reason": "Inherited across CohortMergeActivity: its input_list input(s) disagree",
+                "rule_id": "inherited_from_parent",
+                "source_type": "derivation_inheritance"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "data_modality": {
             "credited_to": "filled_by_inference",
             "evidence": [
               {
@@ -1642,6 +1808,17 @@
                 "rule_id": "tar_inner_format",
                 "source_type": "content_read",
                 "tier": 4,
+                "value": "genomic"
+              },
+              {
+                "activity": "CohortMergeActivity",
+                "parent_keys": [
+                  "g-file-0"
+                ],
+                "parent_role": "input_list",
+                "reason": "Inherited across CohortMergeActivity: its input_list input(s) say genomic",
+                "rule_id": "inherited_from_parent",
+                "source_type": "derivation_inheritance",
                 "value": "genomic"
               }
             ],
@@ -1721,21 +1898,36 @@
             "value": "PACBIO"
           },
           "reference_assembly": {
-            "credited_to": "not_classified",
+            "build": {
+              "base": "GRCh38",
+              "version": "p14"
+            },
+            "credited_to": "inherited",
             "evidence": [
               {
                 "marker": "not_classified",
                 "reason": "No rule determined a value for reference_assembly",
                 "status": "not_classified"
+              },
+              {
+                "activity": "CohortMergeActivity",
+                "parent_keys": [
+                  "g-file-0"
+                ],
+                "parent_role": "input_list",
+                "reason": "Inherited across CohortMergeActivity: its input_list input(s) say GRCh38",
+                "rule_id": "inherited_from_parent",
+                "source_type": "derivation_inheritance",
+                "value": "GRCh38"
               }
             ],
             "inferred": {
               "status": "not_classified",
               "value": null
             },
-            "status": "not_classified",
-            "use": "published",
-            "value": null
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "GRCh38"
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -1745,7 +1937,29 @@
         "file_id": "g-file-f",
         "file_name": "chr5.136400001_136500001.tar",
         "file_size": 45516800,
-        "generated_by": null,
+        "generated_by": {
+          "activity": "CohortMergeActivity",
+          "inputs": [
+            {
+              "named_by": [
+                {
+                  "rule_id": "merge_by_workspace_header",
+                  "source_type": "content_read"
+                }
+              ],
+              "parent_file": "chr5_sample_map.tsv",
+              "parent_key": "g-file-0",
+              "parent_kind": null,
+              "role": "input_list"
+            }
+          ],
+          "named_by": [
+            {
+              "rule_id": "merge_by_workspace_header",
+              "source_type": "content_read"
+            }
+          ]
+        },
         "md5sum": "ffffffffffffffffffffffffffffffff"
       }
     ]

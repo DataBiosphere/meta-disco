@@ -351,34 +351,63 @@ def test_a_report_written_before_lineage_says_so_and_one_with_no_conflicts_says_
     assert "None: wherever two sources named a file's step, they agreed." in md
 
 
-def test_the_header_steps_are_listed_per_dataset_in_outcome_order_and_absent_ones_say_so():
-    rows = rr.lineage_rows(lineage_report(header_steps={DATASET: {"stepped": 3, "parent_ambiguous": 1}}))
+def test_the_content_steps_are_listed_per_producer_and_dataset_in_outcome_order_and_absent_ones_say_so():
+    content = {
+        "vcf": {DATASET: {"stepped": 3, "parent_ambiguous": 1}},
+        "tar": {DATASET: {"stepped": 2, "no_vcf_header": 5}},
+    }
+    rows = rr.lineage_rows(lineage_report(content_steps=content))
     assert rows is not None
     md = "\n".join(rr._lineage_section(rows))
-    assert "### Steps read from VCF headers" in md
-    assert f"| `{DATASET}` | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 1 |" in md
-    # A report written before the reader (#609) has no header_steps block at all.
+    assert "### Steps read from file content" in md
+    # Columns: the VCF reader's eight outcomes, then the cohort readers' three of their own.
+    assert f"| `tar` | `{DATASET}` | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 5 | 0 | 0 |" in md
+    assert f"| `vcf` | `{DATASET}` | 3 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 |" in md
+    # A report written before the reader (#609) has no step block at all.
     rows = rr.lineage_rows(lineage_report())
-    assert rows is not None and rows["header_steps"] == []
-    assert "None: no producer read a header in this run" in "\n".join(rr._lineage_section(rows))
+    assert rows is not None and rows["content_steps"] == []
+    assert "None: no producer read a step in this run" in "\n".join(rr._lineage_section(rows))
 
 
-def test_the_inheritance_section_lists_what_each_role_passed_per_dataset_and_dimension():
+def test_a_report_written_before_621_reads_its_header_steps_as_the_vcf_producers():
+    rows = rr.lineage_rows(lineage_report(header_steps={DATASET: {"stepped": 3}}))
+    assert rows is not None and [(r["producer"], r["stepped"]) for r in rows["content_steps"]] == [("vcf", 3)]
+
+
+def test_the_inheritance_section_lists_what_each_role_passed_per_dataset_role_and_dimension():
     report = {
-        "inheritance": {
+        "inheritance": {DATASET: {"platform": {"declared": 5, "mixed": 1, "list_unresolved": 3}}},
+        "inheritance_by_role": {
             DATASET: {
-                "platform": {"declared": 5, "mixed": 1},
-                "data_modality": {"declared": 7, "parent_not_classified": 2},
+                "shard": {"platform": {"declared": 5, "mixed": 1}},
+                "input_list": {
+                    "platform": {"list_unresolved": 3},
+                    "data_modality": {"declared": 7, "parent_not_classified": 2},
+                },
             }
-        }
+        },
     }
     rows = rr.inheritance_rows(report)
     assert rows is not None
-    # In dimension order, every outcome a column, zero where none.
-    assert [r["slot"] for r in rows] == ["data_modality", "platform"]
+    # Roles in name order, dimensions in dimension order, every outcome a column, zero where none.
+    assert [(r["role"], r["slot"]) for r in rows] == [
+        ("input_list", "data_modality"),
+        ("input_list", "platform"),
+        ("shard", "platform"),
+    ]
     md = "\n".join(rr._inheritance_section(rows))
-    assert f"| `{DATASET}` | `data_modality` | 7 | 0 | 0 | 2 | 0 |" in md
-    assert f"| `{DATASET}` | `platform` | 5 | 1 | 0 | 0 | 0 |" in md
+    assert f"| `{DATASET}` | `input_list` | `data_modality` | 7 | 0 | 0 | 2 | 0 | 0 |" in md
+    assert f"| `{DATASET}` | `input_list` | `platform` | 0 | 0 | 0 | 0 | 0 | 3 |" in md
+    assert f"| `{DATASET}` | `shard` | `platform` | 5 | 1 | 0 | 0 | 0 | 0 |" in md
+
+
+def test_a_report_written_before_the_per_role_counts_lists_every_role_together():
+    report = {"inheritance": {DATASET: {"platform": {"declared": 5, "mixed": 1}}}}
+    rows = rr.inheritance_rows(report)
+    assert rows is not None and [(r["role"], r["slot"]) for r in rows] == [(None, "platform")]
+    assert f"| `{DATASET}` | every role | `platform` | 5 | 1 | 0 | 0 | 0 | 0 |" in "\n".join(
+        rr._inheritance_section(rows)
+    )
 
 
 def test_a_report_written_before_inheritance_says_so():

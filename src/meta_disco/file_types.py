@@ -1,7 +1,7 @@
 """File type configurations for the classification pipeline.
 
 Each config defines extensions, fetcher, classifier, and summary printer for one file
-type. They are used by ClassifyPipeline and classify_headers.py, and are the seven header
+type. They are used by ClassifyPipeline and classify_headers.py, and are the eight header
 entries in the producer registry (``producers``).
 
 ``FileTypeConfig`` is declared here rather than in ``pipeline`` so that ``pipeline`` can
@@ -12,12 +12,14 @@ importing ``pipeline`` back.
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from .cohort_steps import SAMPLE_MAP_SUFFIX, SampleMapSteps, TarSteps, parse_sample_map, parse_tar_head
 from .fetchers import (
     fetch_bam_header,
     fetch_bed_signals,
     fetch_fasta_headers,
     fetch_fastq_reads,
     fetch_gfa_segment_tags,
+    fetch_sample_map,
     fetch_tar_headers,
     fetch_vcf_header,
     require_samtools,
@@ -29,9 +31,11 @@ from .header_classifier import (
     classify_from_fastq_header,
     classify_from_gfa_segment_tags,
     classify_from_header,
-    classify_from_tar_members,
+    classify_from_tar_head,
     classify_from_vcf_header,
+    classify_sample_map,
     tar_head_is_conclusive,
+    workspace_header_member,
 )
 from .producer_steps import HeaderSteps
 from .summaries import print_bam_summary, print_fastq_summary, print_vcf_summary
@@ -64,8 +68,15 @@ class FileTypeConfig:
     # The step that made a file, read from its fetched content (#609). Called once per run
     # with every loaded record and the source's record key, it returns the per-file
     # reader: given the parse, the file's name and dataset, ``(generated_by or None,
-    # outcome)``. None means the type states no step; a type with one needs a ``parser``.
+    # outcome)``, the outcome None for a file the reader does not apply to (a tar that is no
+    # GenomicsDB workspace, #621), which is not counted. None means the type states no step;
+    # a type with one needs a ``parser``.
     step: Callable | None = None
+    # Given the member names an archive's head walk has read, the base name of the one
+    # member whose text the fetcher keeps, or None (#621). Injected like ``head_detector``,
+    # so the reader stays ignorant of which archives have a member worth reading. None
+    # keeps none.
+    kept_member: Callable | None = None
 
     def __post_init__(self):
         if self.step is not None and self.parser is None:
@@ -124,10 +135,27 @@ TAR_CONFIG = FileTypeConfig(
     name="tar",
     extensions=(".tar", ".tar.gz"),
     fetcher=fetch_tar_headers,
-    classifier=classify_from_tar_members,
+    classifier=classify_from_tar_head,
     # Escalating head-read (#260): read deeper only until the members are classifiable,
     # so a GenomicsDB store whose variant signal sits past the first 256KiB is reached.
     head_detector=tar_head_is_conclusive,
+    # A GenomicsDB workspace's `vcfheader.vcf` names the sample map it imported: the tar's
+    # step (#621).
+    kept_member=workspace_header_member,
+    parser=parse_tar_head,
+    step=TarSteps.for_run,
+)
+
+# GATK sample-name maps (#621): the list of gVCFs one GenomicsDB import joint-calls. Read
+# whole for the cohort step it states; classified from its name as the catch-all did, since
+# a list of files is not their data.
+SAMPLE_MAP_CONFIG = FileTypeConfig(
+    name="sample_map",
+    extensions=(SAMPLE_MAP_SUFFIX,),
+    fetcher=fetch_sample_map,
+    classifier=classify_sample_map,
+    parser=parse_sample_map,
+    step=SampleMapSteps.for_run,
 )
 
 # BED reference is inferred from coordinate content (chromosome names + per-contig max
@@ -149,4 +177,5 @@ FILE_TYPE_REGISTRY = {
     "gfa": GFA_CONFIG,
     "tar": TAR_CONFIG,
     "bed": BED_CONFIG,
+    "sample_map": SAMPLE_MAP_CONFIG,
 }

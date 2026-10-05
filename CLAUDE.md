@@ -310,10 +310,10 @@ evidence}` entry — plus the controlled vocabulary:
     deployment's: output and the header cache stay prod's paths until #480/#479.
   - **Every producer builds `records.OutputRecord`** (#450) — the pipeline through
     `from_work_item`, the four standalone producers through `from_record`. A per-record
-    field added there reaches all eleven outputs; one wired into a producer does not.
+    field added there reaches all twelve outputs; one wired into a producer does not.
     That is why the per-producer sweeps for the catalog identity (#433), and formerly
     for the `published` block (#424, deleted by #513), are gone: `test_output_shape`
-    pins the record's key set across all eleven instead.
+    pins the record's key set across all twelve instead.
     Add a new standalone producer to `STANDALONE_PRODUCERS` in `tests/producer_sweep`
     and that test picks it up.
   - **Output records carry no `dataset_id`** (#450). It is an input-contract slot and
@@ -326,13 +326,19 @@ evidence}` entry — plus the controlled vocabulary:
     activity declares. What each role passes is `rules/activities.yaml`'s to say, read
     through `meta_disco.activities` and trusted by its readers; a term may take its
     declaration from an abstract parent, and no step names an abstract term (#610). Inference
-    states four (`code_rules.EDGE_RULES`): two from the child's own name through
+    states six (`code_rules.EDGE_RULES`): two from the child's own name through
     `meta_disco.edges`, the index producer's `IndexActivity` and the catch-all's
-    `ChecksumActivity` for a `.md5`, and two from a VCF's header through
+    `ChecksumActivity` for a `.md5`, two from a VCF's header through
     `meta_disco.producer_steps` (#609, #610): the end of the header's data flow (ADR-0002
     decision 6), a `HaplotypeCaller` giving `VariantCallActivity` and a bcftools `concat`
-    giving `MergeActivity` with every input VCF a `shard`.
-    Its outcomes per dataset are in the VCF producer's `metadata.details.producer_steps`.
+    giving `MergeActivity` with every input VCF a `shard`, and two of T2T's joint-calling
+    cohort through `meta_disco.cohort_steps` (#621): a GATK sample-name map's rows giving
+    `CohortDefinitionActivity` with every listed gVCF a `member` (the `sample_map` producer),
+    and a GenomicsDB workspace tar's own `vcfheader.vcf` giving `CohortMergeActivity` with the
+    map its one `input_list`, whose values reconcile reads **through** the map's members
+    (`read_through` in `activities.yaml`, contract 4.9); the tar fetcher keeps that member's
+    text in the tar's cache entry (`TarEvidence.vcf_header`).
+    Their outcomes per dataset are in each producer's `metadata.details.producer_steps`.
     **A VCF's command lines are read once, on first use, by `VCFHeader.commands`** (#615),
     which gives each line's words and its step, through `validators.command_lines` and its
     `TOOL_ARGUMENTS` (an undeclared tool is an unread step, never a guess). Its readers
@@ -343,7 +349,7 @@ evidence}` entry — plus the controlled vocabulary:
     `parent_kind`, and `named_by`, every source that named it (the step has its own). A parent no file or
     two files of the dataset carry gives none. Steps the source tables state are built at
     reconcile (#577), and reconcile inherits across every step (#571).
-  - **A producer is declared once**, in `producers.PRODUCERS` — the eleven writers of a
+  - **A producer is declared once**, in `producers.PRODUCERS` — the twelve writers of a
     run's `*_classifications.json` files. Add one there, never to a second list:
     `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,
     and the three hand-maintained lists they replaced are what let a registered type

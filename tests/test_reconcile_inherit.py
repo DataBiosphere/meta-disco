@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from meta_disco import activities, code_rules, edges
+from meta_disco import activities, code_rules, edges, reconcile_inherit
 from meta_disco.models import (
     CLASSIFIED,
     CONFLICT,
@@ -25,6 +25,7 @@ from meta_disco.models import (
 from meta_disco.reconcile import INHERITED, ReconcileError, reconcile_run
 from meta_disco.reconcile_inherit import (
     DECLARED,
+    LIST_UNRESOLVED,
     PARENT_CONFLICT,
     PARENT_NOT_CLASSIFIED,
     PARENT_NOT_IN_RUN,
@@ -485,3 +486,108 @@ def test_a_checksum_inherits_nothing_and_keeps_its_link(tmp_path):
     assert md5["generated_by"]["activity"] == "ChecksumActivity"
     assert md5["generated_by"]["inputs"][0]["parent_key"] == "file-1"
     assert all(not per for per in report["inheritance"].values())
+
+
+# --- reading through a list (#621) ----------------------------------------------------------
+
+
+def steps_by(rule, parents: list[tuple[int, str]]) -> dict:
+    """``rule``'s step over ``parents`` (file number, name), as ``edges.generated_by`` writes it."""
+    return edges.generated_by(
+        rule, [{"file_name": name, "file_id": f"file-{n}"} for n, name in parents], SOURCE_RECORD_KEYS["anvil"]
+    )
+
+
+def cohort(members: list[tuple[int, str]]) -> dict:
+    return steps_by(code_rules.COHORT_BY_SAMPLE_MAP, members)
+
+
+def workspace(list_number: int) -> dict:
+    return steps_by(code_rules.MERGE_BY_WORKSPACE_HEADER, [(list_number, "chr1_sample_map.tsv")])
+
+
+GVCFS = [(1, "a.chr1.hc.vcf.gz"), (2, "b.chr1.hc.vcf.gz")]
+
+
+def joint_calling(*members: dict, tars: int = 1, cohort_step: bool = True) -> list[dict]:
+    """Two gVCFs with ``members``' dimensions, their sample map (file 3) and ``tars`` workspace tars reading through it."""
+    rows = [rec(n, name, **dims) for (n, name), dims in zip(GVCFS, members, strict=True)]
+    rows.append(rec(3, "chr1_sample_map.tsv", generated_by=cohort(GVCFS) if cohort_step else None))
+    rows += [
+        rec(10 + t, f"chr1.{t}_{t + 1}.tar", generated_by=workspace(3), data_modality="genomic") for t in range(tars)
+    ]
+    return rows
+
+
+def test_ac_a_workspace_takes_what_its_lists_members_agree_on(tmp_path):
+    rows, report = go(
+        tmp_path,
+        joint_calling(
+            {"platform": "ILLUMINA", "reference_assembly": "CHM13"},
+            {"platform": "ILLUMINA", "reference_assembly": "CHM13"},
+        ),
+        None,
+    )
+    tar = rows["chr1.0_1.tar"]
+    assert slot(tar, "platform")["value"] == "ILLUMINA"
+    assert slot(tar, "reference_assembly")["value"] == "CHM13"
+    (claim,) = inherited_claims(slot(tar, "platform"))
+    # The list is the parent the claim names, not its members.
+    assert (claim["activity"], claim["parent_role"], claim["parent_keys"]) == (
+        "CohortMergeActivity",
+        "input_list",
+        ["file-3"],
+    )
+    assert "input_list input(s)' member inputs say ILLUMINA" in claim["reason"]
+    # The list itself passes nothing and takes nothing.
+    assert slot(rows["chr1_sample_map.tsv"], "platform")["status"] == NOT_CLASSIFIED
+    by_role = report["inheritance_by_role"][DATASET]
+    assert by_role["input_list"]["platform"] == {DECLARED: 1}
+    assert "member" not in by_role
+
+
+def test_ac_a_member_not_classified_blocks_the_dimension_through_the_list(tmp_path):
+    rows, report = go(tmp_path, joint_calling({"platform": "ILLUMINA"}, {}), None)
+    assert slot(rows["chr1.0_1.tar"], "platform")["status"] == NOT_CLASSIFIED
+    assert report["inheritance_by_role"][DATASET]["input_list"]["platform"] == {PARENT_NOT_CLASSIFIED: 1}
+
+
+def test_members_that_disagree_make_the_workspace_mixed(tmp_path):
+    rows, report = go(tmp_path, joint_calling({"platform": "ILLUMINA"}, {"platform": "PACBIO"}), None)
+    platform = slot(rows["chr1.0_1.tar"], "platform")
+    assert platform["status"] == NOT_CLASSIFIED
+    assert [c.get("claim_state") for c in inherited_claims(platform)] == [MIXED]
+    assert report["inheritance_by_role"][DATASET]["input_list"]["platform"] == {MIXED: 1}
+
+
+def test_a_list_with_no_step_passes_nothing(tmp_path):
+    rows, report = go(
+        tmp_path, joint_calling({"platform": "ILLUMINA"}, {"platform": "ILLUMINA"}, cohort_step=False), None
+    )
+    assert slot(rows["chr1.0_1.tar"], "platform")["status"] == NOT_CLASSIFIED
+    assert report["inheritance_by_role"][DATASET]["input_list"]["platform"] == {LIST_UNRESOLVED: 1}
+
+
+def test_the_lists_members_settle_once_for_every_workspace_reading_through_it(tmp_path, monkeypatch):
+    calls: list[str] = []
+    real = reconcile_inherit.settle_parents
+
+    def counting(slot_name, answers):
+        calls.append(slot_name)
+        return real(slot_name, answers)
+
+    monkeypatch.setattr(reconcile_inherit, "settle_parents", counting)
+    rows, report = go(tmp_path, joint_calling({"platform": "ILLUMINA"}, {"platform": "ILLUMINA"}, tars=3), None)
+    assert all(slot(rows[f"chr1.{t}_{t + 1}.tar"], "platform")["value"] == "ILLUMINA" for t in range(3))
+    assert sorted(calls) == sorted(activities.role_passes(activities.COHORT_MERGE)["input_list"])
+    assert report["inheritance_by_role"][DATASET]["input_list"]["platform"] == {DECLARED: 3}
+
+
+def test_a_member_settles_its_own_inheritance_before_the_list_is_read_through(tmp_path):
+    """A gVCF takes its platform from its CRAM; the workspace reads the gVCF's settled answer, not its own."""
+    rows = joint_calling({}, {})
+    for row, cram in zip(rows[:2], (4, 5), strict=True):
+        row["generated_by"] = steps_by(code_rules.VARIANT_CALL_BY_HEADER, [(cram, f"{cram}.cram")])
+    rows += [rec(4, "4.cram", platform="ILLUMINA"), rec(5, "5.cram", platform="ILLUMINA")]
+    reconciled, _ = go(tmp_path, rows, None)
+    assert slot(reconciled["chr1.0_1.tar"], "platform")["value"] == "ILLUMINA"

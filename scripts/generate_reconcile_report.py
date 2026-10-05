@@ -28,9 +28,10 @@ import math
 import sys
 from pathlib import Path
 
+from meta_disco.cohort_steps import OUTCOMES as COHORT_STEP_OUTCOMES
 from meta_disco.models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, STATUS_LABELS
 from meta_disco.output_utils import RECONCILED_DIR, find_latest_run, list_runs
-from meta_disco.producer_steps import OUTCOMES as HEADER_STEP_COLUMNS
+from meta_disco.producer_steps import OUTCOMES as HEADER_STEP_OUTCOMES
 from meta_disco.reconcile import (
     CONFLICT_CATEGORIES,
     EVERY_DATASET,
@@ -43,6 +44,9 @@ from meta_disco.reconcile import (
 from meta_disco.reconcile_inherit import OUTCOMES as INHERITANCE_COLUMNS
 from meta_disco.reconcile_lineage import OUTCOMES
 from meta_disco.summaries import embed_json, md_code, md_table
+
+# Every outcome a producer's step reader gives, the VCF producer's first (#609, #621).
+CONTENT_STEP_COLUMNS = tuple(dict.fromkeys((*HEADER_STEP_OUTCOMES, *COHORT_STEP_OUTCOMES)))
 
 PROJECT_ROOT = Path(__file__).parent.parent
 TEMPLATE = PROJECT_ROOT / "docs" / "reconcile-dashboard-template.html"
@@ -316,8 +320,9 @@ def lineage_rows(report: dict) -> dict | None:
     """The lineage section (#577) as tables over the whole run, or None for a report written before it.
 
     ``sources``: per source type and dataset, the lines offered and what became of them;
-    ``header_steps``: per dataset, what inference's producer-step reader made of each VCF
-    header (#609), empty for a report written before it; ``steps``: per dataset, the files
+    ``content_steps``: per producer and dataset, what its step reader made of each file's
+    content (#609, #621), a report written before #621 read as the VCF producer's, and empty
+    for one written before #609; ``steps``: per dataset, the files
     whose ``generated_by`` each combination of source types named; ``conflicts``: per dataset and kind, the files and the first few with who
     said what; ``misfits``: the steps that do not fit their activity's declaration.
     """
@@ -339,13 +344,18 @@ def lineage_rows(report: dict) -> dict | None:
         for dataset, per in sorted(lineage["conflicts"].items())
         for kind, c in sorted(per.items())
     ]
-    header_steps = [
-        {"dataset": dataset, **{k: counts.get(k, 0) for k in HEADER_STEP_COLUMNS}}
-        for dataset, counts in sorted(lineage.get("header_steps", {}).items())
+    content = lineage.get("content_steps")
+    if content is None:
+        # Written before #621, when only the VCF producer read a step.
+        content = {"vcf": lineage["header_steps"]} if lineage.get("header_steps") else {}
+    content_steps = [
+        {"producer": producer, "dataset": dataset, **{k: counts.get(k, 0) for k in CONTENT_STEP_COLUMNS}}
+        for producer, per_dataset in sorted(content.items())
+        for dataset, counts in sorted(per_dataset.items())
     ]
     return {
         "sources": sources,
-        "header_steps": header_steps,
+        "content_steps": content_steps,
         "steps": steps,
         "conflicts": conflicts,
         "misfits": lineage["misfits"],
@@ -355,19 +365,32 @@ def lineage_rows(report: dict) -> dict | None:
 
 
 def inheritance_rows(report: dict) -> list[dict] | None:
-    """What each role's parents gave a child, per dataset and dimension (#571); None for a report written before it.
+    """What each role's parents gave a child, per dataset, role and dimension (#571, #621); None for a report written before it.
 
-    One row per dataset and dimension that any step passes, its counts keyed by
+    One row per dataset, input role and dimension that role passes, its counts keyed by
     ``reconcile_inherit.OUTCOMES``: *declared* (a value or ``not_applicable``), *mixed*
-    (the parents disagree), and the three reasons nothing passed.
+    (the parents disagree), and the reasons nothing passed. A report written before the
+    per-role counts gives one row per dataset and dimension, its ``role`` None.
     """
     inheritance = report.get("inheritance")
     if inheritance is None:
         return None
+
+    def by_slot(item: tuple[str, dict]) -> int:
+        return CLASSIFICATION_FIELDS.index(item[0])
+
+    by_role = report.get("inheritance_by_role")
+    if by_role is None:
+        return [
+            {"dataset": dataset, "role": None, "slot": slot, **{k: counts.get(k, 0) for k in INHERITANCE_COLUMNS}}
+            for dataset, per_slot in sorted(inheritance.items())
+            for slot, counts in sorted(per_slot.items(), key=by_slot)
+        ]
     return [
-        {"dataset": dataset, "slot": slot, **{k: counts.get(k, 0) for k in INHERITANCE_COLUMNS}}
-        for dataset, per_slot in sorted(inheritance.items())
-        for slot, counts in sorted(per_slot.items(), key=lambda kv: CLASSIFICATION_FIELDS.index(kv[0]))
+        {"dataset": dataset, "role": role, "slot": slot, **{k: counts.get(k, 0) for k in INHERITANCE_COLUMNS}}
+        for dataset, per_role in sorted(by_role.items())
+        for role, per_slot in sorted(per_role.items())
+        for slot, counts in sorted(per_slot.items(), key=by_slot)
     ]
 
 
@@ -417,7 +440,7 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
         "values_new_dimensions": new_dimensions(report, previous) if previous else [],
         "lineage": lineage_rows(report),
         "lineage_columns": list(LINEAGE_COLUMNS),
-        "header_step_columns": list(HEADER_STEP_COLUMNS),
+        "content_step_columns": list(CONTENT_STEP_COLUMNS),
         "inheritance": inheritance_rows(report),
         "inheritance_columns": list(INHERITANCE_COLUMNS),
     }
@@ -726,10 +749,10 @@ def _said(example: dict) -> str:
     )
 
 
-def _header_steps_section(rows: list[dict]) -> list[str]:
-    """What inference's producer-step reader made of each VCF header, per dataset (#609)."""
+def _content_steps_section(rows: list[dict]) -> list[str]:
+    """What each producer's step reader made of each file's content, per dataset (#609, #621)."""
     lines = [
-        "### Steps read from VCF headers",
+        "### Steps read from file content",
         "",
         "Inference reads a VCF's producer command lines, chains them by matching outputs to inputs, and takes the "
         "one end of that flow as the step that made the file (#609). *stepped*: a `HaplotypeCaller` gave a "
@@ -739,14 +762,22 @@ def _header_steps_section(rows: list[dict]) -> list[str]:
         "producing step is not one a rule takes: no rule for its tool in that family, a `HaplotypeCaller` without "
         "exactly one alignment input, or a `concat` that does not join two or more VCFs or reads one from stdin; "
         "*parent_not_found* / *parent_ambiguous*: an input's name no file of the dataset carries, or more than "
-        "one does (or two inputs share it).",
+        "one does (or two inputs share it). The tar and sample-map producers read T2T's joint-calling cohort "
+        "(#621): a GenomicsDB workspace tar's `vcfheader.vcf` gives a `MergeActivity` from its sample map, and a "
+        "sample map's rows a `CohortDefinitionActivity` of its gVCFs; a tar that is no GenomicsDB workspace is not "
+        "counted; *no_vcf_header*: the workspace has no `vcfheader.vcf` where it was looked for; *vcf_header_unreadable*: reading it failed, and the next run "
+        "reads it again; *output_not_this_file*, for a tar: the import's workspace names another directory; *not_a_list*: the file "
+        "is not two tab-separated columns naming VCFs.",
         "",
     ]
     if not rows:
-        return [*lines, "None: no producer read a header in this run, or the run predates the reader."]
+        return [*lines, "None: no producer read a step in this run, or the run predates the reader."]
     return lines + md_table(
-        ["dataset", *HEADER_STEP_COLUMNS],
-        [[md_code(shown(r["dataset"])), *(_n(r[k]) for k in HEADER_STEP_COLUMNS)] for r in rows],
+        ["producer", "dataset", *CONTENT_STEP_COLUMNS],
+        [
+            [md_code(r["producer"]), md_code(shown(r["dataset"])), *(_n(r[k]) for k in CONTENT_STEP_COLUMNS)]
+            for r in rows
+        ],
     )
 
 
@@ -777,7 +808,7 @@ def _lineage_section(lineage: dict | None) -> list[str]:
                 for r in lineage["sources"]
             ],
         )
-    lines += ["", *_header_steps_section(lineage["header_steps"])]
+    lines += ["", *_content_steps_section(lineage["content_steps"])]
     lines += [
         "",
         "### Who named each file's step",
@@ -855,7 +886,9 @@ def _inheritance_section(rows: list[dict] | None) -> list[str]:
         "(a slot it fills is credited *inherited* above); *mixed*: they disagree, which leaves the slot "
         "`not_classified`, or a conflict beside a value; *parent_conflict* / *parent_not_classified*: a parent "
         "in conflict, or with no answer, so nothing passes; *parent_not_in_run*: a parent no record of the "
-        "run carries. Counted once per file, dimension and role.",
+        "run carries; *list_unresolved*: a role that reads through a list (a GenomicsDB workspace's "
+        "`input_list`, #621), whose list has no step naming its members. A role reading through a list "
+        "counts what the list's members settle to. Counted once per file, dimension and role.",
         "",
     ]
     if rows is None:
@@ -863,8 +896,12 @@ def _inheritance_section(rows: list[dict] | None) -> list[str]:
     if not rows:
         return [*lines, "No file has a step that passes a dimension."]
     return lines + md_table(
-        ["dataset", "dimension", *INHERITANCE_COLUMNS],
-        [[md_code(shown(r["dataset"])), md_code(r["slot"])] + [_n(r[k]) for k in INHERITANCE_COLUMNS] for r in rows],
+        ["dataset", "role", "dimension", *INHERITANCE_COLUMNS],
+        [
+            [md_code(shown(r["dataset"])), md_code(r["role"]) if r["role"] else "every role", md_code(r["slot"])]
+            + [_n(r[k]) for k in INHERITANCE_COLUMNS]
+            for r in rows
+        ],
     )
 
 
