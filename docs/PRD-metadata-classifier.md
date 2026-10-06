@@ -409,7 +409,7 @@ name (#561: ANVIL_1000G_PRIMED is half hg19).
 
 **Results** (20,956 files):
 - FAST5: 12,394 files (ONT raw signal) → `genomic`, no reference (pre-basecalling)
-- PLINK: 8,562 files → `genomic.germline_variants`, GRCh38
+- PLINK: 8,562 files → `genomic.germline_variants`; reference from each `.pvar`'s own header (GRCh37 or GRCh38), `.pgen` / `.psam` not classified (#561)
 
 ### 6.5 BED File Classification
 

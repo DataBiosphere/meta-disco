@@ -129,7 +129,7 @@ The source AnVIL metadata contained **758,658 files** but with minimal semantic 
 | .bed | 13,660 | Filename patterns + dataset context |
 | .fast5 | 12,394 | Extension → genomic (raw ONT signal) |
 | .cram | 10,829 | Header inspection (@RG, @PG, @SQ) |
-| .pvar/.psam/.pgen | 8,562 | Extension + dataset → germline variants |
+| .pvar/.psam/.pgen | 8,562 | Extension → germline variants; a .pvar's reference from its header (#561) |
 | .bam | 7,834 | Header inspection (@RG, @PG, @SQ) |
 | .png | 8,049 | Extension → N/A (derived visualizations) |
 
@@ -252,7 +252,7 @@ Multiple evidence entries indicate multiple rules matched. Review files with con
 | Data files (BAM/CRAM/VCF/FASTQ)*  | 246,768 | 32.5%      | ✅ Header classified |
 | Index files (.tbi, .csi, .crai)   | 224,037 | 29.5%      | ✅ Inherited from parent |
 | Images (.svs, .png)               | 33,757  | 4.4%       | ✅ Extension rules |
-| Auxiliary genomic (FAST5, PLINK)  | 20,956  | 2.8%       | ✅ Extension + dataset |
+| Auxiliary genomic (FAST5, PLINK)  | 20,956  | 2.8%       | ✅ Extension (a .pvar's reference from its header) |
 | BED files                         | 13,660  | 1.8%       | ✅ Pattern + dataset |
 | **Total classified**              | **539,178** | **71.1%** | |
 | Unclassified (.txt, .tar, .md5, etc) | 219,480 | 28.9%   | Skipped |
@@ -725,23 +725,24 @@ Image files are classified by extension using domain-specific rules.
 
 ### 5.7 Auxiliary Genomic File Classification Results
 
-FAST5 and PLINK files are classified by extension with dataset-based reference inference.
+FAST5 and PLINK files are classified by extension. No reference is inferred from a dataset's
+name (#561): ANVIL_1000G_PRIMED is half hg19.
 
 **Total auxiliary genomic files: 20,956**
 
 | Extension | Count  | Data Modality             | Reference | Confidence |
 | --------- | ------ | ------------------------- | --------- | ---------- |
 | `.fast5`  | 12,394 | genomic                   | N/A*      | 90%        |
-| `.pvar`   | 2,854  | genomic.germline_variants | GRCh38    | 95%        |
-| `.psam`   | 2,854  | genomic.germline_variants | GRCh38    | 95%        |
-| `.pgen`   | 2,854  | genomic.germline_variants | GRCh38    | 95%        |
+| `.pvar`   | 2,854  | genomic.germline_variants | GRCh37 (1,427) / GRCh38 (1,427), from its `##contig` lengths | 95% |
+| `.psam`   | 2,854  | genomic.germline_variants | not classified | 95% |
+| `.pgen`   | 2,854  | genomic.germline_variants | not classified (#562 maps the submitter's) | 95% |
 
 *FAST5 files contain raw ONT electrical signal data (pre-basecalling). Reference not applicable until basecalling and alignment.
 
 **Classification rules:**
 
 - **FAST5**: Extension-based. Raw nanopore signal data from ANVIL_NIA_CARD_Coriell_Cell_Lines_Open dataset.
-- **PLINK**: Extension-based modality + dataset-based reference. All from ANVIL_1000G_PRIMED_data_model (1000 Genomes Project uses GRCh38).
+- **PLINK**: Extension-based modality. All from ANVIL_1000G_PRIMED_data_model, half hg19 and half hg38; a `.pvar`'s reference is read from its VCF-style header by the VCF producer (#561).
 
 **Implementation**: `scripts/classify_auxiliary_genomic.py` (rules in `src/meta_disco/rules/unified_rules.yaml`)
 
