@@ -172,7 +172,7 @@ def test_the_fetcher_reads_and_caches_the_header(monkeypatch, tmp_path):
     assert fetch_idat_header(tmp_path, MD5) == header
 
 
-def test_a_plain_idat_is_read_though_the_pipeline_says_it_may_be_gzipped(monkeypatch, tmp_path):
+def test_a_plain_idat_is_read_even_though_the_pipeline_says_it_may_be_gzipped(monkeypatch, tmp_path):
     # The pipeline passes is_gzipped=True for a type with no gzip extension (#603).
     _install(monkeypatch, _idat())
     assert fetch_idat_header(tmp_path, MD5, is_gzipped=True).chip_type == CHIP
