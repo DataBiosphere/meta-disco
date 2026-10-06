@@ -146,8 +146,14 @@ def test_an_offset_into_the_table_is_refused_rather_than_read():
 
 @pytest.mark.parametrize(
     ("field", "wrong"),
-    [("scan_software", None), ("probe_count", True), ("probe_count", "2522340"), ("chip_type", 7)],
-    ids=["no software list", "a boolean probe count", "a string probe count", "a numeric chip type"],
+    [("scan_software", None), ("probe_count", True), ("probe_count", "2522340"), ("probe_count", -1), ("chip_type", 7)],
+    ids=[
+        "no software list",
+        "a boolean probe count",
+        "a string probe count",
+        "a negative probe count",
+        "a numeric chip type",
+    ],
 )
 def test_a_cached_header_with_a_field_of_the_wrong_type_is_a_cache_miss(tmp_path, field, wrong):
     IdatEvidence(md5sum=MD5, file_name="x.idat", header=IdatHeader(1, "c", ["s"])).save(tmp_path)
@@ -171,6 +177,11 @@ def test_text_fields_too_far_apart_for_one_window_are_each_read_in_their_own(mon
     header = idat.read_header(_reader(bytes(blob), calls))
     assert header == IdatHeader(probe_count=PROBES, chip_type=CHIP, scan_software=[SCAN])
     assert len(calls) == 3
+
+
+def test_a_negative_probe_count_is_refused():
+    with pytest.raises(idat.IdatError, match="a probe count of -1"):
+        idat.read_header(_reader(_idat(probes=-1)))
 
 
 def test_a_negative_run_log_row_count_is_refused():

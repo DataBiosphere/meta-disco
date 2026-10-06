@@ -546,13 +546,18 @@ class IdatHeader:
 
         Raises:
             KeyError: a field is missing.
-            TypeError: a field holds another type than the reader writes.
+            TypeError: a field holds another type than the reader writes, or a negative
+                probe count.
         """
         header = cls(probe_count=raw["probe_count"], chip_type=raw["chip_type"], scan_software=raw["scan_software"])
         if not (
             (
                 header.probe_count is None
-                or (isinstance(header.probe_count, int) and not isinstance(header.probe_count, bool))
+                or (
+                    isinstance(header.probe_count, int)
+                    and not isinstance(header.probe_count, bool)
+                    and header.probe_count >= 0
+                )
             )
             and (header.chip_type is None or isinstance(header.chip_type, str))
             and isinstance(header.scan_software, list)

@@ -43,7 +43,8 @@ _TABLE_ENTRY = struct.Struct("<Hq")
 
 class IdatError(ValueError):
     """The bytes are no IDAT this reader reads: gzipped, wrong magic, another version, an
-    offset into the preamble or table, a negative run-log row count, or a field cut short."""
+    offset into the preamble or table, a negative probe count or run-log row count, or a
+    field cut short."""
 
 
 Fetch = Callable[[int, int], bytes]
@@ -84,8 +85,8 @@ def read_header(fetch: Fetch) -> IdatHeader:
     spanning both where they lie within ``FIELD_WINDOW`` of each other.
 
     Raises:
-        IdatError: as ``field_offsets``, a negative run-log row count, or a field runs
-            past its window.
+        IdatError: as ``field_offsets``, a negative probe count or run-log row count, or a
+            field runs past its window.
     """
     head = fetch(0, HEAD_LENGTH - 1)
     offsets = field_offsets(head)
@@ -101,6 +102,8 @@ def read_header(fetch: Fetch) -> IdatHeader:
     if (offset := offsets.get(FIELD_PROBE_COUNT)) is not None:
         buf, pos = windows.at(offset, need=4)
         probe_count = _int32(buf, pos)
+        if probe_count < 0:
+            raise IdatError(f"a probe count of {probe_count}")
 
     chip_type = None
     if (offset := offsets.get(FIELD_CHIP_TYPE)) is not None:
