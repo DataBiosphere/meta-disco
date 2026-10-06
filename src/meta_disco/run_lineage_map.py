@@ -35,11 +35,15 @@ from importlib.resources import files
 
 from .azul_manifest import REPOSITORY
 from .lineage_map import expect_keys, expect_mapping, expect_name, map_document
-from .models import SOURCE_EXTERNAL_GROUND_TRUTH
-from .schema.classification_model import EvidenceFileEnvelope
+from .models import JOIN_KEY_FILE_ID, SOURCE_EXTERNAL_GROUND_TRUTH
+from .schema.classification_model import EvidenceFileEnvelope, LineageRow
 from .slot_map import Readable, unique_key_loader
 
 _WHERE = "run lineage map"
+# The one shape a crossing line may have, the run lineage importer's (``ena_lineage``): a file
+# of the archive's run records, keyed by AnVIL's file_id, whose parent is a file the run lists.
+RUN_TABLE = "read_run"
+PARENT_COLUMN = "fastq_ftp"
 _ENTRY_KEYS = {"child", "counts", "ena_studies", "reads_in"}
 _STUDY = re.compile(r"^PRJ[EDN][A-Z]\d+$")
 
@@ -71,20 +75,27 @@ class RunLineageMap:
     def dataset_entries(self, dataset: str) -> list[Entry]:
         return [e for e in self.entries if e.dataset == dataset]
 
-    def declares(self, envelope: EvidenceFileEnvelope, parent_dataset: str, child_column: str) -> bool:
-        """Whether a line of the file ``envelope`` heads, read from ``child_column``, may name a parent in ``parent_dataset``.
+    def declares(self, envelope: EvidenceFileEnvelope, line: LineageRow) -> bool:
+        """Whether ``line``, of the file ``envelope`` heads, may name a parent in its ``parent_dataset``.
 
-        Only an archive's run record (``external_ground_truth``) of this map's source, about a
-        file of this map's catalog of AnVIL, where an entry declares that dataset's
-        ``child_column`` taking its reads from ``parent_dataset``.
+        Only a line of the run lineage importer's shape: a file of this map's source's run
+        records (``external_ground_truth``, table :data:`RUN_TABLE`, keyed by ``file_id``)
+        about a file of this map's catalog of AnVIL, whose parent is a ``file_id`` read from
+        :data:`PARENT_COLUMN`, where an entry declares the line's dataset and alignment
+        column taking their reads from that ``parent_dataset``.
         """
         target = envelope.target
         return (
-            envelope.source.repository == self.source
+            line.parent_dataset is not None
+            and envelope.source.repository == self.source
             and str(envelope.source_type) == SOURCE_EXTERNAL_GROUND_TRUTH
+            and envelope.source.table == RUN_TABLE
+            and str(envelope.target_key) == JOIN_KEY_FILE_ID
+            and str(line.parent_key_type) == JOIN_KEY_FILE_ID
+            and line.parent_column == PARENT_COLUMN
             and (target.system, target.version) == (REPOSITORY, self.catalog)
             and any(
-                (e.dataset, e.child_column, e.reads_in) == (target.dataset, child_column, parent_dataset)
+                (e.dataset, e.child_column, e.reads_in) == (target.dataset, line.child_column, line.parent_dataset)
                 for e in self.entries
             )
         )

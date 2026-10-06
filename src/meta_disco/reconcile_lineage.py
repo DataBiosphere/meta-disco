@@ -16,10 +16,11 @@ reconcile's slot-evidence join (``reconcile.join``) and shaped like it:
    accession was already written as its DRS URI by the importer), each against that
    field of the run's records whose ``dataset_title`` is the envelope's target dataset.
    The one exception is a line naming its parent's dataset (``parent_dataset``, #594):
-   its parent is looked for in that dataset where the run lineage map declares the line's
-   source, and the child's dataset and column taking their reads from it
-   (``run_lineage_map.RunLineageMap.declares``); any other such line, a sample parent's
-   included, is counted ``undeclared_dataset`` before anything else and gives nothing.
+   its parent is looked for in that dataset where the run lineage map declares it: a line of
+   the run lineage importer's shape, from the map's source, whose child's dataset and
+   column take their reads from that dataset (``run_lineage_map.RunLineageMap.declares``).
+   Any other such line, a sample parent's included, is counted ``undeclared_dataset``
+   before anything else and gives nothing.
    One carrier resolves it; none is ``not_in_dataset``, several ``several_match``, and
    either gives no input (counted, never written onto a record). A line naming no locator
    for its parent (``parent`` absent) is ``not_in_dataset``. A child no record carries is
@@ -155,7 +156,7 @@ def translate_lineage(
         counts = pending.counts[str(envelope.source_type)][dataset]
         counts["offered"] += 1
         # First, so a forbidden crossing is counted as one, not as a sample or a step to author.
-        if line.parent_dataset is not None and not run_map.declares(envelope, line.parent_dataset, line.child_column):
+        if line.parent_dataset is not None and not run_map.declares(envelope, line):
             counts[UNDECLARED_DATASET] += 1
             continue
         if str(line.parent_key_type) == LineageParentKeyEnum.biosample_id.value:

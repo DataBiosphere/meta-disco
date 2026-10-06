@@ -383,17 +383,24 @@ def test_the_map_refuses_a_malformed_entry(tmp_path, text, fault):
         load(tmp_path, text)
 
 
-def test_the_map_declares_only_its_pairs_from_its_source_for_its_catalog(run_map):
+def test_the_map_declares_only_the_importers_lines_for_its_pairs(run_map):
     ena = {"source_type": SOURCE_EXTERNAL_GROUND_TRUTH, "repository": "ena"}
-    assert run_map.declares(envelope("read_run", dataset="C", **ena), "R", "cram")
-    assert not run_map.declares(envelope("read_run", dataset="C", **ena), "R", "stats")  # an undeclared column
-    assert not run_map.declares(envelope("read_run", dataset="C", **ena), "X", "cram")
-    assert not run_map.declares(envelope("read_run", dataset="R", **ena), "C", "cram")
-    assert not run_map.declares(envelope("read_run", dataset="C", version="anvil16", **ena), "R", "cram")
-    not_ena = envelope("sample", dataset="C", source_type=SOURCE_EXTERNAL_GROUND_TRUTH)
-    assert not run_map.declares(not_ena, "R", "cram")
-    another_kind = envelope("read_run", dataset="C", source_type=SOURCE_REPOSITORY_METADATA, repository="ena")
-    assert not run_map.declares(another_kind, "R", "cram")
+    file = envelope("read_run", dataset="C", **ena)
+    line = read_line("r1")
+    assert run_map.declares(file, line)
+    # Each part of the importer's shape, changed alone, is refused.
+    assert not run_map.declares(file, line.model_copy(update={"child_column": "stats"}))
+    assert not run_map.declares(file, line.model_copy(update={"parent_dataset": "X"}))
+    assert not run_map.declares(file, line.model_copy(update={"parent_column": "submitted_ftp"}))
+    assert not run_map.declares(file, line.model_copy(update={"parent_key_type": LineageParentKeyEnum.drs_uri}))
+    assert not run_map.declares(envelope("read_run", dataset="R", **ena), line)
+    assert not run_map.declares(envelope("read_run", dataset="C", version="anvil16", **ena), line)
+    assert not run_map.declares(envelope("analysis", dataset="C", **ena), line)  # another ENA table
+    assert not run_map.declares(envelope("read_run", dataset="C", key="drs_uri", **ena), line)
+    assert not run_map.declares(envelope("read_run", dataset="C", source_type=SOURCE_EXTERNAL_GROUND_TRUTH), line)
+    assert not run_map.declares(
+        envelope("read_run", dataset="C", source_type=SOURCE_REPOSITORY_METADATA, repository="ena"), line
+    )
 
 
 def test_check_passes_a_map_the_deployment_and_manifests_agree_with(run_map, manifests):
@@ -428,14 +435,14 @@ def test_a_run_holding_the_child_but_not_its_reads_dataset_is_refused(run_map):
 
 def test_the_bundled_map_loads():
     bundled = load_run_lineage_map()
-    line = envelope(
+    file = envelope(
         "read_run",
         SOURCE_EXTERNAL_GROUND_TRUTH,
         dataset="ANVIL_T2T_CHRY",
         version=bundled.catalog,
         repository=bundled.source,
     )
-    assert bundled.source == "ena" and bundled.declares(line, "ANVIL_T2T", "cram")
+    assert bundled.source == "ena" and bundled.declares(file, read_line("r1", parent_dataset="ANVIL_T2T"))
 
 
 # --- reconcile -------------------------------------------------------------------------

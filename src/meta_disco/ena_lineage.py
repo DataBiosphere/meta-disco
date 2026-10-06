@@ -68,15 +68,13 @@ from .exclusions import MD5_RE
 from .fetchers import FetchError, fetch_bam_header, fetch_head_text, require_samtools
 from .lineage_evidence import write_lineage_file
 from .models import JOIN_KEY_FILE_ID
-from .run_lineage_map import Entry, RunLineageMap
+from .run_lineage_map import PARENT_COLUMN, RUN_TABLE, Entry, RunLineageMap
 from .schema.classification_model import LineageParentKeyEnum, LineageRow
 from .source_evidence import evidence_file_path, generation_dir, new_generation, staged_generation
 from .validators.header_extractors import parse_sam_header, sam_command_words
 
 # ENA's per-accession report of its runs, every run of a study in one response.
 PORTAL_FILEREPORT = "https://www.ebi.ac.uk/ena/portal/api/filereport"
-# What a line names as the parent's column: ENA's list of the run's files.
-PARENT_COLUMN = "fastq_ftp"
 # What a line names as raw_activity's column: the child header's program lines.
 STEP_COLUMN = "@PG"
 # What is asked of ENA for each run of a study.
@@ -466,6 +464,8 @@ def import_all(
     """
     if run_map.source != SOURCE:
         raise ValueError(f"the run lineage map's source is {run_map.source!r}; this importer reads {SOURCE!r}'s runs")
+    if TABLE != RUN_TABLE:
+        raise ValueError(f"ENA's run table is {TABLE!r}; reconcile lets only {RUN_TABLE!r} lines cross datasets")
     paths, problems = manifest_paths(run_map, manifest_root)
     if problems:
         raise ValueError("; ".join(problems))
