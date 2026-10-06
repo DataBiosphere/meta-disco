@@ -43,42 +43,42 @@ Processed **708,088** files.
 
 | extension | count | reason (from evidence) |
 |---|---:|---|
-| .tbi | 169,531 | No reason recorded |
-| .txt | 42,477 | No rule determined a value for data_modality |
-| .csi | 41,186 | No reason recorded |
-| .fastq | 21,270 | FASTQ modality cannot be determined from reads alone — could be genomic, transcriptomic, or epigenomic depending on assay |
-| .fast5 | 12,509 | No rule determined a value for data_modality |
-| .crai | 10,317 | No reason recorded |
-| (none) | 10,071 | No rule determined a value for data_modality |
-| .bed | 9,768 | No rule determined a value for data_modality |
-| .bam | 2,757 | No rule determined a value for data_modality |
-| .bai | 2,742 | No reason recorded |
-| .gff3 | 1,565 | No rule determined a value for data_modality |
-| .chain | 926 | No rule determined a value for data_modality |
-| .tsv | 899 | No rule determined a value for data_modality |
-| .fai | 477 | No reason recorded |
-| .gzi | 466 | No reason recorded |
-| .bigwig | 462 | No rule determined a value for data_modality |
-| .sizes | 458 | No rule determined a value for data_modality |
-| .paf | 297 | No rule determined a value for data_modality |
-| .sam | 192 | No rule determined a value for data_modality |
-| .cram | 68 | No rule determined a value for data_modality |
-| .vcf | 23 | no VCF header lines (no run of '#' lines starting the read head) |
-| .csv | 18 | No rule determined a value for data_modality |
-| .fasta | 14 | No rule determined a value for data_modality |
-| .pod5 | 11 | No rule determined a value for data_modality |
-| .dict | 9 | No rule determined a value for data_modality |
-| .pbi | 7 | No reason recorded |
-| .snarls | 6 | No rule determined a value for data_modality |
-| .gg | 6 | No rule determined a value for data_modality |
-| .min | 6 | No rule determined a value for data_modality |
-| .dist | 6 | No rule determined a value for data_modality |
-| .trans | 6 | No rule determined a value for data_modality |
-| .fa | 4 | No rule determined a value for data_modality |
-| .fna | 2 | No rule determined a value for data_modality |
-| .hal | 2 | No rule determined a value for data_modality |
-| .hapl | 2 | No rule determined a value for data_modality |
-| .delta | 1 | No rule determined a value for data_modality |
+| .tbi | 169,531 | `No reason recorded` |
+| .txt | 42,477 | `No rule determined a value for data_modality` |
+| .csi | 41,186 | `No reason recorded` |
+| .fastq | 21,270 | `FASTQ modality cannot be determined from reads alone — could be genomic, transcriptomic, or epigenomic depending on assay` |
+| .fast5 | 12,509 | `No rule determined a value for data_modality` |
+| .crai | 10,317 | `No reason recorded` |
+| (none) | 10,071 | `No rule determined a value for data_modality` |
+| .bed | 9,768 | `No rule determined a value for data_modality` |
+| .bam | 2,757 | `No rule determined a value for data_modality` |
+| .bai | 2,742 | `No reason recorded` |
+| .gff3 | 1,565 | `No rule determined a value for data_modality` |
+| .chain | 926 | `No rule determined a value for data_modality` |
+| .tsv | 899 | `No rule determined a value for data_modality` |
+| .fai | 477 | `No reason recorded` |
+| .gzi | 466 | `No reason recorded` |
+| .bigwig | 462 | `No rule determined a value for data_modality` |
+| .sizes | 458 | `No rule determined a value for data_modality` |
+| .paf | 297 | `No rule determined a value for data_modality` |
+| .sam | 192 | `No rule determined a value for data_modality` |
+| .cram | 68 | `No rule determined a value for data_modality` |
+| .vcf | 23 | `no VCF header lines (no run of '#' lines starting the read head)` |
+| .csv | 18 | `No rule determined a value for data_modality` |
+| .fasta | 14 | `No rule determined a value for data_modality` |
+| .pod5 | 11 | `No rule determined a value for data_modality` |
+| .dict | 9 | `No rule determined a value for data_modality` |
+| .pbi | 7 | `No reason recorded` |
+| .snarls | 6 | `No rule determined a value for data_modality` |
+| .gg | 6 | `No rule determined a value for data_modality` |
+| .min | 6 | `No rule determined a value for data_modality` |
+| .dist | 6 | `No rule determined a value for data_modality` |
+| .trans | 6 | `No rule determined a value for data_modality` |
+| .fa | 4 | `No rule determined a value for data_modality` |
+| .fna | 2 | `No rule determined a value for data_modality` |
+| .hal | 2 | `No rule determined a value for data_modality` |
+| .hapl | 2 | `No rule determined a value for data_modality` |
+| .delta | 1 | `No rule determined a value for data_modality` |
 
 | Data Modality | count | % | extensions |
 |---|---:|---:|---|
@@ -103,27 +103,27 @@ Processed **708,088** files.
 
 | extension | count | reason (from evidence) |
 |---|---:|---|
-| (none) | 10,069 | No rule determined a value for data_type |
-| .txt | 4,929 | No rule determined a value for data_type |
-| .bed | 2,771 | No rule determined a value for data_type |
-| .gff3 | 1,565 | No rule determined a value for data_type |
-| .chain | 926 | No rule determined a value for data_type |
-| .tsv | 899 | No rule determined a value for data_type |
-| .bigwig | 462 | No rule determined a value for data_type |
-| .sizes | 458 | No rule determined a value for data_type |
-| .paf | 297 | No rule determined a value for data_type |
-| .sam | 192 | No rule determined a value for data_type |
-| .vcf | 23 | no VCF header lines (no run of '#' lines starting the read head) |
-| .csv | 18 | No rule determined a value for data_type |
-| .dict | 9 | No rule determined a value for data_type |
-| .snarls | 6 | No rule determined a value for data_type |
-| .gg | 6 | No rule determined a value for data_type |
-| .min | 6 | No rule determined a value for data_type |
-| .dist | 6 | No rule determined a value for data_type |
-| .trans | 6 | No rule determined a value for data_type |
-| .hal | 2 | No rule determined a value for data_type |
-| .hapl | 2 | No rule determined a value for data_type |
-| .delta | 1 | No rule determined a value for data_type |
+| (none) | 10,069 | `No rule determined a value for data_type` |
+| .txt | 4,929 | `No rule determined a value for data_type` |
+| .bed | 2,771 | `No rule determined a value for data_type` |
+| .gff3 | 1,565 | `No rule determined a value for data_type` |
+| .chain | 926 | `No rule determined a value for data_type` |
+| .tsv | 899 | `No rule determined a value for data_type` |
+| .bigwig | 462 | `No rule determined a value for data_type` |
+| .sizes | 458 | `No rule determined a value for data_type` |
+| .paf | 297 | `No rule determined a value for data_type` |
+| .sam | 192 | `No rule determined a value for data_type` |
+| .vcf | 23 | `no VCF header lines (no run of '#' lines starting the read head)` |
+| .csv | 18 | `No rule determined a value for data_type` |
+| .dict | 9 | `No rule determined a value for data_type` |
+| .snarls | 6 | `No rule determined a value for data_type` |
+| .gg | 6 | `No rule determined a value for data_type` |
+| .min | 6 | `No rule determined a value for data_type` |
+| .dist | 6 | `No rule determined a value for data_type` |
+| .trans | 6 | `No rule determined a value for data_type` |
+| .hal | 2 | `No rule determined a value for data_type` |
+| .hapl | 2 | `No rule determined a value for data_type` |
+| .delta | 1 | `No rule determined a value for data_type` |
 
 | Data Type | count | % | extensions |
 |---|---:|---:|---|
@@ -165,42 +165,42 @@ Processed **708,088** files.
 
 | extension | count | reason (from evidence) |
 |---|---:|---|
-| .vcf | 201,668 | No rule determined a value for platform |
-| .tbi | 169,531 | No reason recorded |
-| (none) | 134,605 | No rule determined a value for platform |
-| .txt | 42,479 | No rule determined a value for platform |
-| .csi | 41,186 | No reason recorded |
-| .bed | 11,523 | No rule determined a value for platform |
-| .crai | 10,317 | No reason recorded |
-| .bam | 3,664 | No rule determined a value for platform |
-| .pvar | 2,854 | No rule determined a value for platform |
-| .psam | 2,854 | No rule determined a value for platform |
-| .pgen | 2,854 | No rule determined a value for platform |
-| .bai | 2,742 | No reason recorded |
-| .bw | 2,536 | No rule determined a value for platform |
-| .g.vcf | 2,504 | No rule determined a value for platform |
-| .gff3 | 1,565 | No rule determined a value for platform |
-| .chain | 926 | No rule determined a value for platform |
-| .tsv | 899 | No rule determined a value for platform |
-| .sf | 634 | No rule determined a value for platform |
-| .fai | 477 | No reason recorded |
-| .gzi | 466 | No reason recorded |
-| .bigwig | 462 | No rule determined a value for platform |
-| .sizes | 458 | No rule determined a value for platform |
-| .h5ad | 350 | No rule determined a value for platform |
-| .paf | 297 | No rule determined a value for platform |
-| .sam | 192 | No rule determined a value for platform |
-| .csv | 21 | No rule determined a value for platform |
-| .dict | 9 | No rule determined a value for platform |
-| .pbi | 7 | No reason recorded |
-| .snarls | 6 | No rule determined a value for platform |
-| .gg | 6 | No rule determined a value for platform |
-| .min | 6 | No rule determined a value for platform |
-| .dist | 6 | No rule determined a value for platform |
-| .trans | 6 | No rule determined a value for platform |
-| .hal | 2 | No rule determined a value for platform |
-| .hapl | 2 | No rule determined a value for platform |
-| .delta | 1 | No rule determined a value for platform |
+| .vcf | 201,668 | `No rule determined a value for platform` |
+| .tbi | 169,531 | `No reason recorded` |
+| (none) | 134,605 | `No rule determined a value for platform` |
+| .txt | 42,479 | `No rule determined a value for platform` |
+| .csi | 41,186 | `No reason recorded` |
+| .bed | 11,523 | `No rule determined a value for platform` |
+| .crai | 10,317 | `No reason recorded` |
+| .bam | 3,664 | `No rule determined a value for platform` |
+| .pvar | 2,854 | `No rule determined a value for platform` |
+| .psam | 2,854 | `No rule determined a value for platform` |
+| .pgen | 2,854 | `No rule determined a value for platform` |
+| .bai | 2,742 | `No reason recorded` |
+| .bw | 2,536 | `No rule determined a value for platform` |
+| .g.vcf | 2,504 | `No rule determined a value for platform` |
+| .gff3 | 1,565 | `No rule determined a value for platform` |
+| .chain | 926 | `No rule determined a value for platform` |
+| .tsv | 899 | `No rule determined a value for platform` |
+| .sf | 634 | `No rule determined a value for platform` |
+| .fai | 477 | `No reason recorded` |
+| .gzi | 466 | `No reason recorded` |
+| .bigwig | 462 | `No rule determined a value for platform` |
+| .sizes | 458 | `No rule determined a value for platform` |
+| .h5ad | 350 | `No rule determined a value for platform` |
+| .paf | 297 | `No rule determined a value for platform` |
+| .sam | 192 | `No rule determined a value for platform` |
+| .csv | 21 | `No rule determined a value for platform` |
+| .dict | 9 | `No rule determined a value for platform` |
+| .pbi | 7 | `No reason recorded` |
+| .snarls | 6 | `No rule determined a value for platform` |
+| .gg | 6 | `No rule determined a value for platform` |
+| .min | 6 | `No rule determined a value for platform` |
+| .dist | 6 | `No rule determined a value for platform` |
+| .trans | 6 | `No rule determined a value for platform` |
+| .hal | 2 | `No rule determined a value for platform` |
+| .hapl | 2 | `No rule determined a value for platform` |
+| .delta | 1 | `No rule determined a value for platform` |
 
 | Platform | count | % | extensions |
 |---|---:|---:|---|
@@ -226,35 +226,35 @@ Processed **708,088** files.
 
 | extension | count | reason (from evidence) |
 |---|---:|---|
-| .tbi | 169,531 | No reason recorded |
-| (none) | 134,605 | No rule determined a value for reference_assembly |
-| .txt | 42,479 | No rule determined a value for reference_assembly |
-| .csi | 41,186 | No reason recorded |
-| .crai | 10,317 | No reason recorded |
-| .psam | 2,854 | No rule determined a value for reference_assembly |
-| .pgen | 2,853 | No rule determined a value for reference_assembly |
-| .bai | 2,742 | No reason recorded |
-| .bw | 2,536 | No rule determined a value for reference_assembly |
-| .gff3 | 1,386 | No rule determined a value for reference_assembly |
-| .tsv | 899 | No rule determined a value for reference_assembly |
-| .bam | 688 | No rule determined a value for reference_assembly |
-| .sf | 634 | No rule determined a value for reference_assembly |
-| .fai | 477 | No reason recorded |
-| .gzi | 466 | No reason recorded |
-| .bigwig | 462 | No rule determined a value for reference_assembly |
-| .sizes | 456 | No rule determined a value for reference_assembly |
-| .h5ad | 350 | No rule determined a value for reference_assembly |
-| .gfa | 314 | No rule determined a value for reference_assembly |
-| .paf | 296 | No rule determined a value for reference_assembly |
-| .sam | 192 | No rule determined a value for reference_assembly |
-| .cram | 68 | No rule determined a value for reference_assembly |
-| .bed | 35 | No rule determined a value for reference_assembly |
-| .vcf | 28 | no VCF header lines (no run of '#' lines starting the read head) |
-| .csv | 21 | No rule determined a value for reference_assembly |
-| .pbi | 7 | No reason recorded |
-| .fasta | 3 | No rule determined a value for reference_assembly |
-| .chain | 1 | No rule determined a value for reference_assembly |
-| .dict | 1 | No rule determined a value for reference_assembly |
+| .tbi | 169,531 | `No reason recorded` |
+| (none) | 134,605 | `No rule determined a value for reference_assembly` |
+| .txt | 42,479 | `No rule determined a value for reference_assembly` |
+| .csi | 41,186 | `No reason recorded` |
+| .crai | 10,317 | `No reason recorded` |
+| .psam | 2,854 | `No rule determined a value for reference_assembly` |
+| .pgen | 2,853 | `No rule determined a value for reference_assembly` |
+| .bai | 2,742 | `No reason recorded` |
+| .bw | 2,536 | `No rule determined a value for reference_assembly` |
+| .gff3 | 1,386 | `No rule determined a value for reference_assembly` |
+| .tsv | 899 | `No rule determined a value for reference_assembly` |
+| .bam | 688 | `No rule determined a value for reference_assembly` |
+| .sf | 634 | `No rule determined a value for reference_assembly` |
+| .fai | 477 | `No reason recorded` |
+| .gzi | 466 | `No reason recorded` |
+| .bigwig | 462 | `No rule determined a value for reference_assembly` |
+| .sizes | 456 | `No rule determined a value for reference_assembly` |
+| .h5ad | 350 | `No rule determined a value for reference_assembly` |
+| .gfa | 314 | `No rule determined a value for reference_assembly` |
+| .paf | 296 | `No rule determined a value for reference_assembly` |
+| .sam | 192 | `No rule determined a value for reference_assembly` |
+| .cram | 68 | `No rule determined a value for reference_assembly` |
+| .bed | 35 | `No rule determined a value for reference_assembly` |
+| .vcf | 28 | `no VCF header lines (no run of '#' lines starting the read head)` |
+| .csv | 21 | `No rule determined a value for reference_assembly` |
+| .pbi | 7 | `No reason recorded` |
+| .fasta | 3 | `No rule determined a value for reference_assembly` |
+| .chain | 1 | `No rule determined a value for reference_assembly` |
+| .dict | 1 | `No rule determined a value for reference_assembly` |
 
 ### What's in conflict?
 
@@ -298,43 +298,43 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 
 | extension | count | reason (from evidence) |
 |---|---:|---|
-| .vcf | 201,668 | No rule determined a value for assay_type |
-| .tbi | 169,531 | No reason recorded |
-| (none) | 134,541 | No rule determined a value for assay_type |
-| .txt | 42,479 | No rule determined a value for assay_type |
-| .csi | 41,186 | No reason recorded |
-| .fastq | 21,270 | No rule determined a value for assay_type |
-| .fast5 | 12,509 | No rule determined a value for assay_type |
-| .bed | 11,511 | No rule determined a value for assay_type |
-| .cram | 10,623 | No rule determined a value for assay_type |
-| .crai | 10,317 | No reason recorded |
-| .bam | 4,675 | No rule determined a value for assay_type |
-| .pvar | 2,854 | No rule determined a value for assay_type |
-| .psam | 2,854 | No rule determined a value for assay_type |
-| .pgen | 2,854 | No rule determined a value for assay_type |
-| .bai | 2,742 | No reason recorded |
-| .g.vcf | 2,504 | No rule determined a value for assay_type |
-| .gff3 | 1,565 | No rule determined a value for assay_type |
-| .chain | 926 | No rule determined a value for assay_type |
-| .tsv | 899 | No rule determined a value for assay_type |
-| .fai | 477 | No reason recorded |
-| .gzi | 466 | No reason recorded |
-| .bigwig | 462 | No rule determined a value for assay_type |
-| .sizes | 458 | No rule determined a value for assay_type |
-| .paf | 297 | No rule determined a value for assay_type |
-| .sam | 192 | No rule determined a value for assay_type |
-| .csv | 21 | No rule determined a value for assay_type |
-| .pod5 | 11 | No rule determined a value for assay_type |
-| .dict | 9 | No rule determined a value for assay_type |
-| .pbi | 7 | No reason recorded |
-| .snarls | 6 | No rule determined a value for assay_type |
-| .gg | 6 | No rule determined a value for assay_type |
-| .min | 6 | No rule determined a value for assay_type |
-| .dist | 6 | No rule determined a value for assay_type |
-| .trans | 6 | No rule determined a value for assay_type |
-| .hal | 2 | No rule determined a value for assay_type |
-| .hapl | 2 | No rule determined a value for assay_type |
-| .delta | 1 | No rule determined a value for assay_type |
+| .vcf | 201,668 | `No rule determined a value for assay_type` |
+| .tbi | 169,531 | `No reason recorded` |
+| (none) | 134,541 | `No rule determined a value for assay_type` |
+| .txt | 42,479 | `No rule determined a value for assay_type` |
+| .csi | 41,186 | `No reason recorded` |
+| .fastq | 21,270 | `No rule determined a value for assay_type` |
+| .fast5 | 12,509 | `No rule determined a value for assay_type` |
+| .bed | 11,511 | `No rule determined a value for assay_type` |
+| .cram | 10,623 | `No rule determined a value for assay_type` |
+| .crai | 10,317 | `No reason recorded` |
+| .bam | 4,675 | `No rule determined a value for assay_type` |
+| .pvar | 2,854 | `No rule determined a value for assay_type` |
+| .psam | 2,854 | `No rule determined a value for assay_type` |
+| .pgen | 2,854 | `No rule determined a value for assay_type` |
+| .bai | 2,742 | `No reason recorded` |
+| .g.vcf | 2,504 | `No rule determined a value for assay_type` |
+| .gff3 | 1,565 | `No rule determined a value for assay_type` |
+| .chain | 926 | `No rule determined a value for assay_type` |
+| .tsv | 899 | `No rule determined a value for assay_type` |
+| .fai | 477 | `No reason recorded` |
+| .gzi | 466 | `No reason recorded` |
+| .bigwig | 462 | `No rule determined a value for assay_type` |
+| .sizes | 458 | `No rule determined a value for assay_type` |
+| .paf | 297 | `No rule determined a value for assay_type` |
+| .sam | 192 | `No rule determined a value for assay_type` |
+| .csv | 21 | `No rule determined a value for assay_type` |
+| .pod5 | 11 | `No rule determined a value for assay_type` |
+| .dict | 9 | `No rule determined a value for assay_type` |
+| .pbi | 7 | `No reason recorded` |
+| .snarls | 6 | `No rule determined a value for assay_type` |
+| .gg | 6 | `No rule determined a value for assay_type` |
+| .min | 6 | `No rule determined a value for assay_type` |
+| .dist | 6 | `No rule determined a value for assay_type` |
+| .trans | 6 | `No rule determined a value for assay_type` |
+| .hal | 2 | `No rule determined a value for assay_type` |
+| .hapl | 2 | `No rule determined a value for assay_type` |
+| .delta | 1 | `No rule determined a value for assay_type` |
 
 | Assay Type | count | % | extensions |
 |---|---:|---:|---|
@@ -360,46 +360,46 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 
 | extension | count | reason (from evidence) |
 |---|---:|---|
-| .vcf | 201,668 | No rule determined a value for instrument_model |
-| .tbi | 169,531 | No reason recorded |
-| (none) | 134,605 | No rule determined a value for instrument_model |
-| .txt | 42,479 | No rule determined a value for instrument_model |
-| .csi | 41,186 | No reason recorded |
-| .fastq | 21,270 | No rule determined a value for instrument_model |
-| .fast5 | 12,509 | No rule determined a value for instrument_model |
-| .bed | 11,523 | No rule determined a value for instrument_model |
-| .cram | 10,555 | No rule determined a value for instrument_model |
-| .crai | 10,317 | No reason recorded |
-| .bam | 6,090 | No rule determined a value for instrument_model |
-| .pvar | 2,854 | No rule determined a value for instrument_model |
-| .psam | 2,854 | No rule determined a value for instrument_model |
-| .pgen | 2,854 | No rule determined a value for instrument_model |
-| .bai | 2,742 | No reason recorded |
-| .bw | 2,536 | No rule determined a value for instrument_model |
-| .g.vcf | 2,504 | No rule determined a value for instrument_model |
-| .gff3 | 1,565 | No rule determined a value for instrument_model |
-| .chain | 926 | No rule determined a value for instrument_model |
-| .tsv | 899 | No rule determined a value for instrument_model |
-| .sf | 634 | No rule determined a value for instrument_model |
-| .fai | 477 | No reason recorded |
-| .gzi | 466 | No reason recorded |
-| .bigwig | 462 | No rule determined a value for instrument_model |
-| .sizes | 458 | No rule determined a value for instrument_model |
-| .h5ad | 350 | No rule determined a value for instrument_model |
-| .paf | 297 | No rule determined a value for instrument_model |
-| .sam | 192 | No rule determined a value for instrument_model |
-| .csv | 21 | No rule determined a value for instrument_model |
-| .pod5 | 11 | No rule determined a value for instrument_model |
-| .dict | 9 | No rule determined a value for instrument_model |
-| .pbi | 7 | No reason recorded |
-| .snarls | 6 | No rule determined a value for instrument_model |
-| .gg | 6 | No rule determined a value for instrument_model |
-| .min | 6 | No rule determined a value for instrument_model |
-| .dist | 6 | No rule determined a value for instrument_model |
-| .trans | 6 | No rule determined a value for instrument_model |
-| .hal | 2 | No rule determined a value for instrument_model |
-| .hapl | 2 | No rule determined a value for instrument_model |
-| .delta | 1 | No rule determined a value for instrument_model |
+| .vcf | 201,668 | `No rule determined a value for instrument_model` |
+| .tbi | 169,531 | `No reason recorded` |
+| (none) | 134,605 | `No rule determined a value for instrument_model` |
+| .txt | 42,479 | `No rule determined a value for instrument_model` |
+| .csi | 41,186 | `No reason recorded` |
+| .fastq | 21,270 | `No rule determined a value for instrument_model` |
+| .fast5 | 12,509 | `No rule determined a value for instrument_model` |
+| .bed | 11,523 | `No rule determined a value for instrument_model` |
+| .cram | 10,555 | `No rule determined a value for instrument_model` |
+| .crai | 10,317 | `No reason recorded` |
+| .bam | 6,090 | `No rule determined a value for instrument_model` |
+| .pvar | 2,854 | `No rule determined a value for instrument_model` |
+| .psam | 2,854 | `No rule determined a value for instrument_model` |
+| .pgen | 2,854 | `No rule determined a value for instrument_model` |
+| .bai | 2,742 | `No reason recorded` |
+| .bw | 2,536 | `No rule determined a value for instrument_model` |
+| .g.vcf | 2,504 | `No rule determined a value for instrument_model` |
+| .gff3 | 1,565 | `No rule determined a value for instrument_model` |
+| .chain | 926 | `No rule determined a value for instrument_model` |
+| .tsv | 899 | `No rule determined a value for instrument_model` |
+| .sf | 634 | `No rule determined a value for instrument_model` |
+| .fai | 477 | `No reason recorded` |
+| .gzi | 466 | `No reason recorded` |
+| .bigwig | 462 | `No rule determined a value for instrument_model` |
+| .sizes | 458 | `No rule determined a value for instrument_model` |
+| .h5ad | 350 | `No rule determined a value for instrument_model` |
+| .paf | 297 | `No rule determined a value for instrument_model` |
+| .sam | 192 | `No rule determined a value for instrument_model` |
+| .csv | 21 | `No rule determined a value for instrument_model` |
+| .pod5 | 11 | `No rule determined a value for instrument_model` |
+| .dict | 9 | `No rule determined a value for instrument_model` |
+| .pbi | 7 | `No reason recorded` |
+| .snarls | 6 | `No rule determined a value for instrument_model` |
+| .gg | 6 | `No rule determined a value for instrument_model` |
+| .min | 6 | `No rule determined a value for instrument_model` |
+| .dist | 6 | `No rule determined a value for instrument_model` |
+| .trans | 6 | `No rule determined a value for instrument_model` |
+| .hal | 2 | `No rule determined a value for instrument_model` |
+| .hapl | 2 | `No rule determined a value for instrument_model` |
+| .delta | 1 | `No rule determined a value for instrument_model` |
 
 | Instrument Model | count | % | extensions |
 |---|---:|---:|---|

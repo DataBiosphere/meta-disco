@@ -87,3 +87,11 @@ def test_dashboard_payload_carries_the_conflict_count_and_breakdown(records, tmp
     ref = next(d for d in payload["dimensions"] if d["field"] == REF)
     assert (ref["classified"], ref["not_classified"], ref["conflict"]) == (3, 1, 4)
     assert ref["conflict_breakdown"][0] == {"ext": ".bed", "competing": "CHM13 vs GRCh38", "count": 2}
+
+
+def test_a_reason_carrying_file_content_is_shown_literally_not_as_markup():
+    # An unrecognised IDAT's chip type reaches its reason (#603); Pages renders raw HTML.
+    reason = "chip type '<img src=x onerror=alert(1)>', 7 beads read: not a chip this rule recognises"
+    records = [{"ext": ".idat", REF: NOT_CLASSIFIED, f"{REF}_reason": reason}]
+    section = report.build_section(report.Tally(records, REF), 1, "Reference Assembly")
+    assert f"`{reason}`" in section

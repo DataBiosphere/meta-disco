@@ -24,7 +24,7 @@ from meta_disco.file_name import FileName
 from meta_disco.models import CLASSIFICATION_FIELDS, CONFLICT, NOT_CLASSIFIED, field_evidence, field_label
 from meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
 from meta_disco.rule_engine import CONFLICT_MARKER
-from meta_disco.summaries import escape_md_cell
+from meta_disco.summaries import escape_md_cell, md_code
 
 # Each dimension's report label and note. The report covers CLASSIFICATION_FIELDS, in
 # its order; a dimension added there without an entry here fails at import.
@@ -209,7 +209,9 @@ def build_section(tally: Tally, total: int, label: str, extra_notes: str = "") -
         lines.append("| extension | count | reason (from evidence) |")
         lines.append("|---|---:|---|")
         for row in nc_rows:
-            lines.append(f"| {row['ext']} | {row['count']:,} | {escape_md_cell(row['why'])} |")
+            # An evidence reason can carry file content (an unrecognised IDAT's chip type,
+            # #603), which Pages would render as markup: a code span shows it literally.
+            lines.append(f"| {row['ext']} | {row['count']:,} | {escape_md_cell(md_code(row['why']))} |")
 
     conflicts = tally.conflict_rows()
     if conflicts:
