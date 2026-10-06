@@ -913,12 +913,15 @@ def classify_from_idat_header(
     pair; the run log's scan software decides platform and instrument where every ``Scan``
     row names one software that ``IDAT_SCANNERS`` lists. Otherwise each of those dimensions
     gets a ``not_classified`` claim at ``CONTENT_TIER`` naming what was read. Reference
-    is the extension rule's (``idat_array_signal``: not applicable). ``file_format`` is accepted to match the uniform
-    ``_fetch_and_classify`` call.
+    is the extension rule's (``idat_array_signal``: not applicable). ``file_format`` is
+    accepted to match the uniform ``_fetch_and_classify`` call, and not read: the format is
+    ``.idat``, which routed the file here.
     """
     from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
-    result = _get_engine().classify_extended(ExtendedFileInfo(name=name, file_size=file_size))
+    # The known ".idat" as the format, as for BAM: with no name (a header-only call) the
+    # engine reads the extension from it, so the extension rule still runs.
+    result = _get_engine().classify_extended(ExtendedFileInfo(name=name, file_format=".idat", file_size=file_size))
 
     # One helper per rule, each claiming the fields its calls name: a value where one is
     # given, else not_classified. Both shapes `test_code_rules` reads.

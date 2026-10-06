@@ -235,6 +235,12 @@ def test_a_recognised_chip_and_scanner_decide_four_dimensions():
     assert _entry(result, "reference_assembly") == (None, NOT_APPLICABLE, ["idat_array_signal"])
 
 
+def test_a_header_only_call_still_takes_what_the_extension_says():
+    result = classify_from_idat_header(IdatHeader(bead_count=BEADS, chip_type=CHIP, scan_software=[SCAN]))
+    assert _entry(result, "data_type") == ("array_signal", CLASSIFIED, ["idat_array_signal"])
+    assert _entry(result, "reference_assembly") == (None, NOT_APPLICABLE, ["idat_array_signal"])
+
+
 @pytest.mark.parametrize(
     "header",
     [

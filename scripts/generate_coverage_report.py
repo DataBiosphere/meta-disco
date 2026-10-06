@@ -36,8 +36,10 @@ _DIMENSION_TEXT = {
         "Platform",
         (
             "**Note**: Platform is inherently unknowable for most derived formats (VCF, "
-            "BED, PLINK). Only BAM/CRAM (via `@RG PL` header) and FASTQ (via read name "
-            "patterns) can encode platform. The high not-classified rate is expected."
+            "BED, PLINK). It is read from a BAM/CRAM `@RG PL` header, FASTQ read name "
+            "patterns, a nanopore signal file's extension, and an Illumina IDAT's run log, "
+            "whose scan software names the array scanner (#603). The high not-classified "
+            "rate is expected."
         ),
     ),
     "assay_type": (
@@ -45,10 +47,11 @@ _DIMENSION_TEXT = {
         (
             "**Note**: Like platform, assay type is inherently unknowable for most derived "
             "formats. It is determined only by a rule that sees evidence of the assay: a "
-            "STAR `@PG` line, filename patterns (STAR, Salmon, expression BED), and "
-            "extension where the format implies it (`.idat` is a methylation array, `.svs` "
-            "histology, a `.h5ad` / `.loom` / `.mtx` single-cell matrix `sc/snRNA-seq`, "
-            "and a tar whose members are one of these, #533). Nothing infers it from the "
+            "STAR `@PG` line, filename patterns (STAR, Salmon, expression BED), an IDAT's "
+            "header, whose chip type and bead count name the BeadChip (#603), and "
+            "extension where the format implies it (`.svs` histology, a `.h5ad` / `.loom` "
+            "/ `.mtx` single-cell matrix `sc/snRNA-seq`, and a tar whose members are one "
+            "of these, #533). Nothing infers it from the "
             "modality (#88), reads file size, or "
             "infers WGS from a long-read platform (#430). The high not-classified rate is "
             "expected."
@@ -57,8 +60,9 @@ _DIMENSION_TEXT = {
     "instrument_model": (
         "Instrument Model",
         (
-            "**Note**: Inference reads the instrument model only from a BAM/CRAM `@RG PM` "
-            "value that names exactly one model (#532); a read-name serial prefix is a "
+            "**Note**: Inference reads the instrument model from a BAM/CRAM `@RG PM` "
+            "value that names exactly one model (#532) and from an IDAT's run log naming "
+            "the iScan (#603); a read-name serial prefix is a "
             "vendor numbering convention and is not read. Most files carry no such value, "
             "so the high not-classified rate is expected. This report reads inference only;"
             " the submitter tables, which reconcile reads, name models far more often."
