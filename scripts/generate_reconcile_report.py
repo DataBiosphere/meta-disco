@@ -765,8 +765,8 @@ def render_markdown(data: dict) -> str:
         "not classified. A filled slot is counted once, under the input its answer is credited to: *original*, "
         "the catalog's published values; *submitter tables*; *external*, ENA's run records (each source's row adds "
         "its own column above and its *harmonized* one); *inherited*, where no source declared the value, the "
-        "file's parents across its `generated_by` did, and inference declared another or none; *inferred*, the "
-        "other values no source declared, inference's; *not applicable*, which reconcile does "
+        "file's parents across its `generated_by` did, and inference declared another or none; *inferred*, every "
+        "other value no source declared, which is credited to inference; *not applicable*, which reconcile does "
         "not yet credit to an input (#634). A slot not classified, published unreviewed or in conflict is not "
         "filled. Each % is its row's count over the *slots* row of its column.",
         "",
