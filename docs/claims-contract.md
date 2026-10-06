@@ -113,6 +113,15 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     attaches evidence by itself, and a candidate the checksum does not confirm is counted, not written.
     ENA's archive-generated FASTQs are the case that set it (#606): `ERR3240114_1.fastq.gz` is looked
     up as run ERR3240114, and is ENA's file only because ENA's `fastq_md5` for it equals the catalog's md5.
+    An alignment holds no file of a run, so it is joined by the run's **read and base counts**, both
+    equal, checked on both sides (#594): a T2T_CHRY CRAM whose own `samtools stats` gives 697,525,866
+    reads and 104,628,879,900 bases holds run ERR3239446's reads, the one run of its declared studies
+    with exactly those counts — where the stats file's command read that CRAM, and the CRAM's `@RG`
+    sample is the sample of the file ENA was submitted. The base count is mostly the read count times
+    the read length, so the counts are close to one number: 29 pairs of distinct runs in those studies
+    share both. A CRAM matching no run, or several, is counted, not linked. Such a link is lineage to the
+    run's reads, not values on the alignment, and its parent may be in another dataset only where
+    `sources/ena_run_lineage_map.yaml` declares it (ADR-0002 decision 2).
     A source keyed by a field the target publishes (a file name within a dataset) joins on that field
     as it is.
 
@@ -271,8 +280,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     only the rule that made it, so the two can be told apart in the record.
 
 4.9 **A child inherits across a derivation edge** (ADR-0002, #355) — an `internal` one, which joins two
-    files of one dataset. A parent is looked for only in the child's dataset; one missing there is
-    `external`, and nothing is inherited across it. A child has one activity (its
+    files of one dataset, or, under ADR-0002 decision 2's one declared exception (#594), a child to its
+    parent in the dataset the run lineage map declares (the input's `parent_dataset`). A parent is
+    looked for only there; one missing is `external`, and nothing is inherited across it. A child has one activity (its
     `generated_by`); for each input role that passes a dimension, the child's parents in that role settle
     their resolved answers among themselves and give the child one declaration, credited to them, to which
     4.2–4.6 apply as to inputs 1–4 — so a dimension two roles pass (none today) has two declarations, which

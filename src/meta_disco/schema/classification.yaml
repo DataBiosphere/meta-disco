@@ -536,10 +536,11 @@ classes:
       the source's own table gives it, with the identifier kept as
       `parent_source_identifier`; when that table has no row for it, or rows naming
       several locators, the line carries the identifier alone, so the link is
-      still reported. `parent_key_type` is present exactly when `parent` is, and
-      `raw_activity_column` exactly when `raw_activity` is. gen-pydantic emits no
-      class rules, so `lineage_evidence.check_row` enforces all three at write and at
-      read.
+      still reported. `parent_key_type` is present exactly when `parent` is,
+      `raw_activity_column` exactly when `raw_activity` is, and `parent_dataset` only
+      with `parent` and never the envelope's own target dataset. gen-pydantic emits no
+      class rules, so `lineage_evidence` enforces them at write and at read
+      (`check_row`, and `_check_row_in` for the one that needs the envelope).
     attributes:
       target_key_value:
         required: true
@@ -562,8 +563,19 @@ classes:
         pattern: "^[^\\r\\n]+\\Z"
         description: >-
           The source's own identifier for the parent, where the source named the
-          parent by one (IGVF's `derived_from` accessions), kept beside the locator
-          the importer found for it.
+          parent by one (IGVF's `derived_from` accessions, or the ENA run whose
+          reads a T2T_CHRY CRAM holds), kept beside the locator the importer found
+          for it.
+      parent_dataset:
+        pattern: "^[^\\r\\n]+\\Z"
+        description: >-
+          The dataset the parent is in, where it is not the child's own (#594).
+          Absent on every line whose parent is looked for in the child's dataset.
+          Written only by the ENA run lineage importer (`ena_lineage`), for a pair of
+          datasets its map declares (`sources/ena_run_lineage_map.yaml`); reconcile
+          resolves a line carrying it only where that map declares the child's dataset
+          taking its reads from this one, and counts any other as
+          `undeclared_dataset`.
       raw_activity:
         description: >-
           What the source calls the step, verbatim (contract 1.4), where the source
@@ -830,6 +842,13 @@ classes:
         multivalued: true
         inlined_as_list: true
         required: true
+      parent_dataset:
+        pattern: "^[^\\r\\n]+\\Z"
+        description: >-
+          The dataset `parent_key`'s record is in, where it is not the child's own: only an
+          input resolved through the run lineage map's declared exception (#594, ADR-0002
+          decision 2), such as a T2T_CHRY CRAM's reads in ANVIL_T2T. Absent on every input
+          whose parent is in the child's dataset.
     slot_usage:
       parent_file:
         required: true
@@ -1124,7 +1143,8 @@ slots:
     description: >-
       The parent's record key (`record_keys.SOURCE_RECORD_KEYS`: AnVIL's `file_id`, HPRC's
       URL hash in `md5sum`), set only when the parent resolves to exactly one record of
-      the child's dataset (ADR-0002 decision 2). Named for the key rather than
+      the child's dataset (ADR-0002 decision 2), or of the dataset an input's
+      `parent_dataset` names under that decision's declared exception (#594). Named for the key rather than
       `parent_file_id` because HPRC's key is not a `file_id`.
   parent_kind:
     description: The kind of file the parent is.

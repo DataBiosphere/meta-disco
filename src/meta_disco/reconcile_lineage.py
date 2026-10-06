@@ -15,6 +15,12 @@ reconcile's slot-evidence join (``reconcile.join``) and shaped like it:
    and the parent by its ``parent_key_type`` (``file_id`` or ``drs_uri``; an IGVF
    accession was already written as its DRS URI by the importer), each against that
    field of the run's records whose ``dataset_title`` is the envelope's target dataset.
+   The one exception is a line naming its parent's dataset (``parent_dataset``, #594):
+   its parent is looked for in that dataset where the run lineage map declares it: a line of
+   the run lineage importer's shape, from the map's source, whose child's dataset and
+   column take their reads from that dataset (``run_lineage_map.RunLineageMap.declares``).
+   Any other such line, a sample parent's included, is counted ``undeclared_dataset``
+   before anything else and gives nothing.
    One carrier resolves it; none is ``not_in_dataset``, several ``several_match``, and
    either gives no input (counted, never written onto a record). A line naming no locator
    for its parent (``parent`` absent) is ``not_in_dataset``. A child no record carries is
@@ -42,6 +48,7 @@ from .edges import LineageStep, lineage_attribution, parent_kind_of
 from .lineage_evidence import read_lineage_envelope
 from .output_utils import relative_to
 from .records import JOIN_KEY_OUTPUT_FIELDS
+from .run_lineage_map import RunLineageMap
 from .schema.classification_model import EvidenceTarget, LineageParentKeyEnum
 from .source_evidence import claim_source_for, discover
 
@@ -51,6 +58,7 @@ NOT_IN_DATASET = "not_in_dataset"
 SEVERAL_MATCH = "several_match"
 UNTRANSLATED = "untranslated"
 SAMPLE_PARENT = "sample_parent"
+UNDECLARED_DATASET = "undeclared_dataset"
 CHILD_NOT_IN_RUN = "child_not_in_run"
 CHILD_SEVERAL_MATCH = "child_several_match"
 PARENT_IS_CHILD = "parent_is_child"
@@ -60,6 +68,7 @@ OUTCOMES = (
     SEVERAL_MATCH,
     UNTRANSLATED,
     SAMPLE_PARENT,
+    UNDECLARED_DATASET,
     CHILD_NOT_IN_RUN,
     CHILD_SEVERAL_MATCH,
     PARENT_IS_CHILD,
@@ -67,7 +76,7 @@ OUTCOMES = (
 
 # A value a record is looked up by: the output-row field, the dataset the lookup is scoped
 # to (None for every dataset), and the value. ``reconcile.join``'s key; a lineage line's is
-# always scoped to its child's dataset.
+# scoped to its child's dataset, or to the dataset a declared line names for its parent.
 Locator = tuple[str, str | None, str]
 
 
@@ -122,12 +131,18 @@ def latest_catalog(paths: list[Path]) -> list[Path]:
 
 
 def translate_lineage(
-    lineage_root: Path, evidence_root: Path, repository: str, catalog: str | None, table: ActivityMap
+    lineage_root: Path,
+    evidence_root: Path,
+    repository: str,
+    catalog: str | None,
+    table: ActivityMap,
+    run_map: RunLineageMap,
 ) -> PendingLineage:
-    """Read and translate every lineage line that :func:`applies` to the run; see the module docstring, step 1.
+    """Read and translate every lineage line that :func:`applies` to the run; see the module docstring, steps 1 and 2.
 
     Where the input names no catalog, only the latest catalog's lineage about this
     repository is read (:func:`latest_catalog`): lineage is read one catalog at a time.
+    ``run_map`` says which lines naming their parent's dataset are declared.
     """
     pending = PendingLineage()
     paths = [p for p in discover(lineage_root) if applies(read_lineage_envelope(p).target, repository, catalog)]
@@ -140,6 +155,10 @@ def translate_lineage(
         dataset = str(envelope.target.dataset)
         counts = pending.counts[str(envelope.source_type)][dataset]
         counts["offered"] += 1
+        # First, so a forbidden crossing is counted as one, not as a sample or a step to author.
+        if line.parent_dataset is not None and not run_map.declares(envelope, line):
+            counts[UNDECLARED_DATASET] += 1
+            continue
         if str(line.parent_key_type) == LineageParentKeyEnum.biosample_id.value:
             counts[SAMPLE_PARENT] += 1
             continue
@@ -148,9 +167,10 @@ def translate_lineage(
             counts[UNTRANSLATED] += 1
             continue
         child = (JOIN_KEY_OUTPUT_FIELDS[str(envelope.target_key)], dataset, line.target_key_value)
+        parent_dataset = line.parent_dataset or dataset
         parent = None
         if line.parent is not None and line.parent_key_type is not None:
-            parent = (JOIN_KEY_OUTPUT_FIELDS[str(line.parent_key_type)], dataset, line.parent)
+            parent = (JOIN_KEY_OUTPUT_FIELDS[str(line.parent_key_type)], parent_dataset, line.parent)
             pending.wanted.add(parent)
         pending.wanted.add(child)
         source = claim_source_for(envelope.source, line.parent_column)
@@ -185,6 +205,7 @@ def resolve_lineage(pending: PendingLineage, carriers: dict[Locator, list[Carrie
                 parent_kind_of(found_parent.file_name),
                 attribution,
                 found_parent.data_type,
+                parent[1] if parent is not None and parent[1] != child[1] else None,
             )
         )
     return result

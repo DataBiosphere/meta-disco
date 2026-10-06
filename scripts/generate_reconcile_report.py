@@ -791,11 +791,13 @@ def _lineage_section(lineage: dict | None) -> list[str]:
         "## Lineage: how each file was made",
         "",
         "Each lineage line says a file was made from a parent, in the source's words (#583). Reconcile translates "
-        "it through the activity map (#584), finds the parent in the child's dataset, and merges every source's "
-        "step for a file into its `generated_by` (#577). *untranslated*: no authored activity-map row reads the "
-        "line (the [review queue](review-queue-report.md) lists them); *sample_parent*: the parent is a sample, "
-        "which becomes an input later (#582); *not_in_dataset* / *several_match*: no file, or more than one, of "
-        "the child's dataset is the parent; *child_not_in_run* / *child_several_match*: no file, or more than "
+        "it through the activity map (#584), finds the parent in the child's dataset (or, for an ENA run lineage "
+        "line, in the dataset its map declares, #594), and merges every source's step for a file into its "
+        "`generated_by` (#577). *untranslated*: no authored activity-map row reads the line (the "
+        "[review queue](review-queue-report.md) lists them); *sample_parent*: the parent is a sample, which becomes "
+        "an input later (#582); *undeclared_dataset*: the line names its parent's dataset, and the ENA run lineage "
+        "map declares no such pair; *not_in_dataset* / *several_match*: no file, or more than one, of the dataset "
+        "searched is the parent; *child_not_in_run* / *child_several_match*: no file, or more than "
         "one, is the child; *parent_is_child*: the parent named is the child itself. Only *resolved* lines give "
         "a step.",
         "",

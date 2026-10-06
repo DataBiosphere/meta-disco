@@ -141,21 +141,11 @@ def load_lineage_map(source: Readable | None = None) -> LineageMap:
     manifests.
     """
     resource = source if source is not None else default_lineage_map_resource()
-    document = yaml.load(resource.read_text(encoding="utf-8"), Loader=_UniqueKeyLoader)
-    if not isinstance(document, dict):
-        raise ValueError(f"{_WHERE}: the document is {type(document).__name__}, not a mapping")
-    if NOTES in document:
-        raise ValueError(f"{_WHERE}: {NO_NOTES}")
-    if set(document) != {"catalog", "datasets"}:
-        raise ValueError(f"{_WHERE}: top-level keys are {sorted(document)}, expected 'catalog' and 'datasets'")
-    catalog = document["catalog"]
-    if not isinstance(catalog, str) or not catalog:
-        raise ValueError(f"{_WHERE}: catalog is {catalog!r}, not the name of the catalog the map was authored against")
-    datasets = document["datasets"]
-    _expect_mapping(datasets, _WHERE, "dataset")
+    document = map_document(resource, _UniqueKeyLoader, _WHERE, set())
+    catalog, datasets = document["catalog"], document["datasets"]
     links = []
     for dataset, tables in datasets.items():
-        _expect_mapping(tables, f"{_WHERE} {dataset}", "table")
+        expect_mapping(tables, f"{_WHERE} {dataset}", "table")
         for table, entries in tables.items():
             at = f"{_WHERE} {dataset}/{table}"
             if table.startswith(HARMONIZED_PREFIX) and table != VERBATIM_ACTIVITY:
@@ -198,7 +188,7 @@ def _link(dataset: str, table: str, entry: object, at: str) -> Link:
             f"{at}: keys are {sorted(entry)}, expected 'child' and 'parent', and optionally 'raw_activity', 'activity_id'"
         )
     child = entry["child"]
-    _expect_keys(child, {"column"}, {"column", "key"}, f"{at} child")
+    expect_keys(child, {"column"}, {"column", "key"}, f"{at} child")
     child_key = child.get("key", JOIN_KEY_DRS_URI)
     if child_key not in CHILD_KEYS:
         raise ValueError(f"{at} child: key {child_key!r} is not one of {CHILD_KEYS}")
@@ -206,19 +196,19 @@ def _link(dataset: str, table: str, entry: object, at: str) -> Link:
     lookup = None
     parent_key = None
     if isinstance(parent, dict) and _LOOKUP_KEYS & set(parent):
-        _expect_keys(parent, {"column"} | _LOOKUP_KEYS, {"column"} | _LOOKUP_KEYS, f"{at} parent")
+        expect_keys(parent, {"column"} | _LOOKUP_KEYS, {"column"} | _LOOKUP_KEYS, f"{at} parent")
         lookup = Lookup(
-            table=_name(parent["table"], f"{at} parent table"),
-            identifier_column=_name(parent["identifier_column"], f"{at} parent identifier_column"),
-            locator_column=_name(parent["locator_column"], f"{at} parent locator_column"),
+            table=expect_name(parent["table"], f"{at} parent table"),
+            identifier_column=expect_name(parent["identifier_column"], f"{at} parent identifier_column"),
+            locator_column=expect_name(parent["locator_column"], f"{at} parent locator_column"),
         )
     else:
-        _expect_keys(parent, {"column"}, {"column", "key"}, f"{at} parent")
+        expect_keys(parent, {"column"}, {"column", "key"}, f"{at} parent")
         parent_key = parent.get("key", JOIN_KEY_DRS_URI)
         if parent_key not in PARENT_KEYS:
             raise ValueError(f"{at} parent: key {parent_key!r} is not one of {PARENT_KEYS}")
-    child_column = _name(child["column"], f"{at} child column")
-    parent_column = _name(parent["column"], f"{at} parent column")
+    child_column = expect_name(child["column"], f"{at} child column")
+    parent_column = expect_name(parent["column"], f"{at} parent column")
     if child_column == parent_column:
         raise ValueError(f"{at}: child and parent are both column {child_column!r}")
     return Link(
@@ -237,18 +227,40 @@ def _link(dataset: str, table: str, entry: object, at: str) -> Link:
 def _cell(value: object, at: str) -> str | None:
     if value is None:
         return None
-    _expect_keys(value, {"cell"}, {"cell"}, at)
+    expect_keys(value, {"cell"}, {"cell"}, at)
     assert isinstance(value, dict)
-    return _name(value["cell"], f"{at} cell")
+    return expect_name(value["cell"], f"{at} cell")
 
 
-def _name(value: object, at: str) -> str:
+def map_document(resource: Readable, loader: type[yaml.SafeLoader], where: str, more_keys: set[str]) -> dict:
+    """A dataset map's YAML document, checked: a mapping with no ``notes``, whose top-level keys are
+    ``catalog``, ``datasets`` and ``more_keys``, ``catalog`` a name and ``datasets`` a non-empty mapping.
+
+    Shared by the lineage map and the ENA run lineage map (``run_lineage_map``, #594), which
+    have the same top-level shape.
+    """
+    document = yaml.load(resource.read_text(encoding="utf-8"), Loader=loader)
+    if not isinstance(document, dict):
+        raise ValueError(f"{where}: the document is {type(document).__name__}, not a mapping")
+    if NOTES in document:
+        raise ValueError(f"{where}: {NO_NOTES}")
+    expected = {"catalog", "datasets", *more_keys}
+    if set(document) != expected:
+        raise ValueError(f"{where}: top-level keys are {sorted(document)}, expected {sorted(expected)}")
+    catalog = document["catalog"]
+    if not isinstance(catalog, str) or not catalog:
+        raise ValueError(f"{where}: catalog is {catalog!r}, not the name of the catalog the map was authored against")
+    expect_mapping(document["datasets"], where, "dataset")
+    return document
+
+
+def expect_name(value: object, at: str) -> str:
     if not isinstance(value, str) or not value:
         raise ValueError(f"{at}: is {value!r}, not a column or table name")
     return value
 
 
-def _expect_keys(value: object, required: set, allowed: set, at: str) -> None:
+def expect_keys(value: object, required: set, allowed: set, at: str) -> None:
     if not isinstance(value, dict):
         raise ValueError(f"{at}: is {value!r}, not a mapping")
     if NOTES in value:
@@ -257,6 +269,6 @@ def _expect_keys(value: object, required: set, allowed: set, at: str) -> None:
         raise ValueError(f"{at}: keys are {sorted(value)}, expected {sorted(required)} (allowed {sorted(allowed)})")
 
 
-def _expect_mapping(value: object, at: str, what: str) -> None:
+def expect_mapping(value: object, at: str, what: str) -> None:
     if not isinstance(value, dict) or not value:
         raise ValueError(f"{at}: must be a non-empty mapping of {what} names, not {type(value).__name__}")

@@ -1203,14 +1203,15 @@ class LineageRow(ConfiguredBaseModel):
     One line of a lineage evidence file after the envelope (#583): a source saying one file was made from one parent. It reads \"the row in the envelope's `target` whose `target_key` equals `target_key_value` was made from `parent`, a `parent_key_type`\". The envelope is an `EvidenceFileEnvelope`, as a slot evidence file's is; the lines differ, so the two are written under separate roots, and the readers of each root read only that root.
     **It declares nothing**, as an `EvidenceRow` declares nothing: no activity, no role, no value, no status, no rule id. `raw_activity` is what the source calls the step, verbatim; which activity and role that means is the activity translation table's (#584), and finding the parent among our files is reconcile's (#577).
     One line per (child, parent) pair: a source row naming two parents, or two generated files, is written as one line for each pair.
-    **At least one of `parent` and `parent_source_identifier`.** A parent named by a locator, by AnVIL's identifier or by a sample's identifier is written as `parent`. One named by the source's own identifier is written as the locator the source's own table gives it, with the identifier kept as `parent_source_identifier`; when that table has no row for it, or rows naming several locators, the line carries the identifier alone, so the link is still reported. `parent_key_type` is present exactly when `parent` is, and `raw_activity_column` exactly when `raw_activity` is. gen-pydantic emits no class rules, so `lineage_evidence.check_row` enforces all three at write and at read.
+    **At least one of `parent` and `parent_source_identifier`.** A parent named by a locator, by AnVIL's identifier or by a sample's identifier is written as `parent`. One named by the source's own identifier is written as the locator the source's own table gives it, with the identifier kept as `parent_source_identifier`; when that table has no row for it, or rows naming several locators, the line carries the identifier alone, so the link is still reported. `parent_key_type` is present exactly when `parent` is, `raw_activity_column` exactly when `raw_activity` is, and `parent_dataset` only with `parent` and never the envelope's own target dataset. gen-pydantic emits no class rules, so `lineage_evidence` enforces them at write and at read (`check_row`, and `_check_row_in` for the one that needs the envelope).
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
     target_key_value: str = Field(default=..., description="""The child, as the envelope's `target_key` names it: AnVIL's `file_id` for `anvil_activity`, the DRS URI for a submitter table.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'LineageRow']} })
     parent: Optional[str] = Field(default=None, description="""The parent, in the form `parent_key_type` names. Written whether or not it is one of the dataset's files: reconcile (#577) will report a parent outside the dataset, and dropping it here would hide it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
     parent_key_type: Optional[LineageParentKeyEnum] = Field(default=None, description="""Which kind of value `parent` is. Named `_type` because `ActivityInput.parent_key` is a value, the parent's record key.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
-    parent_source_identifier: Optional[str] = Field(default=None, description="""The source's own identifier for the parent, where the source named the parent by one (IGVF's `derived_from` accessions), kept beside the locator the importer found for it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
+    parent_source_identifier: Optional[str] = Field(default=None, description="""The source's own identifier for the parent, where the source named the parent by one (IGVF's `derived_from` accessions, or the ENA run whose reads a T2T_CHRY CRAM holds), kept beside the locator the importer found for it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
+    parent_dataset: Optional[str] = Field(default=None, description="""The dataset the parent is in, where it is not the child's own (#594). Absent on every line whose parent is looked for in the child's dataset. Written only by the ENA run lineage importer (`ena_lineage`), for a pair of datasets its map declares (`sources/ena_run_lineage_map.yaml`); reconcile resolves a line carrying it only where that map declares the child's dataset taking its reads from this one, and counts any other as `undeclared_dataset`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow', 'ActivityInput']} })
     raw_activity: Optional[str] = Field(default=None, description="""What the source calls the step, verbatim (contract 1.4), where the source names it — `anvil_activity`'s `activity_type`, e.g. `Indexing` or `Quantificatioin: salmon`. The empty string is kept; a null or empty-list cell is omitted. No pattern and no enum, for `EvidenceRow.raw_value`'s reason.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
     activity_id: Optional[str] = Field(default=None, description="""The source's id for the step, where it has one (`anvil_activity`'s `activity_id`), so lines from one step can be told apart from another's.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow', 'Attribution']} })
     child_column: str = Field(default=..., description="""The column the child was read from.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
@@ -1253,6 +1254,19 @@ class LineageRow(ConfiguredBaseModel):
                     raise ValueError(err_msg)
         elif isinstance(v, str) and not pattern.match(v):
             err_msg = f"Invalid parent_source_identifier format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('parent_dataset')
+    def pattern_parent_dataset(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid parent_dataset format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid parent_dataset format: {v}"
             raise ValueError(err_msg)
         return v
 
@@ -1436,10 +1450,24 @@ class ActivityInput(ConfiguredBaseModel):
          'slot_usage': {'parent_file': {'name': 'parent_file', 'required': True}}})
 
     parent_file: str = Field(default=..., description="""The input file's name: the matched record's own spelling where the input resolves (a file-name rule matches case-insensitively, so it may differ in case from the name worked out from the child), otherwise as the source that names the input wrote it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
-    parent_key: Optional[str] = Field(default=None, description="""The parent's record key (`record_keys.SOURCE_RECORD_KEYS`: AnVIL's `file_id`, HPRC's URL hash in `md5sum`), set only when the parent resolves to exactly one record of the child's dataset (ADR-0002 decision 2). Named for the key rather than `parent_file_id` because HPRC's key is not a `file_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
+    parent_key: Optional[str] = Field(default=None, description="""The parent's record key (`record_keys.SOURCE_RECORD_KEYS`: AnVIL's `file_id`, HPRC's URL hash in `md5sum`), set only when the parent resolves to exactly one record of the child's dataset (ADR-0002 decision 2), or of the dataset an input's `parent_dataset` names under that decision's declared exception (#594). Named for the key rather than `parent_file_id` because HPRC's key is not a `file_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
     parent_kind: Optional[ParentKindEnum] = Field(default=None, description="""The kind of file the parent is.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
     role: str = Field(default=..., description="""One of the roles its activity declares in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput', 'InputRole']} })
     named_by: list[Attribution] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityInput']} })
+    parent_dataset: Optional[str] = Field(default=None, description="""The dataset `parent_key`'s record is in, where it is not the child's own: only an input resolved through the run lineage map's declared exception (#594, ADR-0002 decision 2), such as a T2T_CHRY CRAM's reads in ANVIL_T2T. Absent on every input whose parent is in the child's dataset.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow', 'ActivityInput']} })
+
+    @field_validator('parent_dataset')
+    def pattern_parent_dataset(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid parent_dataset format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid parent_dataset format: {v}"
+            raise ValueError(err_msg)
+        return v
 
 
 class Attribution(ConfiguredBaseModel):

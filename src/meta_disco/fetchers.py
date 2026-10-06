@@ -228,6 +228,18 @@ def _fetch_range(md5sum: str, end_byte: int, timeout: int = 60, url: str | None 
     return resp.content
 
 
+@wrap_as_fetch_error("head", passthrough=(requests.RequestException,))
+def fetch_head_text(md5sum: str, length: int, url: str | None = None) -> str:
+    """The first ``length`` bytes of a file (all of it, if shorter), decoded as :func:`_decode_bytes` does.
+
+    Uncached: for a small text file read once by an importer (``ena_lineage`` reads a
+    ``samtools stats`` file's counts from its head, #594). A transport failure (a
+    ``requests`` exception: a dropped connection, a timeout, a body cut off mid-read) raises
+    as itself, so the caller can try again; an HTTP status and any other failure is ``FetchError``.
+    """
+    return _decode_bytes(_fetch_range(md5sum, length - 1, url=url))
+
+
 def _decode_bytes(content: bytes | bytearray) -> str:
     """Decode bytes to string, trying UTF-8 first then Latin-1.
 

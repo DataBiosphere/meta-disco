@@ -108,6 +108,7 @@ from .reconcile_lineage import Carrier, Locator, PendingLineage, applies, resolv
 from .record_keys import PUBLISHED_TABLES, RecordKey, is_key_value, record_key
 from .records import JOIN_KEY_OUTPUT_FIELDS, STEP_OUTCOMES_KEY
 from .rule_engine import CONFLICT_MARKER, make_claim
+from .run_lineage_map import RunLineageMap, load_run_lineage_map
 from .schema.classification_model import EvidenceFileEnvelope
 from .schema_vocab import most_specific
 from .slot_map import load_slot_map, published_slot_map_resource
@@ -1122,6 +1123,7 @@ def reconcile_run(
     table: ValueMap | None = None,
     lineage_root: Path | None = None,
     activity_table: ActivityMap | None = None,
+    run_lineage_map: RunLineageMap | None = None,
 ) -> dict:
     """Reconcile one stored run into ``<run>/reconciled/`` and return its report; ``evidence_root=None`` excludes all evidence.
 
@@ -1141,6 +1143,10 @@ def reconcile_run(
     inference's own step (``edges.merge_steps``) into the reconciled ``generated_by``. A
     record no lineage names keeps inference's step as it is. ``evidence_root=None``
     excludes lineage too, and inheritance still crosses the steps inference wrote (6.6).
+    A lineage line naming its parent's dataset is resolved there only where
+    ``run_lineage_map`` (the bundled run lineage map by default, #594) declares it; a run
+    holding a child dataset of that map but not the dataset its reads are in is refused
+    (``RunLineageMap.require_in_run``).
 
     Inheritance (#571, :mod:`reconcile_inherit`) needs every parent's answer before its
     child is written, and the records come file by file, so inheritance reads the run twice,
@@ -1177,7 +1183,12 @@ def reconcile_run(
         applicable, skipped = select_evidence(statuses, repository, catalog)
         if lineage_root is None:
             lineage_root = evidence_root.parent / DEFAULT_LINEAGE_EVIDENCE_ROOT.name
-        pending = translate_lineage(lineage_root, evidence_root, repository, catalog, activity_table)
+        run_map = run_lineage_map if run_lineage_map is not None else load_run_lineage_map()
+        try:
+            run_map.require_in_run(repository, catalog, envelope.get("datasets") or {})
+        except ValueError as exc:
+            raise ReconcileError(str(exc)) from None
+        pending = translate_lineage(lineage_root, evidence_root, repository, catalog, activity_table, run_map)
     joined = join(applicable, run_dir, key, table, extra=pending.wanted)
     lineage = resolve_lineage(pending, joined.carriers)
     report = Report(

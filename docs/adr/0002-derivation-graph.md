@@ -37,7 +37,7 @@ headers (13,125 of 16,427), VCF sample columns on 99.9% of VCF headers (203,823 
 
 **A file's lineage lives inside its dataset.** A parent is looked for only in the child's own dataset,
 and a parent not found there is `external` (decision 2). Only sample and donor identifiers cross datasets
-(decision 1).
+(decision 1), and the one declared pair of decision 2's exception (#594).
 
 ### 1. Samples and donors are identifiers, not records
 
@@ -63,7 +63,7 @@ that is what a `SampleCollectionActivity` edge states (#361, #580). A `SequenceA
 identifier, and a `SampleCollectionActivity` makes that sample from a donor identifier, read from the
 sample's own row: AnVIL's `anvil_biosample.donor_id`, filled on every sample row of ten anvil15 datasets,
 and a submitter table's donor column where one has it (1000G `sample.participant`, IGVF `sample.donors`). **Identifiers are the one thing that crosses datasets;
-file edges never do** (decision 2).
+file edges do not**, but for decision 2's one declared exception (#594).
 
 **Mapping between namespaces is out of scope here** and stays with #361: one person as
 `coriell:HG03016` in one dataset and `sra_sample:SRS…` in another needs a registry crosswalk (IGSR,
@@ -77,14 +77,22 @@ table would be empty scaffolding. Revisit if #337's manifest route populates the
 
 - **`internal`** — the parent is one file we hold **in the child's own dataset**, and the edge carries its
   record key (`record_keys.SOURCE_RECORD_KEYS`). A file parent resolves only within the child's dataset,
-  whatever form the source names it in, as today's filename joins do.
+  whatever form the source names it in, as today's filename joins do. **One declared exception (#594):**
+  a dataset that `sources/ena_run_lineage_map.yaml` declares as taking its reads from another
+  (`reads_in`) resolves an ENA run lineage line's parent in that other dataset. T2T_CHRY's 1KGP CRAMs
+  hold reads only ANVIL_T2T holds, matched by the run's read and base counts (contract 2.10). The map is
+  refused if its datasets loop (at load), if one is missing from the deployment or the manifests
+  (`make check-ena-lineage-map`), or if a run holds the child dataset without the other (at reconcile).
+  Reconcile counts any other line naming another dataset `undeclared_dataset` and resolves nothing
+  from it; a resolved input records the parent's dataset as its `parent_dataset`.
 - **`external`** — a source names the parent (`NA21127.merged.bam` in a `@PG` line, or a `file_id` or DRS
   URI in a table) but it is missing from the child's dataset: it was never deposited, or the name is
   shared by more than one file (#438). An `external` parent passes nothing (contract 4.9).
 
 The parent as the source wrote it is always kept, resolved or not: `parent_file` for a name (looked up
 only within the child's dataset), `parent_ref` for anything else a source gives — a `file_id`, a DRS URI, an S3 or filesystem path.
-`parent_key` is set only when the parent, however named, resolves to a record of the child's dataset.
+`parent_key` is set only when the parent, however named, resolves to a record of the child's dataset, or of
+the dataset decision 2's declared exception names.
 
 `parent_scope` is **not stored** on the record: it is whether `parent_key` is set, and a stored copy
 could disagree with it. `edges.jsonl` works it out, so a consumer can filter on it. An edge whose parent

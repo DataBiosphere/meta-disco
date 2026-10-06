@@ -335,8 +335,8 @@ def import_dataset(
     """Look ``found``'s runs up and write one generation: the evidence file and ENA's response.
 
     Refuses a response for another catalog or dataset, so a stored one is imported only as
-    what it was fetched for, and raises, writing nothing, when no file matched. The envelope's ``fetched_at`` is when ENA was
-    asked, and its ``source_version`` that day: ENA publishes no version of its records.
+    what it was fetched for, and raises, writing nothing, when no file matched. The envelope
+    is :func:`ena_envelope`'s.
     """
     # A file with no catalog md5 cannot match whatever ENA says, so its run is not asked for.
     response = fetch(catalog, dataset, sorted({c.accession for c in found if c.md5 is not None}))
@@ -357,17 +357,8 @@ def import_dataset(
         # 5.3), and writing nothing quietly would leave an older generation current.
         counts = ", ".join(f"{verdict} {n:,}" for verdict, n in sorted(result.outcomes.items()))
         raise ValueError(f"{dataset}: no file named as ENA's matched ENA's md5 ({counts}); nothing written")
-    source = EvidenceFileSource(repository=SOURCE, table=TABLE, url=PORTAL_SEARCH)
-    envelope = EvidenceFileEnvelope(
-        source=source,
-        source_type=ImporterSourceTypeEnum(SOURCE_EXTERNAL_GROUND_TRUTH),
-        source_version=response.requested_at.date().isoformat(),
-        source_key=SOURCE_KEY,
-        target=EvidenceTarget(system=REPOSITORY, dataset=dataset, version=catalog),
-        target_key=JoinKeyEnum(JOIN_KEY_FILE_ID),
-        fetched_at=response.requested_at.isoformat(),
-    )
-    lines = (e for c in matched for e in entries(c, response.rows[c.accession], source))
+    envelope = ena_envelope(dataset, catalog, response.requested_at, PORTAL_SEARCH)
+    lines = (e for c in matched for e in entries(c, response.rows[c.accession], envelope.source))
     with staged_generation(result.directory) as staging:
         result.written = write_evidence_file(evidence_file_path(staging, TABLE), envelope, lines)
         if not result.written:
@@ -376,6 +367,24 @@ def import_dataset(
             raise ValueError(f"{dataset}: {len(matched):,} matched files, but ENA states no mapped field for any")
         write_response(staging / RESPONSE_FILE, response)
     return result
+
+
+def ena_envelope(dataset: str, catalog: str, requested_at: datetime, url: str) -> EvidenceFileEnvelope:
+    """The envelope of a file of ENA's rows about ``dataset``'s files, keyed by ``file_id``.
+
+    Its ``fetched_at`` is when ENA was asked, and its ``source_version`` that day: ENA
+    publishes no version of its records. Shared with the run lineage importer
+    (``ena_lineage``, #594), whose lines are ENA's too.
+    """
+    return EvidenceFileEnvelope(
+        source=EvidenceFileSource(repository=SOURCE, table=TABLE, url=url),
+        source_type=ImporterSourceTypeEnum(SOURCE_EXTERNAL_GROUND_TRUTH),
+        source_version=requested_at.date().isoformat(),
+        source_key=SOURCE_KEY,
+        target=EvidenceTarget(system=REPOSITORY, dataset=dataset, version=catalog),
+        target_key=JoinKeyEnum(JOIN_KEY_FILE_ID),
+        fetched_at=requested_at.isoformat(),
+    )
 
 
 def describe(imports: list[DatasetImport]) -> list[str]:

@@ -193,7 +193,8 @@ class LineageStep:
     reads it (:func:`parent_kind_of`); ``parent_data_type`` its inferred ``data_type``,
     which :func:`misfits` judges against the role's declared kinds, None where not known.
     ``attribution`` is the ``Attribution`` the source gets, from :func:`lineage_attribution`
-    for a lineage line.
+    for a lineage line. ``parent_dataset`` is the parent's dataset where it is not the
+    child's (the run lineage map's declared exception, #594), else None.
     """
 
     activity: str
@@ -203,6 +204,7 @@ class LineageStep:
     parent_kind: str | None
     attribution: dict
     parent_data_type: str | None = None
+    parent_dataset: str | None = None
 
 
 def lineage_attribution(source_type: str, row_id: str, source: ClaimSource, activity_id: str | None) -> dict:
@@ -327,6 +329,7 @@ def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[
                 "parent_file": s.parent_file,
                 "parent_key": s.parent_key,
                 "parent_kind": s.parent_kind,
+                **({"parent_dataset": s.parent_dataset} if s.parent_dataset else {}),
                 "named_by": [],
             },
         )
