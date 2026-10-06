@@ -61,12 +61,12 @@
   <div class="scroll" id="headline"></div>
   <p class="note"><strong>How complete the metadata is.</strong> A slot is one file in one dimension. It is
     <em>filled</em> when it settled with a value or as not applicable, which is an answer (the dimension does not apply
-    to the file), unlike not classified. A filled slot is counted once, by where its answer is credited:
-    <em>original</em>, a source's value spelled exactly as the term its translation row declares (each
-    source's own column above); <em>mapped</em>, one spelled differently that its row translates (each source's
-    <em>harmonized</em> column); <em>inferred</em>, inference's, where no source declared it;
-    <em>inherited</em>, only the file's parents' across its <code>generated_by</code>; <em>not applicable</em>, which
-    is not credited to any input. A slot not classified, published unreviewed or in conflict is not filled.</p>
+    to the file), unlike not classified. A filled slot is counted once, under the input its answer is credited to:
+    <em>original</em>, the catalog's published values; <em>submitter tables</em>; <em>external</em>, ENA's run records
+    (each source's row adds its own column above and its <em>harmonized</em> one); <em>inferred</em>, inference's,
+    where no source declared it; <em>inherited</em>, only the file's parents' across its <code>generated_by</code>;
+    <em>not applicable</em>, which reconcile does not yet credit to an input (#634). A slot not classified, published
+    unreviewed or in conflict is not filled. Each % is its row's count over the <em>slots</em> row of its column.</p>
   <div class="scroll" id="completeness"></div>
   <p class="note" id="catalog-dimensions"></p>
 
@@ -158,17 +158,20 @@
       return table(header, rows.map(r => [r.dimension, ...cells(r, fmt)]), totals);
     }
 
-    // Ours by credit, then filled and all slots; beside them, where there is one, the catalog alone's.
+    // Ours by the input credited, then filled and slots; beside them, where it is known, the catalog today's.
+    // What the catalog publishes is the original metadata: its count goes in the published row alone.
     function completenessTable(scope) {
-      const c = scope.completeness, alone = scope.catalog_alone;
+      const c = scope.completeness, today = scope.catalog_today;
       const num = text => ({text, cls: 'num'});
-      const extra = alone ? (filled, slots) => [num(n(filled)), num(ofSlots(filled, slots))] : () => [];
-      const dash = alone ? [num('—'), num('—')] : [];
-      return table(['', 'slots', '% of all slots', ...(alone ? ['catalog alone', '% of its slots'] : [])],
-        DATA.filled_groups.map(g => [g.label, num(n(c[g.key])), num(ofSlots(c[g.key], scope.slots)), ...dash]),
+      const pair = (v, slots) => [num(n(v)), num(ofSlots(v, slots))];
+      const theirs = (key) => !today ? [] : key === DATA.catalog_group ? pair(today.filled, today.slots) : [num('—'), num('—')];
+      const header = ['', `meta-disco (${scope.headline.length} dimensions)`, '%',
+        ...(today ? [`catalog today (${today.dimensions.length} dimensions)`, '%'] : [])];
+      return table(header,
+        DATA.filled_groups.map(g => [g.label, ...pair(c[g.key], scope.slots), ...theirs(g.key)]),
         [
-          ['filled', num(n(c.filled)), num(ofSlots(c.filled, scope.slots)), ...(alone ? extra(alone.filled, alone.slots) : [])],
-          ['all slots', num(n(scope.slots)), num('100%'), ...(alone ? [num(n(alone.slots)), num('100%')] : [])],
+          ['filled', ...pair(c.filled, scope.slots), ...(today ? pair(today.filled, today.slots) : [])],
+          ['slots (files × dimensions)', num(n(scope.slots)), num('100%'), ...(today ? [num(n(today.slots)), num('100%')] : [])],
         ]);
     }
 
@@ -196,10 +199,13 @@
       const scope = whole ? DATA.run : DATA.datasets[index];
       const name = whole ? DATA.all : scope.name;
       document.getElementById('completeness').innerHTML = completenessTable(scope);
-      document.getElementById('catalog-dimensions').innerHTML = scope.catalog_alone
-        ? `<em>Catalog alone</em> is the catalog's own metadata, before ours: only the dimensions it publishes a column for (${
-            scope.catalog_alone.dimensions.map(d => `<code>${esc(d)}</code>`).join(', ')}), so fewer slots, and a slot is filled ` +
-          'where it publishes a value for the file, read by a translation row or not. It is not split by credit, so those rows read —.'
+      document.getElementById('catalog-dimensions').innerHTML = scope.catalog_today
+        ? `<em>Catalog today</em> is the metadata the catalog publishes itself, before ours: only the dimensions it has a column for (${
+            scope.catalog_today.dimensions.map(d => `<code>${esc(d)}</code>`).join(', ')}), so fewer slots. A slot is filled where it ` +
+          'publishes a value for the file, whether or not a translation row reads it, and all of it is original. Our ' +
+          "<em>original</em> row can be larger: one of the catalog's columns can fill more than one of our dimensions (its " +
+          '<code>data_modality</code> value "single-nucleus RNA sequencing assay" also gives <code>assay_type</code>), though it ' +
+          "counts only the values a reviewed translation row reads. It is shown only where this run read the catalog's published values."
         : '';
       document.getElementById('headline').innerHTML = headlineTable(scope.headline, n, scope);
 

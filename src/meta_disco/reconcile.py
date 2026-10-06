@@ -190,15 +190,16 @@ SLOT_CATEGORIES = (
 )
 # SLOT_CATEGORIES split by whether the slot is filled: settled with a value, or as
 # not_applicable (an answer: the dimension does not apply to the file). The filled ones are
-# grouped by where the answer is credited: a source's value, which reaches a slot only
-# through an authored translation row, spelled exactly as the term the row declares
-# (original) or spelled differently (mapped);
-# inference's, where no source declared it (inferred); only the file's parents' (inherited);
-# and not_applicable, which is not credited to any input. Between them the groups and
+# grouped by the input the answer is credited to: each source in SOURCE_PRECEDENCE, its
+# value as written and through a harmonizing row together; inference, where no source
+# declared it (inferred); only the file's parents (inherited); and not_applicable, which
+# credited_to does not credit to any input (#634). Between them the groups and
 # UNFILLED_CATEGORIES hold every category once.
 FILLED_GROUPS = {
-    "original": tuple(fill_category(name, harmonized=False) for _, name in SOURCE_PRECEDENCE),
-    "mapped": tuple(fill_category(name, harmonized=True) for _, name in SOURCE_PRECEDENCE),
+    **{
+        name: (fill_category(name, harmonized=False), fill_category(name, harmonized=True))
+        for _, name in SOURCE_PRECEDENCE
+    },
     "inferred": (FILLED_BY_INFERENCE,),
     "inherited": (INHERITED,),
     "not_applicable": (NOT_APPLICABLE,),

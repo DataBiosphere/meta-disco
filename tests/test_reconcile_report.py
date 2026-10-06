@@ -7,7 +7,7 @@ from pathlib import Path
 import generate_reconcile_report as rr
 import pytest
 
-from meta_disco.models import SOURCE_REPOSITORY_METADATA
+from meta_disco.models import SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
 from meta_disco.output_utils import RECONCILED_DIR
 from meta_disco.reconcile import FILLED_GROUPS, REPORT_FILE, UNFILLED_CATEGORIES
 from meta_disco.record_keys import HPRC_REPOSITORY
@@ -209,26 +209,62 @@ def test_the_completeness_filled_count_is_the_values_tables_filled_summed_over_t
     assert round(filled) == data["run"]["completeness"]["filled"] > 0
 
 
-def test_the_catalog_alone_counts_its_own_dimensions_and_the_values_it_publishes(conflicted):
+def test_the_catalog_today_counts_its_own_dimensions_and_the_values_it_publishes(conflicted):
     """Its slots are the files times its published columns; a value no translation row reads still fills one."""
-    report = rr.load_report(conflicted)
-    data = rr.dashboard_data(report, None, Path("report.json"))
-    assert data["run"]["catalog_alone"] == {
+    data = rr.dashboard_data(rr.load_report(conflicted), None, Path("report.json"))
+    whole = data["run"]
+    assert whole["catalog_today"] == {
         "dimensions": ["data_modality", "reference_assembly"],
-        "slots": data["run"]["files"] * 2,
+        "slots": whole["files"] * 2,
         "filled": 1,  # the one unreviewed published reference_assembly
     }
     md = rr.render_markdown(data)
-    assert "| **filled** |" in md and "| catalog alone | % of its slots |" in md
-    assert "publishes a column for (`data_modality`, `reference_assembly`)" in md
+    assert "|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |" in md
+    # What the catalog publishes is the original metadata: its count is in that row, and no other.
+    c, slots, share = whole["completeness"], whole["slots"], rr._of_slots(1, whole["files"] * 2)
+    original = f"| original (catalog's published values) | {c['published']:,} | {rr._of_slots(c['published'], slots)} |"
+    assert f"{original} 1 | {share} |" in md
+    assert f"| submitter tables | {c['submitter']:,} | {rr._of_slots(c['submitter'], slots)} | — | — |" in md
+    assert "only the dimensions it has a column for (`data_modality`, `reference_assembly`)" in md
 
 
-def test_a_repository_with_no_published_source_has_no_catalog_alone(conflicted):
-    report = {**rr.load_report(conflicted), "repository": HPRC_REPOSITORY}
+@pytest.mark.parametrize(
+    "unread",
+    [
+        pytest.param({"repository": HPRC_REPOSITORY}, id="no published source"),
+        pytest.param({"evidence": [], "evidence_excluded": True}, id="evidence excluded"),
+        pytest.param("no published evidence read", id="published values never imported"),
+    ],
+)
+def test_the_catalog_today_is_not_shown_where_it_is_unknown(conflicted, unread):
+    """Where this run read none of the catalog's values, its count is unknown, not 0.0%."""
+    report = rr.load_report(conflicted)
+    if unread == "no published evidence read":
+        unread = {"evidence": [e for e in report["evidence"] if e["source_type"] != SOURCE_PUBLISHED_VALUE]}
+        assert unread["evidence"] != report["evidence"]
+    data = rr.dashboard_data({**report, **unread}, None, Path("report.json"))
+    assert data["run"]["catalog_today"] is None
+    assert all(scope["catalog_today"] is None for scope in data["datasets"])
+    assert "catalog today" not in rr.render_markdown(data).lower()
+
+
+def test_a_source_no_evidence_came_from_has_no_completeness_row(conflicted):
+    """As the headline leaves out such a source's columns, the completeness table leaves out its row."""
+    report = rr.load_report(conflicted)
+    unread = rr.unread_sources(report)
+    assert unread  # the fixture reads no external evidence
     data = rr.dashboard_data(report, None, Path("report.json"))
-    assert data["run"]["catalog_alone"] is None
+    assert [g["key"] for g in data["filled_groups"]] == [g for g in FILLED_GROUPS if g not in unread]
     md = rr.render_markdown(data)
-    assert "catalog alone" not in md.lower()
+    assert all(f"| {rr.group_label(g)} |" not in md for g in unread)
+    assert f"| {rr.group_label(rr.CATALOG_GROUP)} |" in md
+
+
+def test_each_sources_row_adds_its_own_and_its_harmonized_column(conflicted):
+    data = rr.dashboard_data(rr.load_report(conflicted), None, Path("report.json"))
+    c, counts = data["run"]["completeness"], data["run"]["totals"]["counts"]
+    assert c["submitter"] == counts["filled_by_submitter"] + counts["filled_by_submitter_harmonized"] > 0
+    assert c["published"] == counts["filled_by_published"] + counts["filled_by_published_harmonized"]
 
 
 def test_a_share_too_small_to_show_is_not_shown_as_zero():
