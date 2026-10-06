@@ -170,7 +170,7 @@
         html += `<p style="font-size: 14px; color: #656d76; margin-bottom: 12px;">We were not able to determine a ${dim.label} (or if ${dim.label} is applicable) for the following file types:</p>`;
         html += '<table class="nc-table"><tr><th>Extension</th><th>Count</th><th>Root cause</th></tr>';
         for (const nc of dim.not_classified_breakdown) {
-          html += `<tr><td>${nc.ext}</td><td>${nc.count.toLocaleString()}</td><td>${nc.why}</td></tr>`;
+          html += `<tr><td>${escapeHtml(nc.ext)}</td><td>${nc.count.toLocaleString()}</td><td>${escapeHtml(nc.why)}</td></tr>`;
         }
         html += '</table>';
       }
@@ -181,7 +181,7 @@
         html += `<p style="font-size: 14px; color: #656d76; margin-bottom: 12px;">Rules at the same tier disagreed on ${dim.label} for these files and no curator rule has answered it; no value is asserted.</p>`;
         html += '<table class="nc-table"><tr><th>Extension</th><th>Competing values</th><th>Count</th></tr>';
         for (const c of dim.conflict_breakdown) {
-          html += `<tr><td>${c.ext}</td><td>${c.competing}</td><td>${c.count.toLocaleString()}</td></tr>`;
+          html += `<tr><td>${escapeHtml(c.ext)}</td><td>${escapeHtml(c.competing)}</td><td>${c.count.toLocaleString()}</td></tr>`;
         }
         html += '</table>';
       }

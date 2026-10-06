@@ -36,11 +36,11 @@ value; the golden would silently record the unrefined result.
 This guards output *shape*; it is not a substitute for the content-driven
 classification tests in ``tests/test_evals.py``.
 
-**Two committed fixtures, one regen command.** The golden covers the eight producers
+**Two committed fixtures, one regen command.** The golden covers the nine producers
 ``ClassifyPipeline`` writes; ``standalone_output.json`` covers the four standalone ones
 (#465), which have no golden and so reached no schema validation at all. Both are read
 across the component boundary by ``schema/tests/test_output_validation.py``, whose gate
-is what makes them cover all twelve — ``test_the_schema_gate_covers_every_producer``
+is what makes them cover all thirteen — ``test_the_schema_gate_covers_every_producer``
 pins that union against ``producers.PRODUCERS``. Regenerate with::
 
     python -m tests.test_output_shape   # writes both fixtures under tests/fixtures/golden/
@@ -59,7 +59,7 @@ from pathlib import Path
 import pytest
 
 from meta_disco import activities, schema_vocab
-from meta_disco.evidence import BedSignals, SegmentTag, TarHead
+from meta_disco.evidence import BedSignals, IdatHeader, SegmentTag, TarHead
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
@@ -116,7 +116,9 @@ def _golden_record(md5_seed: str, **fields):
     missing from the fixture that exists to carry it.
     """
     return valid_record(
-        file_md5sum=md5_seed * 32,  # lowercase-hex, per the contract
+        # Lowercase hex, 32 characters, per the contract: a seed of one or two digits,
+        # repeated and cut to length.
+        file_md5sum=(md5_seed * 32)[:32],
         # Per record, and deliberately not `drs://...v2_<file_id>`: one shared value
         # would not catch a producer that pairs a row with another row's identity, and
         # a derivable pair would not catch one that reconstructs the URI (#433).
@@ -189,6 +191,12 @@ GOLDEN_INPUTS = {
             "7", file_name="sample.regions.bed.gz", file_size=45000, file_format=".bed.gz", entry_id="g-bed-1"
         ),
     ],
+    # Every one-digit seed is taken, so the IDAT's is two.
+    "idat": [
+        _golden_record(
+            "ab", file_name="201868530174_R03C01_Red.idat", file_size=32792621, file_format=".idat", entry_id="g-idat-1"
+        ),
+    ],
 }
 GOLDEN_INPUTS["sample_map"] = [SAMPLE_MAP_RECORD, GOLDEN_INPUTS["vcf"][0]]
 
@@ -243,6 +251,12 @@ STUB_PAYLOADS = {
         has_chr_prefix=False,
         max_coordinates={"1": 1000, "2": 2000},
         line_count=2,
+    ),
+    # idat returns an IdatHeader: the HPRC's genotyping chip, scanned on an iScan (#603).
+    "idat": IdatHeader(
+        bead_count=2_522_340,
+        chip_type="1-95um_multi-swath_for_8x2-5M",
+        scan_software=["iScan Control Software"],
     ),
 }
 # Every evidence entry has a reason, and is either a synthetic resolution marker
@@ -351,9 +365,7 @@ def build_standalone_output(tmp_path: Path) -> dict:
         producer, file_name, file_format = param.values
         # Positional rather than a hand-kept pool, so a producer added to
         # STANDALONE_PRODUCERS gets a seed without a second list to extend. One hex digit,
-        # because `_golden_record` repeats it 32 times: two would build a 64-character
-        # `file_md5sum`, which is excluded at load as unusable (#376) rather than refused,
-        # and the producer would write no rows at all.
+        # so it cannot take a two-digit seed a header type's input uses.
         seed = f"{i + 3:x}"
         assert len(seed) == 1, f"{len(STANDALONE_PRODUCERS)} standalone producers is more seeds than hex digits"
         # The param's id is the producer's registry name, which is the key this fixture
@@ -468,7 +480,7 @@ def test_standalone_output_matches_fixture(standalone_output):
 
 
 def test_the_schema_gate_covers_every_producer():
-    """The gate's input is these two fixtures; together they must be all twelve.
+    """The gate's input is these two fixtures; together they must be all thirteen.
 
     Read off the committed files rather than off the builders above, because the files
     are what `schema/tests/test_output_validation.py` actually validates — a fixture
@@ -569,9 +581,9 @@ def test_output_values_in_vocabulary(output):
 
 @pytest.mark.parametrize("producer,name,fmt", STANDALONE_PRODUCERS)
 def test_a_standalone_producer_emits_the_record_keys(tmp_path, producer, name, fmt):
-    """All twelve output files carry one record shape (#450).
+    """All thirteen output files carry one record shape (#450).
 
-    The golden fixture covers the eight the pipeline writes; this covers the four that
+    The golden fixture covers the nine the pipeline writes; this covers the four that
     used to assemble dicts by hand and so could each carry a different set. That is what
     the catalog identity (#433) needed a sweep for, and what building `OutputRecord`
     makes structural instead.
@@ -608,7 +620,7 @@ def test_the_index_producer_emits_the_metadata_keys(tmp_path):
 
 
 def test_the_pipeline_emits_the_metadata_keys(output):
-    """The eight header types, off the golden run, so all twelve are covered."""
+    """The nine header types, off the golden run, so all thirteen are covered."""
     for ftype, payload in output.items():
         assert list(payload["metadata"]) == METADATA_KEYS, ftype
 
@@ -715,7 +727,7 @@ if __name__ == "__main__":
 
 
 def test_every_rule_id_in_the_output_is_declared(output, standalone_output):
-    """Every ``rule_id`` the golden output of the twelve producers carries is declared (#572).
+    """Every ``rule_id`` the golden output of the thirteen producers carries is declared (#572).
 
     Declared means a YAML rule, or a rule or marker in ``code_rules``. This is the output
     half of the check that ``test_code_rules`` makes on the source: it catches an id

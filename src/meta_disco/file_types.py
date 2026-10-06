@@ -1,7 +1,7 @@
 """File type configurations for the classification pipeline.
 
 Each config defines extensions, fetcher, classifier, and summary printer for one file
-type. They are used by ClassifyPipeline and classify_headers.py, and are the eight header
+type. They are used by ClassifyPipeline and classify_headers.py, and are the nine header
 entries in the producer registry (``producers``).
 
 ``FileTypeConfig`` is declared here rather than in ``pipeline`` so that ``pipeline`` can
@@ -20,6 +20,7 @@ from .fetchers import (
     fetch_fasta_headers,
     fetch_fastq_reads,
     fetch_gfa_segment_tags,
+    fetch_idat_header,
     fetch_sample_map,
     fetch_tar_headers,
     fetch_vcf_header,
@@ -32,6 +33,7 @@ from .header_classifier import (
     classify_from_fastq_header,
     classify_from_gfa_segment_tags,
     classify_from_header,
+    classify_from_idat_header,
     classify_from_tar_head,
     classify_from_vcf_header,
     classify_sample_map,
@@ -183,6 +185,16 @@ BED_CONFIG = FileTypeConfig(
     classifier=classify_from_bed_signals,
 )
 
+# Illumina IDAT (#603): the BeadChip's chip type and the scanner's software, read by byte
+# range from the header's field table. The extension gives only data_type, since genotyping
+# and methylation chips both write IDAT.
+IDAT_CONFIG = FileTypeConfig(
+    name="idat",
+    extensions=(".idat",),
+    fetcher=fetch_idat_header,
+    classifier=classify_from_idat_header,
+)
+
 FILE_TYPE_REGISTRY = {
     "bam": BAM_CONFIG,
     "vcf": VCF_CONFIG,
@@ -192,4 +204,5 @@ FILE_TYPE_REGISTRY = {
     "tar": TAR_CONFIG,
     "bed": BED_CONFIG,
     "sample_map": SAMPLE_MAP_CONFIG,
+    "idat": IDAT_CONFIG,
 }

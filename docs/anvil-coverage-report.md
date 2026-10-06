@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-10-06 00:13:28**
+Classification run: **2026-10-06 11:41:56**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,088** files.
@@ -24,10 +24,10 @@ Processed **708,088** files.
 |---|---:|---:|---:|
 | **Data Modality** | 379,527 (53.6%) | 328,561 (46.4%) | 0 (0.0%) |
 | **Data Type** | 685,435 (96.8%) | 22,653 (3.2%) | 0 (0.0%) |
-| **Platform** | 69,813 (9.9%) | 638,275 (90.1%) | 0 (0.0%) |
-| **Reference Assembly** | 292,033 (41.2%) | 416,047 (58.8%) | 8 (0.0%) |
+| **Platform** | 69,973 (9.9%) | 638,115 (90.1%) | 0 (0.0%) |
+| **Reference Assembly** | 292,193 (41.3%) | 415,887 (58.7%) | 8 (0.0%) |
 | **Assay Type** | 28,145 (4.0%) | 679,943 (96.0%) | 0 (0.0%) |
-| **Instrument Model** | 23,042 (3.3%) | 685,046 (96.7%) | 0 (0.0%) |
+| **Instrument Model** | 23,202 (3.3%) | 684,886 (96.7%) | 0 (0.0%) |
 
 ---
 
@@ -86,7 +86,8 @@ Processed **708,088** files.
 | `not_classified` | 328,561 | 46.4% | .tbi (169,531)<br>.txt (42,477)<br>.csi (41,186)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.crai (10,317)<br>(none) (10,071)<br>.bed (9,768)<br>.bam (2,757)<br>.bai (2,742)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.paf (297)<br>.sam (192)<br>.cram (68)<br>.vcf (23)<br>.csv (18)<br>.fasta (14)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.fa (4)<br>.fna (2)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
 | `not_applicable` | 20,968 | 3.0% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.tsv (24) |
 | `transcriptomic` | 5,930 | 0.8% | .bw (2,536)<br>.bam (2,329)<br>.sf (634)<br>.h5ad (350)<br>(none) (64)<br>.bed (12)<br>.csv (3)<br>.txt (2) |
-| `epigenomic.methylation` | 188 | 0.0% | .idat (160)<br>.bed (28) |
+| `genomic.genotyping` | 160 | 0.0% | .idat (160) |
+| `epigenomic.methylation` | 28 | 0.0% | .bed (28) |
 
 ---
 
@@ -156,8 +157,8 @@ Processed **708,088** files.
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 69,813 | 9.9% |
-| **Not classified** | 638,275 | 90.1% |
+| **Classified** | 69,973 | 9.9% |
+| **Not classified** | 638,115 | 90.1% |
 | **Conflict** | 0 | 0.0% |
 
 ### What's not classified?
@@ -189,7 +190,6 @@ Processed **708,088** files.
 | .h5ad | 350 | No rule determined a value for platform |
 | .paf | 297 | No rule determined a value for platform |
 | .sam | 192 | No rule determined a value for platform |
-| .idat | 160 | No rule determined a value for platform |
 | .csv | 21 | No rule determined a value for platform |
 | .dict | 9 | No rule determined a value for platform |
 | .pbi | 7 | No reason recorded |
@@ -204,8 +204,8 @@ Processed **708,088** files.
 
 | Platform | count | % | extensions |
 |---|---:|---:|---|
-| `not_classified` | 638,275 | 90.1% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.bed (11,523)<br>.crai (10,317)<br>.bam (3,664)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.h5ad (350)<br>.paf (297)<br>.sam (192)<br>.idat (160)<br>.csv (21)<br>.dict (9)<br>.pbi (7)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
-| `ILLUMINA` | 30,789 | 4.3% | .fastq (20,166)<br>.cram (10,623) |
+| `not_classified` | 638,115 | 90.1% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.bed (11,523)<br>.crai (10,317)<br>.bam (3,664)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.h5ad (350)<br>.paf (297)<br>.sam (192)<br>.csv (21)<br>.dict (9)<br>.pbi (7)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
+| `ILLUMINA` | 30,949 | 4.4% | .fastq (20,166)<br>.cram (10,623)<br>.idat (160) |
 | `not_applicable` | 22,290 | 3.1% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.fa (940)<br>.gfa (326)<br>.fasta (38)<br>.tsv (24)<br>.xg (8)<br>.gbwt (6)<br>.fna (2)<br>.gbz (2) |
 | `ONT` | 13,957 | 2.0% | .fast5 (12,509)<br>.bam (1,300)<br>.fastq (137)<br>.pod5 (11) |
 | `PACBIO` | 2,777 | 0.4% | .bam (1,810)<br>.fastq (967) |
@@ -218,8 +218,8 @@ Processed **708,088** files.
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 292,033 | 41.2% |
-| **Not classified** | 416,047 | 58.8% |
+| **Classified** | 292,193 | 41.3% |
+| **Not classified** | 415,887 | 58.7% |
 | **Conflict** | 8 | 0.0% |
 
 ### What's not classified?
@@ -247,7 +247,6 @@ Processed **708,088** files.
 | .gfa | 314 | No rule determined a value for reference_assembly |
 | .paf | 296 | No rule determined a value for reference_assembly |
 | .sam | 192 | No rule determined a value for reference_assembly |
-| .idat | 160 | No rule determined a value for reference_assembly |
 | .cram | 68 | No rule determined a value for reference_assembly |
 | .bed | 35 | No rule determined a value for reference_assembly |
 | .vcf | 28 | no VCF header lines (no run of '#' lines starting the read head) |
@@ -272,10 +271,10 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 
 | Reference Assembly | count | % | extensions |
 |---|---:|---:|---|
-| `not_classified` | 416,047 | 58.8% | .tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.crai (10,317)<br>.psam (2,854)<br>.pgen (2,853)<br>.bai (2,742)<br>.bw (2,536)<br>.gff3 (1,386)<br>.tsv (899)<br>.bam (688)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (456)<br>.h5ad (350)<br>.gfa (314)<br>.paf (296)<br>.sam (192)<br>.idat (160)<br>.cram (68)<br>.bed (35)<br>.vcf (28)<br>.csv (21)<br>.pbi (7)<br>.fasta (3)<br>.chain (1)<br>.dict (1) |
+| `not_classified` | 415,887 | 58.7% | .tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.crai (10,317)<br>.psam (2,854)<br>.pgen (2,853)<br>.bai (2,742)<br>.bw (2,536)<br>.gff3 (1,386)<br>.tsv (899)<br>.bam (688)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (456)<br>.h5ad (350)<br>.gfa (314)<br>.paf (296)<br>.sam (192)<br>.cram (68)<br>.bed (35)<br>.vcf (28)<br>.csv (21)<br>.pbi (7)<br>.fasta (3)<br>.chain (1)<br>.dict (1) |
 | `t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r` | 111,756 | 15.8% | .vcf (108,478)<br>.cram (3,202)<br>.bam (76) |
 | `T2T-CHM13v2.0` | 87,747 | 12.4% | .vcf (83,804)<br>.cram (3,481)<br>.bam (462) |
-| `not_applicable` | 62,753 | 8.9% | .fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,509)<br>.bed (3,922)<br>.log (3,637)<br>.bam (3,113)<br>.png (3,074)<br>.fa (936)<br>.fasta (24)<br>.tsv (24)<br>.pod5 (11) |
+| `not_applicable` | 62,913 | 8.9% | .fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,509)<br>.bed (3,922)<br>.log (3,637)<br>.bam (3,113)<br>.png (3,074)<br>.fa (936)<br>.idat (160)<br>.fasta (24)<br>.tsv (24)<br>.pod5 (11) |
 | `GRCh38` | 20,705 | 2.9% | .vcf (9,186)<br>.cram (3,837)<br>.g.vcf (2,504)<br>.bam (2,341)<br>.pvar (1,427)<br>.bed (817)<br>.chain (462)<br>.gff3 (88)<br>.gfa (6)<br>.fasta (3)<br>.dict (3)<br>.snarls (3)<br>.min (3)<br>.gg (3)<br>.dist (3)<br>.trans (3)<br>.xg (3)<br>.gbwt (3)<br>.fna (2)<br>.fa (1)<br>.pgen (1)<br>.sizes (1)<br>.hal (1)<br>.paf (1)<br>.delta (1)<br>.hapl (1)<br>.gbz (1) |
 | `CHM13` | 7,395 | 1.0% | .bed (6,744)<br>.chain (462)<br>.gff3 (90)<br>.vcf (54)<br>.fasta (7)<br>.gfa (6)<br>.dict (4)<br>.fa (3)<br>.gg (3)<br>.snarls (3)<br>.trans (3)<br>.min (3)<br>.dist (3)<br>.gbwt (3)<br>.xg (3)<br>.sizes (1)<br>.hal (1)<br>.gbz (1)<br>.hapl (1) |
 | `GRCh37` | 1,464 | 0.2% | .pvar (1,427)<br>.vcf (34)<br>.bed (3) |
@@ -343,7 +342,7 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | `not_applicable` | 22,290 | 3.1% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.fa (940)<br>.gfa (326)<br>.fasta (38)<br>.tsv (24)<br>.xg (8)<br>.gbwt (6)<br>.fna (2)<br>.gbz (2) |
 | `RNA-seq` | 5,281 | 0.7% | .bw (2,536)<br>.bam (2,099)<br>.sf (634)<br>.bed (12) |
 | `sc/snRNA-seq` | 414 | 0.1% | .h5ad (350)<br>(none) (64) |
-| `Methylation array` | 160 | 0.0% | .idat (160) |
+| `Genotyping array` | 160 | 0.0% | .idat (160) |
 
 **Note**: Like platform, assay type is inherently unknowable for most derived formats. It is determined only by a rule that sees evidence of the assay: a STAR `@PG` line, filename patterns (STAR, Salmon, expression BED), and extension where the format implies it (`.idat` is a methylation array, `.svs` histology, a `.h5ad` / `.loom` / `.mtx` single-cell matrix `sc/snRNA-seq`, and a tar whose members are one of these, #533). Nothing infers it from the modality (#88), reads file size, or infers WGS from a long-read platform (#430). The high not-classified rate is expected.
 
@@ -353,8 +352,8 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 23,042 | 3.3% |
-| **Not classified** | 685,046 | 96.7% |
+| **Classified** | 23,202 | 3.3% |
+| **Not classified** | 684,886 | 96.7% |
 | **Conflict** | 0 | 0.0% |
 
 ### What's not classified?
@@ -389,7 +388,6 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | .h5ad | 350 | No rule determined a value for instrument_model |
 | .paf | 297 | No rule determined a value for instrument_model |
 | .sam | 192 | No rule determined a value for instrument_model |
-| .idat | 160 | No rule determined a value for instrument_model |
 | .csv | 21 | No rule determined a value for instrument_model |
 | .pod5 | 11 | No rule determined a value for instrument_model |
 | .dict | 9 | No rule determined a value for instrument_model |
@@ -405,9 +403,10 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 
 | Instrument Model | count | % | extensions |
 |---|---:|---:|---|
-| `not_classified` | 685,046 | 96.7% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.bed (11,523)<br>.cram (10,555)<br>.crai (10,317)<br>.bam (6,090)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.h5ad (350)<br>.paf (297)<br>.sam (192)<br>.idat (160)<br>.csv (21)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
+| `not_classified` | 684,886 | 96.7% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.bed (11,523)<br>.cram (10,555)<br>.crai (10,317)<br>.bam (6,090)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.h5ad (350)<br>.paf (297)<br>.sam (192)<br>.csv (21)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
 | `not_applicable` | 22,290 | 3.1% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.fa (940)<br>.gfa (326)<br>.fasta (38)<br>.tsv (24)<br>.xg (8)<br>.gbwt (6)<br>.fna (2)<br>.gbz (2) |
 | `Revio` | 684 | 0.1% | .bam (684) |
+| `Illumina iScan` | 160 | 0.0% | .idat (160) |
 | `Illumina NovaSeq X` | 68 | 0.0% | .cram (68) |
 
 **Note**: Inference reads the instrument model only from a BAM/CRAM `@RG PM` value that names exactly one model (#532); a read-name serial prefix is a vendor numbering convention and is not read. Most files carry no such value, so the high not-classified rate is expected. This report reads inference only; the submitter tables, which reconcile reads, name models far more often.

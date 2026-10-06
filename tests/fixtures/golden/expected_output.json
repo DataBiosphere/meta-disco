@@ -558,6 +558,114 @@
       "validation_failed": 0
     }
   },
+  "idat": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "reason": "chip type '1-95um_multi-swath_for_8x2-5M', 2522340 beads read: an Illumina genotyping BeadChip",
+                "rule_id": "idat_chip_type",
+                "source_type": "content_read",
+                "tier": 4,
+                "value": "Genotyping array"
+              }
+            ],
+            "status": "classified",
+            "value": "Genotyping array"
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "chip type '1-95um_multi-swath_for_8x2-5M', 2522340 beads read: an Illumina genotyping BeadChip",
+                "rule_id": "idat_chip_type",
+                "source_type": "content_read",
+                "tier": 4,
+                "value": "genomic.genotyping"
+              }
+            ],
+            "status": "classified",
+            "value": "genomic.genotyping"
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": "IDAT is Illumina's BeadChip intensity format, written by genotyping and methylation chips alike, so the extension says only that the file is array signal (#603). Its intensities are keyed by bead, not by genome coordinate, so no reference applies until genotypes are called against a chip manifest",
+                "rule_id": "idat_array_signal",
+                "source_type": "filename_rule",
+                "tier": 1,
+                "value": "array_signal"
+              }
+            ],
+            "status": "classified",
+            "value": "array_signal"
+          },
+          "instrument_model": {
+            "evidence": [
+              {
+                "reason": "every one of 1 Scan rows names 'iScan Control Software'",
+                "rule_id": "idat_scanner",
+                "source_type": "content_read",
+                "tier": 4,
+                "value": "Illumina iScan"
+              }
+            ],
+            "status": "classified",
+            "value": "Illumina iScan"
+          },
+          "platform": {
+            "evidence": [
+              {
+                "reason": "every one of 1 Scan rows names 'iScan Control Software'",
+                "rule_id": "idat_scanner",
+                "source_type": "content_read",
+                "tier": 4,
+                "value": "ILLUMINA"
+              }
+            ],
+            "status": "classified",
+            "value": "ILLUMINA"
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "reason": "IDAT is Illumina's BeadChip intensity format, written by genotyping and methylation chips alike, so the extension says only that the file is array signal (#603). Its intensities are keyed by bead, not by genome coordinate, so no reference applies until genotypes are called against a chip manifest",
+                "rule_id": "idat_array_signal",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "drs_uri": "drs://golden/v2_g-object-ab",
+        "entry_id": "g-idat-1",
+        "file_format": ".idat",
+        "file_id": "g-file-ab",
+        "file_name": "201868530174_R03C01_Red.idat",
+        "file_size": 32792621,
+        "generated_by": null,
+        "md5sum": "abababababababababababababababab"
+      }
+    ],
+    "metadata": {
+      "complete": true,
+      "content_unreadable": 0,
+      "details": null,
+      "dropped": 0,
+      "errored": 0,
+      "failed": 0,
+      "from_cache": 0,
+      "processed": 1,
+      "successful": 1,
+      "total_to_process": 1,
+      "validation_failed": 0
+    }
+  },
   "sample_map": {
     "classifications": [
       {

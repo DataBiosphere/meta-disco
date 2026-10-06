@@ -667,7 +667,7 @@ After spikes, assess:
 | `.bigwig`, `.bw` | varies | Signal tracks |
 | `.gtf`, `.gff` | transcriptomic | Annotations |
 | `.h5ad`, `.loom` | transcriptomic | Single-cell matrices |
-| `.idat` | epigenomic | Methylation arrays |
+| `.idat` | varies (genomic or epigenomic) | Illumina BeadChip arrays: genotyping or methylation, the header's chip type says which (#603) |
 | `.cel` | varies | Microarrays |
 
 ## Appendix B: Datasets in Open Access Sample

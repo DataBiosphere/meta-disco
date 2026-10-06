@@ -50,7 +50,7 @@ def write_metadata(path, records, repository="anvil", input_source=None, catalog
     return path
 
 
-# Every key an output record carries, for the twelve producers alike (#450). Written out
+# Every key an output record carries, for the thirteen producers alike (#450). Written out
 # rather than derived from `OutputRecord`'s fields on purpose: every producer now
 # serializes through `to_dict`, so deriving it would make each assertion over it vacuous.
 RECORD_KEYS = {
@@ -67,7 +67,7 @@ RECORD_KEYS = {
     "drs_uri",
     # The step that made the file (#450, #356, #580): written by the index producer and
     # the catch-all (for a checksum file) where a parent resolves, null elsewhere; emitted
-    # rather than omitted so the envelope keeps one shape across all twelve files.
+    # rather than omitted so the envelope keeps one shape across all thirteen files.
     "generated_by",
 }
 

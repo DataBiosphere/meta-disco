@@ -250,7 +250,7 @@ class TestARecordWithNoNameIsWrittenNotDropped:
 
     def test_the_tallies_still_describe_the_rows(self, tmp_path):
         """`total` is the rows written and `processed` accounts for all of them, which is
-        what lets the run's twelve metadata blocks sum to the corpus."""
+        what lets the run's thirteen metadata blocks sum to the corpus."""
         envelope = self._run(
             tmp_path,
             [

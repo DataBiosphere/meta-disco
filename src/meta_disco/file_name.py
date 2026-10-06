@@ -158,7 +158,7 @@ EXTENSION_MAP: dict[str, str] = {
     ".h5ad": "single_cell_matrix",
     ".loom": "single_cell_matrix",
     ".mtx": "single_cell_matrix",
-    ".idat": "methylation_array",
+    ".idat": "bead_array",
     ".fast5": "nanopore",
     ".pod5": "nanopore",
     ".svs": "histology_image",

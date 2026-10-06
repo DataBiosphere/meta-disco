@@ -45,6 +45,7 @@ from typing import NamedTuple
 
 import requests
 
+from . import idat
 from .evidence import (
     BamEvidence,
     BedEvidence,
@@ -52,6 +53,8 @@ from .evidence import (
     FastaEvidence,
     FastqEvidence,
     GfaEvidence,
+    IdatEvidence,
+    IdatHeader,
     SampleMapEvidence,
     SegmentTag,
     TarEvidence,
@@ -1352,3 +1355,52 @@ def fetch_sample_map(
         SampleMapEvidence, evidence_dir, md5sum=md5sum, file_name=file_name, raw=raw, url=url, text=text
     )
     return text
+
+
+# =============================================================================
+# IDAT FETCHER
+# =============================================================================
+
+
+@wrap_as_fetch_error("IDAT header")
+def fetch_idat_header(
+    evidence_dir: Path,
+    md5sum: str,
+    file_name: str = "",
+    is_gzipped: bool = False,
+    use_cache: bool = True,
+    url: str | None = None,
+    **kwargs,
+) -> IdatHeader:
+    """Read an Illumina IDAT's bead count, chip type and scan software (#603), by byte range.
+
+    The header's field table says where each field sits; ``idat.read_header`` reads the
+    table and a window at each field, never the intensities. If url is provided, fetches
+    from that URL directly. Otherwise uses the AnVIL S3 mirror. ``is_gzipped`` is ignored:
+    the reader refuses gzipped bytes itself. Raises ``FetchError`` for bytes that are no
+    version-3 IDAT, gzipped ones included.
+    """
+    payload = _load_cached(IdatEvidence, evidence_dir, md5sum, use_cache)
+    if payload is not None:
+        return payload
+
+    ranges = _CountedRanges(md5sum, url)
+    header = idat.read_header(ranges.fetch)
+    _save_head_evidence(
+        IdatEvidence, evidence_dir, md5sum=md5sum, file_name=file_name, raw=ranges, url=url, header=header
+    )
+    return header
+
+
+class _CountedRanges:
+    """Byte ranges of one file, counting the bytes fetched for ``_save_head_evidence``."""
+
+    def __init__(self, md5sum: str, url: str | None):
+        self._md5sum = md5sum
+        self._url = url
+        self.bytes_fetched = 0
+
+    def fetch(self, start: int, end: int) -> bytes:
+        data = _fetch_range(self._md5sum, end, url=self._url, start_byte=start)
+        self.bytes_fetched += len(data)
+        return data

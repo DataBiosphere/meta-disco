@@ -453,7 +453,9 @@ class TestRuleEngineE2E:
             ],
             pytest.param("sample.hg38.regions.bed", {"reference_assembly": "GRCh38"}, id="BED with hg38 in the name"),
             pytest.param(
-                "200123456789_R01C01.idat", {"data_modality": "epigenomic.methylation"}, id="IDAT is methylation"
+                "200123456789_R01C01.idat",
+                {"data_type": "array_signal", "data_modality": NOT_CLASSIFIED, "reference_assembly": NOT_APPLICABLE},
+                id="IDAT is array signal, its modality left to its header",
             ),
             # Unknown files don't crash and resolve to a not_classified status (the value
             # stays None — the sentinel lives in status now).
