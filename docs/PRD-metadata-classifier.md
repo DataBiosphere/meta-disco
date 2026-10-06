@@ -43,7 +43,7 @@ We explored the AnVIL API (`service.explore.anvilproject.org/index/files`) to un
 | **Index files** | ~224K | 29% | TBI, CSI, BAI, CRAI - ✅ inherit from parent (99.96% matched) |
 | **Image files** | ~34K | 4% | SVS, PNG - ✅ classified by extension |
 | **Auxiliary genomic** | ~21K | 3% | FAST5, PLINK - ✅ classified by extension (a `.pvar`'s reference from its header) |
-| **BED files** | ~14K | 2% | Genomic intervals - ✅ classified by pattern + dataset |
+| **BED files** | ~14K | 2% | Genomic intervals - ✅ classified by filename pattern + the file's coordinates |
 | **Other/ambiguous** | ~145K | 19% | TXT, TAR, LOG - mixed utility |
 | **Checksum files** | ~16K | 2% | MD5 - skip |
 
@@ -401,15 +401,15 @@ name (#561: ANVIL_1000G_PRIMED is half hg19).
 | `.fast5`  | genomic / raw_signal      | N/A       | Extension |
 | `.pvar`   | genomic / genotypes       | from its `##contig` lengths | Extension + VCF-style header (VCF producer) |
 | `.psam`   | genomic / genotypes       | not classified | Extension |
-| `.pgen`   | genomic / genotypes       | not classified* | Extension |
+| `.pgen`   | genomic / genotypes       | not classified*, unless its name says one | Extension |
 
-*A `.pgen` is binary genotypes with no reference of its own; the submitter's table states it (#562).
+*A `.pgen` is binary genotypes with no reference of its own; the submitter's table states it (#562). One in ANVIL_1000G_PRIMED (`all_hg38_ns.pgen`) is GRCh38 from its name (`filename_ref_grch38`).
 
 **Implementation**: `scripts/classify_auxiliary_genomic.py` for `.fast5`, `.pgen` and `.psam`; a `.pvar` is the VCF producer's (`classify_headers.py --type vcf`, `FileTypeConfig` `VCF_CONFIG`), which reads its header (rules in `src/meta_disco/rules/unified_rules.yaml`)
 
 **Results** (20,956 files):
 - FAST5: 12,394 files (ONT raw signal) → `genomic`, no reference (pre-basecalling)
-- PLINK: 8,562 files → `genomic` / `genotypes`; reference from each `.pvar`'s own header (GRCh37 or GRCh38), `.pgen` / `.psam` not classified (#561)
+- PLINK: 8,562 files → `genomic` / `genotypes`; reference from each `.pvar`'s own header (GRCh37 or GRCh38), `.pgen` / `.psam` not classified, but for one `.pgen` whose name says `hg38` (#561)
 
 ### 6.5 BED File Classification
 

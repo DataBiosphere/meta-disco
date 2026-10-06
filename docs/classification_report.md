@@ -735,7 +735,7 @@ name (#561): ANVIL_1000G_PRIMED is half hg19.
 | `.fast5`  | 12,394 | genomic / raw_signal      | N/A*      | 90%        |
 | `.pvar`   | 2,854  | genomic / genotypes       | GRCh37 (1,427) / GRCh38 (1,427), from its `##contig` lengths | 95% |
 | `.psam`   | 2,854  | genomic / genotypes       | not classified | 95% |
-| `.pgen`   | 2,854  | genomic / genotypes       | not classified (#562 maps the submitter's) | 95% |
+| `.pgen`   | 2,854  | genomic / genotypes       | not classified (2,853; #562 maps the submitter's), GRCh38 (1, `hg38` in its name) | 95% |
 
 *FAST5 files contain raw ONT electrical signal data (pre-basecalling). Reference not applicable until basecalling and alignment.
 
