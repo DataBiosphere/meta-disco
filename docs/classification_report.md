@@ -764,7 +764,7 @@ BED files are classified using filename pattern matching and dataset context.
 
 | Reference | Count | Source |
 | --------- | ----- | ------ |
-| CHM13 | 7,031 | T2T datasets + filename patterns |
+| CHM13 | 7,031 | Filename patterns + BED coordinates (counts not re-measured since the dataset rule was removed) |
 | GRCh38 | 36 | Filename patterns (hg38) |
 | GRCh37 | 1 | Filename patterns (hg19) |
 | N/A | 6,592 | No reference signal |
@@ -772,7 +772,7 @@ BED files are classified using filename pattern matching and dataset context.
 **Classification approach:**
 1. **Pattern-based modality**: Filename patterns identify methylation, expression, peaks, regions, or assembly QC
 2. **Filename-based reference**: Explicit reference in filename (hg38, chm13, etc.)
-3. **Dataset-based reference**: T2T datasets default to CHM13
+3. **Coordinate-based reference**: the file's own coordinates (`fetchers.fetch_bed_signals`); no reference is taken from a dataset's name
 
 Most BED files (5,100) are assembly QC artifacts from HPRC/T2T - derived outputs marked as N/A.
 

@@ -413,7 +413,7 @@ name (#561: ANVIL_1000G_PRIMED is half hg19).
 
 ### 6.5 BED File Classification
 
-BED files are classified using filename pattern matching and dataset context.
+BED files are classified using filename pattern matching and their own coordinates.
 
 | Pattern | Data Modality | Example |
 |---------|---------------|---------|
@@ -423,7 +423,7 @@ BED files are classified using filename pattern matching and dataset context.
 | `.regions.bed.gz` | not classified (the alignment's) | mosdepth coverage, `data_type: annotations.coverage` |
 | Assembly QC patterns | N/A | Derived artifacts |
 
-Reference inferred from filename patterns (hg38, chm13) or dataset context (T2T → CHM13).
+Reference from filename patterns (hg38, chm13) or from the file's own coordinates (`fetchers.fetch_bed_signals`, `header_classifier.classify_from_bed_signals`); never from a dataset's name (`dataset_t2t_reference` was removed, as was `dataset_1000g_reference` in #561).
 
 **Implementation**: `scripts/classify_bed_files.py` (rules in `src/meta_disco/rules/unified_rules.yaml`)
 
