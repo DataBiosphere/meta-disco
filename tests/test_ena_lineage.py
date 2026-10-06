@@ -711,6 +711,14 @@ def test_a_reimport_whose_stats_file_changed_is_refused(tmp_path, run_map, manif
         el.import_all(run_map, manifests, tmp_path / "lin2", tmp_path / "cache", stored=stored, generation=STAMP)
 
 
+@pytest.mark.parametrize("member, value", [("md5", md5("other bytes")), ("file_name", "renamed.cram")])
+def test_a_reimport_whose_alignment_is_another_file_is_refused(tmp_path, run_map, manifests, imported, member, value):
+    stored = el.load_inputs([imported.directory / "sample.inputs.json"])
+    setattr(stored["C"].crams["c1"], member, value)
+    with pytest.raises(ValueError, match=r"s1\.cram \(c1\) is not the file its kept reading read"):
+        el.import_all(run_map, manifests, tmp_path / "lin2", tmp_path / "cache", stored=stored, generation=STAMP)
+
+
 def test_a_reimport_missing_an_alignment_is_refused(tmp_path, run_map, manifests, imported):
     stored = el.load_inputs([imported.directory / "sample.inputs.json"])
     del stored["C"].crams["c2"]

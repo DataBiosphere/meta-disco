@@ -209,14 +209,18 @@ class CatalogFile:
 class CramReading:
     """What was read for one alignment: its stats file's counts and its header's steps, or why not.
 
-    Kept in the inputs file, so a re-import reads none of it again. ``stats_reads`` is the
-    name of the file the stats file's command read, where it names one alignment.
+    Kept in the inputs file, so a re-import reads none of it again. ``file_name`` and
+    ``md5`` are the alignment's as the manifest gave them when it was read, so a re-import
+    can tell the manifest still names the same file. ``stats_reads`` is the name of the
+    file the stats file's command read, where it names one alignment.
     ``steps`` is each distinct ``@PG`` program (and subcommand) whose command names a
     FASTQ, and ``samples`` each distinct ``@RG`` ``SM``, both sorted and None until the
     header is read.
     """
 
     file_id: str
+    file_name: str | None = None
+    md5: str | None = None
     stats_md5: str | None = None
     read_count: int | None = None
     base_count: int | None = None
@@ -530,7 +534,7 @@ def import_dataset(
             if stored is not None:
                 require_inputs_agree(entries, found, stored, f"{dataset}/{entry.table}")
             for child, _stats in found:
-                inputs.crams.setdefault(child.file_id, CramReading(child.file_id))
+                inputs.crams.setdefault(child.file_id, CramReading(child.file_id, child.file_name, child.md5))
             by_counts = runs_by_counts(inputs.runs, entry.ena_studies)
             at = f"{dataset}/{entry.table}"
             if stored is None:
@@ -554,7 +558,8 @@ def require_inputs_agree(
 
     ``ValueError`` when the dataset's studies differ from the map's (a run of a study they
     lack could make a link ambiguous), when an alignment the manifest names has no kept
-    reading (it was never read), or when its stats file is not the one the reading read.
+    reading (it was never read), when its name or md5 is not the one its reading was read
+    for (another file under the same id), or when its stats file is not the one the reading read.
     """
     studies = sorted({s for e in entries for s in e.ena_studies})
     if inputs.studies != studies:
@@ -563,6 +568,8 @@ def require_inputs_agree(
         reading = inputs.crams.get(child.file_id)
         if reading is None:
             raise ValueError(f"{at}: {child.file_name} ({child.file_id}) has no kept reading")
+        if (reading.file_name, reading.md5) != (child.file_name, child.md5):
+            raise ValueError(f"{at}: {child.file_name} ({child.file_id}) is not the file its kept reading read")
         if (stats.md5 if stats is not None else None) != reading.stats_md5:
             raise ValueError(f"{at}: {child.file_name}'s stats file is not the one its kept reading read")
 
