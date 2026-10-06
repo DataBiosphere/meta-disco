@@ -191,8 +191,9 @@ SLOT_CATEGORIES = (
 # SLOT_CATEGORIES split by whether the slot is filled: settled with a value, or as
 # not_applicable (an answer: the dimension does not apply to the file). The filled ones are
 # grouped by the input the answer is credited to: each source in SOURCE_PRECEDENCE, its
-# value as written and through a harmonizing row together; inference, where no source
-# declared it (inferred); only the file's parents (inherited); and not_applicable, which
+# value as written and through a harmonizing row together; inherited, where no source
+# declared the value, a parent did and inference declared another; inferred, every other
+# value no source declared (inference's, or credited_to's fallback); and not_applicable, which
 # credited_to does not credit to any input (#634). Between them the groups and
 # UNFILLED_CATEGORIES hold every category once.
 FILLED_GROUPS = {

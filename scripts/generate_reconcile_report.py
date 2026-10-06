@@ -238,8 +238,10 @@ def catalog_dimensions(report: dict) -> list[str]:
 def catalog_today(report: dict, dimensions: list[str], dataset: str | None = None) -> dict | None:
     """How complete the catalog's own metadata is, before ours, over ``dimensions`` (:func:`catalog_dimensions`).
 
-    A slot is filled where the published source was not silent for the file: it publishes a
-    value, whether or not a translation row reads it. None where ``dimensions`` is empty.
+    A slot is filled where the published source was not silent for that file and dimension:
+    an evidence line of it reached the slot, whether or not a translation row reads its value.
+    Today each published column reaches only its own dimension among ``dimensions``, so that is
+    where the catalog publishes a value for the file. None where ``dimensions`` is empty.
     """
     if not dimensions:
         return None
@@ -762,8 +764,9 @@ def render_markdown(data: dict) -> str:
         "with a value or as not applicable, which is an answer (the dimension does not apply to the file), unlike "
         "not classified. A filled slot is counted once, under the input its answer is credited to: *original*, "
         "the catalog's published values; *submitter tables*; *external*, ENA's run records (each source's row adds "
-        "its own column above and its *harmonized* one); *inferred*, inference's, where no source declared it; "
-        "*inherited*, only the file's parents' across its `generated_by`; *not applicable*, which reconcile does "
+        "its own column above and its *harmonized* one); *inherited*, where no source declared the value, the "
+        "file's parents across its `generated_by` did, and inference declared another or none; *inferred*, the "
+        "other values no source declared, inference's; *not applicable*, which reconcile does "
         "not yet credit to an input (#634). A slot not classified, published unreviewed or in conflict is not "
         "filled. Each % is its row's count over the *slots* row of its column.",
         "",

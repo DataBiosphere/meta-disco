@@ -7,7 +7,7 @@ from pathlib import Path
 import generate_reconcile_report as rr
 import pytest
 
-from meta_disco.models import SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
+from meta_disco.models import CLASSIFICATION_FIELDS, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
 from meta_disco.output_utils import RECONCILED_DIR
 from meta_disco.reconcile import FILLED_GROUPS, REPORT_FILE, UNFILLED_CATEGORIES
 from meta_disco.record_keys import HPRC_REPOSITORY
@@ -195,7 +195,6 @@ def test_completeness_counts_each_filled_slot_once_and_nothing_else(conflicted):
     data = rr.dashboard_data(rr.load_report(conflicted), None, Path("report.json"))
     for scope in (data["run"], *data["datasets"]):
         c, counts = scope["completeness"], scope["totals"]["counts"]
-        assert c["filled"] == sum(c[group] for group in FILLED_GROUPS)
         assert c["filled"] + sum(counts[k] for k in UNFILLED_CATEGORIES) == scope["slots"]
     md = rr.render_markdown(data)
     filled = data["run"]["completeness"]["filled"]
@@ -282,6 +281,24 @@ def test_a_share_too_small_to_show_is_not_shown_as_zero():
     assert rr._of_slots(0, 100) == "0.0%" and rr._of_slots(5, 0) == "0.0%"
     assert rr._of_slots(1, 10_000) == "<0.1%" and rr._of_slots(1, 1_000) == "0.1%"
     assert rr._of_slots(1, 8) == "12.5%" and rr._of_slots(8, 8) == "100%"
+
+
+def test_each_datasets_completeness_and_catalog_today_count_that_dataset_alone(conflicted):
+    """A second dataset the catalog publishes nothing for: its own counts, and the run's are the two summed."""
+    report = rr.load_report(conflicted)
+    other = "OTHER"
+    report["files"][other] = 4
+    report["slots"][other] = {slot: {"not_classified": 4} for slot in CLASSIFICATION_FIELDS}
+    report["values"][other] = {slot: {"not_classified": 4} for slot in CLASSIFICATION_FIELDS}
+    data = rr.dashboard_data(report, None, Path("report.json"))
+    scopes = {scope["name"]: scope for scope in data["datasets"]}
+    dims = ["data_modality", "reference_assembly"]
+    assert scopes[other]["catalog_today"] == {"dimensions": dims, "slots": 8, "filled": 0}
+    assert scopes[DATASET]["catalog_today"] == {"dimensions": dims, "slots": 6, "filled": 1}
+    assert data["run"]["catalog_today"] == {"dimensions": dims, "slots": 14, "filled": 1}
+    assert scopes[other]["completeness"]["filled"] == 0
+    assert data["run"]["completeness"] == scopes[DATASET]["completeness"]
+    assert data["run"]["slots"] == scopes[DATASET]["slots"] + scopes[other]["slots"]
 
 
 def test_catalog_text_is_a_code_span_in_the_markdown():
