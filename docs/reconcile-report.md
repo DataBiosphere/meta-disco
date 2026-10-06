@@ -25,6 +25,23 @@ The last two columns are extra counts laid over those, not part of the sum:
 | reference_assembly | 0 | 4,476 | 46,798 | 263,942 | 0 | 0 | 126,517 | 171,371 | 8 | 0 | 0 | 220 | 63,859 | 30,897 | 608,628 | 215,655 |
 | assay_type | 0 | 6,753 | 12,420 | 0 | 6,962 | 0 | 5,441 | 490,058 | 0 | 6 | 2 | 0 | 23,227 | 163,219 | 514,881 | 25,721 |
 | instrument_model | 0 | 0 | 19,102 | 520 | 6,962 | 0 | 229 | 488,653 | 0 | 0 | 0 | 0 | 23,233 | 169,389 | 515,466 | 25,901 |
+| **all dimensions** | **0** | **17,972** | **88,614** | **301,519** | **20,886** | **6,962** | **1,188,527** | **1,895,499** | **8** | **8** | **2** | **220** | **154,520** | **573,791** | **3,501,995** | **299,960** |
+| **% of slots** | **0.0%** | **0.4%** | **2.0%** | **7.0%** | **0.4%** | **0.1%** | **27.9%** | **44.6%** | **<0.1%** | **<0.1%** | **<0.1%** | **<0.1%** | **3.6%** | **13.5%** | **82.4%** | **7.0%** |
+
+**How complete the metadata is.** A slot is one file in one dimension. It is *filled* when it settled with a value or as not applicable, which is an answer (the dimension does not apply to the file), unlike not classified. A filled slot is counted once, under the input its answer is credited to: *original*, the catalog's published values; *submitter tables*; *external*, ENA's run records (each source's row adds its own column above and its *harmonized* one); *inherited*, where no source declared the value, the file's parents across its `generated_by` did, and inference declared another or none; *inferred*, every other value no source declared, which is credited to inference; *not applicable*, which reconcile does not yet credit to an input (#634). A slot not classified, published unreviewed or in conflict is not filled. Each % is its row's count over the *slots* row of its column.
+
+|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |
+| --- | ---: | ---: | ---: | ---: |
+| original (catalog's published values) | 17,972 | 0.4% | 11,451 | 0.8% |
+| submitter tables | 390,133 | 9.1% | — | — |
+| external (ENA) | 27,848 | 0.6% | — | — |
+| inferred | 1,188,527 | 27.9% | — | — |
+| inherited | 1,895,499 | 44.6% | — | — |
+| not applicable | 154,520 | 3.6% | — | — |
+| **filled** | **3,674,499** | **86.4%** | **11,451** | **0.8%** |
+| **slots (files × dimensions)** | **4,248,528** | **100%** | **1,416,176** | **100%** |
+
+*Catalog today* is the metadata the catalog publishes itself, before ours: only the dimensions it has a column for (`data_modality`, `reference_assembly`), so fewer slots. A slot is filled where it publishes a value for the file, whether or not a translation row reads it, and all of it is original. Our *original* row can be larger: one of the catalog's columns can fill more than one of our dimensions (its `data_modality` value "single-nucleus RNA sequencing assay" also gives `assay_type`), though it counts only the values a reviewed translation row reads. It is shown only where this run read the catalog's published values.
 
 ## Conflict rate
 
@@ -59,7 +76,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 
 ### data_modality
 
-| dataset | `genomic` | `transcriptomic` | `epigenomic.3d_contact_maps` | `epigenomic.methylation` | `genomic.genotyping` | `epigenomic.chromatin_accessibility` | `not_applicable` | `not_classified` | files | has a value | determined |
+| dataset | `genomic` | `transcriptomic` | `epigenomic.3d_contact_maps` | `epigenomic.methylation` | `genomic.genotyping` | `epigenomic.chromatin_accessibility` | `not_applicable` | `not_classified` | files | has a value | filled |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `ANVIL_1000G_PRIMED_data_model` | 8,631 | · | · | · | · | · | 2,852 | 10 | 11,493 | 75.0% | 99.9% |
 | `ANVIL_1000G_high_coverage_2019` | 12,908 | · | · | · | · | · | 13,008 | 100 | 26,016 | 49.6% | 99.6% |
@@ -133,7 +150,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 
 ### assay_type
 
-| dataset | `WGS` | `RNA-seq` | `snRNA-seq` | `Genotyping array` | `SHARE-seq` | `snATAC-seq` | `conflict` | `not_applicable` | `not_classified` | files | has a value | determined |
+| dataset | `WGS` | `RNA-seq` | `snRNA-seq` | `Genotyping array` | `SHARE-seq` | `snATAC-seq` | `conflict` | `not_applicable` | `not_classified` | files | has a value | filled |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `ANVIL_1000G_PRIMED_data_model` | · | · | · | · | · | · | · | 2,852 | 8,641 | 11,493 | 0.0% | 24.8% |
 | `ANVIL_1000G_high_coverage_2019` | 12,808 | · | · | · | · | · | · | 13,008 | 200 | 26,016 | 49.2% | 99.2% |
@@ -151,7 +168,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 
 ### instrument_model
 
-| dataset | `Illumina NovaSeq 6000` | `Illumina HiSeq 2000` | `Illumina NovaSeq X` | `Sequel II` | `PromethION` | `Revio` | `NextSeq 2000` | `Illumina iScan` | `GridION` | `MinION` | `not_applicable` | `not_classified` | files | has a value | determined |
+| dataset | `Illumina NovaSeq 6000` | `Illumina HiSeq 2000` | `Illumina NovaSeq X` | `Sequel II` | `PromethION` | `Revio` | `NextSeq 2000` | `Illumina iScan` | `GridION` | `MinION` | `not_applicable` | `not_classified` | files | has a value | filled |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `ANVIL_1000G_PRIMED_data_model` | · | · | · | · | · | · | · | · | · | · | 2,852 | 8,641 | 11,493 | 0.0% | 24.8% |
 | `ANVIL_1000G_high_coverage_2019` | 12,808 | · | · | · | · | · | · | · | · | · | 13,008 | 200 | 26,016 | 49.2% | 99.2% |
@@ -536,6 +553,19 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | reference_assembly | 0 | 0 | 0 | 365 | 0 | 0 | 1,510 | 243 | 3 | 0 | 0 | 0 | 11,751 | 9,313 | 2,118 | 95 |
 | assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 160 | 0 | 0 | 0 | 0 | 0 | 5,430 | 17,595 | 160 | 0 |
 | instrument_model | 0 | 0 | 0 | 0 | 0 | 0 | 160 | 0 | 0 | 0 | 0 | 0 | 5,430 | 17,595 | 160 | 0 |
+| **all dimensions** | **0** | **0** | **0** | **2,357** | **0** | **0** | **24,009** | **557** | **3** | **0** | **0** | **0** | **32,659** | **79,525** | **26,923** | **1,321** |
+| **% of slots** | **0.0%** | **0.0%** | **0.0%** | **1.6%** | **0.0%** | **0.0%** | **17.2%** | **0.4%** | **<0.1%** | **0.0%** | **0.0%** | **0.0%** | **23.4%** | **57.1%** | **19.3%** | **0.9%** |
+
+|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |
+| --- | ---: | ---: | ---: | ---: |
+| original (catalog's published values) | 0 | 0.0% | 0 | 0.0% |
+| submitter tables | 2,357 | 1.6% | — | — |
+| external (ENA) | 0 | 0.0% | — | — |
+| inferred | 24,009 | 17.2% | — | — |
+| inherited | 557 | 0.4% | — | — |
+| not applicable | 32,659 | 23.4% | — | — |
+| **filled** | **59,582** | **42.8%** | **0** | **0.0%** |
+| **slots (files × dimensions)** | **139,110** | **100%** | **46,370** | **100%** |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
