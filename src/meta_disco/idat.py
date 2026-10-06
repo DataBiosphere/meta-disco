@@ -3,8 +3,8 @@
 An IDAT (version 3) opens with the bytes ``IDAT``, a little-endian int64 version and an
 int32 field count, then a table of ``(uint16 code, int64 offset)`` entries naming where
 each field sits in the file. The per-probe intensities fill most of the file; the fields read
-here are small, so a reader needs the table and a few bytes at each field's offset, never
-the intensities. The layout is the one Bioconductor's ``illuminaio`` reads.
+here are small, so a reader needs the table and a short read at each field's offset,
+never the intensities. The layout is the one Bioconductor's ``illuminaio`` reads.
 
 Three fields are read:
 
@@ -134,7 +134,7 @@ class _Windows:
         """A window holding ``offset`` and the ``need`` bytes from it (or to the file's end), and where ``offset`` sits in it.
 
         A field of unknown length asks for the whole ``FIELD_WINDOW`` (the default); an
-        int32 asks for 4. A window held that covers neither is read, ``need`` bytes long.
+        int32 asks for 4. Where no window held covers it, one is read, ``need`` bytes long.
         """
         need = FIELD_WINDOW if need is None else need
         for start, data, at_eof in self._held:

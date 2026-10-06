@@ -38,7 +38,7 @@ _DIMENSION_TEXT = {
             "**Note**: Platform is inherently unknowable for most derived formats (VCF, "
             "BED, PLINK). It is read from a BAM/CRAM `@RG PL` header, FASTQ read name "
             "patterns, a nanopore signal file's extension, and an Illumina IDAT's run log, "
-            "whose scan software names the array scanner (#603). The high not-classified "
+            "from whose scan software the array scanner is inferred (#603). The high not-classified "
             "rate is expected."
         ),
     ),
@@ -62,7 +62,7 @@ _DIMENSION_TEXT = {
         (
             "**Note**: Inference reads the instrument model from a BAM/CRAM `@RG PM` "
             "value that names exactly one model (#532) and from an IDAT's run log naming "
-            "the iScan (#603); a read-name serial prefix is a "
+            "the iScan's software (#603); a read-name serial prefix is a "
             "vendor numbering convention and is not read. Most files carry no such value, "
             "so the high not-classified rate is expected. This report reads inference only;"
             " the submitter tables, which reconcile reads, name models far more often."

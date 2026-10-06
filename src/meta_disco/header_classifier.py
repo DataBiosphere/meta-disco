@@ -884,7 +884,7 @@ def classify_sample_map(
 
 
 # The IDAT chips recognised, by the exact chip type and probe count read from real files
-# (`code_rules.IDAT_CHIP_TYPE`): what each chip is, and the modality and assay it reads.
+# (`code_rules.IDAT_CHIP_TYPE`): what each chip is, and the modality and assay of its data.
 IDAT_CHIPS: dict[tuple[str, int], tuple[str, str, str]] = {
     # The HPRC's Infinium Omni2.5-8 v1.3, all 160 of its corpus IDATs (#603).
     ("1-95um_multi-swath_for_8x2-5M", 2_522_340): (
@@ -893,8 +893,8 @@ IDAT_CHIPS: dict[tuple[str, int], tuple[str, str, str]] = {
         "Genotyping array",
     ),
 }
-# The scan software recognised (`code_rules.IDAT_SCANNER`), and the scanner it runs: platform
-# and instrument model.
+# The scan software recognised (`code_rules.IDAT_SCANNER`), and the platform and instrument
+# model of the scanner it is taken to name (the run log names software, not a model).
 IDAT_SCANNERS: dict[str, tuple[str, str]] = {
     "iScan Control Software": ("ILLUMINA", "Illumina iScan"),
 }
@@ -917,7 +917,7 @@ def classify_from_idat_header(
     file_size: int | None = None,
     file_format: str | None = None,
 ) -> dict:
-    """Classify an Illumina IDAT: its data_type from the extension, the rest from its header (#603).
+    """Classify an Illumina IDAT: data_type and reference from the extension, the rest from its header (#603).
 
     The chip type and probe count decide modality and assay where ``IDAT_CHIPS`` lists the
     pair; the run log's scan software decides platform and instrument where every ``Scan``
@@ -934,7 +934,7 @@ def classify_from_idat_header(
     result = _get_engine().classify_extended(ExtendedFileInfo(name=name, file_format=".idat", file_size=file_size))
 
     # One helper per rule, each claiming the fields its calls name: a value where one is
-    # given, else not_classified. Both shapes `test_code_rules` reads.
+    # given, else not_classified. A helper of this shape is one `test_code_rules` reads.
     def _claim_chip(reason: str, **values: str | None) -> None:
         for fld, value in values.items():
             result.add_claim(

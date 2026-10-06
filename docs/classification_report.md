@@ -103,7 +103,7 @@ assay_type                       # the terms nest by is_a; a record holds the mo
 ├── ChIP-seq                     # EFO:0002692
 ├── Bisulfite-seq                # EFO:0003753
 ├── Methylation array            # EFO:0002759; no rule emits it today (#603 recognises only a genotyping chip)
-├── Genotyping array             # EFO:0002767 genotyping by array; an IDAT whose chip the header names (#603)
+├── Genotyping array             # EFO:0002767 genotyping by array; an IDAT whose header names a genotyping chip the rule lists (#603)
 ├── Histology                    # OBI:0600020, as EFO imports it
 ├── not_applicable               # a status, not a term (value null): non-sequencing data (images, annotations)
 └── not_classified               # a status, not a term (value null): could not be determined from file alone
@@ -428,8 +428,8 @@ Parse file headers (without downloading entire files) to extract metadata.
 
 **Illumina IDAT headers (#603):**
 
-- field 403, the chip type, with field 1000 - The BeadChip, by an exact pair the rule lists (modality, assay)
-- field 300, the run log's `Scan` rows - The scan software, hence the scanner (platform, instrument model)
+- field 403, the chip type, with field 1000, the probe count - The BeadChip, by an exact pair the rule lists (modality, assay)
+- field 300, the run log's `Scan` rows - The scan software, from which the scanner is inferred (platform, instrument model)
 
 ### 3.2 Cross-Validation Rules
 

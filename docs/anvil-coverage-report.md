@@ -210,7 +210,7 @@ Processed **708,088** files.
 | `ONT` | 13,957 | 2.0% | .fast5 (12,509)<br>.bam (1,300)<br>.fastq (137)<br>.pod5 (11) |
 | `PACBIO` | 2,777 | 0.4% | .bam (1,810)<br>.fastq (967) |
 
-**Note**: Platform is inherently unknowable for most derived formats (VCF, BED, PLINK). It is read from a BAM/CRAM `@RG PL` header, FASTQ read name patterns, a nanopore signal file's extension, and an Illumina IDAT's run log, whose scan software names the array scanner (#603). The high not-classified rate is expected.
+**Note**: Platform is inherently unknowable for most derived formats (VCF, BED, PLINK). It is read from a BAM/CRAM `@RG PL` header, FASTQ read name patterns, a nanopore signal file's extension, and an Illumina IDAT's run log, from whose scan software the array scanner is inferred (#603). The high not-classified rate is expected.
 
 ---
 
@@ -409,5 +409,5 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | `Illumina iScan` | 160 | 0.0% | .idat (160) |
 | `Illumina NovaSeq X` | 68 | 0.0% | .cram (68) |
 
-**Note**: Inference reads the instrument model from a BAM/CRAM `@RG PM` value that names exactly one model (#532) and from an IDAT's run log naming the iScan (#603); a read-name serial prefix is a vendor numbering convention and is not read. Most files carry no such value, so the high not-classified rate is expected. This report reads inference only; the submitter tables, which reconcile reads, name models far more often.
+**Note**: Inference reads the instrument model from a BAM/CRAM `@RG PM` value that names exactly one model (#532) and from an IDAT's run log naming the iScan's software (#603); a read-name serial prefix is a vendor numbering convention and is not read. Most files carry no such value, so the high not-classified rate is expected. This report reads inference only; the submitter tables, which reconcile reads, name models far more often.
 

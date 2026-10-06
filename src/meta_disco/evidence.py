@@ -474,8 +474,9 @@ class _RecordEvidence(CachedEvidence):
 
     ``PAYLOAD_TYPE`` is the record's class, whose ``from_evidence`` parses the cached
     dict. A ``KeyError`` or ``TypeError`` it raises is a cache miss here, keeping
-    ``load``'s "any miss -> None" contract at the boundary: every one raises on a
-    missing key, and ``IdatHeader`` on a field of the wrong type too.
+    ``load``'s "any miss -> None" contract at the boundary. Each record class raises
+    ``KeyError`` on a missing key; ``IdatHeader`` also raises ``TypeError`` on a field of
+    the wrong type.
     """
 
     PAYLOAD_TYPE: ClassVar[type]
@@ -531,9 +532,8 @@ class IdatHeader:
     """What the IDAT reader takes from an Illumina IDAT's header (#603).
 
     ``probe_count`` is the chip's number of probes (bead types, each read on several
-    beads), ``chip_type`` the BeadChip's
-    physical format, and ``scan_software`` the software each ``Scan`` row of the run log
-    names, in order. A field the file does not carry is ``None``; no ``Scan`` row is ``[]``.
+    beads), ``chip_type`` the BeadChip's physical format, and ``scan_software`` the
+    software each ``Scan`` row of the run log names, in order. A field the file does not carry is ``None``; no ``Scan`` row is ``[]``.
     """
 
     probe_count: int | None
@@ -573,5 +573,5 @@ class IdatEvidence(_RecordEvidence):
 
     @property
     def count(self) -> int:
-        """The run log's Scan rows. Nothing reads it; it stands in for ``len(payload)``, which a record has not."""
+        """The run log's Scan rows. Nothing reads it; it replaces the base's ``len(payload)``, as one record has no length."""
         return len(self.header.scan_software)

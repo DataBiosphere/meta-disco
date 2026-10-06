@@ -278,7 +278,7 @@ class PlatformEnum(str, Enum):
 
 class InstrumentModelEnum(str, Enum):
     """
-    Instrument models for the platforms in `platform_enum`. A sequencer's is spelled exactly as ENA/SRA's controlled `INSTRUMENT_MODEL` string (SRA.common.xsd, enasequence/schema); SRA's `unspecified` is not a model and is not here (a file whose model is unknown is `not_classified`). SRA lists no array scanner, so an array scanner's model is our own term, spelled as the vendor names the product (#603). `meaning` is the EFO term whose label names the same model, recorded where EFO has one and never followed at run time. Where EFO's nearest term is broader or narrower (its one `Illumina HiSeq X` for SRA's `HiSeq X Five` / `HiSeq X Ten`, its `ONT GridION X5` for SRA's `GridION`) no meaning is recorded.
+    Instrument models for the platforms in `platform_enum`. A sequencer's is spelled exactly as ENA/SRA's controlled `INSTRUMENT_MODEL` string (SRA.common.xsd, enasequence/schema); SRA's `unspecified` is not a model and is not here (a file whose model is unknown is `not_classified`). SRA lists no array scanner, so an array scanner's model is our own term, spelled after the vendor's product name (#603). `meaning` is the EFO term whose label names the same model, recorded where EFO has one and never followed at run time. Where EFO's nearest term is broader or narrower (its one `Illumina HiSeq X` for SRA's `HiSeq X Five` / `HiSeq X Ten`, its `ONT GridION X5` for SRA's `GridION`) no meaning is recorded.
     """
     HiSeq_X_Five = "HiSeq X Five"
     HiSeq_X_Ten = "HiSeq X Ten"

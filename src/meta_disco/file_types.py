@@ -186,8 +186,8 @@ BED_CONFIG = FileTypeConfig(
 )
 
 # Illumina IDAT (#603): the BeadChip's chip type and the scanner's software, read by byte
-# range from the header's field table. The extension gives only data_type, since genotyping
-# and methylation chips both write IDAT.
+# range from the header's field table. The extension gives data_type and reference but not
+# modality or assay, since genotyping and methylation chips both write IDAT.
 IDAT_CONFIG = FileTypeConfig(
     name="idat",
     extensions=(".idat",),

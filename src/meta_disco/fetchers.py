@@ -1377,8 +1377,8 @@ def fetch_idat_header(
     The header's field table says where each field sits; ``idat.read_header`` reads the
     table and a window at each field, never the intensities. If url is provided, fetches
     from that URL directly. Otherwise uses the AnVIL S3 mirror. ``is_gzipped`` is ignored:
-    the reader refuses gzipped bytes itself. Raises ``FetchError`` for bytes that are no
-    version-3 IDAT, gzipped ones included.
+    the reader refuses gzipped bytes itself. Raises ``FetchError`` for a failed read and for
+    bytes that are no version-3 IDAT, gzipped ones included.
     """
     payload = _load_cached(IdatEvidence, evidence_dir, md5sum, use_cache)
     if payload is not None:
