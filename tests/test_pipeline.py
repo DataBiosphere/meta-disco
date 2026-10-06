@@ -651,11 +651,21 @@ class TestFileTypeConfigs:
     def test_all_configs_exist(self):
         from meta_disco.file_types import FILE_TYPE_REGISTRY
 
-        assert set(FILE_TYPE_REGISTRY.keys()) == {"bam", "vcf", "fastq", "fasta", "gfa", "tar", "bed", "sample_map"}
+        assert set(FILE_TYPE_REGISTRY.keys()) == {
+            "bam",
+            "vcf",
+            "fastq",
+            "fasta",
+            "gfa",
+            "tar",
+            "bed",
+            "sample_map",
+            "idat",
+        }
 
     def test_a_registered_type_routes_as_its_registry_producer(self, tmp_path):
         """The pipeline does not route with a predicate of its own: it is one of the
-        twelve producers, and asks the same question they all ask (#449)."""
+        thirteen producers, and asks the same question they all ask (#449)."""
         from meta_disco.file_types import FILE_TYPE_REGISTRY
         from meta_disco.producers import PRODUCERS
 

@@ -157,7 +157,7 @@ We define **6 orthogonal dimensions** for file classification. Each dimension an
 |-----------|----------|--------------|--------------|
 | `data_modality` | What biology is measured? | 1 | Medium |
 | `data_type` | What artifact do I have? | 1 | High |
-| `platform` | What sequencing instrument? | 0..1 | High |
+| `platform` | What sequencer or array scanner? | 0..1 | High |
 | `reference_assembly` | What reference genome? | 0..1 | High |
 | `file_format` | How is it stored? | 1 | Trivial |
 | `assay_type` | What method class? (v2) | 0..1 | Low |
@@ -211,7 +211,7 @@ data_type
 
 ### 5.4 Platform
 
-**Definition**: The sequencing instrument/technology used to generate the data.
+**Definition**: The vendor's instrument family that read the data: a sequencer's, or an array scanner's (#603).
 
 ```
 platform
@@ -667,7 +667,7 @@ After spikes, assess:
 | `.bigwig`, `.bw` | varies | Signal tracks |
 | `.gtf`, `.gff` | transcriptomic | Annotations |
 | `.h5ad`, `.loom` | transcriptomic | Single-cell matrices |
-| `.idat` | epigenomic | Methylation arrays |
+| `.idat` | varies (genomic or epigenomic) | Illumina BeadChip arrays: genotyping or methylation, the header's chip type says which (#603) |
 | `.cel` | varies | Microarrays |
 
 ## Appendix B: Datasets in Open Access Sample

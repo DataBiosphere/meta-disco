@@ -1,4 +1,4 @@
-.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-sample_map classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published check-lineage-map import-anvil-lineage import-ena-evidence check-ena-lineage-map import-ena-lineage seed-activity-map seed-value-map review-queue corpus-diff reconcile reconcile-report rules-report all-reports download-hprc validate-hprc clean help
+.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-sample_map classify-idat classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published check-lineage-map import-anvil-lineage import-ena-evidence check-ena-lineage-map import-ena-lineage seed-activity-map seed-value-map review-queue corpus-diff reconcile reconcile-report rules-report all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -24,6 +24,7 @@ help:
 	@echo "  make classify-tar       Classify tar/tar.gz archives by inner format (network required)"
 	@echo "  make classify-bed       Classify BED files"
 	@echo "  make classify-sample_map  Read GATK sample maps' cohort steps (network required)"
+	@echo "  make classify-idat      Classify Illumina IDATs from their headers (network required)"
 	@echo "  make classify-hprc      Classify HPRC catalog files (network required)"
 	@echo "  make coverage-report    Generate coverage report from latest run"
 	@echo "  make manifest-survey    Survey what the downloaded manifests carry (offline)"
@@ -180,7 +181,7 @@ validate-metadata:
 RUN_DIR_ARG = $(if $(RUN_DIR),--run-dir $(RUN_DIR))
 
 classify-headers:
-	$(MAKE) classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-sample_map \
+	$(MAKE) classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-sample_map classify-idat \
 		RUN_DIR="output/anvil/partials/$$(date +%Y%m%d_%H%M%S)"
 
 classify-bam:
@@ -206,6 +207,9 @@ classify-bed:
 
 classify-sample_map:
 	uv run python scripts/classify_headers.py --type sample_map $(RUN_DIR_ARG) -w 10
+
+classify-idat:
+	uv run python scripts/classify_headers.py --type idat $(RUN_DIR_ARG) -w 10
 
 consistency-report:
 	uv run python scripts/check_consistency.py

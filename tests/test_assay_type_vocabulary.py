@@ -25,6 +25,7 @@ TERMS = {
     "ChIP-seq": ("EFO:0002692", None),
     "Bisulfite-seq": ("EFO:0003753", None),
     "Methylation array": ("EFO:0002759", None),  # methylation profiling by array
+    "Genotyping array": ("EFO:0002767", None),  # genotyping by array
     "Histology": ("OBI:0600020", None),  # histological assay, as EFO imports it
 }
 

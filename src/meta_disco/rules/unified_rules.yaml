@@ -52,10 +52,10 @@
 #
 # - assay_type: Experimental method (WGS, WES, RNA-seq, ATAC-seq, ChIP-seq, etc.)
 #
-# - platform: Sequencing platform (ILLUMINA, PACBIO, ONT, MGI)
+# - platform: Sequencer's or array scanner's platform (ILLUMINA, PACBIO, ONT, MGI)
 #
-# - instrument_model: Sequencing instrument model, in ENA/SRA's spelling
-#   (Illumina NovaSeq 6000, Revio, PromethION)
+# - instrument_model: Sequencer model, in ENA/SRA's spelling (Illumina NovaSeq
+#   6000, Revio, PromethION), or array scanner model (Illumina iScan, #603)
 #
 #
 # FILE STRUCTURE (Multi-document YAML)
@@ -144,7 +144,7 @@
 # - data_type: set data type (alignments, variants, reads, peaks, etc.)
 # - reference_assembly: set reference (GRCh38, GRCh37, CHM13)
 # - assay_type: set assay type (WGS, WES, RNA-seq, ATAC-seq, etc.)
-# - platform: set sequencing platform (ILLUMINA, PACBIO, ONT, MGI)
+# - platform: set platform (ILLUMINA, PACBIO, ONT, MGI)
 # - instrument_model: set instrument model (Illumina NovaSeq 6000, Revio, etc.)
 #
 #
@@ -293,18 +293,20 @@ rules:
     rationale: "PLINK files contain genotype data (genomic)"
 
   # ---------------------------------------------------------------------------
-  # Methylation array files
+  # Illumina BeadChip intensity files
   # ---------------------------------------------------------------------------
-  - id: idat_methylation
+  # Modality, assay, platform and instrument come from the IDAT header instead, by the
+  # code rules idat_chip_type and idat_scanner (#603).
+  - id: idat_array_signal
     tier: 1
     scope: extension
     when:
       extensions: [".idat"]
     then:
-      data_modality: epigenomic.methylation
       data_type: array_signal
-      assay_type: Methylation array
-    rationale: "IDAT files are Illumina methylation array data"
+      status:
+        reference_assembly: not_applicable
+    rationale: "IDAT is Illumina's BeadChip intensity format, written by genotyping and methylation chips alike, so the extension cannot say which chip wrote the file, only that it is array signal (#603). Its intensities are keyed by probe, not by genome coordinate, so no reference applies until genotypes are called against a chip manifest"
 
   # ---------------------------------------------------------------------------
   # Single-cell matrix files

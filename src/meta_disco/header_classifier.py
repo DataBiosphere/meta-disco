@@ -1,4 +1,4 @@
-"""BAM/CRAM, VCF, FASTQ, FASTA, and BED header-based classification.
+"""BAM/CRAM, VCF, FASTQ, FASTA, BED and IDAT header-based classification.
 
 This module provides functions to classify sequencing files based on their headers.
 The actual classification rules are defined in the bundled unified_rules.yaml
@@ -14,7 +14,7 @@ from functools import cache
 from typing import TYPE_CHECKING
 
 from . import code_rules
-from .evidence import BedSignals, SegmentTag
+from .evidence import BedSignals, IdatHeader, SegmentTag
 from .file_name import FileName
 from .models import (
     CLASSIFICATION_FIELDS,
@@ -880,6 +880,110 @@ def classify_sample_map(
             reason=why,
             status=NOT_APPLICABLE,
         )
+    return result.to_output_dict()
+
+
+# The IDAT chips recognised, by the exact chip type and probe count read from real files
+# (`code_rules.IDAT_CHIP_TYPE`): what each chip is, and the modality and assay of its data.
+IDAT_CHIPS: dict[tuple[str, int], tuple[str, str, str]] = {
+    # The HPRC's Infinium Omni2.5-8 v1.3, all 160 of its corpus IDATs (#603).
+    ("1-95um_multi-swath_for_8x2-5M", 2_522_340): (
+        "an Illumina genotyping BeadChip",
+        "genomic.genotyping",
+        "Genotyping array",
+    ),
+}
+# The scan software recognised (`code_rules.IDAT_SCANNER`), and the platform and instrument
+# model of the scanner it is taken to name (the run log names software, not a model).
+IDAT_SCANNERS: dict[str, tuple[str, str]] = {
+    "iScan Control Software": ("ILLUMINA", "Illumina iScan"),
+}
+# The longest run of file text an IDAT reason quotes: a chip type or a software name is
+# the file's own, and could be up to a read window long.
+REASON_TEXT_LIMIT = 200
+
+
+def _quoted(text: str | None) -> str:
+    """``text`` for a reason, cut to ``REASON_TEXT_LIMIT`` characters, as its ``repr``."""
+    if text is not None and len(text) > REASON_TEXT_LIMIT:
+        text = text[:REASON_TEXT_LIMIT] + "…"
+    return repr(text)
+
+
+def classify_from_idat_header(
+    header: IdatHeader,
+    *,
+    name: FileName = FileName.EMPTY,
+    file_size: int | None = None,
+    file_format: str | None = None,
+) -> dict:
+    """Classify an Illumina IDAT: data_type and reference from the extension, the rest from its header (#603).
+
+    The chip type and probe count decide modality and assay where ``IDAT_CHIPS`` lists the
+    pair; the run log's scan software decides platform and instrument where every ``Scan``
+    row names one software that ``IDAT_SCANNERS`` lists. Otherwise each of those dimensions
+    gets a ``not_classified`` claim at ``CONTENT_TIER`` naming what was read. Reference
+    is the extension rule's (``idat_array_signal``: not applicable). ``file_format`` is
+    accepted to match the uniform ``_fetch_and_classify`` call, and not read: the format is
+    ``.idat``, which routed the file here.
+    """
+    from .rule_engine import CONTENT_TIER, ExtendedFileInfo
+
+    # The known ".idat" as the format, as for BAM: with no name (a header-only call) the
+    # engine reads the extension from it, so the extension rule still runs.
+    result = _get_engine().classify_extended(ExtendedFileInfo(name=name, file_format=".idat", file_size=file_size))
+
+    # One helper per rule, each claiming the fields its calls name: a value where one is
+    # given, else not_classified. A helper of this shape is one `test_code_rules` reads.
+    def _claim_chip(reason: str, **values: str | None) -> None:
+        for fld, value in values.items():
+            result.add_claim(
+                fld,
+                rule_id=code_rules.IDAT_CHIP_TYPE.id,
+                tier=CONTENT_TIER,
+                source_type=SOURCE_CONTENT_READ,
+                reason=reason,
+                value=value,
+                status=NOT_CLASSIFIED if value is None else None,
+            )
+
+    def _claim_scanner(reason: str, **values: str | None) -> None:
+        for fld, value in values.items():
+            result.add_claim(
+                fld,
+                rule_id=code_rules.IDAT_SCANNER.id,
+                tier=CONTENT_TIER,
+                source_type=SOURCE_CONTENT_READ,
+                reason=reason,
+                value=value,
+                status=NOT_CLASSIFIED if value is None else None,
+            )
+
+    chip = f"chip type {_quoted(header.chip_type)}, {header.probe_count} probes"
+    said = (
+        IDAT_CHIPS.get((header.chip_type, header.probe_count))
+        if header.chip_type is not None and header.probe_count is not None
+        else None
+    )
+    if said is not None:
+        what, modality, assay = said
+        _claim_chip(f"{chip}: {what}", data_modality=modality, assay_type=assay)
+    else:
+        _claim_chip(f"{chip}: not a chip this rule recognises", data_modality=None, assay_type=None)
+
+    software = sorted(set(header.scan_software))
+    scanner = IDAT_SCANNERS.get(software[0]) if len(software) == 1 else None
+    if scanner is not None:
+        platform, model = scanner
+        why = f"every one of {len(header.scan_software)} Scan rows names {software[0]!r}"
+        _claim_scanner(why, platform=platform, instrument_model=model)
+    else:
+        why = (
+            f"the Scan rows name [{', '.join(_quoted(s) for s in software)}]: not one scanner this rule recognises"
+            if software
+            else "the run log has no Scan row"
+        )
+        _claim_scanner(why, platform=None, instrument_model=None)
     return result.to_output_dict()
 
 

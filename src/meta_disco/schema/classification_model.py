@@ -260,6 +260,10 @@ class AssayTypeEnum(str, Enum):
     ChIP_seq = "ChIP-seq"
     Bisulfite_seq = "Bisulfite-seq"
     Methylation_array = "Methylation array"
+    Genotyping_array = "Genotyping array"
+    """
+    EFO's genotyping by array: polymorphisms in DNA read on an array (an Illumina genotyping BeadChip, #603). None of EFO's parents of it (genotyping, DNA assay, assay by array) is a value here, so it names no `is_a`.
+    """
     Histology = "Histology"
 
 
@@ -274,7 +278,7 @@ class PlatformEnum(str, Enum):
 
 class InstrumentModelEnum(str, Enum):
     """
-    Sequencing instrument models, spelled exactly as ENA/SRA's controlled `INSTRUMENT_MODEL` strings (SRA.common.xsd, enasequence/schema) for the platforms in `platform_enum`; SRA's `unspecified` is not a model and is not here (a file whose model is unknown is `not_classified`). `meaning` is the EFO term whose label names the same model, recorded where EFO has one and never followed at run time. Where EFO's nearest term is broader or narrower (its one `Illumina HiSeq X` for SRA's `HiSeq X Five` / `HiSeq X Ten`, its `ONT GridION X5` for SRA's `GridION`) no meaning is recorded.
+    Instrument models for the platforms in `platform_enum`. A sequencer's is spelled exactly as ENA/SRA's controlled `INSTRUMENT_MODEL` string (SRA.common.xsd, enasequence/schema); SRA's `unspecified` is not a model and is not here (a file whose model is unknown is `not_classified`). SRA lists no array scanner, so an array scanner's model is our own term, spelled after the vendor's product name (#603). `meaning` is the EFO term whose label names the same model, recorded where EFO has one and never followed at run time. Where EFO's nearest term is broader or narrower (its one `Illumina HiSeq X` for SRA's `HiSeq X Five` / `HiSeq X Ten`, its `ONT GridION X5` for SRA's `GridION`) no meaning is recorded.
     """
     HiSeq_X_Five = "HiSeq X Five"
     HiSeq_X_Ten = "HiSeq X Ten"
@@ -299,6 +303,10 @@ class InstrumentModelEnum(str, Enum):
     NextSeq_550 = "NextSeq 550"
     NextSeq_1000 = "NextSeq 1000"
     NextSeq_2000 = "NextSeq 2000"
+    Illumina_iScan = "Illumina iScan"
+    """
+    Illumina's iScan System, the scanner that reads Infinium BeadChips into IDAT files. No ontology term names it (an OLS search finds none in EFO or OBI), so it records no meaning.
+    """
     Onso = "Onso"
     PacBio_RS = "PacBio RS"
     PacBio_RS_II = "PacBio RS II"
@@ -743,8 +751,8 @@ class Classifications(ConfiguredBaseModel):
     data_type: DataTypeClassification = Field(default=..., description="""The content type of the file (biological or descriptive class).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
     reference_assembly: ReferenceAssemblyClassification = Field(default=..., description="""The reference genome the file's coordinates are expressed against.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
     assay_type: AssayTypeClassification = Field(default=..., description="""The experimental assay that produced the upstream data.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
-    platform: PlatformClassification = Field(default=..., description="""The sequencing platform / instrument family.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
-    instrument_model: InstrumentModelClassification = Field(default=..., description="""The sequencing instrument's model, refining `platform` (#532): `Illumina NovaSeq 6000` where `platform` says `ILLUMINA`. Not applicable wherever `platform` is not.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
+    platform: PlatformClassification = Field(default=..., description="""The vendor's instrument family that read the data: a sequencer's, or an array scanner's (#603).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
+    instrument_model: InstrumentModelClassification = Field(default=..., description="""The model of the sequencer or array scanner that read the data, refining `platform` (#532, #603): `Illumina NovaSeq 6000` or `Illumina iScan` where `platform` says `ILLUMINA`. Not applicable wherever `platform` is not.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
 
 
 class Classification(ConfiguredBaseModel):

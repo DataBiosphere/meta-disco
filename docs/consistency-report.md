@@ -1,6 +1,6 @@
 # Self-Consistency Report
 
-Run: **output/anvil/20261006_001328** — 708,088 records, 8 rules  
+Run: **output/anvil/20261006_144504** — 708,088 records, 8 rules  
 **Total violations: 0**
 
 Cross-field invariants over classified records (#314). *Active* is how many records a rule tested; a rule with 0 active is **vacuous** (no matching data in this run), not verified-clean.
@@ -11,9 +11,9 @@ Cross-field invariants over classified records (#314). *Active* is how many reco
 | 0 | 352,441 | `assay_for_genomic` |
 | 0 | 0 | `assay_for_chromatin_accessibility` _(vacuous)_ |
 | 0 | 0 | `assay_for_histone_modification` _(vacuous)_ |
-| 0 | 188 | `assay_for_methylation` |
+| 0 | 28 | `assay_for_methylation` |
 | 0 | 0 | `imaging_exclusive` _(vacuous)_ |
-| 0 | 47,523 | `sequencing_platform_excludes_imaging` |
+| 0 | 47,683 | `sequencing_platform_excludes_imaging` |
 | 0 | 17,894 | `auxiliary_inert` |
 
 ## Examples

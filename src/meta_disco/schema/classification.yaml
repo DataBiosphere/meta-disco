@@ -1001,11 +1001,14 @@ slots:
   assay_type:
     description: The experimental assay that produced the upstream data.
   platform:
-    description: The sequencing platform / instrument family.
+    description: >-
+      The vendor's instrument family that read the data: a sequencer's, or an array
+      scanner's (#603).
   instrument_model:
     description: >-
-      The sequencing instrument's model, refining `platform` (#532): `Illumina NovaSeq
-      6000` where `platform` says `ILLUMINA`. Not applicable wherever `platform` is not.
+      The model of the sequencer or array scanner that read the data, refining `platform`
+      (#532, #603): `Illumina NovaSeq 6000` or `Illumina iScan` where `platform` says
+      `ILLUMINA`. Not applicable wherever `platform` is not.
 
   generated_by:
     description: >-
@@ -1427,6 +1430,12 @@ enums:
         meaning: EFO:0003753
       "Methylation array":
         meaning: EFO:0002759
+      "Genotyping array":
+        description: >-
+          EFO's genotyping by array: polymorphisms in DNA read on an array (an Illumina
+          genotyping BeadChip, #603). None of EFO's parents of it (genotyping, DNA assay,
+          assay by array) is a value here, so it names no `is_a`.
+        meaning: EFO:0002767
       Histology:
         meaning: OBI:0600020
 
@@ -1441,10 +1450,12 @@ enums:
 
   instrument_model_enum:
     description: >-
-      Sequencing instrument models, spelled exactly as ENA/SRA's controlled
-      `INSTRUMENT_MODEL` strings (SRA.common.xsd, enasequence/schema) for the
-      platforms in `platform_enum`; SRA's `unspecified` is not a model and is not
-      here (a file whose model is unknown is `not_classified`). `meaning` is the EFO
+      Instrument models for the platforms in `platform_enum`. A sequencer's is spelled
+      exactly as ENA/SRA's controlled `INSTRUMENT_MODEL` string (SRA.common.xsd,
+      enasequence/schema); SRA's `unspecified` is not a model and is not here (a file
+      whose model is unknown is `not_classified`). SRA lists no array scanner, so an
+      array scanner's model is our own term, spelled after the vendor's product name
+      (#603). `meaning` is the EFO
       term whose label names the same model, recorded where EFO has one and never
       followed at run time. Where EFO's nearest term is broader or narrower (its one
       `Illumina HiSeq X` for SRA's `HiSeq X Five` / `HiSeq X Ten`, its `ONT GridION
@@ -1494,6 +1505,12 @@ enums:
         meaning: EFO:0010962
       "NextSeq 2000":
         meaning: EFO:0010963
+      # --- Illumina array scanners (no SRA string; our own terms, #603) ---
+      "Illumina iScan":
+        description: >-
+          Illumina's iScan System, the scanner that reads Infinium BeadChips into IDAT
+          files. No ontology term names it (an OLS search finds none in EFO or OBI), so it
+          records no meaning.
       # --- PacBio (SRA platform PACBIO_SMRT) ---
       "Onso":
         meaning: EFO:0920007

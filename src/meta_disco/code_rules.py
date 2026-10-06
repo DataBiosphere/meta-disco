@@ -273,6 +273,39 @@ SAMPLE_MAP_CONTENT = CodeRule(
         "is only named like a map keeps what its name says."
     ),
 )
+IDAT_CHIP_TYPE = CodeRule(
+    id="idat_chip_type",
+    module=HEADER_CLASSIFIER,
+    basis=BASIS_CONTENT,
+    source_type=SOURCE_CONTENT_READ,
+    reads="an Illumina IDAT's header: its chip type (field 403) and its number of probes (field 1000)",
+    sets=("data_modality", "assay_type"),
+    rationale=(
+        "Genotyping and methylation BeadChips both write IDAT, so the extension cannot say "
+        "which (#603). A chip is recognised only as the exact chip type and probe count read "
+        "from real files: 1-95um_multi-swath_for_8x2-5M with 2,522,340 probes is the HPRC's "
+        "Infinium Omni2.5-8 v1.3 genotyping BeadChip, as its methods name it (Liao et al. "
+        "2023, PMC10172123). Any other chip, a methylation chip included, is left "
+        "not_classified with what was read."
+    ),
+)
+IDAT_SCANNER = CodeRule(
+    id="idat_scanner",
+    module=HEADER_CLASSIFIER,
+    basis=BASIS_CONTENT,
+    source_type=SOURCE_CONTENT_READ,
+    reads="an Illumina IDAT's run log (field 300): the software each Scan row names",
+    sets=("platform", "instrument_model"),
+    rationale=(
+        "The run log records the software that scanned the chip, not the scanner's model, so "
+        "the model is inferred from the software: iScan Control Software is the software of "
+        "Illumina's iScan System, the scanner the HPRC's methods name for its arrays (#603). "
+        "If another Illumina scanner ran the same software, its files would be called iScan; "
+        "a source naming the scanner would settle it. Every Scan row must name the same "
+        "recognised software; otherwise platform and instrument are left not_classified with "
+        "what was read."
+    ),
+)
 INDEX_BY_EXTENSION = CodeRule(
     id="index_by_extension",
     module=INDEX_PRODUCER,
@@ -313,6 +346,8 @@ CODE_RULES = (
     RGFA_STABLE_RANK_REFERENCE,
     TAR_INNER_FORMAT,
     SAMPLE_MAP_CONTENT,
+    IDAT_CHIP_TYPE,
+    IDAT_SCANNER,
     INDEX_BY_EXTENSION,
     INHERITED_FROM_PARENT,
 )

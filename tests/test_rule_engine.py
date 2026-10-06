@@ -821,7 +821,6 @@ class TestSpecialFileTypes:
             pytest.param("sample.pvar", "genomic", id="PLINK .pvar is genomic"),
             pytest.param("sample.psam", "genomic", id="PLINK .psam is genomic"),
             pytest.param("sample.h5ad", "transcriptomic", id="single-cell matrix"),
-            pytest.param("sample.idat", "epigenomic.methylation", id="IDAT is methylation"),
             pytest.param("GTEX-18A6Q-1126.svs", "imaging.microscopy", id="SVS is histology"),
         ],
     )

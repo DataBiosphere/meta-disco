@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Meta-disco extracts and validates metadata from biological data files (BAM, CRAM, FASTQ, etc.) for the AnVIL Explorer and Terra Data Repository. It infers six dimensions — `data_modality`, `data_type`, `reference_assembly`, `assay_type`, `platform`, `instrument_model` — from filenames, extensions, and file headers (BAM/SAM `@SQ`/`@RG`, VCF `##contig`, FASTQ read names, FASTA/GFA content), using a deterministic tiered rule engine.
+Meta-disco extracts and validates metadata from biological data files (BAM, CRAM, FASTQ, etc.) for the AnVIL Explorer and Terra Data Repository. It infers six dimensions — `data_modality`, `data_type`, `reference_assembly`, `assay_type`, `platform`, `instrument_model` — from filenames, extensions, and file headers (BAM/SAM `@SQ`/`@RG`, VCF `##contig`, FASTQ read names, FASTA/GFA content, IDAT chip type and scanner), using a deterministic tiered rule engine.
 
 ## Architecture
 
@@ -105,10 +105,12 @@ evidence}` entry — plus the controlled vocabulary:
   proteomic, metabolomic, microbiome and their children
 - **classification_status_enum**: classified, not_applicable, not_classified, conflict
 - **instrument_model_enum**: ENA/SRA's instrument-model strings for the platforms in
-  `platform_enum`, with EFO ids as `meaning` where EFO has the same model (#532)
+  `platform_enum`, with EFO ids as `meaning` where EFO has the same model (#532), and our own
+  term for an array scanner, which SRA does not list (`Illumina iScan`, #603)
 - **assay_type_enum**: EFO's assay terms as an `is_a` tree, each term's ontology id as `meaning`
   (#533): EFO's, except `Histology`'s, which is OBI's `histological assay` as EFO imports it; a
-  term of our own (`snATAC-seq`) has no id and sits under the EFO term it narrows
+  term of our own (`snATAC-seq`) has no id and sits under the EFO term it narrows; the two
+  array assays (`Methylation array`, `Genotyping array`) are EFO terms with no parent among the values
 - also **data_type_enum**, **platform_enum**
 
 `status` is required on every dimension; `value` is null unless status is `classified`.
@@ -317,10 +319,10 @@ evidence}` entry — plus the controlled vocabulary:
     deployment's: output and the header cache stay prod's paths until #480/#479.
   - **Every producer builds `records.OutputRecord`** (#450) — the pipeline through
     `from_work_item`, the four standalone producers through `from_record`. A per-record
-    field added there reaches all twelve outputs; one wired into a producer does not.
+    field added there reaches all thirteen outputs; one wired into a producer does not.
     That is why the per-producer sweeps for the catalog identity (#433), and formerly
     for the `published` block (#424, deleted by #513), are gone: `test_output_shape`
-    pins the record's key set across all twelve instead.
+    pins the record's key set across all thirteen instead.
     Add a new standalone producer to `STANDALONE_PRODUCERS` in `tests/producer_sweep`
     and that test picks it up.
   - **Output records carry no `dataset_id`** (#450). It is an input-contract slot and
@@ -358,7 +360,7 @@ evidence}` entry — plus the controlled vocabulary:
     `parent_kind`, and `named_by`, every source that named it (the step has its own). A parent no file or
     two files of the dataset carry gives none. Steps the source tables state are built at
     reconcile (#577), and reconcile inherits across every step (#571).
-  - **A producer is declared once**, in `producers.PRODUCERS` — the twelve writers of a
+  - **A producer is declared once**, in `producers.PRODUCERS` — the thirteen writers of a
     run's `*_classifications.json` files. Add one there, never to a second list:
     `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,
     and the three hand-maintained lists they replaced are what let a registered type

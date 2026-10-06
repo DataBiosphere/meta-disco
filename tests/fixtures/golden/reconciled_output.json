@@ -880,6 +880,151 @@
       }
     ]
   },
+  "idat": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "credited_to": "filled_by_inference",
+            "evidence": [
+              {
+                "reason": "chip type '1-95um_multi-swath_for_8x2-5M', 2522340 probes: an Illumina genotyping BeadChip",
+                "rule_id": "idat_chip_type",
+                "source_type": "content_read",
+                "tier": 4,
+                "value": "Genotyping array"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "Genotyping array"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "Genotyping array"
+          },
+          "data_modality": {
+            "credited_to": "filled_by_inference",
+            "evidence": [
+              {
+                "reason": "chip type '1-95um_multi-swath_for_8x2-5M', 2522340 probes: an Illumina genotyping BeadChip",
+                "rule_id": "idat_chip_type",
+                "source_type": "content_read",
+                "tier": 4,
+                "value": "genomic.genotyping"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "genomic.genotyping"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "genomic.genotyping"
+          },
+          "data_type": {
+            "credited_to": "filled_by_inference",
+            "evidence": [
+              {
+                "reason": "IDAT is Illumina's BeadChip intensity format, written by genotyping and methylation chips alike, so the extension cannot say which chip wrote the file, only that it is array signal (#603). Its intensities are keyed by probe, not by genome coordinate, so no reference applies until genotypes are called against a chip manifest",
+                "rule_id": "idat_array_signal",
+                "source_type": "filename_rule",
+                "tier": 1,
+                "value": "array_signal"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "array_signal"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "array_signal"
+          },
+          "instrument_model": {
+            "credited_to": "filled_by_inference",
+            "evidence": [
+              {
+                "reason": "every one of 1 Scan rows names 'iScan Control Software'",
+                "rule_id": "idat_scanner",
+                "source_type": "content_read",
+                "tier": 4,
+                "value": "Illumina iScan"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "Illumina iScan"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "Illumina iScan"
+          },
+          "platform": {
+            "credited_to": "conflict_sources",
+            "evidence": [
+              {
+                "reason": "every one of 1 Scan rows names 'iScan Control Software'",
+                "rule_id": "idat_scanner",
+                "source_type": "content_read",
+                "tier": 4,
+                "value": "ILLUMINA"
+              },
+              {
+                "join_key": "drs_uri",
+                "match_exact": true,
+                "raw_value": "PacBio",
+                "rule_id": "platform.golden",
+                "source": {
+                  "column": "platform",
+                  "dataset": "AnVIL_GOLDEN",
+                  "name": "anvil",
+                  "table": "sequencing"
+                },
+                "source_type": "repository_metadata",
+                "value": "PACBIO"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "ILLUMINA"
+            },
+            "status": "conflict",
+            "use": "published",
+            "value": null
+          },
+          "reference_assembly": {
+            "credited_to": "not_applicable",
+            "evidence": [
+              {
+                "reason": "IDAT is Illumina's BeadChip intensity format, written by genotyping and methylation chips alike, so the extension cannot say which chip wrote the file, only that it is array signal (#603). Its intensities are keyed by probe, not by genome coordinate, so no reference applies until genotypes are called against a chip manifest",
+                "rule_id": "idat_array_signal",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "drs_uri": "drs://golden/v2_g-object-ab",
+        "entry_id": "g-idat-1",
+        "file_format": ".idat",
+        "file_id": "g-file-ab",
+        "file_name": "201868530174_R03C01_Red.idat",
+        "file_size": 32792621,
+        "generated_by": null,
+        "md5sum": "abababababababababababababababab"
+      }
+    ]
+  },
   "images": {
     "classifications": [
       {

@@ -469,7 +469,43 @@ class BedSignals:
 
 
 @dataclass(frozen=True, kw_only=True)
-class BedEvidence(CachedEvidence):
+class _RecordEvidence(CachedEvidence):
+    """Cached evidence whose payload is one typed record, serialized as its ``asdict`` shape.
+
+    ``PAYLOAD_TYPE`` is the record's class, whose ``from_evidence`` parses the cached
+    dict. A ``KeyError`` or ``TypeError`` it raises is a cache miss here, keeping
+    ``load``'s "any miss -> None" contract at the boundary. Each record class raises
+    ``KeyError`` on a missing key; ``IdatHeader`` also raises ``TypeError`` on a field of
+    the wrong type.
+    """
+
+    PAYLOAD_TYPE: ClassVar[type]
+
+    def to_json(self) -> dict:
+        data = super().to_json()
+        data[self.PAYLOAD_KEY] = asdict(self.payload)
+        return data
+
+    @classmethod
+    def from_json(cls, data: object) -> Any:
+        # The base parses identity and provenance and guards the cache miss; the payload,
+        # which it built as a raw dict, is rebuilt as the typed record.
+        base = super().from_json(data)
+        if base is None:
+            return None
+        assert isinstance(data, dict)  # base returned non-None ⇒ data parsed as a dict
+        payload = data[cls.PAYLOAD_KEY]
+        if not isinstance(payload, dict):
+            return None
+        try:
+            record = cls.PAYLOAD_TYPE.from_evidence(payload)
+        except (KeyError, TypeError):
+            return None
+        return replace(base, **{cls.PAYLOAD_KEY: record})
+
+
+@dataclass(frozen=True, kw_only=True)
+class BedEvidence(_RecordEvidence):
     """Cached BED coordinate signals (chromosomes, chr-prefix, per-contig max coords).
 
     The payload is a single :class:`BedSignals`, serialized as its ``asdict`` shape (the
@@ -479,6 +515,7 @@ class BedEvidence(CachedEvidence):
     """
 
     PAYLOAD_KEY: ClassVar[str] = "signals"
+    PAYLOAD_TYPE: ClassVar[type] = BedSignals
 
     signals: BedSignals
 
@@ -489,27 +526,57 @@ class BedEvidence(CachedEvidence):
         reports header lines for its text payload."""
         return self.signals.line_count
 
-    def to_json(self) -> dict:
-        # The payload is a typed BedSignals; serialize it to its plain-dict shape.
-        data = super().to_json()
-        data[self.PAYLOAD_KEY] = asdict(self.signals)
-        return data
+
+@dataclass(frozen=True)
+class IdatHeader:
+    """What the IDAT reader takes from an Illumina IDAT's header (#603).
+
+    ``probe_count`` is the chip's number of probes (bead types, each read on several
+    beads), ``chip_type`` the BeadChip's physical format, and ``scan_software`` the
+    software each ``Scan`` row of the run log names, in order. A field the file does not carry is ``None``; no ``Scan`` row is ``[]``.
+    """
+
+    probe_count: int | None
+    chip_type: str | None
+    scan_software: list[str]
 
     @classmethod
-    def from_json(cls, data: object) -> Any:
-        # Delegate identity/provenance parse + the cache-miss guard to the base, then
-        # rebuild the payload as a typed BedSignals (base built it as a raw dict).
-        base = super().from_json(data)
-        if base is None:
-            return None
-        assert isinstance(data, dict)  # base returned non-None ⇒ data parsed as a dict
-        payload = data[cls.PAYLOAD_KEY]
-        # A corrupt file whose signals are not the expected dict is a cache miss, not a
-        # crash — keeping load()'s "any miss -> None" contract at the boundary.
-        if not isinstance(payload, dict):
-            return None
-        try:
-            signals = BedSignals.from_evidence(payload)
-        except (KeyError, TypeError):
-            return None
-        return replace(base, signals=signals)
+    def from_evidence(cls, raw: dict) -> IdatHeader:
+        """Parse cached evidence JSON into a header.
+
+        Raises:
+            KeyError: a field is missing.
+            TypeError: a field holds another type than the reader writes, or a negative
+                probe count.
+        """
+        header = cls(probe_count=raw["probe_count"], chip_type=raw["chip_type"], scan_software=raw["scan_software"])
+        if not (
+            (
+                header.probe_count is None
+                or (
+                    isinstance(header.probe_count, int)
+                    and not isinstance(header.probe_count, bool)
+                    and header.probe_count >= 0
+                )
+            )
+            and (header.chip_type is None or isinstance(header.chip_type, str))
+            and isinstance(header.scan_software, list)
+            and all(isinstance(s, str) for s in header.scan_software)
+        ):
+            raise TypeError(f"cached IDAT header has a field of the wrong type: {raw!r}")
+        return header
+
+
+@dataclass(frozen=True, kw_only=True)
+class IdatEvidence(_RecordEvidence):
+    """Cached IDAT header fields (#603): a single :class:`IdatHeader`."""
+
+    PAYLOAD_KEY: ClassVar[str] = "header"
+    PAYLOAD_TYPE: ClassVar[type] = IdatHeader
+
+    header: IdatHeader
+
+    @property
+    def count(self) -> int:
+        """The run log's Scan rows. Nothing reads it; it replaces the base's ``len(payload)``, as one record has no length."""
+        return len(self.header.scan_software)
