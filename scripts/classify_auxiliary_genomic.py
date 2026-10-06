@@ -3,7 +3,8 @@
 
 Uses rules from the bundled unified_rules.yaml (package data of meta_disco.rules) for:
 - .fast5, .pod5 -> genomic.raw_signal (ONT raw signal data)
-- .pvar, .psam, .pgen -> genomic.genotypes (PLINK2 genotype data)
+- .psam, .pgen -> genomic.genotypes (PLINK2 genotype data); a .pvar is the VCF
+  producer's, which reads its reference from its VCF-style header (#561)
 """
 
 import argparse

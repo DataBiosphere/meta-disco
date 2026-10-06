@@ -33,7 +33,7 @@ def _environment_ready(monkeypatch):
 # parent in the run (declined, #438), and one no producer claims (the catch-all).
 _CATALOG = [
     {"filename": name, "awsFasta": f"s3://bucket/{name}", "fileSize": 1}
-    for name in ("HG002.png", "HG002.pvar", "HG002.bam.bai", "HG002.readme")
+    for name in ("HG002.png", "HG002.pgen", "HG002.bam.bai", "HG002.readme")
 ]
 # The exact failure from the issue: a record with no location has no URL to hash, so no
 # key at all. It must be excluded and named, never reach a phase.
@@ -79,7 +79,7 @@ def test_hprc_shaped_records_complete_every_phase(tmp_path, capsys):
     by_name = {row["file_name"]: fname for fname, row in rows}
     assert by_name == {
         "HG002.png": "image_classifications.json",
-        "HG002.pvar": "auxiliary_classifications.json",
+        "HG002.pgen": "auxiliary_classifications.json",
         "HG002.bam.bai": "index_classifications.json",
         "HG002.readme": "remaining_classifications.json",
     }

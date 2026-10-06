@@ -97,7 +97,15 @@ BAM_CONFIG = FileTypeConfig(
 
 VCF_CONFIG = FileTypeConfig(
     name="vcf",
-    extensions=(".vcf", ".vcf.gz", ".g.vcf.gz", ".gvcf.gz"),
+    # A `.vcf.bgz` is a bgzipped VCF (1000 Genomes phase 3, in ANVIL_1000G_PRIMED). A PLINK 2
+    # `.pvar` is no VCF, but one written from a VCF keeps its `##` header, so its `##contig`
+    # lengths give its reference (#561); the VCF header rules, scoped to VCF extensions, do
+    # not fire on it, and its data_type stays the PLINK extension rule's `genotypes`. A
+    # `.pvar` whose head does not start with a `#` line (a headerless one, in `.bim` column
+    # order) is unreadable here, and every dimension of it not_classified, as for any file a
+    # header reader cannot read (#155); one whose header is only `#CHROM` is read, and gives no
+    # reference. Its step is never read (`NOT_A_VCF`).
+    extensions=(".vcf", ".vcf.gz", ".vcf.bgz", ".g.vcf.gz", ".gvcf.gz", ".pvar"),
     fetcher=fetch_vcf_header,
     classifier=classify_from_vcf_header,
     summary_printer=print_vcf_summary,

@@ -113,6 +113,9 @@ def _assert_matched(output: dict, file_name: str) -> dict:
         pytest.param(
             "HG01874.chr17.hc.vcf.gz.tbi", ".tbi", "HG01874.chr17.hc.vcf.gz", True, id="dotted name still works"
         ),
+        pytest.param(
+            "ALL.chr19.genotypes.vcf.bgz.tbi", ".tbi", "ALL.chr19.genotypes.vcf.bgz", True, id="vcf.bgz.tbi (#561)"
+        ),
     ],
 )
 def test_parent_candidate_generation(index_name, extension, parent, only_candidate):

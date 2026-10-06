@@ -8,7 +8,7 @@ its lines, so neither the last line nor any one line's position says which step 
 file.
 
 **The producing step is the end of the data flow.** Steps chain where one's output is
-another's input, compared by base name with any ``.gz`` dropped (``chr1.genotyped.vcf``
+another's input, compared by base name with any ``.gz`` or ``.bgz`` dropped (``chr1.genotyped.vcf``
 is consumed as ``…/chr1.genotyped.vcf.gz``). An end is a step whose output no other step
 consumes. An end whose output names a file other than this one did not make this file
 (a ``GenomicsDBImport`` workspace whose consumer's line is not in the header), so it is
@@ -67,6 +67,9 @@ NO_ACTIVITY = "no_activity"
 PARENT_NOT_FOUND = "parent_not_found"
 PARENT_AMBIGUOUS = "parent_ambiguous"
 PARENT_UNREADABLE = "parent_unreadable"
+# A PLINK 2 `.pvar` keeps the `##` command lines of the VCF it was converted from and adds
+# none of its own, so its header never names the step that made it (#561).
+NOT_A_VCF = "not_a_vcf"
 OUTCOMES = (
     STEPPED,
     NO_COMMAND_LINE,
@@ -77,6 +80,7 @@ OUTCOMES = (
     PARENT_NOT_FOUND,
     PARENT_AMBIGUOUS,
     PARENT_UNREADABLE,
+    NOT_A_VCF,
 )
 
 
@@ -125,18 +129,20 @@ def steps_of(header: VCFHeader) -> list[Step] | None:
 
 
 def data_name(path: str) -> str:
-    """A path as a chain compares it: its base name, case-folded, less any ``.gz`` and GATK's ``gendb://``."""
+    """A path as a chain compares it: its base name, case-folded, less any ``.gz`` or ``.bgz`` and GATK's ``gendb://``."""
     name = PurePosixPath(path.removeprefix("gendb://")).name.lower()
-    return name.removesuffix(".gz")
+    return name.removesuffix(".gz").removesuffix(".bgz")
 
 
 def producing_step(header: VCFHeader, file_name: str) -> tuple[Step | None, str]:
     """The step in a VCF header that made ``file_name``, the one end of its data flow, and the outcome.
 
     See the module docstring for the rule. ``(step, STEPPED)``, or ``(None, reason)``:
-    :data:`NO_COMMAND_LINE`, :data:`UNKNOWN_TOOL`, :data:`NO_SINGLE_END` or
+    :data:`NOT_A_VCF`, :data:`NO_COMMAND_LINE`, :data:`UNKNOWN_TOOL`, :data:`NO_SINGLE_END` or
     :data:`OUTPUT_NOT_THIS_FILE`.
     """
+    if file_name.lower().endswith(".pvar"):
+        return None, NOT_A_VCF
     steps = steps_of(header)
     if steps is None:
         return None, UNKNOWN_TOOL

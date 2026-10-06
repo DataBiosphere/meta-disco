@@ -485,12 +485,13 @@ class TestRuleEngineE2E:
     def test_a_filename_classifies(self, filename, expected):
         assert_dimensions(engine.classify_extended(FileInfo.from_filename(filename)), expected)
 
-    def test_plink_1000g(self):
+    def test_plink_1000g_takes_no_reference_from_its_dataset(self):
+        """Half of ANVIL_1000G_PRIMED is hg19: the dataset's name is no file's reference (#561)."""
         result = engine.classify_extended(
             FileInfo.from_filename("IBS.3.pgen", dataset_title="ANVIL_1000G_PRIMED_data_model")
         )
         assert result.data_modality == "genomic"
-        assert result.reference_assembly == "GRCh38"
+        assert result.reference_assembly is None
 
 
 # =============================================================================

@@ -172,6 +172,17 @@ def test_an_end_that_names_another_file_is_not_this_files_producer():
     assert ps.producing_step(header(HC), "HG00096.chr11.hc.vcf.gz")[1] == ps.OUTPUT_NOT_THIS_FILE
 
 
+def test_a_pvar_never_takes_a_step_from_the_vcf_it_was_converted_from():
+    """A `.pvar` keeps its source VCF's command lines, and plink2 adds none of its own, so a
+    HaplotypeCaller line naming no output must not become the `.pvar`'s step (#561)."""
+    assert ps.producing_step(header(HC), "HG00096.chr11.hc.vcf.gz")[1] == ps.OUTPUT_NOT_THIS_FILE
+    assert ps.producing_step(header(HC), "HG00096.chr11.pvar") == (None, ps.NOT_A_VCF)
+
+
+def test_a_bgz_compares_as_its_vcf():
+    assert ps.data_name("dir/ALL.chr1.genotypes.vcf.bgz") == ps.data_name("ALL.chr1.genotypes.vcf")
+
+
 def test_a_header_with_no_command_line_or_an_undeclared_tool_declines():
     assert ps.producing_step(header("##source=Sniffles2"), "x.vcf.gz")[1] == ps.NO_COMMAND_LINE
     assert ps.producing_step(header(gatk4("Mutect2", "-O x.vcf")), "x.vcf.gz")[1] == ps.UNKNOWN_TOOL

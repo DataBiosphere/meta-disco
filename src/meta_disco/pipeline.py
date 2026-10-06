@@ -77,6 +77,11 @@ def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> 
     return records
 
 
+# The name suffixes of a gzip-compressed file the header readers decompress: a `.bgz` is
+# bgzip's BGZF, as 1000 Genomes phase 3 names its VCFs (#561).
+GZIP_SUFFIXES = (".gz", ".bgz")
+
+
 class RecordOutcome(NamedTuple):
     """The outcome of processing one record, tallied by ``_run_parallel``.
 
@@ -501,11 +506,13 @@ class ClassifyPipeline:
                 validation_failed=True,
             )
 
-        has_gz_ext = any(ext.endswith(".gz") for ext in self.config.extensions)
+        has_gz_ext = any(ext.endswith(GZIP_SUFFIXES) for ext in self.config.extensions)
         # Lowercased for the same reason routing is: a `.VCF.GZ` reaches this reader, and
         # read as uncompressed its gzip bytes classify as nothing.
         is_gzipped = (
-            (item.file_name.lower().endswith(".gz") or item.file_format.lower().endswith(".gz")) if has_gz_ext else True
+            (item.file_name.lower().endswith(GZIP_SUFFIXES) or item.file_format.lower().endswith(GZIP_SUFFIXES))
+            if has_gz_ext
+            else True
         )
 
         was_cached = self.resume and self._is_cached(item.file_md5sum)

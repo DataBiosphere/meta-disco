@@ -482,17 +482,30 @@ def _read_head_text(stream, raw: "_RawRangeReader", *, cap: int) -> tuple[str, b
 
 
 class _VcfMatcher:
-    """Collect ``#`` header lines and up to ``max_variants`` variant lines from a VCF head."""
+    """Collect the ``#`` header lines a VCF head starts with, and up to ``max_variants`` variant lines.
+
+    The header is the run of ``#`` lines (a UTF-8 byte-order mark before the first one
+    allowed) before the first other non-blank line: a ``#`` line after it is not header. So a
+    head that does not start with ``#`` (gzip bytes read as text, which may hold a ``#``
+    anywhere) has no header, and is refused rather than cached as one (#561).
+    """
 
     def __init__(self, max_variants: int = 100):
         self.header_lines: list[str] = []
         self.variant_lines: list[str] = []
         self._max_variants = max_variants
+        self._in_header = True
 
     def feed(self, line: str) -> bool:
-        if line.startswith("#"):
+        if not line.strip():
+            return False
+        if self._in_header and not self.header_lines:
+            line = line.removeprefix("\ufeff")
+        if self._in_header and line.startswith("#"):
             self.header_lines.append(line)
-        elif line.strip() and len(self.variant_lines) < self._max_variants:
+            return False
+        self._in_header = False
+        if len(self.variant_lines) < self._max_variants:
             self.variant_lines.append(line)
         return len(self.variant_lines) >= self._max_variants
 
@@ -882,7 +895,7 @@ def fetch_vcf_header(
     """Read VCF header from S3 via a streamed range read.
 
     If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
-    Returns header text (lines starting with #). Raises ``FetchError`` naming the cause when
+    Returns header text: the run of ``#`` lines the head starts with (``_VcfMatcher``). Raises ``FetchError`` naming the cause when
     the range read fails or no header is found, so the record is kept as a ``not_classified``
     row instead of vanishing (#155).
 
@@ -912,7 +925,7 @@ def fetch_vcf_header(
         )
         return header_text
 
-    raise FetchError("no VCF header lines (no '#' lines) in the read head")
+    raise FetchError("no VCF header lines (no run of '#' lines starting the read head)")
 
 
 # =============================================================================

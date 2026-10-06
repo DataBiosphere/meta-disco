@@ -502,8 +502,8 @@ rules:
   # ---------------------------------------------------------------------------
   # Reference assembly in filename
   # ---------------------------------------------------------------------------
-  # A name or dataset that mentions a reference says nothing about whether the
-  # file can have one, so these four rules claim only on the file kinds that hold
+  # A name that mentions a reference says nothing about whether the
+  # file can have one, so these three rules claim only on the file kinds that hold
   # coordinates on a reference: alignments, variants, intervals and signal tracks,
   # sequence and its companions (a `.dict` sequence dictionary, `.sizes` contig
   # lengths), pangenome graphs and the vg indexes built from them, GFF3 annotations,
@@ -523,7 +523,7 @@ rules:
   # on purpose (#523). An archive whose name keeps an inner format
   # (`x.GRCh38.bam.tar.gz`) parses to that format's extension, so it is claimed as
   # the content it holds, the way the tar producer claims its `data_type` from the
-  # members it reads. The anchor is defined here and reused by the other three rules.
+  # members it reads. The anchor is defined here and reused by the other two rules.
   - id: filename_ref_grch38
     tier: 2
     scope: filename
@@ -564,23 +564,8 @@ rules:
       reference_assembly: CHM13
     rationale: "Filename contains CHM13/T2T reference indicator"
 
-  # ---------------------------------------------------------------------------
-  # Dataset-based reference rules
-  # ---------------------------------------------------------------------------
-  # dataset_t2t_reference was removed — replaced by coordinate-based detection
-  # via fetchers.fetch_bed_signals, which reads actual BED file content from S3.
-  # The blanket dataset rule misclassified GRCh38 liftover/comparison files
-  # in T2T datasets as CHM13.
-
-  - id: dataset_1000g_reference
-    tier: 2
-    scope: filename
-    when:
-      extensions: *reference_bearing_extensions
-      dataset_pattern: "ANVIL_1000G_PRIMED_data_model"
-    then:
-      reference_assembly: GRCh38
-    rationale: "1000 Genomes Project high-coverage data uses GRCh38 reference"
+  # No rule takes a reference from a dataset's name: half of a dataset can be on another
+  # build (ANVIL_1000G_PRIMED is half hg19, #561), so a file's own name or content decides.
 
   # ---------------------------------------------------------------------------
   # FASTA assembly indicators
