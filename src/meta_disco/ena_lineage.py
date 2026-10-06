@@ -4,8 +4,8 @@ ANVIL_T2T_CHRY's 1KGP CRAMs were re-aligned from reads that dataset does not hol
 no table of it names their reads and no md5 of theirs is ENA's. Each CRAM's own
 ``samtools stats`` file, on the same sample row, gives the reads and bases in it; a
 sequencing run is one event, so the one run of the declared ENA studies with exactly that
-read count *and* base count is the run whose reads the CRAM holds, whichever copy of them
-the aligner was given. Those reads are files of another dataset (ANVIL_T2T's
+read count and base count (the base count mostly the read count times the read length) is
+the run whose reads the CRAM holds, whichever copy of them the aligner was given. Those reads are files of another dataset (ANVIL_T2T's
 ``ERR…_1/_2.fastq.gz``, ENA's own files by md5, #606), so the importer writes each CRAM a
 lineage line per FASTQ of its run, naming that dataset as the parent's
 (``parent_dataset``), and reconcile carries the run's answer down the CRAM's step (#571).
@@ -15,20 +15,26 @@ declared exception to a file's lineage staying in its dataset (ADR-0002 decision
 :func:`check` holds the map to the deployment and the manifests: every dataset it names
 declared and on disk, every table and column present.
 
-**The gate is both counts** (contract 2.10): a CRAM is linked only to the one run whose
-``read_count`` and ``base_count`` equal its stats file's ``raw total sequences`` and
-``total length``, and only where every FASTQ ENA lists for that run is a file of the
-``reads_in`` dataset with that name and ENA's md5. **The step is the CRAM's own word**:
-``raw_activity`` is the program and subcommand of the CRAM header's ``@PG`` lines whose
-command names a FASTQ (``bwa mem``, once per lane), verbatim, when they all name the same
-one; what it means is the activity translation table's (#584). Every CRAM not linked is
-counted by why (:data:`OUTCOMES`), never written.
+**The gate is the counts, with the identity checked on both sides** (contract 2.10): a CRAM
+is linked only to the one run whose ``read_count`` and ``base_count`` equal its stats
+file's ``raw total sequences`` and ``total length``, where the stats file's own command
+line read a file of the CRAM's name, every FASTQ ENA lists for that run is a file of the
+``reads_in`` dataset with that name and ENA's md5, and the CRAM's ``@RG`` sample is the
+sample of the file ENA was submitted (``NA19201.final.cram`` for NA19201). **The step is
+the CRAM's own word**: ``raw_activity`` is the program, and its subcommand where it has
+one, of the CRAM header's ``@PG`` lines whose command names a FASTQ (``bwa mem``, once
+per lane), verbatim, when they all name the same one; what it means is the activity
+translation table's (#584). Every CRAM not linked is counted by why (:data:`OUTCOMES`),
+never written.
 
 **What was read is kept** beside each generation (``<table>.inputs.json``): ENA's rows
-as fetched, and per CRAM its stats file's counts and its header's steps, so a re-import
-from it (:func:`load_inputs`) reads no network and writes the same lines. Stats files and
-headers are read :data:`WORKERS` at a time; ENA's portal and the S3 mirror both drop
-requests now and then, so each retries (:data:`ENA_MAX_WAIT`, :data:`STATS_ATTEMPTS`).
+as fetched, and per CRAM what its stats file and header gave, so a re-import from it
+(:func:`load_inputs`) reads no network and, against the same map and manifests, writes the
+same lines; kept inputs that disagree with the map or the manifests are refused
+(:func:`require_inputs_agree`). Stats files and headers are read :data:`WORKERS` at a time.
+ENA's portal answers 500 for minutes at a time, so an HTTP 429/5xx from it is waited out
+(:data:`ENA_MAX_WAIT`); a stats read cut off by the network is tried again
+(:data:`STATS_ATTEMPTS`).
 """
 
 from __future__ import annotations
@@ -74,11 +80,13 @@ PARENT_COLUMN = "fastq_ftp"
 # What a line names as raw_activity's column: the child header's program lines.
 STEP_COLUMN = "@PG"
 # What is asked of ENA for each run of a study.
-FIELDS = (SOURCE_KEY, "study_accession", "read_count", "base_count", "fastq_ftp", "fastq_md5")
+FIELDS = (SOURCE_KEY, "study_accession", "read_count", "base_count", "fastq_ftp", "fastq_md5", "submitted_ftp")
 # A stats file's head holding its summary numbers, which sit in its first ~2 KB.
 STATS_HEAD_BYTES = 16 * 1024
 _STATS_READS = "SN\traw total sequences:"
 _STATS_BASES = "SN\ttotal length:"
+_STATS_COMMAND = "# The command line was:"
+_ALIGNMENT = (".cram", ".bam", ".sam")
 _FASTQ = (".fastq.gz", ".fq.gz", ".fastq", ".fq")
 # ENA's portal answers 500 for minutes at a time: seconds one study's report may spend waiting.
 ENA_MAX_WAIT = 600.0
@@ -89,26 +97,32 @@ WORKERS = 8
 PROGRESS_EVERY = 500
 
 # Each alignment's outcome, one per CRAM, in the order they are tested. ``no_stats``: the
-# rows naming it give no one stats file (none, or several).
+# rows naming it give no one stats file (none, or several); ``stats_of_other_file``: the
+# stats file's command read a file of another name; ``sample_differs``: the CRAM's @RG
+# sample is not the sample of the file ENA was submitted.
 LINKED = "linked"
 NO_STATS = "no_stats"
 STATS_UNREADABLE = "stats_unreadable"
+STATS_OF_OTHER_FILE = "stats_of_other_file"
 NO_RUN = "no_run"
 SEVERAL_RUNS = "several_runs"
 READS_NOT_IN_DATASET = "reads_not_in_dataset"
 HEADER_UNREADABLE = "header_unreadable"
 NO_READ_STEP = "no_read_step"
 SEVERAL_READ_STEPS = "several_read_steps"
+SAMPLE_DIFFERS = "sample_differs"
 OUTCOMES = (
     LINKED,
     NO_STATS,
     STATS_UNREADABLE,
+    STATS_OF_OTHER_FILE,
     NO_RUN,
     SEVERAL_RUNS,
     READS_NOT_IN_DATASET,
     HEADER_UNREADABLE,
     NO_READ_STEP,
     SEVERAL_READ_STEPS,
+    SAMPLE_DIFFERS,
 )
 
 
@@ -132,12 +146,14 @@ def manifest_paths(run_map: RunLineageMap, manifest_root: Path) -> tuple[dict[st
 def check(run_map: RunLineageMap, deployment: Deployment, manifest_root: Path) -> list[str]:
     """How the map disagrees with the deployment and the manifests on disk, one line per problem; empty when none.
 
-    The map is authored against the deployment's catalog; every child and ``reads_in``
-    dataset is one the deployment declares and the catalog's sidecar names, with its
-    verbatim manifest on disk. Each entry's table has rows, and its child and counts
-    columns appear on some row, every non-empty value a DRS URI or a list of them.
+    The map is ENA's and authored against the deployment's catalog; every child and
+    ``reads_in`` dataset is one the deployment declares and the catalog's sidecar names,
+    with its verbatim manifest on disk. Each entry's table has rows, and its child and
+    counts columns appear on some row, every non-empty value a DRS URI or a list of them.
     """
     problems = []
+    if run_map.source != SOURCE:
+        problems.append(f"run lineage map: its source is {run_map.source!r}; this importer reads {SOURCE!r}'s runs")
     if run_map.catalog != deployment.catalog:
         problems.append(f"run lineage map: authored against {run_map.catalog}, not {deployment.catalog}")
     for dataset in dict.fromkeys(d for e in run_map.entries for d in (e.dataset, e.reads_in)):
@@ -193,8 +209,10 @@ class CatalogFile:
 class CramReading:
     """What was read for one alignment: its stats file's counts and its header's steps, or why not.
 
-    Kept in the inputs file, so a re-import reads none of it again. ``steps`` is each
-    distinct ``@PG`` program and subcommand that names a FASTQ, sorted; None until the
+    Kept in the inputs file, so a re-import reads none of it again. ``stats_reads`` is the
+    name of the file the stats file's command read, where it names one alignment.
+    ``steps`` is each distinct ``@PG`` program (and subcommand) whose command names a
+    FASTQ, and ``samples`` each distinct ``@RG`` ``SM``, both sorted and None until the
     header is read.
     """
 
@@ -202,8 +220,10 @@ class CramReading:
     stats_md5: str | None = None
     read_count: int | None = None
     base_count: int | None = None
+    stats_reads: str | None = None
     stats_error: str | None = None
     steps: list[str] | None = None
+    samples: list[str] | None = None
     header_error: str | None = None
 
 
@@ -220,7 +240,7 @@ class Inputs:
 
 
 FetchRuns = Callable[[list[str], "Progress"], tuple[datetime, dict[str, dict]]]
-ReadStats = Callable[[str], tuple[int, int]]
+ReadStats = Callable[[str], "StatsHead"]
 ReadHeader = Callable[[CatalogFile], str]
 Progress = Callable[[str], None]
 
@@ -257,21 +277,41 @@ def fetch_study_runs(studies: list[str], progress: Progress) -> tuple[datetime, 
     return requested_at, rows
 
 
-def stats_counts(text: str) -> tuple[int, int]:
-    """A ``samtools stats`` file's ``raw total sequences`` and ``total length``, from its head; ``ValueError`` if absent."""
-    reads = bases = None
+@dataclass(frozen=True)
+class StatsHead:
+    """What a ``samtools stats`` file's head says: its counts, and the alignment its command read (None unless one)."""
+
+    read_count: int
+    base_count: int
+    reads: str | None
+
+
+def stats_counts(text: str) -> StatsHead:
+    """A ``samtools stats`` file's ``raw total sequences`` and ``total length``, and the file its command read.
+
+    ``ValueError`` if either count is absent or not a number: not samtools stats, or a head
+    cut off before them. The file read is the one word of the command line naming an
+    alignment (``.cram``, ``.bam``, ``.sam``), by its base name.
+    """
+    counts: dict[str, int] = {}
+    command: list[str] = []
     for line in text.splitlines():
-        if line.startswith(_STATS_READS):
-            reads = int(line.split("\t")[2])
-        elif line.startswith(_STATS_BASES):
-            bases = int(line.split("\t")[2])
-    if reads is None or bases is None:
+        for label in (_STATS_READS, _STATS_BASES):
+            if line.startswith(label):
+                cells = line.split("\t")
+                if len(cells) < 3 or not cells[2].strip().isdigit():
+                    raise ValueError(f"{label.strip()!r} holds no count")
+                counts[label] = int(cells[2])
+        if line.startswith(_STATS_COMMAND):
+            command = line[len(_STATS_COMMAND) :].split()
+    if len(counts) != 2:
         raise ValueError("no raw total sequences and total length in the file's head; not samtools stats")
-    return reads, bases
+    read = {w.rsplit("/", 1)[-1] for w in command if w.endswith(_ALIGNMENT)}
+    return StatsHead(counts[_STATS_READS], counts[_STATS_BASES], next(iter(read)) if len(read) == 1 else None)
 
 
-def read_stats(md5: str) -> tuple[int, int]:
-    """The counts of the ``samtools stats`` file with this md5, read from the AnVIL S3 mirror.
+def read_stats(md5: str) -> StatsHead:
+    """What the ``samtools stats`` file with this md5 says (:func:`stats_counts`), read from the AnVIL S3 mirror.
 
     A transport failure (a dropped connection, a failed name lookup, a body cut off
     mid-read: any ``requests`` exception) is tried :data:`STATS_ATTEMPTS` times in all, then
@@ -300,18 +340,31 @@ def header_reader(evidence_dir: Path) -> ReadHeader:
 
 
 def read_steps(header_text: str) -> list[str]:
-    """The program and subcommand of each ``@PG`` command that names a FASTQ, verbatim (``bwa mem``), distinct and sorted.
+    """The program of each ``@PG`` command that names a FASTQ, with its subcommand where it has one, verbatim, distinct and sorted.
 
-    The commands are split by ``header_extractors.sam_command_words``, the readers' one
-    command-line splitter (#615).
+    ``bwa mem`` for ``bwa mem -Y … ref.fa r_1.fq.gz r_2.fq.gz``; ``minimap2`` for
+    ``minimap2 ref.fa r.fq.gz``: a second word is taken as a subcommand only where it is
+    neither an option nor a file (no ``-`` first, no ``/`` or ``.`` in it). The commands are
+    split by ``header_extractors.sam_command_words``, the readers' one command-line splitter (#615).
     """
     steps = set()
     for words in sam_command_words(parse_sam_header(header_text)):
         if not any(w.endswith(_FASTQ) for w in words[1:]):
             continue
-        program = words[:2] if len(words) > 1 and not words[1].startswith("-") and "/" not in words[1] else words[:1]
-        steps.add(" ".join(program))
+        subcommand = len(words) > 1 and not words[1].startswith("-") and not any(c in words[1] for c in "/.")
+        steps.add(" ".join(words[:2] if subcommand else words[:1]))
     return sorted(steps)
+
+
+def read_samples(header_text: str) -> list[str]:
+    """The ``SM`` of each ``@RG`` line, distinct and sorted."""
+    return sorted({rg["SM"] for rg in parse_sam_header(header_text).rg or [] if rg.get("SM")})
+
+
+def run_sample(run: dict) -> str | None:
+    """The sample of the file ENA was submitted for a run (``NA19201`` of ``…/NA19201.final.cram``), where its files name one."""
+    names = {p.rsplit("/", 1)[-1].split(".", 1)[0] for p in (run.get("submitted_ftp") or "").split(";") if p}
+    return next(iter(names)) if len(names) == 1 else None
 
 
 def _catalog_files(path: Path) -> Iterable[tuple[dict, CatalogFile]]:
@@ -453,7 +506,8 @@ def import_dataset(
 
     Raises, writing nothing, when no alignment of a table is linked: the map disagrees with
     the catalog or with ENA there, and writing nothing quietly would leave an older
-    generation current.
+    generation current. With ``stored``, also when the kept inputs disagree with the map or
+    the manifests (:func:`require_inputs_agree`).
     """
     catalog = run_map.catalog
     result = DatasetImport(dataset, generation_dir(lineage_root, SOURCE, catalog, dataset, generation))
@@ -473,6 +527,8 @@ def import_dataset(
             if entry.reads_in not in reads_index:
                 reads_index[entry.reads_in] = files_by_md5(paths[entry.reads_in])
             found = alignments(paths[dataset], entry, by_drs)
+            if stored is not None:
+                require_inputs_agree(entries, found, stored, f"{dataset}/{entry.table}")
             for child, _stats in found:
                 inputs.crams.setdefault(child.file_id, CramReading(child.file_id))
             by_counts = runs_by_counts(inputs.runs, entry.ena_studies)
@@ -489,6 +545,26 @@ def import_dataset(
             result.outcomes.update(outcomes)
             write_inputs(staging / f"{entry.table}.inputs.json", inputs, [f.file_id for f, _ in found])
     return result
+
+
+def require_inputs_agree(
+    entries: list[Entry], found: list[tuple[CatalogFile, CatalogFile | None]], inputs: Inputs, at: str
+) -> None:
+    """Refuse kept inputs that would re-import against another map or manifest than they were read for.
+
+    ``ValueError`` when the dataset's studies differ from the map's (a run of a study they
+    lack could make a link ambiguous), when an alignment the manifest names has no kept
+    reading (it was never read), or when its stats file is not the one the reading read.
+    """
+    studies = sorted({s for e in entries for s in e.ena_studies})
+    if inputs.studies != studies:
+        raise ValueError(f"{at}: kept inputs are for studies {inputs.studies}, the map names {studies}")
+    for child, stats in found:
+        reading = inputs.crams.get(child.file_id)
+        if reading is None:
+            raise ValueError(f"{at}: {child.file_name} ({child.file_id}) has no kept reading")
+        if (stats.md5 if stats is not None else None) != reading.stats_md5:
+            raise ValueError(f"{at}: {child.file_name}'s stats file is not the one its kept reading read")
 
 
 def _in_parallel(tasks: list[Callable[[], None]], progress: Progress, what: str) -> None:
@@ -514,9 +590,15 @@ def _read_stats_files(
         def read() -> None:
             reading.stats_md5 = md5
             try:
-                reading.read_count, reading.base_count = read_stats_of(md5)
+                head = read_stats_of(md5)
             except (FetchError, ValueError) as exc:
                 reading.stats_error = str(exc)
+            else:
+                reading.read_count, reading.base_count, reading.stats_reads = (
+                    head.read_count,
+                    head.base_count,
+                    head.reads,
+                )
 
         return read
 
@@ -542,9 +624,11 @@ def _read_headers(
     def task(child: CatalogFile, reading: CramReading) -> Callable[[], None]:
         def read() -> None:
             try:
-                reading.steps = read_steps(read_header(child))
+                text = read_header(child)
             except FetchError as exc:
                 reading.header_error = str(exc)
+            else:
+                reading.steps, reading.samples = read_steps(text), read_samples(text)
 
         return read
 
@@ -552,7 +636,7 @@ def _read_headers(
     for child, stats in found:
         reading = inputs.crams[child.file_id]
         unread = reading.steps is None and reading.header_error is None
-        if unread and _run_match(stats, reading, by_counts, reads_by_md5)[0] is None:
+        if unread and _run_match(child, stats, reading, by_counts, reads_by_md5)[0] is None:
             tasks.append(task(child, reading))
     _in_parallel(tasks, lambda message: progress(f"{at}: {message}"), "headers")
 
@@ -569,9 +653,10 @@ def _lines(
     outcomes: Counter = Counter()
     for child, stats in found:
         reading = inputs.crams[child.file_id]
-        verdict, run, parents = _run_match(stats, reading, by_counts, reads_by_md5)
+        verdict, run, parents = _run_match(child, stats, reading, by_counts, reads_by_md5)
         if verdict is None:
-            verdict = _step_outcome(reading)
+            assert run is not None
+            verdict = _header_outcome(reading, run)
         outcomes[verdict] += 1
         if verdict != LINKED:
             continue
@@ -594,6 +679,7 @@ def _lines(
 
 
 def _run_match(
+    child: CatalogFile,
     stats: CatalogFile | None,
     reading: CramReading,
     by_counts: dict[tuple[int, int], list[dict]],
@@ -604,6 +690,8 @@ def _run_match(
         return NO_STATS, None, []
     if reading.read_count is None or reading.base_count is None:
         return STATS_UNREADABLE, None, []
+    if reading.stats_reads != child.file_name:
+        return STATS_OF_OTHER_FILE, None, []
     runs = by_counts.get((reading.read_count, reading.base_count), [])
     if not runs:
         return NO_RUN, None, []
@@ -616,13 +704,16 @@ def _run_match(
     return None, run, parents
 
 
-def _step_outcome(reading: CramReading) -> str:
-    """A matched alignment's outcome from its header's steps: linked on exactly one."""
+def _header_outcome(reading: CramReading, run: dict) -> str:
+    """A matched alignment's outcome from its header: linked on exactly one step, and one sample, the run's."""
     if reading.header_error is not None or reading.steps is None:
         return HEADER_UNREADABLE
     if not reading.steps:
         return NO_READ_STEP
-    return LINKED if len(reading.steps) == 1 else SEVERAL_READ_STEPS
+    if len(reading.steps) > 1:
+        return SEVERAL_READ_STEPS
+    sample = run_sample(run)
+    return LINKED if sample is not None and reading.samples == [sample] else SAMPLE_DIFFERS
 
 
 def _run_reads(run: dict, reads_by_md5: dict[str, list[CatalogFile]]) -> list[CatalogFile] | None:

@@ -81,8 +81,10 @@ table would be empty scaffolding. Revisit if #337's manifest route populates the
   a dataset that `sources/ena_run_lineage_map.yaml` declares as taking its reads from another
   (`reads_in`) resolves an ENA run lineage line's parent in that other dataset. T2T_CHRY's 1KGP CRAMs
   hold reads only ANVIL_T2T holds, matched by the run's read and base counts (contract 2.10). The map is
-  refused if its datasets loop, or if one is missing from the deployment or the run. Reconcile counts
-  any other line naming another dataset `undeclared_dataset` and resolves nothing from it.
+  refused if its datasets loop (at load), if one is missing from the deployment or the manifests
+  (`make check-ena-lineage-map`), or if a run holds the child dataset without the other (at reconcile).
+  Reconcile counts any other line naming another dataset `undeclared_dataset` and resolves nothing
+  from it; a resolved input records the parent's dataset as its `parent_dataset`.
 - **`external`** — a source names the parent (`NA21127.merged.bam` in a `@PG` line, or a `file_id` or DRS
   URI in a table) but it is missing from the child's dataset: it was never deposited, or the name is
   shared by more than one file (#438). An `external` parent passes nothing (contract 4.9).

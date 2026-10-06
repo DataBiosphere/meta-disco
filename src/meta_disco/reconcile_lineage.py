@@ -17,9 +17,9 @@ reconcile's slot-evidence join (``reconcile.join``) and shaped like it:
    field of the run's records whose ``dataset_title`` is the envelope's target dataset.
    The one exception is a line naming its parent's dataset (``parent_dataset``, #594):
    its parent is looked for in that dataset where the run lineage map declares the line's
-   source and the child's dataset taking its reads from it
-   (``run_lineage_map.RunLineageMap.declares``), and any other such line is counted
-   ``undeclared_dataset`` and gives nothing.
+   source, and the child's dataset and column taking their reads from it
+   (``run_lineage_map.RunLineageMap.declares``); any other such line, a sample parent's
+   included, is counted ``undeclared_dataset`` before anything else and gives nothing.
    One carrier resolves it; none is ``not_in_dataset``, several ``several_match``, and
    either gives no input (counted, never written onto a record). A line naming no locator
    for its parent (``parent`` absent) is ``not_in_dataset``. A child no record carries is
@@ -154,12 +154,12 @@ def translate_lineage(
         dataset = str(envelope.target.dataset)
         counts = pending.counts[str(envelope.source_type)][dataset]
         counts["offered"] += 1
+        # First, so a forbidden crossing is counted as one, not as a sample or a step to author.
+        if line.parent_dataset is not None and not run_map.declares(envelope, line.parent_dataset, line.child_column):
+            counts[UNDECLARED_DATASET] += 1
+            continue
         if str(line.parent_key_type) == LineageParentKeyEnum.biosample_id.value:
             counts[SAMPLE_PARENT] += 1
-            continue
-        # Before the activity map, so a forbidden crossing is counted as one, not as a step to author.
-        if line.parent_dataset is not None and not run_map.declares(envelope, line.parent_dataset):
-            counts[UNDECLARED_DATASET] += 1
             continue
         row = table.select(keyed.key)
         if row is None or not row.authored:
@@ -204,6 +204,7 @@ def resolve_lineage(pending: PendingLineage, carriers: dict[Locator, list[Carrie
                 parent_kind_of(found_parent.file_name),
                 attribution,
                 found_parent.data_type,
+                parent[1] if parent is not None and parent[1] != child[1] else None,
             )
         )
     return result

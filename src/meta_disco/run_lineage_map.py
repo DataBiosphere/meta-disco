@@ -20,8 +20,8 @@ structural checks only, so reconcile imports no importer::
             reads_in: ANVIL_T2T            # where a run's reads are files
 
 :func:`load_run_lineage_map` refuses a loop among the ``reads_in`` arrows
-(:func:`find_loop`); :func:`require_in_run` refuses a run holding an entry's child
-dataset but not its ``reads_in`` dataset. Whether the datasets, tables and columns exist
+(:func:`find_loop`); :meth:`RunLineageMap.require_in_run` refuses a run holding an entry's
+child dataset but not its ``reads_in`` dataset. Whether the datasets, tables and columns exist
 is ``ena_lineage.check``'s, against the deployment and the manifests.
 """
 
@@ -35,6 +35,7 @@ from importlib.resources import files
 
 from .azul_manifest import REPOSITORY
 from .lineage_map import expect_keys, expect_mapping, expect_name, map_document
+from .models import SOURCE_EXTERNAL_GROUND_TRUTH
 from .schema.classification_model import EvidenceFileEnvelope
 from .slot_map import Readable, unique_key_loader
 
@@ -70,17 +71,22 @@ class RunLineageMap:
     def dataset_entries(self, dataset: str) -> list[Entry]:
         return [e for e in self.entries if e.dataset == dataset]
 
-    def declares(self, envelope: EvidenceFileEnvelope, parent_dataset: str) -> bool:
-        """Whether a line of the file ``envelope`` heads may name a parent in ``parent_dataset``.
+    def declares(self, envelope: EvidenceFileEnvelope, parent_dataset: str, child_column: str) -> bool:
+        """Whether a line of the file ``envelope`` heads, read from ``child_column``, may name a parent in ``parent_dataset``.
 
-        Only a file of this map's source, about a file of this map's catalog of AnVIL, whose
-        dataset an entry declares taking its reads from ``parent_dataset``.
+        Only an archive's run record (``external_ground_truth``) of this map's source, about a
+        file of this map's catalog of AnVIL, where an entry declares that dataset's
+        ``child_column`` taking its reads from ``parent_dataset``.
         """
         target = envelope.target
         return (
             envelope.source.repository == self.source
+            and str(envelope.source_type) == SOURCE_EXTERNAL_GROUND_TRUTH
             and (target.system, target.version) == (REPOSITORY, self.catalog)
-            and any(e.dataset == target.dataset and e.reads_in == parent_dataset for e in self.entries)
+            and any(
+                (e.dataset, e.child_column, e.reads_in) == (target.dataset, child_column, parent_dataset)
+                for e in self.entries
+            )
         )
 
     def require_in_run(self, repository: str, catalog: str | None, datasets: Iterable[str]) -> None:

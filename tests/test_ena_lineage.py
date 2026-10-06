@@ -19,7 +19,7 @@ from meta_disco import ena_lineage as el
 from meta_disco.deployments import Deployment
 from meta_disco.fetchers import FetchError
 from meta_disco.lineage_evidence import check_row, iter_lineage, read_lineage_envelope, write_lineage_file
-from meta_disco.models import SOURCE_EXTERNAL_GROUND_TRUTH
+from meta_disco.models import SOURCE_EXTERNAL_GROUND_TRUTH, SOURCE_REPOSITORY_METADATA
 from meta_disco.output_utils import iter_reconciled_records
 from meta_disco.reconcile import ReconcileError, reconcile_run
 from meta_disco.reconcile_lineage import UNDECLARED_DATASET
@@ -67,10 +67,16 @@ BWA = (
 FIXMATE = "@PG\tID:samtools\tPN:samtools\tPP:bwa\tCL:samtools fixmate -m in.bam out.bam\n"
 MINIMAP = "@PG\tID:mm2\tPN:minimap2\tCL:minimap2 -ax sr ref.fa x_1.fq.gz x_2.fq.gz\n"
 
-# Per alignment n (its CRAM is file n, its stats file 10+n): the counts its stats file
-# gives (an exception to raise instead), and its header (one to raise instead).
+
+def rg(sample: str) -> str:
+    return f"@RG\tID:{sample}.lane1\tPL:illumina\tSM:{sample}\n"
+
+
+# Per alignment n (its CRAM is s<n>.cram, file c<n>; its stats file 10+n): the counts its
+# stats file gives (an exception to raise instead), and its header (one to raise instead).
+# Alignment 7 has no stats file; alignment 10's stats file read another CRAM.
 STATS = {
-    1: (100, 1500),  # one run, both FASTQs in R, bwa mem: linked
+    1: (100, 1500),  # one run, both FASTQs in R, bwa mem, the run's sample: linked
     2: (200, 3000),  # no run has these counts
     3: (300, 4500),  # two runs have them
     4: (400, 6000),  # its run's second FASTQ is not in R
@@ -78,11 +84,20 @@ STATS = {
     6: FetchError("HTTP 404 from AnVIL S3 mirror range request"),
     8: (800, 12000),  # two FASTQ steps in its header
     9: (900, 13500),  # its header cannot be read
+    10: (1000, 15000),  # its stats file's command read s99.cram
+    11: (1100, 16500),  # its @RG sample is not the run's
 }
-HEADERS = {1: BWA + FIXMATE, 4: BWA, 5: FIXMATE, 8: BWA + MINIMAP, 9: FetchError("samtools view -H exited 1")}
+HEADERS = {
+    1: rg("S1") + BWA + FIXMATE,
+    4: rg("S4") + BWA,
+    5: rg("S5") + FIXMATE,
+    8: rg("S8") + BWA + MINIMAP,
+    9: FetchError("samtools view -H exited 1"),
+    11: rg("OTHER") + BWA,
+}
 
 
-def run(accession, reads, bases, *files, study="PRJEB1"):
+def run(accession, reads, bases, *files, study="PRJEB1", sample=None):
     return {
         "run_accession": accession,
         "study_accession": study,
@@ -90,19 +105,22 @@ def run(accession, reads, bases, *files, study="PRJEB1"):
         "base_count": str(bases),
         "fastq_ftp": ";".join(f"ftp.sra.ebi.ac.uk/vol1/fastq/{accession}/{name}" for name, _ in files),
         "fastq_md5": ";".join(md5 for _, md5 in files),
+        "submitted_ftp": f"ftp.sra.ebi.ac.uk/vol1/run/{accession}/{sample or accession}.final.cram",
     }
 
 
 RUNS = {
     r["run_accession"]: r
     for r in (
-        run("ERR1", 100, 1500, ("ERR1_1.fastq.gz", md5("a1")), ("ERR1_2.fastq.gz", md5("a2"))),
+        run("ERR1", 100, 1500, ("ERR1_1.fastq.gz", md5("a1")), ("ERR1_2.fastq.gz", md5("a2")), sample="S1"),
         run("ERR3a", 300, 4500, ("ERR3a_1.fastq.gz", md5("b1"))),
         run("ERR3b", 300, 4500, ("ERR3b_1.fastq.gz", md5("b2"))),
-        run("ERR4", 400, 6000, ("ERR4_1.fastq.gz", md5("c1")), ("ERR4_2.fastq.gz", md5("c2"))),
-        run("ERR5", 500, 7500, ("ERR5_1.fastq.gz", md5("d1"))),
-        run("ERR8", 800, 12000, ("ERR8_1.fastq.gz", md5("e1"))),
-        run("ERR9", 900, 13500, ("ERR9_1.fastq.gz", md5("g1"))),
+        run("ERR4", 400, 6000, ("ERR4_1.fastq.gz", md5("c1")), ("ERR4_2.fastq.gz", md5("c2")), sample="S4"),
+        run("ERR5", 500, 7500, ("ERR5_1.fastq.gz", md5("d1")), sample="S5"),
+        run("ERR8", 800, 12000, ("ERR8_1.fastq.gz", md5("e1")), sample="S8"),
+        run("ERR9", 900, 13500, ("ERR9_1.fastq.gz", md5("g1")), sample="S9"),
+        run("ERR10", 1000, 15000, ("ERR10_1.fastq.gz", md5("j1")), sample="S10"),
+        run("ERR11", 1100, 16500, ("ERR11_1.fastq.gz", md5("h1")), sample="S11"),
         run("ERR_other", 100, 1500, ("o.fastq.gz", md5("zz")), study="PRJEB2"),  # same counts, another study
     )
 }
@@ -110,7 +128,7 @@ RUNS = {
 
 def child_entities():
     files = []
-    for n in range(1, 10):
+    for n in range(1, 12):
         files.append(
             (
                 "anvil_file",
@@ -124,11 +142,11 @@ def child_entities():
                     "file_id": f"st{n}",
                     "file_name": f"s{n}.stats.txt",
                     "file_md5sum": md5(f"s{n}"),
-                    "drs_uri": drs(10 + n),
+                    "drs_uri": drs(20 + n),
                 },
             )
         )
-    rows = [("sample", {"cram": drs(n), "stats": None if n == 7 else drs(10 + n)}) for n in range(1, 10)]
+    rows = [("sample", {"cram": drs(n), "stats": None if n == 7 else drs(20 + n)}) for n in range(1, 12)]
     return files + rows
 
 
@@ -140,17 +158,19 @@ def reads_entities():
         ("ERR5_1.fastq.gz", md5("d1")),
     ]
     present += [("ERR8_1.fastq.gz", md5("e1")), ("ERR9_1.fastq.gz", md5("g1"))]
+    present += [("ERR10_1.fastq.gz", md5("j1")), ("ERR11_1.fastq.gz", md5("h1"))]
     return [
         ("anvil_file", {"file_id": f"r_{name}", "file_name": name, "file_md5sum": md5, "drs_uri": drs(100 + i)})
         for i, (name, md5) in enumerate(present)
     ]
 
 
-def stats_of(checksum: str):
-    found = STATS[next(n for n in STATS if md5(f"s{n}") == checksum)]
+def stats_of(checksum: str) -> el.StatsHead:
+    n = next(n for n in STATS if md5(f"s{n}") == checksum)
+    found = STATS[n]
     if isinstance(found, Exception):
         raise found
-    return found
+    return el.StatsHead(*found, reads="s99.cram" if n == 10 else f"s{n}.cram")
 
 
 def header_of(file: el.CatalogFile) -> str:
@@ -215,6 +235,8 @@ def test_each_alignment_is_counted_once_by_why(imported):
         el.NO_STATS: 1,
         el.SEVERAL_READ_STEPS: 1,
         el.HEADER_UNREADABLE: 1,
+        el.STATS_OF_OTHER_FILE: 1,
+        el.SAMPLE_DIFFERS: 1,
     }
 
 
@@ -286,13 +308,27 @@ def test_read_steps_takes_the_program_and_subcommand_of_each_line_naming_a_fastq
     assert el.read_steps(BWA + FIXMATE) == ["bwa mem"]
     assert el.read_steps(FIXMATE) == []
     assert el.read_steps(BWA + MINIMAP) == ["bwa mem", "minimap2"]
+    no_subcommand = "@PG\tID:mm2\tPN:minimap2\tCL:minimap2 ref.fa x.fq.gz\n"
+    assert el.read_steps(no_subcommand) == ["minimap2"]  # ref.fa is a file, not a subcommand
 
 
-def test_stats_counts_reads_raw_total_sequences_and_total_length():
-    text = "# This file was produced by samtools stats\nSN\traw total sequences:\t697525866\nSN\ttotal length:\t104628879900\t# ignores clipping\n"
-    assert el.stats_counts(text) == (697525866, 104628879900)
+STATS_TEXT = (
+    "# This file was produced by samtools stats\n"
+    "# The command line was:  stats -r ref.fa -@ 16 /cromwell_root/x/call-bamtoCram/NA19201.cram\n"
+    "SN\traw total sequences:\t697525866\nSN\ttotal length:\t104628879900\t# ignores clipping\n"
+)
+
+
+def test_stats_counts_reads_the_counts_and_the_file_its_command_read():
+    assert el.stats_counts(STATS_TEXT) == el.StatsHead(697525866, 104628879900, "NA19201.cram")
+    assert el.stats_counts(STATS_TEXT.replace("NA19201.cram", "a.cram b.cram")).reads is None
     with pytest.raises(ValueError, match="not samtools stats"):
         el.stats_counts("SN\traw total sequences:\t1\n")
+
+
+def test_a_count_cut_off_is_unreadable_not_a_crash():
+    with pytest.raises(ValueError, match="holds no count"):
+        el.stats_counts("SN\traw total sequences:\nSN\ttotal length:\t5\n")
 
 
 # --- the map ---------------------------------------------------------------------------
@@ -349,11 +385,15 @@ def test_the_map_refuses_a_malformed_entry(tmp_path, text, fault):
 
 def test_the_map_declares_only_its_pairs_from_its_source_for_its_catalog(run_map):
     ena = {"source_type": SOURCE_EXTERNAL_GROUND_TRUTH, "repository": "ena"}
-    assert run_map.declares(envelope("read_run", dataset="C", **ena), "R")
-    assert not run_map.declares(envelope("read_run", dataset="C", **ena), "X")
-    assert not run_map.declares(envelope("read_run", dataset="R", **ena), "C")
-    assert not run_map.declares(envelope("read_run", dataset="C", version="anvil16", **ena), "R")
-    assert not run_map.declares(envelope("sample", dataset="C", source_type=SOURCE_EXTERNAL_GROUND_TRUTH), "R")
+    assert run_map.declares(envelope("read_run", dataset="C", **ena), "R", "cram")
+    assert not run_map.declares(envelope("read_run", dataset="C", **ena), "R", "stats")  # an undeclared column
+    assert not run_map.declares(envelope("read_run", dataset="C", **ena), "X", "cram")
+    assert not run_map.declares(envelope("read_run", dataset="R", **ena), "C", "cram")
+    assert not run_map.declares(envelope("read_run", dataset="C", version="anvil16", **ena), "R", "cram")
+    not_ena = envelope("sample", dataset="C", source_type=SOURCE_EXTERNAL_GROUND_TRUTH)
+    assert not run_map.declares(not_ena, "R", "cram")
+    another_kind = envelope("read_run", dataset="C", source_type=SOURCE_REPOSITORY_METADATA, repository="ena")
+    assert not run_map.declares(another_kind, "R", "cram")
 
 
 def test_check_passes_a_map_the_deployment_and_manifests_agree_with(run_map, manifests):
@@ -388,8 +428,14 @@ def test_a_run_holding_the_child_but_not_its_reads_dataset_is_refused(run_map):
 
 def test_the_bundled_map_loads():
     bundled = load_run_lineage_map()
-    line = envelope("read_run", dataset="ANVIL_T2T_CHRY", version=bundled.catalog, repository=bundled.source)
-    assert bundled.source == "ena" and bundled.declares(line, "ANVIL_T2T")
+    line = envelope(
+        "read_run",
+        SOURCE_EXTERNAL_GROUND_TRUTH,
+        dataset="ANVIL_T2T_CHRY",
+        version=bundled.catalog,
+        repository=bundled.source,
+    )
+    assert bundled.source == "ena" and bundled.declares(line, "ANVIL_T2T", "cram")
 
 
 # --- reconcile -------------------------------------------------------------------------
@@ -481,8 +527,8 @@ def test_progress_is_told_how_many_stats_files_and_headers_were_read(tmp_path, r
         generation=STAMP,
         progress=messages.append,
     )
-    # Alignment 7 has no stats file; only 1, 5, 8 and 9 reach a run whose reads are in R, so only theirs are read.
-    assert messages == ["C/sample: read 8 of 8 stats files", "C/sample: read 4 of 4 headers"]
+    # Alignment 7 has no stats file; only 1, 5, 8, 9 and 11 reach a run whose reads are in R, so only theirs are read.
+    assert messages == ["C/sample: read 10 of 10 stats files", "C/sample: read 5 of 5 headers"]
 
 
 class FlakyEna:
@@ -537,7 +583,7 @@ def test_a_dropped_connection_reading_a_stats_file_is_retried(monkeypatch):
         return "SN\traw total sequences:\t5\nSN\ttotal length:\t750\n"
 
     monkeypatch.setattr(el, "fetch_head_text", head)
-    assert el.read_stats("m") == (5, 750) and len(calls) == el.STATS_ATTEMPTS
+    assert el.read_stats("m").read_count == 5 and len(calls) == el.STATS_ATTEMPTS
 
 
 def test_a_body_cut_off_mid_read_is_retried_too(monkeypatch):
@@ -551,7 +597,7 @@ def test_a_body_cut_off_mid_read_is_retried_too(monkeypatch):
         return "SN\traw total sequences:\t5\nSN\ttotal length:\t750\n"
 
     monkeypatch.setattr(el, "fetch_head_text", head)
-    assert el.read_stats("m") == (5, 750) and len(calls) == 2
+    assert el.read_stats("m").base_count == 750 and len(calls) == 2
 
 
 def test_a_connection_dropped_on_every_try_is_a_fetch_error(monkeypatch):
@@ -620,10 +666,10 @@ def test_a_stats_file_is_the_one_the_rows_naming_the_alignment_give(tmp_path, ru
     assert found["f3"] is None
 
 
-def test_a_line_naming_its_own_dataset_is_refused():
+def test_a_line_naming_its_own_dataset_is_refused(tmp_path):
     ena = envelope("read_run", dataset="C", source_type=SOURCE_EXTERNAL_GROUND_TRUTH, repository="ena")
     with pytest.raises(ValueError, match="child's own dataset"):
-        write_lineage_file(Path("unused.ndjson"), ena, [read_line("r1", parent_dataset="C")])
+        write_lineage_file(tmp_path / "x.ndjson", ena, [read_line("r1", parent_dataset="C")])
 
 
 def test_a_parent_dataset_without_a_parent_is_refused():
@@ -646,3 +692,78 @@ def test_an_undeclared_crossing_is_counted_before_the_activity_map(tmp_path, roo
     _, report = reconcile(tmp_path, roots, run_map)
     counts = report["lineage"]["sources"][SOURCE_EXTERNAL_GROUND_TRUTH]["C"]
     assert counts[UNDECLARED_DATASET] == 1 and "untranslated" not in counts
+
+
+# --- what the adversarial review asked for ------------------------------------------------
+
+
+def test_a_reimport_from_inputs_kept_for_other_studies_is_refused(tmp_path, run_map, manifests, imported):
+    stored = el.load_inputs([imported.directory / "sample.inputs.json"])
+    stored["C"].studies = ["PRJEB1", "PRJEB9"]
+    with pytest.raises(ValueError, match="kept inputs are for studies"):
+        el.import_all(run_map, manifests, tmp_path / "lin2", tmp_path / "cache", stored=stored, generation=STAMP)
+
+
+def test_a_reimport_whose_stats_file_changed_is_refused(tmp_path, run_map, manifests, imported):
+    stored = el.load_inputs([imported.directory / "sample.inputs.json"])
+    stored["C"].crams["c1"].stats_md5 = md5("an older stats file")
+    with pytest.raises(ValueError, match=r"s1\.cram's stats file is not the one its kept reading read"):
+        el.import_all(run_map, manifests, tmp_path / "lin2", tmp_path / "cache", stored=stored, generation=STAMP)
+
+
+def test_a_reimport_missing_an_alignment_is_refused(tmp_path, run_map, manifests, imported):
+    stored = el.load_inputs([imported.directory / "sample.inputs.json"])
+    del stored["C"].crams["c2"]
+    with pytest.raises(ValueError, match=r"s2\.cram \(c2\) has no kept reading"):
+        el.import_all(run_map, manifests, tmp_path / "lin2", tmp_path / "cache", stored=stored, generation=STAMP)
+
+
+def test_check_refuses_a_map_that_is_not_enas(tmp_path, manifests):
+    other = load(tmp_path, MAP.replace("source: ena", "source: sra"))
+    assert "run lineage map: its source is 'sra'; this importer reads 'ena''s runs" in el.check(
+        other, DEPLOYMENT, manifests
+    )
+
+
+def test_check_refuses_a_reads_dataset_the_manifests_do_not_hold(tmp_path, manifests):
+    elsewhere = load(tmp_path, MAP.replace("reads_in: R", "reads_in: Q"))
+    with_q = dataclasses.replace(DEPLOYMENT, snapshots={**DEPLOYMENT.snapshots, "Q": Snapshot("p", "Q_snapshot")})
+    assert el.check(elsewhere, with_q, manifests) == ["Q: not a dataset the anvil15 sidecar names"]
+
+
+def test_fetch_head_text_lets_a_transport_failure_through_and_wraps_an_http_status(monkeypatch):
+    from meta_disco import fetchers
+
+    def dropped(*_a, **_k):
+        raise requests.ConnectionError("reset")
+
+    monkeypatch.setattr(fetchers.requests, "get", dropped)
+    with pytest.raises(requests.ConnectionError):
+        fetchers.fetch_head_text(md5("x"), 100)
+
+    def missing(*_a, **_k):
+        response = requests.Response()
+        response.status_code = 404
+        return response
+
+    monkeypatch.setattr(fetchers.requests, "get", missing)
+    with pytest.raises(FetchError, match="HTTP 404"):
+        fetchers.fetch_head_text(md5("x"), 100)
+
+
+def test_a_sample_parent_naming_an_undeclared_dataset_is_counted_as_a_crossing(tmp_path, roots, run_map):
+    _, lineage = roots
+    sample = read_line("S1", parent_dataset="X").model_copy(
+        update={"parent_key_type": LineageParentKeyEnum.biosample_id}
+    )
+    ena_lineage_file(lineage, [sample])
+    _, report = reconcile(tmp_path, roots, run_map)
+    counts = report["lineage"]["sources"][SOURCE_EXTERNAL_GROUND_TRUTH]["C"]
+    assert counts[UNDECLARED_DATASET] == 1 and "sample_parent" not in counts
+
+
+def test_a_resolved_input_in_another_dataset_names_that_dataset(tmp_path, roots, run_map):
+    _, lineage = roots
+    ena_lineage_file(lineage, [read_line("r1"), read_line("r2")])
+    rows, _ = reconcile(tmp_path, roots, run_map)
+    assert {i["parent_dataset"] for i in rows["s.cram"]["generated_by"]["inputs"]} == {"R"}

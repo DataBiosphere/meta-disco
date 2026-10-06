@@ -23,8 +23,8 @@ slot line.
 **The rules the generated model cannot carry** are :func:`check_row`'s, run at write
 and at read: at least one of ``parent`` and ``parent_source_identifier``;
 ``parent_key_type`` exactly when ``parent``; ``raw_activity_column`` exactly when
-``raw_activity``; ``parent_dataset`` only with ``parent``, and never the envelope's own
-target dataset (#594). The envelope's kind must be one of :data:`LINEAGE_SOURCE_TYPES`.
+``raw_activity``; ``parent_dataset`` only with ``parent``; and (``_check_row_in``, which
+has the envelope) ``parent_dataset`` never the envelope's own target dataset (#594). The envelope's kind must be one of :data:`LINEAGE_SOURCE_TYPES`.
 """
 
 from __future__ import annotations
