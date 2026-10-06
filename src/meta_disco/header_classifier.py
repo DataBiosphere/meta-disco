@@ -883,7 +883,7 @@ def classify_sample_map(
     return result.to_output_dict()
 
 
-# The IDAT chips recognised, by the exact chip type and bead count read from real files
+# The IDAT chips recognised, by the exact chip type and probe count read from real files
 # (`code_rules.IDAT_CHIP_TYPE`): what each chip is, and the modality and assay it reads.
 IDAT_CHIPS: dict[tuple[str, int], tuple[str, str, str]] = {
     # The HPRC's Infinium Omni2.5-8 v1.3, all 160 of its corpus IDATs (#603).
@@ -898,6 +898,16 @@ IDAT_CHIPS: dict[tuple[str, int], tuple[str, str, str]] = {
 IDAT_SCANNERS: dict[str, tuple[str, str]] = {
     "iScan Control Software": ("ILLUMINA", "Illumina iScan"),
 }
+# The longest run of file text an IDAT reason quotes: a chip type or a software name is
+# the file's own, and could be up to a read window long.
+REASON_TEXT_LIMIT = 200
+
+
+def _quoted(text: str | None) -> str:
+    """``text`` for a reason, cut to ``REASON_TEXT_LIMIT`` characters, as its ``repr``."""
+    if text is not None and len(text) > REASON_TEXT_LIMIT:
+        text = text[:REASON_TEXT_LIMIT] + "…"
+    return repr(text)
 
 
 def classify_from_idat_header(
@@ -909,7 +919,7 @@ def classify_from_idat_header(
 ) -> dict:
     """Classify an Illumina IDAT: its data_type from the extension, the rest from its header (#603).
 
-    The chip type and bead count decide modality and assay where ``IDAT_CHIPS`` lists the
+    The chip type and probe count decide modality and assay where ``IDAT_CHIPS`` lists the
     pair; the run log's scan software decides platform and instrument where every ``Scan``
     row names one software that ``IDAT_SCANNERS`` lists. Otherwise each of those dimensions
     gets a ``not_classified`` claim at ``CONTENT_TIER`` naming what was read. Reference
@@ -949,10 +959,10 @@ def classify_from_idat_header(
                 status=NOT_CLASSIFIED if value is None else None,
             )
 
-    chip = f"chip type {header.chip_type!r}, {header.bead_count} beads read"
+    chip = f"chip type {_quoted(header.chip_type)}, {header.probe_count} probes"
     said = (
-        IDAT_CHIPS.get((header.chip_type, header.bead_count))
-        if header.chip_type is not None and header.bead_count is not None
+        IDAT_CHIPS.get((header.chip_type, header.probe_count))
+        if header.chip_type is not None and header.probe_count is not None
         else None
     )
     if said is not None:
@@ -969,7 +979,7 @@ def classify_from_idat_header(
         _claim_scanner(why, platform=platform, instrument_model=model)
     else:
         why = (
-            f"the Scan rows name {software}: not one scanner this rule recognises"
+            f"the Scan rows name [{', '.join(_quoted(s) for s in software)}]: not one scanner this rule recognises"
             if software
             else "the run log has no Scan row"
         )

@@ -473,8 +473,9 @@ class _RecordEvidence(CachedEvidence):
     """Cached evidence whose payload is one typed record, serialized as its ``asdict`` shape.
 
     ``PAYLOAD_TYPE`` is the record's class, whose ``from_evidence`` parses the cached
-    dict and raises ``KeyError`` or ``TypeError`` on a malformed one, which is a cache
-    miss here, keeping ``load``'s "any miss -> None" contract at the boundary.
+    dict. A ``KeyError`` or ``TypeError`` it raises is a cache miss here, keeping
+    ``load``'s "any miss -> None" contract at the boundary: every one raises on a
+    missing key, and ``IdatHeader`` on a field of the wrong type too.
     """
 
     PAYLOAD_TYPE: ClassVar[type]
@@ -529,12 +530,13 @@ class BedEvidence(_RecordEvidence):
 class IdatHeader:
     """What the IDAT reader takes from an Illumina IDAT's header (#603).
 
-    ``bead_count`` is the number of beads the scanner read, ``chip_type`` the BeadChip's
+    ``probe_count`` is the chip's number of probes (bead types, each read on several
+    beads), ``chip_type`` the BeadChip's
     physical format, and ``scan_software`` the software each ``Scan`` row of the run log
     names, in order. A field the file does not carry is ``None``; no ``Scan`` row is ``[]``.
     """
 
-    bead_count: int | None
+    probe_count: int | None
     chip_type: str | None
     scan_software: list[str]
 
@@ -546,9 +548,9 @@ class IdatHeader:
             KeyError: a field is missing.
             TypeError: a field holds another type than the reader writes.
         """
-        header = cls(bead_count=raw["bead_count"], chip_type=raw["chip_type"], scan_software=raw["scan_software"])
+        header = cls(probe_count=raw["probe_count"], chip_type=raw["chip_type"], scan_software=raw["scan_software"])
         if not (
-            (header.bead_count is None or isinstance(header.bead_count, int))
+            (header.probe_count is None or isinstance(header.probe_count, int))
             and (header.chip_type is None or isinstance(header.chip_type, str))
             and isinstance(header.scan_software, list)
             and all(isinstance(s, str) for s in header.scan_software)

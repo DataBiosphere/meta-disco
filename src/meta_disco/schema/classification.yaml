@@ -1450,12 +1450,12 @@ enums:
 
   instrument_model_enum:
     description: >-
-      Sequencing instrument models, spelled exactly as ENA/SRA's controlled
-      `INSTRUMENT_MODEL` strings (SRA.common.xsd, enasequence/schema) for the
-      platforms in `platform_enum`; SRA's `unspecified` is not a model and is not
-      here (a file whose model is unknown is `not_classified`). SRA lists no array
-      scanner, so an array scanner's model is our own term, spelled as the vendor
-      names the product (#603). `meaning` is the EFO
+      Instrument models for the platforms in `platform_enum`. A sequencer's is spelled
+      exactly as ENA/SRA's controlled `INSTRUMENT_MODEL` string (SRA.common.xsd,
+      enasequence/schema); SRA's `unspecified` is not a model and is not here (a file
+      whose model is unknown is `not_classified`). SRA lists no array scanner, so an
+      array scanner's model is our own term, spelled as the vendor names the product
+      (#603). `meaning` is the EFO
       term whose label names the same model, recorded where EFO has one and never
       followed at run time. Where EFO's nearest term is broader or narrower (its one
       `Illumina HiSeq X` for SRA's `HiSeq X Five` / `HiSeq X Ten`, its `ONT GridION

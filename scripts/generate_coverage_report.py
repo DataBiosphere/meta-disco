@@ -48,7 +48,7 @@ _DIMENSION_TEXT = {
             "**Note**: Like platform, assay type is inherently unknowable for most derived "
             "formats. It is determined only by a rule that sees evidence of the assay: a "
             "STAR `@PG` line, filename patterns (STAR, Salmon, expression BED), an IDAT's "
-            "header, whose chip type and bead count name the BeadChip (#603), and "
+            "header, whose chip type and probe count name the BeadChip (#603), and "
             "extension where the format implies it (`.svs` histology, a `.h5ad` / `.loom` "
             "/ `.mtx` single-cell matrix `sc/snRNA-seq`, and a tar whose members are one "
             "of these, #533). Nothing infers it from the "

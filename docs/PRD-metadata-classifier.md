@@ -211,7 +211,7 @@ data_type
 
 ### 5.4 Platform
 
-**Definition**: The sequencing instrument/technology used to generate the data.
+**Definition**: The vendor's instrument family that read the data: a sequencer's, or an array scanner's (#603).
 
 ```
 platform

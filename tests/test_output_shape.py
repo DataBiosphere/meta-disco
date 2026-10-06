@@ -254,7 +254,7 @@ STUB_PAYLOADS = {
     ),
     # idat returns an IdatHeader: the HPRC's genotyping chip, scanned on an iScan (#603).
     "idat": IdatHeader(
-        bead_count=2_522_340,
+        probe_count=2_522_340,
         chip_type="1-95um_multi-swath_for_8x2-5M",
         scan_software=["iScan Control Software"],
     ),

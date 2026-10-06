@@ -2,13 +2,14 @@
 
 An IDAT (version 3) opens with the bytes ``IDAT``, a little-endian int64 version and an
 int32 field count, then a table of ``(uint16 code, int64 offset)`` entries naming where
-each field sits in the file. The bead intensities fill most of the file; the fields read
+each field sits in the file. The per-probe intensities fill most of the file; the fields read
 here are small, so a reader needs the table and a few bytes at each field's offset, never
 the intensities. The layout is the one Bioconductor's ``illuminaio`` reads.
 
 Three fields are read:
 
-* 1000, the number of beads the scanner read (``nSNPsRead`` in illuminaio), an int32;
+* 1000, the number of probes (``nSNPsRead`` in illuminaio: bead types, each read on
+  several beads), the length of the per-probe arrays, an int32;
 * 403, the chip type, the BeadChip's physical format (``1-95um_multi-swath_for_8x2-5M``);
 * 300, the run log, one row per processing step, each five strings (time, block type,
   parameters, software, software version); a ``Scan`` row names the scanner's software.
@@ -25,7 +26,7 @@ from .evidence import IdatHeader
 MAGIC = b"IDAT"
 _GZIP_MAGIC = b"\x1f\x8b"
 VERSION = 3
-FIELD_BEAD_COUNT = 1000
+FIELD_PROBE_COUNT = 1000
 FIELD_RUN_INFO = 300
 FIELD_CHIP_TYPE = 403
 SCAN_BLOCK = "Scan"
@@ -41,7 +42,8 @@ _TABLE_ENTRY = struct.Struct("<Hq")
 
 
 class IdatError(ValueError):
-    """The bytes are no IDAT this reader reads: wrong magic, another version, or a field cut short."""
+    """The bytes are no IDAT this reader reads: gzipped, wrong magic, another version, an
+    offset into the preamble or table, a negative run-log row count, or a field cut short."""
 
 
 Fetch = Callable[[int, int], bytes]
@@ -75,14 +77,15 @@ def field_offsets(head: bytes) -> dict[int, int]:
 
 
 def read_header(fetch: Fetch) -> IdatHeader:
-    """The bead count, chip type and scan software of the IDAT that ``fetch`` reads.
+    """The probe count, chip type and scan software of the IDAT that ``fetch`` reads.
 
-    A field the table does not list is ``None`` (the run log: no scan software). The bead
+    A field the table does not list is ``None`` (the run log: no scan software). The probe
     count is read from the head where the head holds it; the text fields from one window
     spanning both where they lie within ``FIELD_WINDOW`` of each other.
 
     Raises:
-        IdatError: as ``field_offsets``, or a field runs past its window.
+        IdatError: as ``field_offsets``, a negative run-log row count, or a field runs
+            past its window.
     """
     head = fetch(0, HEAD_LENGTH - 1)
     offsets = field_offsets(head)
@@ -94,10 +97,10 @@ def read_header(fetch: Fetch) -> IdatHeader:
     if text_offsets and (span := max(text_offsets) - min(text_offsets)) <= FIELD_WINDOW:
         windows.at(min(text_offsets), need=span + FIELD_WINDOW)
 
-    bead_count = None
-    if (offset := offsets.get(FIELD_BEAD_COUNT)) is not None:
+    probe_count = None
+    if (offset := offsets.get(FIELD_PROBE_COUNT)) is not None:
         buf, pos = windows.at(offset, need=4)
-        bead_count = _int32(buf, pos)
+        probe_count = _int32(buf, pos)
 
     chip_type = None
     if (offset := offsets.get(FIELD_CHIP_TYPE)) is not None:
@@ -107,6 +110,8 @@ def read_header(fetch: Fetch) -> IdatHeader:
     if (offset := offsets.get(FIELD_RUN_INFO)) is not None:
         buf, pos = windows.at(offset)
         rows = _int32(buf, pos)
+        if rows < 0:
+            raise IdatError(f"a run log of {rows} rows")
         pos += 4
         for _ in range(rows):
             row = []
@@ -115,7 +120,7 @@ def read_header(fetch: Fetch) -> IdatHeader:
                 row.append(text)
             if row[1] == SCAN_BLOCK:
                 scan_software.append(row[3])
-    return IdatHeader(bead_count=bead_count, chip_type=chip_type, scan_software=scan_software)
+    return IdatHeader(probe_count=probe_count, chip_type=chip_type, scan_software=scan_software)
 
 
 class _Windows:

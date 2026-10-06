@@ -59,16 +59,16 @@ data_type
 
 #### platform
 
-The sequencing instrument/technology used to generate the data.
+The vendor's instrument family that read the data: a sequencer's, or an array scanner's (#603).
 
 ```
 platform
-├── ILLUMINA                     # Illumina short-read
+├── ILLUMINA                     # Illumina short-read sequencers, and Illumina's BeadChip scanner (iScan, #603)
 ├── PACBIO                       # PacBio long-read (HiFi, CLR)
 ├── ONT                          # Oxford Nanopore
 ├── MGI                          # MGI/BGISEQ
 ├── ELEMENT                      # Element Biosciences
-├── not_applicable               # Non-sequencing data (images, annotations)
+├── not_applicable               # Data no sequencer or array scanner read (images, annotations)
 └── not_classified               # Could not be determined from available signals
 ```
 
@@ -102,7 +102,8 @@ assay_type                       # the terms nest by is_a; a record holds the mo
 │       └── snATAC-seq           # our own term; EFO has no single-nucleus ATAC-seq
 ├── ChIP-seq                     # EFO:0002692
 ├── Bisulfite-seq                # EFO:0003753
-├── Methylation array            # EFO:0002759
+├── Methylation array            # EFO:0002759; no rule emits it today (#603 recognises only a genotyping chip)
+├── Genotyping array             # EFO:0002767 genotyping by array; an IDAT whose chip the header names (#603)
 ├── Histology                    # OBI:0600020, as EFO imports it
 ├── not_applicable               # a status, not a term (value null): non-sequencing data (images, annotations)
 └── not_classified               # a status, not a term (value null): could not be determined from file alone
@@ -424,6 +425,11 @@ Parse file headers (without downloading entire files) to extract metadata.
 - `@A00297:44:HFKH3DSXX:...` - Illumina modern format
 - `@m64011_190830/1/ccs` - PacBio CCS/HiFi
 - `@uuid runid=...` - Oxford Nanopore
+
+**Illumina IDAT headers (#603):**
+
+- field 403, the chip type, with field 1000 - The BeadChip, by an exact pair the rule lists (modality, assay)
+- field 300, the run log's `Scan` rows - The scan software, hence the scanner (platform, instrument model)
 
 ### 3.2 Cross-Validation Rules
 

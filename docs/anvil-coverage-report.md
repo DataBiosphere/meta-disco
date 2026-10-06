@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-10-06 11:41:56**
+Classification run: **2026-10-06 14:45:04**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,088** files.
@@ -344,7 +344,7 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | `sc/snRNA-seq` | 414 | 0.1% | .h5ad (350)<br>(none) (64) |
 | `Genotyping array` | 160 | 0.0% | .idat (160) |
 
-**Note**: Like platform, assay type is inherently unknowable for most derived formats. It is determined only by a rule that sees evidence of the assay: a STAR `@PG` line, filename patterns (STAR, Salmon, expression BED), an IDAT's header, whose chip type and bead count name the BeadChip (#603), and extension where the format implies it (`.svs` histology, a `.h5ad` / `.loom` / `.mtx` single-cell matrix `sc/snRNA-seq`, and a tar whose members are one of these, #533). Nothing infers it from the modality (#88), reads file size, or infers WGS from a long-read platform (#430). The high not-classified rate is expected.
+**Note**: Like platform, assay type is inherently unknowable for most derived formats. It is determined only by a rule that sees evidence of the assay: a STAR `@PG` line, filename patterns (STAR, Salmon, expression BED), an IDAT's header, whose chip type and probe count name the BeadChip (#603), and extension where the format implies it (`.svs` histology, a `.h5ad` / `.loom` / `.mtx` single-cell matrix `sc/snRNA-seq`, and a tar whose members are one of these, #533). Nothing infers it from the modality (#88), reads file size, or infers WGS from a long-read platform (#430). The high not-classified rate is expected.
 
 ---
 

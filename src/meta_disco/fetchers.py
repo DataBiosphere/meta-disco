@@ -1372,7 +1372,7 @@ def fetch_idat_header(
     url: str | None = None,
     **kwargs,
 ) -> IdatHeader:
-    """Read an Illumina IDAT's bead count, chip type and scan software (#603), by byte range.
+    """Read an Illumina IDAT's probe count, chip type and scan software (#603), by byte range.
 
     The header's field table says where each field sits; ``idat.read_header`` reads the
     table and a window at each field, never the intensities. If url is provided, fetches

@@ -215,7 +215,7 @@ A bare `rna` in a name no longer says transcriptomic.
 | Format | data_type | data_modality | Notes |
 |--------|-----------|---------------|-------|
 | .pgen/.pvar/.psam | genotypes | genomic | PLINK files |
-| .idat | array_signal | _(from the header)_ | Illumina BeadChip intensities. The extension gives `array_signal` and a not-applicable reference (intensities are keyed by bead, not coordinate); the header's chip type and bead count give modality and assay, and its scan software gives platform and instrument (#603). The corpus's 160 are genotyping arrays (`genomic.genotyping`) |
+| .idat | array_signal | _(from the header)_ | Illumina BeadChip intensities. The extension gives `array_signal` and a not-applicable reference (intensities are keyed by probe, not coordinate); the header's chip type and probe count give modality and assay, and its scan software gives platform and instrument (#603). The corpus's 160 are genotyping arrays (`genomic.genotyping`) |
 | .svs | images | imaging.microscopy | Whole-slide histology |
 | .png/.jpg/.jpeg/.tiff/.tif | images | not_applicable | Derived plots/QC |
 | .bai/.crai/.tbi/.csi/.pbi/.fai/.gzi/.idx | index | _(inherited from parent)_ | Index files — `data_type` is the file's own kind, the rest describe the data it points into (#437) |

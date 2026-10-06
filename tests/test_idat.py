@@ -1,7 +1,7 @@
 """Reading an Illumina IDAT's header, and classifying from it (#603).
 
 The IDAT bytes are built here: a preamble, a field table, and the fields the reader
-takes, optionally behind padding that stands in for the bead intensities, so a field
+takes, optionally behind padding that stands in for the per-probe intensities, so a field
 past the first read is reached by its own range request.
 """
 
@@ -24,7 +24,7 @@ from tests.test_fetchers import _install, _raise_transport
 MD5 = "b" * 32
 SCAN = "iScan Control Software"
 CHIP = "1-95um_multi-swath_for_8x2-5M"
-BEADS = 2_522_340
+PROBES = 2_522_340
 
 
 def _string(text: str) -> bytes:
@@ -52,7 +52,7 @@ def _scan(software: str = SCAN) -> list[tuple[str, str, str, str, str]]:
 
 def _idat(
     *,
-    beads: int | None = BEADS,
+    probes: int | None = PROBES,
     chip: str | None = CHIP,
     run_info: list | None = None,
     pad: int = 0,
@@ -60,8 +60,8 @@ def _idat(
     magic: bytes = b"IDAT",
     version: int = 3,
 ) -> bytes:
-    """An IDAT whose bead count follows the table and whose text fields follow ``pad`` bytes."""
-    head_fields = {} if beads is None else {idat.FIELD_BEAD_COUNT: struct.pack("<i", beads)}
+    """An IDAT whose probe count follows the table and whose text fields follow ``pad`` bytes."""
+    head_fields = {} if probes is None else {idat.FIELD_PROBE_COUNT: struct.pack("<i", probes)}
     tail_fields = {}
     if chip is not None:
         tail_fields[idat.FIELD_CHIP_TYPE] = _string(chip)
@@ -99,8 +99,8 @@ def test_the_header_fields_are_read_from_the_head_and_one_window_at_the_tail(run
     calls: list = []
     blob = _idat(run_info=_scan(), pad=200_000, run_info_first=run_info_first)
     header = idat.read_header(_reader(blob, calls))
-    assert header == IdatHeader(bead_count=BEADS, chip_type=CHIP, scan_software=[SCAN])
-    # The head serves the bead count; the chip type and run log share one window.
+    assert header == IdatHeader(probe_count=PROBES, chip_type=CHIP, scan_software=[SCAN])
+    # The head serves the probe count; the chip type and run log share one window.
     assert len(calls) == 2
 
 
@@ -111,8 +111,8 @@ def test_fields_inside_the_head_need_no_second_read():
 
 
 def test_a_field_the_table_does_not_list_is_none():
-    header = idat.read_header(_reader(_idat(beads=None, chip=None)))
-    assert header == IdatHeader(bead_count=None, chip_type=None, scan_software=[])
+    header = idat.read_header(_reader(_idat(probes=None, chip=None)))
+    assert header == IdatHeader(probe_count=None, chip_type=None, scan_software=[])
 
 
 def test_a_string_longer_than_127_bytes_reads_its_two_byte_length():
@@ -138,7 +138,7 @@ def test_bytes_that_are_no_readable_idat_are_refused(blob, match):
 def test_an_offset_into_the_table_is_refused_rather_than_read():
     # A negative or tiny offset would read the preamble's own bytes as a field.
     blob = bytearray(_idat(chip=None))
-    struct.pack_into("<Hq", blob, 16, idat.FIELD_BEAD_COUNT, -8)
+    struct.pack_into("<Hq", blob, 16, idat.FIELD_PROBE_COUNT, -8)
     with pytest.raises(idat.IdatError, match="inside the 26-byte preamble and table"):
         idat.read_header(_reader(bytes(blob)))
 
@@ -149,6 +149,29 @@ def test_a_cached_header_with_a_field_of_the_wrong_type_is_a_cache_miss(tmp_path
     path.write_text(path.read_text().replace('"scan_software": [\n      "s"\n    ]', '"scan_software": null'))
     assert "null" in path.read_text()
     assert IdatEvidence.load(tmp_path, MD5) is None
+
+
+def test_text_fields_too_far_apart_for_one_window_are_each_read_in_their_own(monkeypatch):
+    monkeypatch.setattr(idat, "FIELD_WINDOW", 256)
+    blob = bytearray(_idat(run_info=_scan(), pad=10_000))
+    # Push the run log 1,000 bytes past the chip type, beyond one window's reach.
+    offsets = idat.field_offsets(bytes(blob[:4096]))
+    run_log = bytes(blob[offsets[idat.FIELD_RUN_INFO] :])
+    blob = blob[: offsets[idat.FIELD_RUN_INFO]] + b"\0" * 1_000 + run_log
+    entry = list(offsets).index(idat.FIELD_RUN_INFO)
+    struct.pack_into("<Hq", blob, 16 + 10 * entry, idat.FIELD_RUN_INFO, offsets[idat.FIELD_RUN_INFO] + 1_000)
+    calls: list = []
+    header = idat.read_header(_reader(bytes(blob), calls))
+    assert header == IdatHeader(probe_count=PROBES, chip_type=CHIP, scan_software=[SCAN])
+    assert len(calls) == 3
+
+
+def test_a_negative_run_log_row_count_is_refused():
+    blob = bytearray(_idat(run_info=_scan()))
+    offset = idat.field_offsets(bytes(blob[:4096]))[idat.FIELD_RUN_INFO]
+    struct.pack_into("<i", blob, offset, -1)
+    with pytest.raises(idat.IdatError, match="a run log of -1 rows"):
+        idat.read_header(_reader(bytes(blob)))
 
 
 def test_a_field_longer_than_its_window_is_refused(monkeypatch):
@@ -204,8 +227,8 @@ def test_the_pipeline_reads_a_real_idat_through_its_own_fetch_call(monkeypatch, 
     (row,) = pipeline.run()
     assert {slot: c["value"] for slot, c in row["classifications"].items() if slot != "reference_assembly"} == {
         "data_type": "array_signal",
-        "data_modality": IDAT_CHIPS[(CHIP, BEADS)][1],
-        "assay_type": IDAT_CHIPS[(CHIP, BEADS)][2],
+        "data_modality": IDAT_CHIPS[(CHIP, PROBES)][1],
+        "assay_type": IDAT_CHIPS[(CHIP, PROBES)][2],
         "platform": IDAT_SCANNERS[SCAN][0],
         "instrument_model": IDAT_SCANNERS[SCAN][1],
     }
@@ -224,9 +247,9 @@ def _entry(result: dict, field: str) -> tuple:
 
 
 def test_a_recognised_chip_and_scanner_decide_four_dimensions():
-    _, modality, assay = IDAT_CHIPS[(CHIP, BEADS)]
+    _, modality, assay = IDAT_CHIPS[(CHIP, PROBES)]
     platform, model = IDAT_SCANNERS[SCAN]
-    result = _classify(IdatHeader(bead_count=BEADS, chip_type=CHIP, scan_software=[SCAN, SCAN]))
+    result = _classify(IdatHeader(probe_count=PROBES, chip_type=CHIP, scan_software=[SCAN, SCAN]))
     assert _entry(result, "data_modality") == (modality, CLASSIFIED, ["idat_chip_type"])
     assert _entry(result, "assay_type") == (assay, CLASSIFIED, ["idat_chip_type"])
     assert _entry(result, "platform") == (platform, CLASSIFIED, ["idat_scanner"])
@@ -236,7 +259,7 @@ def test_a_recognised_chip_and_scanner_decide_four_dimensions():
 
 
 def test_a_header_only_call_still_takes_what_the_extension_says():
-    result = classify_from_idat_header(IdatHeader(bead_count=BEADS, chip_type=CHIP, scan_software=[SCAN]))
+    result = classify_from_idat_header(IdatHeader(probe_count=PROBES, chip_type=CHIP, scan_software=[SCAN]))
     assert _entry(result, "data_type") == ("array_signal", CLASSIFIED, ["idat_array_signal"])
     assert _entry(result, "reference_assembly") == (None, NOT_APPLICABLE, ["idat_array_signal"])
 
@@ -245,10 +268,12 @@ def test_a_header_only_call_still_takes_what_the_extension_says():
     "header",
     [
         pytest.param(
-            IdatHeader(bead_count=1_051_943, chip_type="BeadChip 8x5", scan_software=[SCAN]), id="another chip"
+            IdatHeader(probe_count=1_051_943, chip_type="BeadChip 8x5", scan_software=[SCAN]), id="another chip"
         ),
-        pytest.param(IdatHeader(bead_count=BEADS + 1, chip_type=CHIP, scan_software=[SCAN]), id="another bead count"),
-        pytest.param(IdatHeader(bead_count=None, chip_type=None, scan_software=[SCAN]), id="neither field"),
+        pytest.param(
+            IdatHeader(probe_count=PROBES + 1, chip_type=CHIP, scan_software=[SCAN]), id="another probe count"
+        ),
+        pytest.param(IdatHeader(probe_count=None, chip_type=None, scan_software=[SCAN]), id="neither field"),
     ],
 )
 def test_a_chip_not_recognised_is_left_not_classified_with_what_was_read(header):
@@ -261,6 +286,13 @@ def test_a_chip_not_recognised_is_left_not_classified_with_what_was_read(header)
     assert _entry(result, "data_type")[0] == "array_signal"
 
 
+def test_file_text_quoted_in_a_reason_is_cut_short():
+    result = _classify(IdatHeader(probe_count=1, chip_type="x" * 10_000, scan_software=["y" * 10_000]))
+    for field in ("data_modality", "platform"):
+        reason = result[field]["evidence"][0]["reason"]
+        assert len(reason) < 400 and "…" in reason
+
+
 @pytest.mark.parametrize(
     ("software", "said"),
     [
@@ -270,7 +302,7 @@ def test_a_chip_not_recognised_is_left_not_classified_with_what_was_read(header)
     ],
 )
 def test_a_scanner_not_recognised_is_left_not_classified_with_what_was_read(software, said):
-    result = _classify(IdatHeader(bead_count=BEADS, chip_type=CHIP, scan_software=software))
+    result = _classify(IdatHeader(probe_count=PROBES, chip_type=CHIP, scan_software=software))
     for field in ("platform", "instrument_model"):
         assert _entry(result, field) == (None, NOT_CLASSIFIED, ["idat_scanner"])
         assert said in result[field]["evidence"][0]["reason"]

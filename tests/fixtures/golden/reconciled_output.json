@@ -888,7 +888,7 @@
             "credited_to": "filled_by_inference",
             "evidence": [
               {
-                "reason": "chip type '1-95um_multi-swath_for_8x2-5M', 2522340 beads read: an Illumina genotyping BeadChip",
+                "reason": "chip type '1-95um_multi-swath_for_8x2-5M', 2522340 probes: an Illumina genotyping BeadChip",
                 "rule_id": "idat_chip_type",
                 "source_type": "content_read",
                 "tier": 4,
@@ -907,7 +907,7 @@
             "credited_to": "filled_by_inference",
             "evidence": [
               {
-                "reason": "chip type '1-95um_multi-swath_for_8x2-5M', 2522340 beads read: an Illumina genotyping BeadChip",
+                "reason": "chip type '1-95um_multi-swath_for_8x2-5M', 2522340 probes: an Illumina genotyping BeadChip",
                 "rule_id": "idat_chip_type",
                 "source_type": "content_read",
                 "tier": 4,
@@ -926,7 +926,7 @@
             "credited_to": "filled_by_inference",
             "evidence": [
               {
-                "reason": "IDAT is Illumina's BeadChip intensity format, written by genotyping and methylation chips alike, so the extension says only that the file is array signal (#603). Its intensities are keyed by bead, not by genome coordinate, so no reference applies until genotypes are called against a chip manifest",
+                "reason": "IDAT is Illumina's BeadChip intensity format, written by genotyping and methylation chips alike, so the extension cannot say which chip wrote the file, only that it is array signal (#603). Its intensities are keyed by probe, not by genome coordinate, so no reference applies until genotypes are called against a chip manifest",
                 "rule_id": "idat_array_signal",
                 "source_type": "filename_rule",
                 "tier": 1,
@@ -997,7 +997,7 @@
             "credited_to": "not_applicable",
             "evidence": [
               {
-                "reason": "IDAT is Illumina's BeadChip intensity format, written by genotyping and methylation chips alike, so the extension says only that the file is array signal (#603). Its intensities are keyed by bead, not by genome coordinate, so no reference applies until genotypes are called against a chip manifest",
+                "reason": "IDAT is Illumina's BeadChip intensity format, written by genotyping and methylation chips alike, so the extension cannot say which chip wrote the file, only that it is array signal (#603). Its intensities are keyed by probe, not by genome coordinate, so no reference applies until genotypes are called against a chip manifest",
                 "rule_id": "idat_array_signal",
                 "source_type": "filename_rule",
                 "status": "not_applicable",

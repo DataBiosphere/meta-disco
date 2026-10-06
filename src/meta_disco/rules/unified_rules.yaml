@@ -306,7 +306,7 @@ rules:
       data_type: array_signal
       status:
         reference_assembly: not_applicable
-    rationale: "IDAT is Illumina's BeadChip intensity format, written by genotyping and methylation chips alike, so the extension says only that the file is array signal (#603). Its intensities are keyed by bead, not by genome coordinate, so no reference applies until genotypes are called against a chip manifest"
+    rationale: "IDAT is Illumina's BeadChip intensity format, written by genotyping and methylation chips alike, so the extension cannot say which chip wrote the file, only that it is array signal (#603). Its intensities are keyed by probe, not by genome coordinate, so no reference applies until genotypes are called against a chip manifest"
 
   # ---------------------------------------------------------------------------
   # Single-cell matrix files
