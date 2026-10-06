@@ -396,20 +396,20 @@ PNG files are excluded from data_modality assignment as they are derived artifac
 FAST5 and PLINK files are classified by extension. No reference is inferred from a dataset's
 name (#561: ANVIL_1000G_PRIMED is half hg19).
 
-| Extension | Data Modality             | Reference | Rule Type |
+| Extension | Data Modality / Data Type | Reference | Rule Type |
 |-----------|---------------------------|-----------|-----------|
-| `.fast5`  | genomic                   | N/A       | Extension |
-| `.pvar`   | genomic.germline_variants | from its `##contig` lengths | Extension + VCF-style header (VCF producer) |
-| `.psam`   | genomic.germline_variants | not classified | Extension |
-| `.pgen`   | genomic.germline_variants | not classified* | Extension |
+| `.fast5`  | genomic / raw_signal      | N/A       | Extension |
+| `.pvar`   | genomic / genotypes       | from its `##contig` lengths | Extension + VCF-style header (VCF producer) |
+| `.psam`   | genomic / genotypes       | not classified | Extension |
+| `.pgen`   | genomic / genotypes       | not classified* | Extension |
 
 *A `.pgen` is binary genotypes with no reference of its own; the submitter's table states it (#562).
 
-**Implementation**: `scripts/classify_auxiliary_genomic.py` (rules in `src/meta_disco/rules/unified_rules.yaml`)
+**Implementation**: `scripts/classify_auxiliary_genomic.py` for `.fast5`, `.pgen` and `.psam`; a `.pvar` is the VCF producer's (`classify_headers.py --type vcf`, `FileTypeConfig` `VCF_CONFIG`), which reads its header (rules in `src/meta_disco/rules/unified_rules.yaml`)
 
 **Results** (20,956 files):
 - FAST5: 12,394 files (ONT raw signal) → `genomic`, no reference (pre-basecalling)
-- PLINK: 8,562 files → `genomic.germline_variants`; reference from each `.pvar`'s own header (GRCh37 or GRCh38), `.pgen` / `.psam` not classified (#561)
+- PLINK: 8,562 files → `genomic` / `genotypes`; reference from each `.pvar`'s own header (GRCh37 or GRCh38), `.pgen` / `.psam` not classified (#561)
 
 ### 6.5 BED File Classification
 

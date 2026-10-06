@@ -8,7 +8,7 @@ its lines, so neither the last line nor any one line's position says which step 
 file.
 
 **The producing step is the end of the data flow.** Steps chain where one's output is
-another's input, compared by base name with any ``.gz`` dropped (``chr1.genotyped.vcf``
+another's input, compared by base name with any ``.gz`` or ``.bgz`` dropped (``chr1.genotyped.vcf``
 is consumed as ``…/chr1.genotyped.vcf.gz``). An end is a step whose output no other step
 consumes. An end whose output names a file other than this one did not make this file
 (a ``GenomicsDBImport`` workspace whose consumer's line is not in the header), so it is

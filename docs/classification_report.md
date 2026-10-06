@@ -129,7 +129,7 @@ The source AnVIL metadata contained **758,658 files** but with minimal semantic 
 | .bed | 13,660 | Filename patterns + dataset context |
 | .fast5 | 12,394 | Extension → genomic (raw ONT signal) |
 | .cram | 10,829 | Header inspection (@RG, @PG, @SQ) |
-| .pvar/.psam/.pgen | 8,562 | Extension → germline variants; a .pvar's reference from its header (#561) |
+| .pvar/.psam/.pgen | 8,562 | Extension → genomic / genotypes; a .pvar's reference from its header (#561) |
 | .bam | 7,834 | Header inspection (@RG, @PG, @SQ) |
 | .png | 8,049 | Extension → N/A (derived visualizations) |
 
@@ -730,12 +730,12 @@ name (#561): ANVIL_1000G_PRIMED is half hg19.
 
 **Total auxiliary genomic files: 20,956**
 
-| Extension | Count  | Data Modality             | Reference | Confidence |
+| Extension | Count  | Data Modality / Data Type | Reference | Confidence |
 | --------- | ------ | ------------------------- | --------- | ---------- |
-| `.fast5`  | 12,394 | genomic                   | N/A*      | 90%        |
-| `.pvar`   | 2,854  | genomic.germline_variants | GRCh37 (1,427) / GRCh38 (1,427), from its `##contig` lengths | 95% |
-| `.psam`   | 2,854  | genomic.germline_variants | not classified | 95% |
-| `.pgen`   | 2,854  | genomic.germline_variants | not classified (#562 maps the submitter's) | 95% |
+| `.fast5`  | 12,394 | genomic / raw_signal      | N/A*      | 90%        |
+| `.pvar`   | 2,854  | genomic / genotypes       | GRCh37 (1,427) / GRCh38 (1,427), from its `##contig` lengths | 95% |
+| `.psam`   | 2,854  | genomic / genotypes       | not classified | 95% |
+| `.pgen`   | 2,854  | genomic / genotypes       | not classified (#562 maps the submitter's) | 95% |
 
 *FAST5 files contain raw ONT electrical signal data (pre-basecalling). Reference not applicable until basecalling and alignment.
 
@@ -744,7 +744,7 @@ name (#561): ANVIL_1000G_PRIMED is half hg19.
 - **FAST5**: Extension-based. Raw nanopore signal data from ANVIL_NIA_CARD_Coriell_Cell_Lines_Open dataset.
 - **PLINK**: Extension-based modality. All from ANVIL_1000G_PRIMED_data_model, half hg19 and half hg38; a `.pvar`'s reference is read from its VCF-style header by the VCF producer (#561).
 
-**Implementation**: `scripts/classify_auxiliary_genomic.py` (rules in `src/meta_disco/rules/unified_rules.yaml`)
+**Implementation**: `scripts/classify_auxiliary_genomic.py` for `.fast5`, `.pgen` and `.psam`; a `.pvar` is the VCF producer's (`classify_headers.py --type vcf`, `FileTypeConfig` `VCF_CONFIG`), which reads its header (rules in `src/meta_disco/rules/unified_rules.yaml`)
 
 ### 5.8 BED File Classification Results
 
