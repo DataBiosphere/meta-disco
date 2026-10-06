@@ -78,7 +78,8 @@ rules:
       reference_assembly: {status_not: "classified"}
 
   # --- 5. platform <-> modality family ----------------------------------------
-  # Conservative form: a sequencing platform must not sit on an imaging modality,
+  # Conservative form: a platform, a sequencer's or an array scanner's (#603), neither of
+  # which images, must not sit on an imaging modality,
   # `imaging` or anything under it in the schema's `is_a` tree (#563). The enum's
   # other non-sequencing families (proteomic, metabolomic) are left out: nothing
   # classifies them today, and a proteomics dataset can carry sequencing files.
@@ -89,7 +90,7 @@ rules:
   # the platform side, the contradiction imaging_exclusive catches from the
   # modality side for microscopy.
   - id: sequencing_platform_excludes_imaging
-    description: A sequencing platform must not sit on an imaging modality.
+    description: A platform (a sequencer's or an array scanner's) must not sit on an imaging modality.
     when: {platform: {value_in: ["ILLUMINA", "PACBIO", "ONT", "MGI", "ELEMENT", "ULTIMA"]}}
     require: {data_modality: {not_under: imaging}}
 

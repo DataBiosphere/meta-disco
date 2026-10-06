@@ -12,7 +12,7 @@ The classifier populates six metadata fields:
 | ----- | ----------------- | -------------- |
 | `data_modality` | What biology is measured? | genomic, transcriptomic, epigenomic |
 | `data_type` | What artifact is this? | alignments, variant_calls, reads |
-| `platform` | Which sequencing platform (vendor)? | ILLUMINA, PACBIO, ONT |
+| `platform` | Which platform (vendor) read it: a sequencer, or an array scanner (#603)? | ILLUMINA, PACBIO, ONT |
 | `reference_assembly` | What reference genome? | GRCh38, GRCh37, CHM13 and its T2T releases |
 | `assay_type` | What method class? | WGS, WES, RNA-seq, snRNA-seq |
 | `instrument_model` | Which instrument model, within the platform? | Illumina NovaSeq 6000, Revio, PromethION |

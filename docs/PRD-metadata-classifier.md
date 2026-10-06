@@ -157,7 +157,7 @@ We define **6 orthogonal dimensions** for file classification. Each dimension an
 |-----------|----------|--------------|--------------|
 | `data_modality` | What biology is measured? | 1 | Medium |
 | `data_type` | What artifact do I have? | 1 | High |
-| `platform` | What sequencing instrument? | 0..1 | High |
+| `platform` | What sequencer or array scanner? | 0..1 | High |
 | `reference_assembly` | What reference genome? | 0..1 | High |
 | `file_format` | How is it stored? | 1 | Trivial |
 | `assay_type` | What method class? (v2) | 0..1 | Low |
