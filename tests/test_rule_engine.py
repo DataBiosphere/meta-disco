@@ -1030,7 +1030,7 @@ assert _REFERENCE_BEARING_CATEGORIES_526.issubset(EXTENSION_MAP.values())
 
 
 class TestReferenceRuleFileKinds:
-    """The four reference rules claim only on the file kinds their include list names (#523)."""
+    """The three filename reference rules claim only on the file kinds their include list names (#523)."""
 
     @pytest.mark.parametrize(
         ("filename", "rule_id", "expected"),
@@ -1104,20 +1104,6 @@ class TestReferenceRuleFileKinds:
         assert {"filename_ref_grch38", "filename_ref_chm13"} <= set(result.rules_matched)
         assert result.reference_assembly is None
         assert any(e.get("marker") == "conflict" for e in result.field_evidence["reference_assembly"])
-
-    @pytest.mark.parametrize(
-        ("filename", "claimed"),
-        [
-            ("IBS.3.pgen", True),
-            ("ALL.chr19.genotypes.vcf.bgz", True),
-            ("CHS.19.log", False),
-            ("PJL.19.psam", False),
-            ("sequencing_dataset.tsv", False),
-        ],
-    )
-    def test_dataset_rule_claims_only_listed_kinds(self, engine, filename, claimed):
-        info = FileInfo.from_filename(filename, dataset_title="ANVIL_1000G_PRIMED_data_model")
-        assert ("dataset_1000g_reference" in engine.classify_extended(info).rules_matched) is claimed
 
 
 class TestSameTierNotApplicableConflicts:

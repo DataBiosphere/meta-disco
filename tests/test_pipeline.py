@@ -626,6 +626,23 @@ class TestPipelineRun:
         ClassifyPipeline(config, path, tmp_path / "out.json", evidence_base=tmp_path / "evidence").run()
         assert calls == [True]
 
+    def test_a_bgz_is_read_as_gzip(self, tmp_path):
+        """bgzip's BGZF is gzip: a 1000 Genomes phase 3 `.vcf.bgz` read as uncompressed has no
+        `#` header lines, and classifies as nothing (#561)."""
+        calls = []
+
+        def tracking_fetcher(evidence_dir, md5, is_gzipped=True, **kw):
+            calls.append(is_gzipped)
+            return "header"
+
+        config = _make_config(fetcher=tracking_fetcher, extensions=(".test", ".test.gz", ".test.bgz"))
+        # The name alone decides: the format says nothing about compression.
+        records = [_valid_record(file_md5sum="a" * 32, file_name="x.test.bgz", file_format=".test")]
+        path = tmp_path / "in.json"
+        path.write_text(json.dumps({"results": records}))
+        ClassifyPipeline(config, path, tmp_path / "out.json", evidence_base=tmp_path / "evidence").run()
+        assert calls == [True]
+
 
 # --- File type config tests ---
 

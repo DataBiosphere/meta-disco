@@ -34,7 +34,7 @@ CATCH_ALL = functools.partial(classify_remaining, classification_paths=[])
 
 STANDALONE_PRODUCERS = [
     pytest.param(classify_images, "slide.svs", ".svs", id="images"),
-    pytest.param(classify_auxiliary_genomic, "cohort.pvar", ".pvar", id="auxiliary"),
+    pytest.param(classify_auxiliary_genomic, "cohort.pgen", ".pgen", id="auxiliary"),
     pytest.param(CATCH_ALL, "mystery.xyz", ".xyz", id="remaining"),
 ]
 

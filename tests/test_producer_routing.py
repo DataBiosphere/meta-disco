@@ -191,3 +191,20 @@ class TestAClaimThatIsACategoryComesFromTheCategory:
         """End to end for the two #451 added: both route to the images producer rather
         than falling through to the catch-all."""
         assert producer_of(valid_record(file_name=file_name, file_format=file_format)) is PRODUCERS["images"]
+
+
+@pytest.mark.parametrize(
+    ("file_name", "producer"),
+    [
+        ("ACB.1.pvar", "vcf"),
+        ("ALL.chr19.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.bgz", "vcf"),
+        ("ACB.1.pgen", "auxiliary"),
+        ("ACB.1.psam", "auxiliary"),
+    ],
+)
+def test_a_header_holding_its_reference_is_read_by_the_vcf_producer(file_name, producer):
+    """A PLINK 2 `.pvar` written from a VCF keeps its `##contig` header, and a `.vcf.bgz` is a
+    VCF, so both are the VCF producer's; the binary `.pgen` and the `.psam` sample table stay
+    auxiliary (#561)."""
+    routed = producer_of(valid_record(file_name=file_name, file_format="." + file_name.rsplit(".", 1)[-1]))
+    assert routed is not None and routed.name == producer

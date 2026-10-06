@@ -25,8 +25,9 @@ from .file_types import FILE_TYPE_REGISTRY, FileTypeConfig
 # the producer routes on and what it inherits from cannot drift apart.
 INDEX_TO_PARENT = {
     ".bai": [".bam"],
-    ".tbi": [".vcf.gz", ".bed.gz", ".txt.gz", ".tsv.gz", ".gff.gz", ".gtf.gz"],
-    ".csi": [".vcf.gz", ".bcf", ".bed.gz"],  # CSI can index BED files too
+    # A `.vcf.bgz` is a bgzipped VCF, as 1000 Genomes phase 3 names them (#561).
+    ".tbi": [".vcf.gz", ".vcf.bgz", ".bed.gz", ".txt.gz", ".tsv.gz", ".gff.gz", ".gtf.gz"],
+    ".csi": [".vcf.gz", ".vcf.bgz", ".bcf", ".bed.gz"],  # CSI can index BED files too
     ".crai": [".cram"],
     ".pbi": [".bam"],
     # `.fai` and `.idx` are in the `index_file` rule's extension list — the engine's
@@ -131,13 +132,15 @@ PRODUCERS: dict[str, Producer] = {
         phase=1,
         extensions=_extensions_in("image", "histology_image"),
     ),
-    # ONT raw signal and PLINK2 genotypes.
+    # ONT raw signal and PLINK2 genotypes, less the `.pvar`: its VCF-style header holds its
+    # reference, so the VCF producer reads it (#561). Named, not derived from the header
+    # types, so another handover is a decision `validate_registry` asks for.
     "auxiliary": Producer(
         name="auxiliary",
         script="classify_auxiliary_genomic.py",
         output="auxiliary_classifications.json",
         phase=1,
-        extensions=_extensions_in("nanopore", "genotype_plink"),
+        extensions=tuple(e for e in _extensions_in("nanopore", "genotype_plink") if e != ".pvar"),
     ),
     "index": Producer(
         name="index",

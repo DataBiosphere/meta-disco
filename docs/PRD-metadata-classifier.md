@@ -42,7 +42,7 @@ We explored the AnVIL API (`service.explore.anvilproject.org/index/files`) to un
 | **Data files** | ~305K | 40% | VCF, BAM, CRAM, FASTQ, etc. - ✅ classified via header inspection |
 | **Index files** | ~224K | 29% | TBI, CSI, BAI, CRAI - ✅ inherit from parent (99.96% matched) |
 | **Image files** | ~34K | 4% | SVS, PNG - ✅ classified by extension |
-| **Auxiliary genomic** | ~21K | 3% | FAST5, PLINK - ✅ classified by extension + dataset |
+| **Auxiliary genomic** | ~21K | 3% | FAST5, PLINK - ✅ classified by extension (a `.pvar`'s reference from its header) |
 | **BED files** | ~14K | 2% | Genomic intervals - ✅ classified by pattern + dataset |
 | **Other/ambiguous** | ~145K | 19% | TXT, TAR, LOG - mixed utility |
 | **Checksum files** | ~16K | 2% | MD5 - skip |
@@ -393,16 +393,17 @@ PNG files are excluded from data_modality assignment as they are derived artifac
 
 ### 6.4 Auxiliary Genomic File Classification
 
-FAST5 and PLINK files are classified by extension with dataset-based reference inference.
+FAST5 and PLINK files are classified by extension. No reference is inferred from a dataset's
+name (#561: ANVIL_1000G_PRIMED is half hg19).
 
 | Extension | Data Modality             | Reference | Rule Type |
 |-----------|---------------------------|-----------|-----------|
 | `.fast5`  | genomic                   | N/A       | Extension |
-| `.pvar`   | genomic.germline_variants | GRCh38*   | Extension + Dataset |
-| `.psam`   | genomic.germline_variants | GRCh38*   | Extension + Dataset |
-| `.pgen`   | genomic.germline_variants | GRCh38*   | Extension + Dataset |
+| `.pvar`   | genomic.germline_variants | from its `##contig` lengths | Extension + VCF-style header (VCF producer) |
+| `.psam`   | genomic.germline_variants | not classified | Extension |
+| `.pgen`   | genomic.germline_variants | not classified* | Extension |
 
-*Reference inferred from dataset context (ANVIL_1000G_PRIMED uses GRCh38).
+*A `.pgen` is binary genotypes with no reference of its own; the submitter's table states it (#562).
 
 **Implementation**: `scripts/classify_auxiliary_genomic.py` (rules in `src/meta_disco/rules/unified_rules.yaml`)
 

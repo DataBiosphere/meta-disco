@@ -77,9 +77,9 @@
         "dataset_title": "GOLDEN_FIXTURE",
         "drs_uri": "drs://golden/v2_g-object-4",
         "entry_id": "g-auxiliary-1",
-        "file_format": ".pvar",
+        "file_format": ".pgen",
         "file_id": "g-file-4",
-        "file_name": "cohort.pvar",
+        "file_name": "cohort.pgen",
         "file_size": 1000,
         "generated_by": null,
         "md5sum": "44444444444444444444444444444444"
@@ -90,7 +90,7 @@
       "content_unreadable": 0,
       "details": {
         "by_extension": {
-          ".pvar": 1
+          ".pgen": 1
         },
         "with_reference": 0
       },

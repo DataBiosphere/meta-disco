@@ -70,11 +70,11 @@ class TestStandaloneProducers:
     def test_auxiliary_writes_no_row_for_a_checksum_less_file(self, tmp_path):
         metadata = _write_metadata(
             tmp_path,
-            [_pair("kept.pvar", ".pvar", md5=GOOD_MD5), _pair("dropped.pvar", ".pvar", md5=BAD_MD5)],
+            [_pair("kept.pgen", ".pgen", md5=GOOD_MD5), _pair("dropped.pgen", ".pgen", md5=BAD_MD5)],
         )
         output = tmp_path / "auxiliary_classifications.json"
         classify_auxiliary_genomic(metadata, output)
-        assert _names(output) == ["kept.pvar"]
+        assert _names(output) == ["kept.pgen"]
 
     def test_catch_all_writes_no_row_for_a_checksum_less_file(self, tmp_path):
         """The catch-all is where a header-pipeline-only exclusion would have leaked."""

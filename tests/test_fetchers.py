@@ -420,6 +420,23 @@ def test_vcf_matcher_splits_header_and_variants():
     assert m.variant_lines == ["1\t100", "1\t200"]
 
 
+def test_vcf_matcher_takes_no_header_from_a_head_that_does_not_start_with_one():
+    """gzip bytes read as text can hold a `#` anywhere; only the run of `#` lines a head
+    starts with is a header, so such a head has none and is refused, never cached (#561)."""
+    m = _VcfMatcher(max_variants=5)
+    for line in ["\x1f\x8b\x08binary", "#'n\xb7SR{", "more"]:
+        m.feed(line)
+    assert m.header_lines == []
+
+
+def test_vcf_matcher_takes_a_header_after_a_byte_order_mark_and_past_blank_lines():
+    m = _VcfMatcher(max_variants=5)
+    for line in ["\ufeff##fileformat=VCFv4.2", "", "##contig=<ID=1,length=249250621>", "#CHROM\tPOS", "1\t100"]:
+        m.feed(line)
+    assert m.header_lines == ["##fileformat=VCFv4.2", "##contig=<ID=1,length=249250621>", "#CHROM\tPOS"]
+    assert m.variant_lines == ["1\t100"]
+
+
 def test_fastq_matcher_skips_three_lines_per_read():
     m = _FastqMatcher(num_reads=2)
     feeds = [m.feed(line) for line in ["@r1", "ACGT", "+", "IIII", "@r2", "ACGT"]]

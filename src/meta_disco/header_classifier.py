@@ -274,7 +274,8 @@ def classify_from_vcf_header(
     file_format: str | None = None,
 ) -> dict:
     """
-    Classify VCF file based on header content.
+    Classify a VCF file based on header content; also a PLINK 2 ``.pvar``, whose ``##``
+    header is a VCF's (#561).
 
     This function uses the RuleEngine with rules from unified_rules.yaml
     to classify VCF files based on their headers.

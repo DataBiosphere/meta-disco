@@ -477,6 +477,22 @@ class TestVcfClassification:
         result = classify_from_vcf_header(header)
         assert val(result, "reference_assembly") == "GRCh37"
 
+    @pytest.mark.parametrize(
+        ("contigs", "reference"),
+        [
+            # The heads of a hg19 and a hg38 ANVIL_1000G_PRIMED .pvar (#561), first contigs.
+            ("##contig=<ID=1,assembly=b37,length=249250621>\n##contig=<ID=2,assembly=b37,length=243199373>", "GRCh37"),
+            ("##contig=<ID=1,length=248956422>\n##contig=<ID=2,length=242193529>", "GRCh38"),
+        ],
+    )
+    def test_a_pvar_takes_its_reference_from_its_vcf_style_header_and_stays_genotypes(self, contigs, reference):
+        """A PLINK 2 .pvar written from a VCF keeps the VCF's ## header: its contig lengths give
+        the reference, and its data_type is the PLINK extension rule's, not a VCF's (#561)."""
+        header = f"{contigs}\n#CHROM\tPOS\tID\tREF\tALT"
+        result = classify_from_vcf_header(header, name=FileName.parse("ACB.1.pvar"))
+        assert val(result, "reference_assembly") == reference
+        assert (val(result, "data_type"), val(result, "data_modality")) == ("genotypes", "genomic")
+
     def test_haplotypecaller_germline(self):
         """Detect GATK HaplotypeCaller as germline."""
         header = """##fileformat=VCFv4.2
