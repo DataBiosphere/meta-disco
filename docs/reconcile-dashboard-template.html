@@ -18,6 +18,7 @@
     th { background: #f6f8fa; text-align: left; vertical-align: bottom; }
     td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
     td.conflict { background: #fff1f0; }
+    tr.total td { font-weight: 600; background: #f6f8fa; }
     select { font-size: 14px; padding: 4px 8px; }
   </style>
 </head>
@@ -58,6 +59,17 @@
       example, <code>ANVIL_T2T_CHRY</code> files whose reference assembly only the submitter's table names.</li>
   </ul>
   <div class="scroll" id="headline"></div>
+  <p class="note"><strong>How complete the metadata is.</strong> A slot is one file in one dimension. It is
+    <em>filled</em> when it settled with a value or as not applicable, which is an answer (the dimension does not apply
+    to the file), unlike not classified. A filled slot is counted once, under the input its answer is credited to:
+    <em>original</em>, the catalog's published values; <em>submitter tables</em>; <em>external</em>, ENA's run records
+    (each source's row adds its own column above and its <em>harmonized</em> one); <em>inherited</em>, where no
+    source declared the value, the file's parents across its <code>generated_by</code> did, and inference declared
+    another or none; <em>inferred</em>, every other value no source declared, which is credited to inference;
+    <em>not applicable</em>, which reconcile does not yet credit to an input (#634). A slot not classified, published
+    unreviewed or in conflict is not filled. Each % is its row's count over the <em>slots</em> row of its column.</p>
+  <div class="scroll" id="completeness"></div>
+  <p class="note" id="catalog-dimensions"></p>
 
   <h2>Conflict rate</h2>
   <p id="rate-summary"></p>
@@ -73,7 +85,7 @@
   <p class="note">What each dataset holds, per dimension: every file counted once, under its reconciled value or, where
     it has none, its status (#545). A value's cell is shaded by its share of the dataset's files; statuses are
     unshaded. <em>Has a value</em> is the
-    share with a value; <em>determined</em> adds <code>not_applicable</code>, a slot settled as having no value.</p>
+    share with a value; <em>filled</em> adds <code>not_applicable</code>, a slot settled as having no value.</p>
   <p><label>Dimension: <select id="values-slot"></select></label></p>
   <div class="scroll" id="values"></div>
 
@@ -117,28 +129,51 @@
     // reconcile counts a record with no dataset_title under "".
     const shown = name => name || '(no dataset title)';
 
-    function table(header, rows) {
-      // rows: arrays of {text, cls} or plain strings
+    function table(header, rows, totals = []) {
+      // rows: arrays of {text, cls} or plain strings; totals: rows like them, shown after them as totals
       const head = '<tr>' + header.map(h => `<th>${esc(h)}</th>`).join('') + '</tr>';
-      const body = rows.map(r => '<tr>' + r.map(c => {
+      const tr = (r, attrs = '') => `<tr${attrs}>` + r.map(c => {
         const cell = typeof c === 'object' ? c : {text: c};
         const style = cell.shade ? ` style="background: rgba(9, 105, 218, ${cell.shade.toFixed(3)})"` : '';
         return `<td class="${cell.cls || ''}"${style}>${esc(cell.text)}</td>`;
-      }).join('') + '</tr>').join('');
+      }).join('') + '</tr>';
+      const body = rows.map(r => tr(r)).join('') + totals.map(r => tr(r, ' class="total"')).join('');
       return `<table>${head}${body}</table>`;
     }
 
-    function headlineTable(rows, fmt) {
+    // With scope, the table closes with its totals and each total's share of the scope's slots.
+    function headlineTable(rows, fmt, scope = null) {
       const header = ['dimension', ...DATA.columns.map(c => c.label), 'added over published', 'filled over inference'];
-      return table(header, rows.map(r => [
-        r.dimension,
+      const cells = (r, f) => [
         ...DATA.columns.map(c => ({
-          text: fmt(r.counts[c.key]),
+          text: f(r.counts[c.key]),
           cls: 'num' + (CONFLICT_KEYS.has(c.key) && r.counts[c.key] ? ' conflict' : ''),
         })),
-        {text: fmt(r.added_over_published), cls: 'num'},
-        {text: fmt(r.filled_over_inference), cls: 'num'},
-      ]));
+        {text: f(r.added_over_published), cls: 'num'},
+        {text: f(r.filled_over_inference), cls: 'num'},
+      ];
+      const totals = scope ? [
+        ['all dimensions', ...cells(scope.totals, n)],
+        ['% of slots', ...cells(scope.totals, v => ofSlots(v, scope.slots))],
+      ] : [];
+      return table(header, rows.map(r => [r.dimension, ...cells(r, fmt)]), totals);
+    }
+
+    // Ours by the input credited, then filled and slots; beside them, where it is known, the catalog today's.
+    // What the catalog publishes is the original metadata: its count goes in the published row alone.
+    function completenessTable(scope) {
+      const c = scope.completeness, today = scope.catalog_today;
+      const num = text => ({text, cls: 'num'});
+      const pair = (v, slots) => [num(n(v)), num(ofSlots(v, slots))];
+      const theirs = (key) => !today ? [] : key === DATA.catalog_group ? pair(today.filled, today.slots) : [num('—'), num('—')];
+      const header = ['', `meta-disco (${scope.headline.length} dimensions)`, '%',
+        ...(today ? [`catalog today (${today.dimensions.length} dimensions)`, '%'] : [])];
+      return table(header,
+        DATA.filled_groups.map(g => [g.label, ...pair(c[g.key], scope.slots), ...theirs(g.key)]),
+        [
+          ['filled', ...pair(c.filled, scope.slots), ...(today ? pair(today.filled, today.slots) : [])],
+          ['slots (files × dimensions)', num(n(scope.slots)), num('100%'), ...(today ? [num(n(today.slots)), num('100%')] : [])],
+        ]);
     }
 
     const competing = inputs => Object.entries(inputs)
@@ -164,7 +199,16 @@
       const whole = index < 0;
       const scope = whole ? DATA.run : DATA.datasets[index];
       const name = whole ? DATA.all : scope.name;
-      document.getElementById('headline').innerHTML = headlineTable(scope.headline, n);
+      document.getElementById('completeness').innerHTML = completenessTable(scope);
+      document.getElementById('catalog-dimensions').innerHTML = scope.catalog_today
+        ? `<em>Catalog today</em> is the metadata the catalog publishes itself, before ours: only the dimensions it has a column for (${
+            scope.catalog_today.dimensions.map(d => `<code>${esc(d)}</code>`).join(', ')}), so fewer slots. A slot is filled where it ` +
+          'publishes a value for the file, whether or not a translation row reads it, and all of it is original. Our ' +
+          "<em>original</em> row can be larger: one of the catalog's columns can fill more than one of our dimensions (its " +
+          '<code>data_modality</code> value "single-nucleus RNA sequencing assay" also gives <code>assay_type</code>), though it ' +
+          "counts only the values a reviewed translation row reads. It is shown only where this run read the catalog's published values."
+        : '';
+      document.getElementById('headline').innerHTML = headlineTable(scope.headline, n, scope);
 
       document.getElementById('rate-summary').innerHTML =
         `<strong>${n(scope.conflicts)} of ${n(scope.slots)} slots (${pct(scope.conflict_rate)})</strong> are a conflict in ${whole ? 'the run' : esc(shown(name))} (${n(scope.files)} files).`;
@@ -250,6 +294,8 @@
 
     // To one decimal, rounded down, so a dataset short of every file never reads 100%.
     const share = v => v >= 1 ? '100%' : (Math.floor(v * 1000) / 10).toFixed(1) + '%';
+    // A count's share of the slots by share(), but "<0.1%" where a non-zero count would read 0.0%.
+    const ofSlots = (v, slots) => v && v < slots / 1000 ? '<0.1%' : (slots ? share(v / slots) : '0.0%');
     const slotSelect = document.getElementById('values-slot');
     slotSelect.innerHTML = Object.keys(DATA.values).map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
 
@@ -262,7 +308,7 @@
       const labelled = index < 0 ? [...matrix.rows.map(r => [shown(r.dataset), r]), [DATA.all, matrix.total]]
         : matrix.rows.filter(r => r.dataset === DATA.datasets[index].name).map(r => [shown(r.dataset), r]);
       document.getElementById('values').innerHTML = table(
-        ['dataset', ...columns, 'files', 'has a value', 'determined'],
+        ['dataset', ...columns, 'files', 'has a value', 'filled'],
         labelled.map(([name, r]) => [
           name,
           ...columns.map(c => {
@@ -273,7 +319,7 @@
           }),
           {text: n(r.files), cls: 'num'},
           {text: share(r.has_value), cls: 'num'},
-          {text: share(r.determined), cls: 'num'},
+          {text: share(r.filled), cls: 'num'},
         ]),
       );
     }

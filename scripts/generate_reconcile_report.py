@@ -29,17 +29,27 @@ import sys
 from pathlib import Path
 
 from meta_disco.cohort_steps import OUTCOMES as COHORT_STEP_OUTCOMES
-from meta_disco.models import CLASSIFICATION_FIELDS, NOT_APPLICABLE, STATUS_LABELS
+from meta_disco.models import (
+    CLASSIFICATION_FIELDS,
+    NOT_APPLICABLE,
+    SOURCE_EXTERNAL_GROUND_TRUTH,
+    SOURCE_PUBLISHED_VALUE,
+    SOURCE_REPOSITORY_METADATA,
+    STATUS_LABELS,
+)
 from meta_disco.output_utils import RECONCILED_DIR, find_latest_run, list_runs
 from meta_disco.producer_steps import OUTCOMES as HEADER_STEP_OUTCOMES
 from meta_disco.reconcile import (
     CONFLICT_CATEGORIES,
     EVERY_DATASET,
+    FILLED_GROUPS,
     INFERENCE,
     REPORT_FILE,
+    SILENT,
     SLOT_CATEGORIES,
     SOURCE_PRECEDENCE,
     fill_category,
+    published_slots,
 )
 from meta_disco.reconcile_inherit import OUTCOMES as INHERITANCE_COLUMNS
 from meta_disco.reconcile_lineage import OUTCOMES
@@ -56,6 +66,17 @@ ALL = EVERY_DATASET
 # for the file, and the gaps inference left that a source filled.
 ADDED = "added_over_published"
 FILLED_OVER = "filled_over_inference"
+# Each source's FILLED_GROUPS key, its name in SOURCE_PRECEDENCE. The published source's
+# group is the catalog's own values, the original metadata, beside which the completeness
+# table shows the catalog today's count.
+SOURCE_GROUP = dict(SOURCE_PRECEDENCE)
+CATALOG_GROUP = SOURCE_GROUP[SOURCE_PUBLISHED_VALUE]
+# The completeness table's row labels where a FILLED_GROUPS key is not one.
+GROUP_LABELS = {
+    CATALOG_GROUP: "original (catalog's published values)",
+    SOURCE_GROUP[SOURCE_REPOSITORY_METADATA]: "submitter tables",
+    SOURCE_GROUP[SOURCE_EXTERNAL_GROUND_TRUTH]: "external (ENA)",
+}
 # A slot's statuses in the order a values table shows them, after its values: a file
 # counted under one has no value for the slot. Read from STATUS_LABELS, so a status added
 # there is never counted as a value here.
@@ -147,14 +168,14 @@ def columns(*reports: dict) -> list[str]:
     zero by construction. A source that was read and filled nothing keeps its zeros: they
     say its values have no authored row yet.
     """
-    read = {ev["source_type"] for report in reports for ev in report["evidence"]}
-    unread = {
-        fill_category(name, harmonized)
-        for source_type, name in SOURCE_PRECEDENCE
-        if source_type not in read
-        for harmonized in (False, True)
-    }
+    unread = {fill_category(name, harmonized) for name in unread_sources(*reports) for harmonized in (False, True)}
     return [c for c in SLOT_CATEGORIES if c not in unread]
+
+
+def unread_sources(*reports: dict) -> set[str]:
+    """The ``SOURCE_PRECEDENCE`` names of the sources no evidence file of these reports came from."""
+    read = {ev["source_type"] for report in reports for ev in report["evidence"]}
+    return {name for source_type, name in SOURCE_PRECEDENCE if source_type not in read}
 
 
 def headline(report: dict, dataset: str | None = None) -> list[dict]:
@@ -182,6 +203,58 @@ def headline(report: dict, dataset: str | None = None) -> list[dict]:
             }
         )
     return rows
+
+
+def totals(rows: list[dict]) -> dict:
+    """:func:`headline`'s rows summed over the dimensions: each category's count, added over published, filled over inference."""
+    counts = {c: sum(r["counts"][c] for r in rows) for c in SLOT_CATEGORIES}
+    return {"counts": counts, ADDED: sum(r[ADDED] for r in rows), FILLED_OVER: sum(r[FILLED_OVER] for r in rows)}
+
+
+def completeness(counts: dict[str, int]) -> dict[str, int]:
+    """Each of ``FILLED_GROUPS``'s slot count, in its order, then ``filled``: their sum."""
+    groups = {group: sum(counts[c] for c in categories) for group, categories in FILLED_GROUPS.items()}
+    return {**groups, "filled": sum(groups.values())}
+
+
+def group_label(group: str) -> str:
+    """A ``FILLED_GROUPS`` key as the completeness table's row label."""
+    return GROUP_LABELS.get(group, group.replace("_", " "))
+
+
+def catalog_dimensions(report: dict) -> list[str]:
+    """The dimensions the catalog today is counted over: the ones its published source has a column for.
+
+    Empty where the repository has no published source, or where this run read no evidence
+    file of it (evidence excluded, or never imported): its count is then unknown, not zero.
+    The check is the run's, not a dataset's: the published map leaves out a dataset whose
+    columns hold no value, so a dataset with no evidence file of it publishes nothing there.
+    """
+    if CATALOG_GROUP in unread_sources(report):
+        return []
+    return sorted(published_slots(report["repository"]))
+
+
+def catalog_today(report: dict, dimensions: list[str], dataset: str | None = None) -> dict | None:
+    """How complete the catalog's own metadata is, before ours, over ``dimensions`` (:func:`catalog_dimensions`).
+
+    A slot is filled where the published source was not silent for that file and dimension:
+    an evidence line of it reached the slot, whether or not a translation row reads its value.
+    Today each published column reaches only its own dimension among ``dimensions``, so that is
+    where the catalog publishes a value for the file. None where ``dimensions`` is empty.
+    """
+    if not dimensions:
+        return None
+    names = _datasets(report, dataset)
+    filled = sum(
+        n
+        for d in names
+        for slot in dimensions
+        for outcome, n in report["inputs"].get(d, {}).get(slot, {}).get(SOURCE_PUBLISHED_VALUE, {}).items()
+        if outcome != SILENT
+    )
+    files = sum(report["files"].get(d, 0) for d in names)
+    return {"dimensions": dimensions, "slots": files * len(dimensions), "filled": filled}
 
 
 def conflict_rows(report: dict, dataset: str | None = None) -> list[dict]:
@@ -229,7 +302,7 @@ def values_matrix(report: dict, slot: str) -> dict:
     ``values`` are the slot's values, most files first; ``statuses`` the
     :data:`VALUE_STATUSES` present in the run. A table's columns are the two in that order,
     and a row's counts, keyed by both, sum to its dataset's files. *Has a value* is the share
-    with a value; *determined* adds ``not_applicable``, a slot settled as having no value.
+    with a value; *filled* adds ``not_applicable``, a slot settled as having no value.
     """
     per_dataset = {d: report["values"].get(d, {}).get(slot, {}) for d in sorted(report["files"])}
     totals: dict[str, int] = {}
@@ -254,7 +327,7 @@ def _values_row(name: str, counts: dict[str, int], values: list[str], statuses: 
         "counts": {c: counts.get(c, 0) for c in (*values, *statuses)},
         "files": files,
         "has_value": valued / files if files else 0.0,
-        "determined": (valued + counts.get(NOT_APPLICABLE, 0)) / files if files else 0.0,
+        "filled": (valued + counts.get(NOT_APPLICABLE, 0)) / files if files else 0.0,
     }
 
 
@@ -407,15 +480,21 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
     or the dataset is not in it.
     """
 
+    dimensions = catalog_dimensions(report)
+
     def scope(dataset: str | None) -> dict:
         files = sum(report["files"].get(d, 0) for d in _datasets(report, dataset))
         rows = headline(report, dataset)
         conflicts = sum(r["conflicts"] for r in rows)
+        summed = totals(rows)
         slots = files * len(rows)
         old = previous if previous and (dataset is None or dataset in previous["files"]) else None
         return {
             "files": files,
             "headline": rows,
+            "totals": summed,
+            "completeness": completeness(summed["counts"]),
+            "catalog_today": catalog_today(report, dimensions, dataset),
             "conflicts": conflicts,
             "slots": slots,
             "conflict_rate": conflicts / slots if slots else 0.0,
@@ -424,7 +503,8 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
             "change": change(report, old, dataset) if old else None,
         }
 
-    cols = columns(report, previous) if previous else columns(report)
+    previous_ = [previous] if previous else []
+    cols = columns(report, *previous_)
     return {
         "source": str(source),
         "provenance": provenance(report),
@@ -432,6 +512,12 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
         "skipped_evidence": len(report.get("skipped_evidence", [])),
         "columns": [{"key": c, "label": label(c)} for c in cols],
         "conflict_categories": list(CONFLICT_CATEGORIES),
+        # The completeness rows: a source no evidence file of this run came from is left out, as columns() leaves
+        # out its columns. Unlike columns(), not the previous run's: these rows count this run alone.
+        "filled_groups": [
+            {"key": g, "label": group_label(g)} for g in FILLED_GROUPS if g not in unread_sources(report)
+        ],
+        "catalog_group": CATALOG_GROUP,
         "all": ALL,
         "run": scope(None),
         "datasets": [{"name": dataset, **scope(dataset)} for dataset in sorted(report["files"])],
@@ -457,17 +543,66 @@ def _signed(value: int) -> str:
     return "0" if value == 0 else f"{value:+,}"
 
 
-def _headline_table(rows: list[dict], cols: list[dict], fmt=_n) -> list[str]:
+def _headline_table(rows: list[dict], cols: list[dict], fmt=_n, scope: dict | None = None) -> list[str]:
+    """The per-dimension table; with ``scope``, closed by its totals and each total's share of its slots."""
     header = ["dimension", *(c["label"] for c in cols), "added over published", "filled over inference"]
-    body = [
-        [r["dimension"], *(fmt(r["counts"][c["key"]]) for c in cols), fmt(r[ADDED]), fmt(r[FILLED_OVER])] for r in rows
-    ]
+
+    def cells(r: dict, f) -> list[str]:
+        return [*(f(r["counts"][c["key"]]) for c in cols), f(r[ADDED]), f(r[FILLED_OVER])]
+
+    body = [[r["dimension"], *cells(r, fmt)] for r in rows]
+    if scope is not None:
+        body += [
+            ["**all dimensions**", *(f"**{v}**" for v in cells(scope["totals"], _n))],
+            ["**% of slots**", *(f"**{v}**" for v in cells(scope["totals"], lambda v: _of_slots(v, scope["slots"])))],
+        ]
     return md_table(header, body, align="right")
 
 
 def _pct(share: float) -> str:
     """A share to one decimal, rounded down, so a dataset short of every file never reads 100%."""
     return "100%" if share >= 1 else f"{math.floor(share * 1000) / 10:.1f}%"
+
+
+def _of_slots(count: int, slots: int) -> str:
+    """``count``'s share of ``slots`` by :func:`_pct`, but "<0.1%" where a non-zero count would read 0.0%."""
+    if count and count < slots / 1000:
+        return "<0.1%"
+    return _pct(count / slots) if slots else "0.0%"
+
+
+def _catalog_dimensions(scope: dict) -> list[str]:
+    today = scope["catalog_today"]
+    if today is None:
+        return []
+    dimensions = ", ".join(md_code(d) for d in today["dimensions"])
+    return [
+        "",
+        f"*Catalog today* is the metadata the catalog publishes itself, before ours: only the dimensions it has a "
+        f"column for ({dimensions}), so fewer slots. A slot is filled where it publishes a value for the file, "
+        "whether or not a translation row reads it, and all of it is original. Our *original* row can be larger: "
+        "one of the catalog's columns can fill more than one of our dimensions (its `data_modality` value "
+        '"single-nucleus RNA sequencing assay" also gives `assay_type`), though it counts only the values a '
+        "reviewed translation row reads. It is shown only where this run read the catalog's published values.",
+    ]
+
+
+def _completeness_table(scope: dict, groups: list[dict]) -> list[str]:
+    """Ours by the input credited (``groups``), then filled and slots; beside them, where known, the catalog today's."""
+    c, slots, today = scope["completeness"], scope["slots"], scope["catalog_today"]
+    header = ["", f"meta-disco ({len(scope['headline'])} dimensions)", "%"]
+    filled = ["**filled**", f"**{_n(c['filled'])}**", f"**{_of_slots(c['filled'], slots)}**"]
+    every = ["**slots (files \N{MULTIPLICATION SIGN} dimensions)**", f"**{_n(slots)}**", "**100%**"]
+    theirs: dict[str, list[str]] = {}
+    if today is not None:
+        header += [f"catalog today ({len(today['dimensions'])} dimensions)", "%"]
+        share = _of_slots(today["filled"], today["slots"])
+        # What the catalog publishes is the original metadata: its count goes in that row alone.
+        theirs = {g["key"]: [_n(today["filled"]), share] if g["key"] == CATALOG_GROUP else ["—", "—"] for g in groups}
+        filled += [f"**{_n(today['filled'])}**", f"**{share}**"]
+        every += [f"**{_n(today['slots'])}**", "**100%**"]
+    rows = [[g["label"], _n(c[g["key"]]), _of_slots(c[g["key"]], slots), *theirs.get(g["key"], [])] for g in groups]
+    return md_table(header, [*rows, filled, every], align="right")
 
 
 def _grouped(matrix: dict) -> tuple[dict, dict[str, list[str]]]:
@@ -498,7 +633,7 @@ def _grouped(matrix: dict) -> tuple[dict, dict[str, list[str]]]:
 
 def _values_table(matrix: dict) -> list[str]:
     columns = [*matrix["values"], *matrix["statuses"]]
-    header = ["dataset", *(md_code(c) for c in columns), "files", "has a value", "determined"]
+    header = ["dataset", *(md_code(c) for c in columns), "files", "has a value", "filled"]
 
     def cells(row: dict, name: str) -> list[str]:
         return [
@@ -506,7 +641,7 @@ def _values_table(matrix: dict) -> list[str]:
             *(_n(row["counts"][c]) if row["counts"][c] else "·" for c in columns),
             _n(row["files"]),
             _pct(row["has_value"]),
-            _pct(row["determined"]),
+            _pct(row["filled"]),
         ]
 
     body = [cells(r, md_code(shown(r["dataset"]))) for r in matrix["rows"]]
@@ -520,7 +655,7 @@ def _values_section(values: dict[str, dict]) -> list[str]:
         "",
         "What each dataset holds, per dimension: every file counted once, under its reconciled value or, "
         "where it has none, its status (#545). *Has a value* is the share of the dataset's files with a value; "
-        "*determined* adds `not_applicable`, a slot settled as having no value.",
+        "*filled* adds `not_applicable`, a slot settled as having no value.",
         "",
     ]
     for slot in CLASSIFICATION_FIELDS:
@@ -623,7 +758,20 @@ def render_markdown(data: dict) -> str:
         "supplied one (a value, or not applicable): gaps inference alone would have left empty. For example, "
         "`ANVIL_T2T_CHRY` files whose reference assembly only the submitter's table names.",
         "",
-        *_headline_table(whole["headline"], cols),
+        *_headline_table(whole["headline"], cols, scope=whole),
+        "",
+        "**How complete the metadata is.** A slot is one file in one dimension. It is *filled* when it settled "
+        "with a value or as not applicable, which is an answer (the dimension does not apply to the file), unlike "
+        "not classified. A filled slot is counted once, under the input its answer is credited to: *original*, "
+        "the catalog's published values; *submitter tables*; *external*, ENA's run records (each source's row adds "
+        "its own column above and its *harmonized* one); *inherited*, where no source declared the value, the "
+        "file's parents across its `generated_by` did, and inference declared another or none; *inferred*, every "
+        "other value no source declared, which is credited to inference; *not applicable*, which reconcile does "
+        "not yet credit to an input (#634). A slot not classified, published unreviewed or in conflict is not "
+        "filled. Each % is its row's count over the *slots* row of its column.",
+        "",
+        *_completeness_table(whole, data["filled_groups"]),
+        *_catalog_dimensions(whole),
         "",
         "## Conflict rate",
         "",
@@ -734,7 +882,9 @@ def render_markdown(data: dict) -> str:
             "",
             f"{scope['files']:,} files.",
             "",
-            *_headline_table(scope["headline"], cols),
+            *_headline_table(scope["headline"], cols, scope=scope),
+            "",
+            *_completeness_table(scope, data["filled_groups"]),
         ]
         if scope["conflict_rows"]:
             lines += ["", *_conflict_table(scope["conflict_rows"], with_dataset=False)]

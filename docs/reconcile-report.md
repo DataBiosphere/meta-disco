@@ -25,6 +25,23 @@ The last two columns are extra counts laid over those, not part of the sum:
 | reference_assembly | 0 | 4,476 | 46,798 | 263,942 | 0 | 0 | 126,517 | 171,371 | 8 | 0 | 0 | 220 | 63,699 | 31,057 | 608,628 | 215,655 |
 | assay_type | 0 | 6,753 | 12,420 | 0 | 6,962 | 0 | 5,441 | 490,058 | 0 | 6 | 2 | 0 | 23,227 | 163,219 | 514,881 | 25,721 |
 | instrument_model | 0 | 0 | 19,102 | 520 | 6,962 | 0 | 69 | 488,653 | 0 | 0 | 0 | 0 | 23,233 | 169,549 | 515,306 | 25,901 |
+| **all dimensions** | **0** | **17,972** | **88,614** | **301,519** | **20,886** | **6,962** | **1,188,207** | **1,895,499** | **8** | **8** | **2** | **220** | **154,360** | **574,271** | **3,501,675** | **299,960** |
+| **% of slots** | **0.0%** | **0.4%** | **2.0%** | **7.0%** | **0.4%** | **0.1%** | **27.9%** | **44.6%** | **<0.1%** | **<0.1%** | **<0.1%** | **<0.1%** | **3.6%** | **13.5%** | **82.4%** | **7.0%** |
+
+**How complete the metadata is.** A slot is one file in one dimension. It is *filled* when it settled with a value or as not applicable, which is an answer (the dimension does not apply to the file), unlike not classified. A filled slot is counted once, under the input its answer is credited to: *original*, the catalog's published values; *submitter tables*; *external*, ENA's run records (each source's row adds its own column above and its *harmonized* one); *inherited*, where no source declared the value, the file's parents across its `generated_by` did, and inference declared another or none; *inferred*, every other value no source declared, which is credited to inference; *not applicable*, which reconcile does not yet credit to an input (#634). A slot not classified, published unreviewed or in conflict is not filled. Each % is its row's count over the *slots* row of its column.
+
+|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |
+| --- | ---: | ---: | ---: | ---: |
+| original (catalog's published values) | 17,972 | 0.4% | 11,451 | 0.8% |
+| submitter tables | 390,133 | 9.1% | — | — |
+| external (ENA) | 27,848 | 0.6% | — | — |
+| inferred | 1,188,207 | 27.9% | — | — |
+| inherited | 1,895,499 | 44.6% | — | — |
+| not applicable | 154,360 | 3.6% | — | — |
+| **filled** | **3,674,019** | **86.4%** | **11,451** | **0.8%** |
+| **slots (files × dimensions)** | **4,248,528** | **100%** | **1,416,176** | **100%** |
+
+*Catalog today* is the metadata the catalog publishes itself, before ours: only the dimensions it has a column for (`data_modality`, `reference_assembly`), so fewer slots. A slot is filled where it publishes a value for the file, whether or not a translation row reads it, and all of it is original. Our *original* row can be larger: one of the catalog's columns can fill more than one of our dimensions (its `data_modality` value "single-nucleus RNA sequencing assay" also gives `assay_type`), though it counts only the values a reviewed translation row reads. It is shown only where this run read the catalog's published values.
 
 ## Conflict rate
 
@@ -55,11 +72,11 @@ Each distinct set of values the inputs declared on a conflicted slot (contract 5
 
 ## Values by dataset
 
-What each dataset holds, per dimension: every file counted once, under its reconciled value or, where it has none, its status (#545). *Has a value* is the share of the dataset's files with a value; *determined* adds `not_applicable`, a slot settled as having no value.
+What each dataset holds, per dimension: every file counted once, under its reconciled value or, where it has none, its status (#545). *Has a value* is the share of the dataset's files with a value; *filled* adds `not_applicable`, a slot settled as having no value.
 
 ### data_modality
 
-| dataset | `genomic` | `transcriptomic` | `epigenomic.3d_contact_maps` | `epigenomic.methylation` | `epigenomic.chromatin_accessibility` | `not_applicable` | `not_classified` | files | has a value | determined |
+| dataset | `genomic` | `transcriptomic` | `epigenomic.3d_contact_maps` | `epigenomic.methylation` | `epigenomic.chromatin_accessibility` | `not_applicable` | `not_classified` | files | has a value | filled |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `ANVIL_1000G_PRIMED_data_model` | 8,631 | · | · | · | · | 2,852 | 10 | 11,493 | 75.0% | 99.9% |
 | `ANVIL_1000G_high_coverage_2019` | 12,908 | · | · | · | · | 13,008 | 100 | 26,016 | 49.6% | 99.6% |
@@ -79,7 +96,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 
 22 values, shown with each dotted term under its top-level term (the dashboard shows every term): `variants` = `variants.germline`, `variants`, `variants.structural`; `annotations` = `annotations.coverage`, `annotations`; `pangenome` = `pangenome`, `pangenome.reference`.
 
-| dataset | `variants` | `index` | `qc_report` | `reads` | `annotations` | `alignments` | `checksum` | `raw_signal` | `genotypes` | `log` | `images` | `assembly` | `quantification` | `expression_matrix` | `pangenome` | `array_signal` | `sample_map` | `sequence` | `conflict` | `not_classified` | files | has a value | determined |
+| dataset | `variants` | `index` | `qc_report` | `reads` | `annotations` | `alignments` | `checksum` | `raw_signal` | `genotypes` | `log` | `images` | `assembly` | `quantification` | `expression_matrix` | `pangenome` | `array_signal` | `sample_map` | `sequence` | `conflict` | `not_classified` | files | has a value | filled |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `ANVIL_1000G_PRIMED_data_model` | 46 | 23 | · | · | · | · | · | · | 8,562 | 2,852 | · | · | · | · | · | · | · | · | · | 10 | 11,493 | 99.9% | 99.9% |
 | `ANVIL_1000G_high_coverage_2019` | 3,252 | 6,454 | · | · | · | 3,202 | 13,008 | · | · | · | · | · | · | · | · | · | · | · | · | 100 | 26,016 | 99.6% | 99.6% |
@@ -97,7 +114,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 
 ### platform
 
-| dataset | `ILLUMINA` | `ONT` | `PACBIO` | `not_applicable` | `not_classified` | files | has a value | determined |
+| dataset | `ILLUMINA` | `ONT` | `PACBIO` | `not_applicable` | `not_classified` | files | has a value | filled |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `ANVIL_1000G_PRIMED_data_model` | · | · | · | 2,852 | 8,641 | 11,493 | 0.0% | 24.8% |
 | `ANVIL_1000G_high_coverage_2019` | 12,808 | · | · | 13,008 | 200 | 26,016 | 49.2% | 99.2% |
@@ -115,7 +132,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 
 ### reference_assembly
 
-| dataset | `t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r` | `T2T-CHM13v2.0` | `GRCh38` | `GRCh37` | `CHM13` | `CHM13Y_EBV_v1.1` | `T2T-CHM13v1.0` | `t2t-chm13.20200921.HG002chrY.chrEBV` | `T2T-CHM13v1.1` | `conflict` | `not_applicable` | `not_classified` | files | has a value | determined |
+| dataset | `t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r` | `T2T-CHM13v2.0` | `GRCh38` | `GRCh37` | `CHM13` | `CHM13Y_EBV_v1.1` | `T2T-CHM13v1.0` | `t2t-chm13.20200921.HG002chrY.chrEBV` | `T2T-CHM13v1.1` | `conflict` | `not_applicable` | `not_classified` | files | has a value | filled |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `ANVIL_1000G_PRIMED_data_model` | · | · | 1,474 | 1,450 | · | · | · | · | · | · | 2,852 | 5,717 | 11,493 | 25.4% | 50.2% |
 | `ANVIL_1000G_high_coverage_2019` | · | · | 12,908 | · | · | · | · | · | · | · | 13,008 | 100 | 26,016 | 49.6% | 99.6% |
@@ -133,7 +150,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 
 ### assay_type
 
-| dataset | `WGS` | `RNA-seq` | `snRNA-seq` | `Methylation array` | `SHARE-seq` | `snATAC-seq` | `conflict` | `not_applicable` | `not_classified` | files | has a value | determined |
+| dataset | `WGS` | `RNA-seq` | `snRNA-seq` | `Methylation array` | `SHARE-seq` | `snATAC-seq` | `conflict` | `not_applicable` | `not_classified` | files | has a value | filled |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `ANVIL_1000G_PRIMED_data_model` | · | · | · | · | · | · | · | 2,852 | 8,641 | 11,493 | 0.0% | 24.8% |
 | `ANVIL_1000G_high_coverage_2019` | 12,808 | · | · | · | · | · | · | 13,008 | 200 | 26,016 | 49.2% | 99.2% |
@@ -151,7 +168,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 
 ### instrument_model
 
-| dataset | `Illumina NovaSeq 6000` | `Illumina HiSeq 2000` | `Illumina NovaSeq X` | `Sequel II` | `PromethION` | `Revio` | `NextSeq 2000` | `GridION` | `MinION` | `not_applicable` | `not_classified` | files | has a value | determined |
+| dataset | `Illumina NovaSeq 6000` | `Illumina HiSeq 2000` | `Illumina NovaSeq X` | `Sequel II` | `PromethION` | `Revio` | `NextSeq 2000` | `GridION` | `MinION` | `not_applicable` | `not_classified` | files | has a value | filled |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `ANVIL_1000G_PRIMED_data_model` | · | · | · | · | · | · | · | · | · | 2,852 | 8,641 | 11,493 | 0.0% | 24.8% |
 | `ANVIL_1000G_high_coverage_2019` | 12,808 | · | · | · | · | · | · | · | · | 13,008 | 200 | 26,016 | 49.2% | 99.2% |
@@ -169,26 +186,20 @@ What each dataset holds, per dimension: every file counted once, under its recon
 
 ## Change since the previous reconciled run
 
-Against `20261005_143508` (708,088 files; the same translation table). Each cell is this run's count minus that run's.
+Against `20261005_210307` (708,088 files; the same translation table). Each cell is this run's count minus that run's.
 
 | dimension | published | published harmonized | submitter | submitter harmonized | external | external harmonized | inference | inherited | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | data_modality | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | data_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | platform | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | -2,853 | 0 | 0 | 0 | 0 | 0 | 0 | +2,853 | -2,853 | 0 |
+| reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | instrument_model | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 
 ### Values that moved, by dataset
 
-| dataset | dimension | value | before | after | change |
-| --- | --- | --- | --- | --- | --- |
-| `ANVIL_1000G_PRIMED_data_model` | reference_assembly | `GRCh38` | 5,777 | 1,474 | -4,303 |
-| `ANVIL_1000G_PRIMED_data_model` | reference_assembly | `not_classified` | 2,864 | 5,717 | +2,853 |
-| `ANVIL_1000G_PRIMED_data_model` | reference_assembly | `GRCh37` | 0 | 1,450 | +1,450 |
-| `ANVIL_1000G_PRIMED_data_model` | data_type | `variants` | 23 | 0 | -23 |
-| `ANVIL_1000G_PRIMED_data_model` | data_type | `variants.structural` | 23 | 46 | +23 |
+No dataset's count of any value moved.
 
 ## The join, per evidence file
 
@@ -490,6 +501,19 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 2,901 | 23 | 0 | 0 | 0 | 0 | 2,852 | 5,717 | 2,924 | 0 |
 | assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2,852 | 8,641 | 0 | 0 |
 | instrument_model | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2,852 | 8,641 | 0 | 0 |
+| **all dimensions** | **0** | **0** | **0** | **0** | **0** | **0** | **22,992** | **46** | **0** | **0** | **0** | **0** | **14,260** | **31,660** | **23,038** | **0** |
+| **% of slots** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **33.3%** | **<0.1%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **20.6%** | **45.9%** | **33.4%** | **0.0%** |
+
+|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |
+| --- | ---: | ---: | ---: | ---: |
+| original (catalog's published values) | 0 | 0.0% | 0 | 0.0% |
+| submitter tables | 0 | 0.0% | — | — |
+| external (ENA) | 0 | 0.0% | — | — |
+| inferred | 22,992 | 33.3% | — | — |
+| inherited | 46 | <0.1% | — | — |
+| not applicable | 14,260 | 20.6% | — | — |
+| **filled** | **37,298** | **54.0%** | **0** | **0.0%** |
+| **slots (files × dimensions)** | **68,958** | **100%** | **22,986** | **100%** |
 
 ### `ANVIL_1000G_high_coverage_2019`
 
@@ -503,6 +527,19 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 6,454 | 6,454 | 0 | 0 | 0 | 0 | 13,008 | 100 | 12,908 | 0 |
 | assay_type | 0 | 0 | 9,603 | 0 | 0 | 0 | 0 | 3,205 | 0 | 0 | 0 | 0 | 13,008 | 200 | 12,808 | 9,603 |
 | instrument_model | 0 | 0 | 9,603 | 0 | 0 | 0 | 0 | 3,205 | 0 | 0 | 0 | 0 | 13,008 | 200 | 12,808 | 9,603 |
+| **all dimensions** | **0** | **0** | **25,604** | **12,808** | **0** | **0** | **32,420** | **19,324** | **0** | **0** | **0** | **0** | **65,040** | **900** | **90,156** | **28,806** |
+| **% of slots** | **0.0%** | **0.0%** | **16.4%** | **8.2%** | **0.0%** | **0.0%** | **20.7%** | **12.3%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **41.6%** | **0.5%** | **57.7%** | **18.4%** |
+
+|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |
+| --- | ---: | ---: | ---: | ---: |
+| original (catalog's published values) | 0 | 0.0% | 0 | 0.0% |
+| submitter tables | 38,412 | 24.6% | — | — |
+| external (ENA) | 0 | 0.0% | — | — |
+| inferred | 32,420 | 20.7% | — | — |
+| inherited | 19,324 | 12.3% | — | — |
+| not applicable | 65,040 | 41.6% | — | — |
+| **filled** | **155,196** | **99.4%** | **0** | **0.0%** |
+| **slots (files × dimensions)** | **156,096** | **100%** | **52,032** | **100%** |
 
 ### `ANVIL_HPRC`
 
@@ -516,6 +553,19 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | reference_assembly | 0 | 0 | 0 | 365 | 0 | 0 | 1,510 | 243 | 3 | 0 | 0 | 0 | 11,591 | 9,473 | 2,118 | 95 |
 | assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 160 | 0 | 0 | 0 | 0 | 0 | 5,430 | 17,595 | 160 | 0 |
 | instrument_model | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 5,430 | 17,755 | 0 | 0 |
+| **all dimensions** | **0** | **0** | **0** | **2,357** | **0** | **0** | **23,689** | **557** | **3** | **0** | **0** | **0** | **32,499** | **80,005** | **26,603** | **1,321** |
+| **% of slots** | **0.0%** | **0.0%** | **0.0%** | **1.6%** | **0.0%** | **0.0%** | **17.0%** | **0.4%** | **<0.1%** | **0.0%** | **0.0%** | **0.0%** | **23.3%** | **57.5%** | **19.1%** | **0.9%** |
+
+|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |
+| --- | ---: | ---: | ---: | ---: |
+| original (catalog's published values) | 0 | 0.0% | 0 | 0.0% |
+| submitter tables | 2,357 | 1.6% | — | — |
+| external (ENA) | 0 | 0.0% | — | — |
+| inferred | 23,689 | 17.0% | — | — |
+| inherited | 557 | 0.4% | — | — |
+| not applicable | 32,499 | 23.3% | — | — |
+| **filled** | **59,102** | **42.4%** | **0** | **0.0%** |
+| **slots (files × dimensions)** | **139,110** | **100%** | **46,370** | **100%** |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -534,6 +584,19 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 64 | 0 | 0 | 0 | 0 | 0 | 12,430 | 40 | 64 | 0 |
 | assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 6 | 0 | 0 | 21 | 12,507 | 0 | 0 |
 | instrument_model | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 27 | 12,507 | 0 | 0 |
+| **all dimensions** | **0** | **0** | **0** | **6** | **0** | **0** | **25,097** | **0** | **0** | **6** | **0** | **0** | **12,505** | **37,590** | **25,103** | **0** |
+| **% of slots** | **0.0%** | **0.0%** | **0.0%** | **<0.1%** | **0.0%** | **0.0%** | **33.3%** | **0.0%** | **0.0%** | **<0.1%** | **0.0%** | **0.0%** | **16.6%** | **49.9%** | **33.3%** | **0.0%** |
+
+|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |
+| --- | ---: | ---: | ---: | ---: |
+| original (catalog's published values) | 0 | 0.0% | 0 | 0.0% |
+| submitter tables | 6 | <0.1% | — | — |
+| external (ENA) | 0 | 0.0% | — | — |
+| inferred | 25,097 | 33.3% | — | — |
+| inherited | 0 | 0.0% | — | — |
+| not applicable | 12,505 | 16.6% | — | — |
+| **filled** | **37,608** | **50.0%** | **0** | **0.0%** |
+| **slots (files × dimensions)** | **75,204** | **100%** | **25,068** | **100%** |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -551,6 +614,19 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | reference_assembly | 0 | 0 | 0 | 48 | 0 | 0 | 113,195 | 163,391 | 4 | 0 | 0 | 0 | 6,428 | 6,138 | 276,634 | 0 |
 | assay_type | 0 | 0 | 0 | 0 | 6,404 | 0 | 0 | 269,739 | 0 | 0 | 0 | 0 | 34 | 13,027 | 276,143 | 6,404 |
 | instrument_model | 0 | 0 | 0 | 0 | 6,404 | 0 | 0 | 269,739 | 0 | 0 | 0 | 0 | 34 | 13,027 | 276,143 | 6,404 |
+| **all dimensions** | **0** | **0** | **0** | **48** | **19,212** | **6,404** | **548,540** | **1,101,578** | **4** | **0** | **0** | **0** | **6,554** | **52,884** | **1,675,782** | **19,212** |
+| **% of slots** | **0.0%** | **0.0%** | **0.0%** | **<0.1%** | **1.1%** | **0.3%** | **31.6%** | **63.4%** | **<0.1%** | **0.0%** | **0.0%** | **0.0%** | **0.3%** | **3.0%** | **96.5%** | **1.1%** |
+
+|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |
+| --- | ---: | ---: | ---: | ---: |
+| original (catalog's published values) | 0 | 0.0% | 0 | 0.0% |
+| submitter tables | 48 | <0.1% | — | — |
+| external (ENA) | 25,616 | 1.4% | — | — |
+| inferred | 548,540 | 31.6% | — | — |
+| inherited | 1,101,578 | 63.4% | — | — |
+| not applicable | 6,554 | 0.3% | — | — |
+| **filled** | **1,682,336** | **96.9%** | **0** | **0.0%** |
+| **slots (files × dimensions)** | **1,735,224** | **100%** | **578,408** | **100%** |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -568,6 +644,19 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | reference_assembly | 0 | 0 | 46,798 | 262,595 | 0 | 0 | 17 | 6 | 1 | 0 | 0 | 0 | 558 | 4 | 309,416 | 211,255 |
 | assay_type | 0 | 0 | 0 | 0 | 558 | 0 | 0 | 215,637 | 0 | 0 | 0 | 0 | 12 | 93,772 | 216,195 | 558 |
 | instrument_model | 0 | 0 | 0 | 0 | 558 | 0 | 0 | 215,637 | 0 | 0 | 0 | 0 | 12 | 93,772 | 216,195 | 558 |
+| **all dimensions** | **0** | **0** | **46,798** | **262,595** | **1,674** | **558** | **501,302** | **764,896** | **1** | **0** | **0** | **0** | **594** | **281,456** | **1,577,823** | **212,929** |
+| **% of slots** | **0.0%** | **0.0%** | **2.5%** | **14.1%** | **<0.1%** | **<0.1%** | **26.9%** | **41.1%** | **<0.1%** | **0.0%** | **0.0%** | **0.0%** | **<0.1%** | **15.1%** | **84.8%** | **11.4%** |
+
+|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |
+| --- | ---: | ---: | ---: | ---: |
+| original (catalog's published values) | 0 | 0.0% | 0 | 0.0% |
+| submitter tables | 309,393 | 16.6% | — | — |
+| external (ENA) | 2,232 | 0.1% | — | — |
+| inferred | 501,302 | 26.9% | — | — |
+| inherited | 764,896 | 41.1% | — | — |
+| not applicable | 594 | <0.1% | — | — |
+| **filled** | **1,578,417** | **84.8%** | **0** | **0.0%** |
+| **slots (files × dimensions)** | **1,859,874** | **100%** | **619,958** | **100%** |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -585,6 +674,19 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 3,591 | 0 | 0 |
 | assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 686 | 686 | 0 | 0 | 0 | 0 | 0 | 2,219 | 1,372 | 0 |
 | instrument_model | 0 | 0 | 0 | 0 | 0 | 0 | 68 | 68 | 0 | 0 | 0 | 0 | 0 | 3,455 | 136 | 0 |
+| **all dimensions** | **0** | **0** | **0** | **0** | **0** | **0** | **3,022** | **1,510** | **0** | **0** | **0** | **0** | **0** | **17,014** | **4,532** | **0** |
+| **% of slots** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **14.0%** | **7.0%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **78.9%** | **21.0%** | **0.0%** |
+
+|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |
+| --- | ---: | ---: | ---: | ---: |
+| original (catalog's published values) | 0 | 0.0% | 0 | 0.0% |
+| submitter tables | 0 | 0.0% | — | — |
+| external (ENA) | 0 | 0.0% | — | — |
+| inferred | 3,022 | 14.0% | — | — |
+| inherited | 1,510 | 7.0% | — | — |
+| not applicable | 0 | 0.0% | — | — |
+| **filled** | **4,532** | **21.0%** | **0** | **0.0%** |
+| **slots (files × dimensions)** | **21,546** | **100%** | **7,182** | **100%** |
 
 ### `AnVIL_ENCORE_293T`
 
@@ -598,6 +700,19 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | reference_assembly | 0 | 1,544 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 448 | 0 | 0 | 1,320 |
 | assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 1,344 | 0 | 0 | 0 | 0 | 0 | 0 | 648 | 1,344 | 0 |
 | instrument_model | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1,992 | 0 | 0 |
+| **all dimensions** | **0** | **1,544** | **0** | **0** | **0** | **0** | **4,928** | **1,344** | **0** | **0** | **0** | **0** | **448** | **3,688** | **6,272** | **1,320** |
+| **% of slots** | **0.0%** | **12.9%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **41.2%** | **11.2%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **3.7%** | **30.8%** | **52.4%** | **11.0%** |
+
+|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |
+| --- | ---: | ---: | ---: | ---: |
+| original (catalog's published values) | 1,544 | 12.9% | 1,544 | 38.7% |
+| submitter tables | 0 | 0.0% | — | — |
+| external (ENA) | 0 | 0.0% | — | — |
+| inferred | 4,928 | 41.2% | — | — |
+| inherited | 1,344 | 11.2% | — | — |
+| not applicable | 448 | 3.7% | — | — |
+| **filled** | **8,264** | **69.1%** | **1,544** | **38.7%** |
+| **slots (files × dimensions)** | **11,952** | **100%** | **3,984** | **100%** |
 
 ### `AnVIL_ENCORE_RS293`
 
@@ -611,6 +726,19 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | reference_assembly | 0 | 2,932 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 820 | 0 | 0 | 2,522 |
 | assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 2,460 | 0 | 0 | 0 | 0 | 0 | 0 | 1,292 | 2,460 | 0 |
 | instrument_model | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 3,752 | 0 | 0 |
+| **all dimensions** | **0** | **2,932** | **0** | **0** | **0** | **0** | **9,020** | **2,460** | **0** | **0** | **0** | **0** | **820** | **7,280** | **11,480** | **2,522** |
+| **% of slots** | **0.0%** | **13.0%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **40.0%** | **10.9%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **3.6%** | **32.3%** | **50.9%** | **11.2%** |
+
+|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |
+| --- | ---: | ---: | ---: | ---: |
+| original (catalog's published values) | 2,932 | 13.0% | 2,932 | 39.0% |
+| submitter tables | 0 | 0.0% | — | — |
+| external (ENA) | 0 | 0.0% | — | — |
+| inferred | 9,020 | 40.0% | — | — |
+| inherited | 2,460 | 10.9% | — | — |
+| not applicable | 820 | 3.6% | — | — |
+| **filled** | **15,232** | **67.6%** | **2,932** | **39.0%** |
+| **slots (files × dimensions)** | **22,512** | **100%** | **7,504** | **100%** |
 
 ### `AnVIL_HPRC_R2`
 
@@ -624,6 +752,19 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | reference_assembly | 0 | 0 | 0 | 934 | 0 | 0 | 1,589 | 467 | 0 | 0 | 0 | 0 | 10,036 | 3,245 | 2,990 | 463 |
 | assay_type | 0 | 0 | 2,817 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 1,870 | 11,584 | 2,817 | 2,817 |
 | instrument_model | 0 | 0 | 5,819 | 230 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 1,870 | 8,351 | 6,050 | 5,366 |
+| **all dimensions** | **0** | **0** | **12,532** | **18,915** | **0** | **0** | **6,034** | **1,397** | **0** | **2** | **0** | **0** | **16,112** | **42,634** | **38,878** | **17,032** |
+| **% of slots** | **0.0%** | **0.0%** | **12.8%** | **19.3%** | **0.0%** | **0.0%** | **6.1%** | **1.4%** | **0.0%** | **<0.1%** | **0.0%** | **0.0%** | **16.5%** | **43.6%** | **39.8%** | **17.4%** |
+
+|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |
+| --- | ---: | ---: | ---: | ---: |
+| original (catalog's published values) | 0 | 0.0% | 0 | 0.0% |
+| submitter tables | 31,447 | 32.2% | — | — |
+| external (ENA) | 0 | 0.0% | — | — |
+| inferred | 6,034 | 6.1% | — | — |
+| inherited | 1,397 | 1.4% | — | — |
+| not applicable | 16,112 | 16.5% | — | — |
+| **filled** | **54,990** | **56.3%** | **0** | **0.0%** |
+| **slots (files × dimensions)** | **97,626** | **100%** | **32,542** | **100%** |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -641,6 +782,19 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 220 | 3,970 | 2,596 | 0 | 0 |
 | assay_type | 0 | 6,753 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 31 | 0 | 6,339 |
 | instrument_model | 0 | 0 | 3,680 | 290 | 0 | 0 | 0 | 4 | 0 | 0 | 0 | 0 | 0 | 2,812 | 3,974 | 3,970 |
+| **all dimensions** | **0** | **13,496** | **3,680** | **4,790** | **0** | **0** | **4,040** | **14** | **0** | **0** | **2** | **220** | **3,970** | **10,504** | **12,512** | **16,818** |
+| **% of slots** | **0.0%** | **33.1%** | **9.0%** | **11.7%** | **0.0%** | **0.0%** | **9.9%** | **<0.1%** | **0.0%** | **0.0%** | **<0.1%** | **0.5%** | **9.7%** | **25.7%** | **30.7%** | **41.3%** |
+
+|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |
+| --- | ---: | ---: | ---: | ---: |
+| original (catalog's published values) | 13,496 | 33.1% | 6,975 | 51.3% |
+| submitter tables | 8,470 | 20.8% | — | — |
+| external (ENA) | 0 | 0.0% | — | — |
+| inferred | 4,040 | 9.9% | — | — |
+| inherited | 14 | <0.1% | — | — |
+| not applicable | 3,970 | 9.7% | — | — |
+| **filled** | **29,990** | **73.6%** | **6,975** | **51.3%** |
+| **slots (files × dimensions)** | **40,716** | **100%** | **13,572** | **100%** |
 
 | dimension | kind | files | competing values |
 | --- | --- | --- | --- |
@@ -658,3 +812,16 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 | reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | 787 | 787 | 0 | 0 | 0 | 0 | 1,558 | 153 | 1,574 | 0 |
 | assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 791 | 791 | 0 | 0 | 0 | 0 | 0 | 1,703 | 1,582 | 0 |
 | instrument_model | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 3,285 | 0 | 0 |
+| **all dimensions** | **0** | **0** | **0** | **0** | **0** | **0** | **7,123** | **2,373** | **0** | **0** | **0** | **0** | **1,558** | **8,656** | **9,496** | **0** |
+| **% of slots** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **36.1%** | **12.0%** | **0.0%** | **0.0%** | **0.0%** | **0.0%** | **7.9%** | **43.9%** | **48.1%** | **0.0%** |
+
+|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |
+| --- | ---: | ---: | ---: | ---: |
+| original (catalog's published values) | 0 | 0.0% | 0 | 0.0% |
+| submitter tables | 0 | 0.0% | — | — |
+| external (ENA) | 0 | 0.0% | — | — |
+| inferred | 7,123 | 36.1% | — | — |
+| inherited | 2,373 | 12.0% | — | — |
+| not applicable | 1,558 | 7.9% | — | — |
+| **filled** | **11,054** | **56.0%** | **0** | **0.0%** |
+| **slots (files × dimensions)** | **19,710** | **100%** | **6,570** | **100%** |

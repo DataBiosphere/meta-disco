@@ -7,9 +7,10 @@ from pathlib import Path
 import generate_reconcile_report as rr
 import pytest
 
-from meta_disco.models import SOURCE_REPOSITORY_METADATA
+from meta_disco.models import CLASSIFICATION_FIELDS, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
 from meta_disco.output_utils import RECONCILED_DIR
-from meta_disco.reconcile import REPORT_FILE
+from meta_disco.reconcile import FILLED_GROUPS, REPORT_FILE, UNFILLED_CATEGORIES
+from meta_disco.record_keys import HPRC_REPOSITORY
 from meta_disco.summaries import md_code
 from tests.run_fixtures import write_run
 from tests.test_reconcile import DATASET, TABLE, drs, go, published, record, write_evidence
@@ -176,6 +177,130 @@ def test_a_dataset_titled_like_the_whole_run_does_not_replace_it(conflicted):
     assert [(scope["name"], scope["files"]) for scope in data["datasets"]] == [(rr.ALL, 3), (DATASET, 3)]
 
 
+def test_the_headline_closes_with_each_columns_total_and_its_share_of_the_slots(conflicted):
+    data = rr.dashboard_data(rr.load_report(conflicted), None, Path("report.json"))
+    whole = data["run"]
+    counts = whole["totals"]["counts"]
+    for category, total in counts.items():
+        assert total == sum(r["counts"][category] for r in whole["headline"])
+    assert sum(counts.values()) == whole["slots"]
+    md = rr.render_markdown(data)
+    shares = next(line for line in md.splitlines() if line.startswith("| **% of slots** |"))
+    keys = [*(c["key"] for c in data["columns"])]
+    expected = [counts[k] for k in keys] + [whole["totals"][rr.ADDED], whole["totals"][rr.FILLED_OVER]]
+    assert shares.strip("| ").split(" | ")[1:] == [f"**{rr._of_slots(v, whole['slots'])}**" for v in expected]
+
+
+def test_completeness_counts_each_filled_slot_once_and_nothing_else(conflicted):
+    data = rr.dashboard_data(rr.load_report(conflicted), None, Path("report.json"))
+    for scope in (data["run"], *data["datasets"]):
+        c, counts = scope["completeness"], scope["totals"]["counts"]
+        assert c["filled"] + sum(counts[k] for k in UNFILLED_CATEGORIES) == scope["slots"]
+    md = rr.render_markdown(data)
+    filled = data["run"]["completeness"]["filled"]
+    assert f"| **filled** | **{filled:,}** | **{rr._of_slots(filled, data['run']['slots'])}** |" in md
+
+
+def test_the_completeness_filled_count_is_the_values_tables_filled_summed_over_the_dimensions(conflicted):
+    """Two counts of one thing, from the slot categories and from the per-value counts: they must agree."""
+    data = rr.dashboard_data(rr.load_report(conflicted), None, Path("report.json"))
+    filled = sum(m["total"]["filled"] * m["total"]["files"] for m in data["values"].values())
+    assert round(filled) == data["run"]["completeness"]["filled"] > 0
+
+
+def test_the_catalog_today_counts_its_own_dimensions_and_the_values_it_publishes(conflicted):
+    """Its slots are the files times its published columns; a value no translation row reads still fills one."""
+    data = rr.dashboard_data(rr.load_report(conflicted), None, Path("report.json"))
+    whole = data["run"]
+    assert whole["catalog_today"] == {
+        "dimensions": ["data_modality", "reference_assembly"],
+        "slots": whole["files"] * 2,
+        "filled": 1,  # the one unreviewed published reference_assembly
+    }
+    md = rr.render_markdown(data)
+    assert "|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |" in md
+    # What the catalog publishes is the original metadata: its count is in that row, and no other.
+    c, slots, share = whole["completeness"], whole["slots"], rr._of_slots(1, whole["files"] * 2)
+    original = f"| original (catalog's published values) | {c['published']:,} | {rr._of_slots(c['published'], slots)} |"
+    assert f"{original} 1 | {share} |" in md
+    assert f"| submitter tables | {c['submitter']:,} | {rr._of_slots(c['submitter'], slots)} | — | — |" in md
+    assert "only the dimensions it has a column for (`data_modality`, `reference_assembly`)" in md
+
+
+@pytest.mark.parametrize(
+    "unread",
+    [
+        pytest.param({"repository": HPRC_REPOSITORY}, id="no published source"),
+        pytest.param({"evidence": [], "evidence_excluded": True}, id="evidence excluded"),
+        pytest.param("no published evidence read", id="published values never imported"),
+    ],
+)
+def test_the_catalog_today_is_not_shown_where_it_is_unknown(conflicted, unread):
+    """Where this run read none of the catalog's values, its count is unknown, not 0.0%."""
+    report = rr.load_report(conflicted)
+    if unread == "no published evidence read":
+        unread = {"evidence": [e for e in report["evidence"] if e["source_type"] != SOURCE_PUBLISHED_VALUE]}
+        assert unread["evidence"] != report["evidence"]
+    data = rr.dashboard_data({**report, **unread}, None, Path("report.json"))
+    assert data["run"]["catalog_today"] is None
+    assert all(scope["catalog_today"] is None for scope in data["datasets"])
+    assert "catalog today" not in rr.render_markdown(data).lower()
+
+
+def test_a_source_no_evidence_came_from_has_no_completeness_row(conflicted):
+    """As the headline leaves out such a source's columns, the completeness table leaves out its row."""
+    report = rr.load_report(conflicted)
+    unread = rr.unread_sources(report)
+    assert unread  # the fixture reads no external evidence
+    data = rr.dashboard_data(report, None, Path("report.json"))
+    assert [g["key"] for g in data["filled_groups"]] == [g for g in FILLED_GROUPS if g not in unread]
+    md = rr.render_markdown(data)
+    assert all(f"| {rr.group_label(g)} |" not in md for g in unread)
+    assert f"| {rr.group_label(rr.CATALOG_GROUP)} |" in md
+
+
+def test_a_source_only_the_previous_run_read_has_no_completeness_row(conflicted):
+    """The headline keeps its columns, for the change table; the completeness rows count this run alone."""
+    report = rr.load_report(conflicted)
+    (gone,) = [e for e in report["evidence"] if e["source_type"] == SOURCE_REPOSITORY_METADATA][:1]
+    current = {**report, "evidence": [e for e in report["evidence"] if e["source_type"] != SOURCE_REPOSITORY_METADATA]}
+    data = rr.dashboard_data(current, report, Path("report.json"))
+    submitter = rr.SOURCE_GROUP[gone["source_type"]]
+    assert submitter not in [g["key"] for g in data["filled_groups"]]
+    assert rr.fill_category(submitter, False) in [c["key"] for c in data["columns"]]
+
+
+def test_each_sources_row_adds_its_own_and_its_harmonized_column(conflicted):
+    data = rr.dashboard_data(rr.load_report(conflicted), None, Path("report.json"))
+    c, counts = data["run"]["completeness"], data["run"]["totals"]["counts"]
+    assert c["submitter"] == counts["filled_by_submitter"] + counts["filled_by_submitter_harmonized"] > 0
+    assert c["published"] == counts["filled_by_published"] + counts["filled_by_published_harmonized"]
+
+
+def test_a_share_too_small_to_show_is_not_shown_as_zero():
+    assert rr._of_slots(0, 100) == "0.0%" and rr._of_slots(5, 0) == "0.0%"
+    assert rr._of_slots(1, 10_000) == "<0.1%" and rr._of_slots(1, 1_000) == "0.1%"
+    assert rr._of_slots(1, 8) == "12.5%" and rr._of_slots(8, 8) == "100%"
+
+
+def test_each_datasets_completeness_and_catalog_today_count_that_dataset_alone(conflicted):
+    """A second dataset the catalog publishes nothing for: its own counts, and the run's are the two summed."""
+    report = rr.load_report(conflicted)
+    other = "OTHER"
+    report["files"][other] = 4
+    report["slots"][other] = {slot: {"not_classified": 4} for slot in CLASSIFICATION_FIELDS}
+    report["values"][other] = {slot: {"not_classified": 4} for slot in CLASSIFICATION_FIELDS}
+    data = rr.dashboard_data(report, None, Path("report.json"))
+    scopes = {scope["name"]: scope for scope in data["datasets"]}
+    dims = ["data_modality", "reference_assembly"]
+    assert scopes[other]["catalog_today"] == {"dimensions": dims, "slots": 8, "filled": 0}
+    assert scopes[DATASET]["catalog_today"] == {"dimensions": dims, "slots": 6, "filled": 1}
+    assert data["run"]["catalog_today"] == {"dimensions": dims, "slots": 14, "filled": 1}
+    assert scopes[other]["completeness"]["filled"] == 0
+    assert data["run"]["completeness"] == scopes[DATASET]["completeness"]
+    assert data["run"]["slots"] == scopes[DATASET]["slots"] + scopes[other]["slots"]
+
+
 def test_catalog_text_is_a_code_span_in_the_markdown():
     """Pages renders the markdown through Jekyll: a value holding a link, an image or HTML must show literally."""
     row = {"dataset": "<b>D</b>", "dimension": "platform", "kind": "conflict_sources", "files": 1}
@@ -222,19 +347,19 @@ def test_each_dimensions_values_are_shown_per_dataset(tmp_path, conflicted):
     assert (matrix["values"], matrix["statuses"]) == (["PACBIO"], ["not_classified"])
     (row,) = matrix["rows"]
     assert (row["counts"], row["files"]) == ({"PACBIO": 1, "not_classified": 2}, 3)
-    assert (round(row["has_value"], 3), round(row["determined"], 3)) == (0.333, 0.333)
+    assert (round(row["has_value"], 3), round(row["filled"], 3)) == (0.333, 0.333)
     assert "## Values by dataset" in md and "### platform" in md
-    assert "| dataset | `PACBIO` | `not_classified` | files | has a value | determined |" in md
+    assert "| dataset | `PACBIO` | `not_classified` | files | has a value | filled |" in md
     assert "Values by dataset" in html and '"values_change": null' in html
 
 
-def test_determined_counts_not_applicable_and_has_a_value_does_not():
+def test_filled_counts_not_applicable_and_has_a_value_does_not():
     report = {
         "files": {"D": 4},
         "values": {"D": {"reference_assembly": {"GRCh38": 1, "not_applicable": 2, "conflict": 1}}},
     }
     (row,) = rr.values_matrix(report, "reference_assembly")["rows"]
-    assert (row["has_value"], row["determined"]) == (0.25, 0.75)
+    assert (row["has_value"], row["filled"]) == (0.25, 0.75)
     matrix = rr.values_matrix(report, "reference_assembly")
     assert (matrix["values"], matrix["statuses"]) == (["GRCh38"], ["conflict", "not_applicable"])
 
@@ -260,7 +385,7 @@ def test_a_wide_slot_with_no_dotted_terms_is_not_grouped(monkeypatch):
     monkeypatch.setattr(rr, "MARKDOWN_VALUE_COLUMNS", 2)
     md = "\n".join(rr._values_section({slot: rr.values_matrix(report, slot) for slot in rr.CLASSIFICATION_FIELDS}))
     assert "top-level term" not in md
-    assert "| dataset | `Revio` | `PromethION` | `Illumina NovaSeq 6000` | files | has a value | determined |" in md
+    assert "| dataset | `Revio` | `PromethION` | `Illumina NovaSeq 6000` | files | has a value | filled |" in md
 
 
 def test_a_report_without_per_value_counts_is_refused_unless_only_compared_against(conflicted):
