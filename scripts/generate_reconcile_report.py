@@ -510,9 +510,10 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
         "skipped_evidence": len(report.get("skipped_evidence", [])),
         "columns": [{"key": c, "label": label(c)} for c in cols],
         "conflict_categories": list(CONFLICT_CATEGORIES),
-        # The completeness rows: a source no evidence file came from is left out, as columns() leaves out its columns.
+        # The completeness rows: a source no evidence file of this run came from is left out, as columns() leaves
+        # out its columns. Unlike columns(), not the previous run's: these rows count this run alone.
         "filled_groups": [
-            {"key": g, "label": group_label(g)} for g in FILLED_GROUPS if g not in unread_sources(report, *previous_)
+            {"key": g, "label": group_label(g)} for g in FILLED_GROUPS if g not in unread_sources(report)
         ],
         "catalog_group": CATALOG_GROUP,
         "all": ALL,

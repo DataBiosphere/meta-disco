@@ -260,6 +260,17 @@ def test_a_source_no_evidence_came_from_has_no_completeness_row(conflicted):
     assert f"| {rr.group_label(rr.CATALOG_GROUP)} |" in md
 
 
+def test_a_source_only_the_previous_run_read_has_no_completeness_row(conflicted):
+    """The headline keeps its columns, for the change table; the completeness rows count this run alone."""
+    report = rr.load_report(conflicted)
+    (gone,) = [e for e in report["evidence"] if e["source_type"] == SOURCE_REPOSITORY_METADATA][:1]
+    current = {**report, "evidence": [e for e in report["evidence"] if e["source_type"] != SOURCE_REPOSITORY_METADATA]}
+    data = rr.dashboard_data(current, report, Path("report.json"))
+    submitter = rr.SOURCE_GROUP[gone["source_type"]]
+    assert submitter not in [g["key"] for g in data["filled_groups"]]
+    assert rr.fill_category(submitter, False) in [c["key"] for c in data["columns"]]
+
+
 def test_each_sources_row_adds_its_own_and_its_harmonized_column(conflicted):
     data = rr.dashboard_data(rr.load_report(conflicted), None, Path("report.json"))
     c, counts = data["run"]["completeness"], data["run"]["totals"]["counts"]
