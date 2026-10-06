@@ -6,6 +6,7 @@ past the first read is reached by its own range request.
 """
 
 import gzip
+import json
 import struct
 
 import pytest
@@ -143,11 +144,17 @@ def test_an_offset_into_the_table_is_refused_rather_than_read():
         idat.read_header(_reader(bytes(blob)))
 
 
-def test_a_cached_header_with_a_field_of_the_wrong_type_is_a_cache_miss(tmp_path):
+@pytest.mark.parametrize(
+    ("field", "wrong"),
+    [("scan_software", None), ("probe_count", True), ("probe_count", "2522340"), ("chip_type", 7)],
+    ids=["no software list", "a boolean probe count", "a string probe count", "a numeric chip type"],
+)
+def test_a_cached_header_with_a_field_of_the_wrong_type_is_a_cache_miss(tmp_path, field, wrong):
     IdatEvidence(md5sum=MD5, file_name="x.idat", header=IdatHeader(1, "c", ["s"])).save(tmp_path)
     path = next(tmp_path.rglob("*.json"))
-    path.write_text(path.read_text().replace('"scan_software": [\n      "s"\n    ]', '"scan_software": null'))
-    assert "null" in path.read_text()
+    cached = json.loads(path.read_text())
+    cached["header"][field] = wrong
+    path.write_text(json.dumps(cached))
     assert IdatEvidence.load(tmp_path, MD5) is None
 
 
