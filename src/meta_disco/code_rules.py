@@ -167,7 +167,8 @@ VCF_GVCF = CodeRule(
     ),
     sets=("data_type",),
     rationale=(
-        "A gVCF has a record for every site, variant or not, and carries the symbolic <NON_REF> "
+        "A gVCF represents every site, variant or not, each in a record of its own or in a block "
+        "record covering a run of sites with no variant, and carries the symbolic <NON_REF> "
         "allele in every record's ALT (GATK, 'GVCF - Genomic Variant Call Format', "
         "https://gatk.broadinstitute.org/hc/en-us/articles/360035531812). HaplotypeCaller writes one "
         "when run with -ERC GVCF (non-variant sites condensed into blocks) or -ERC BP_RESOLUTION (a "
