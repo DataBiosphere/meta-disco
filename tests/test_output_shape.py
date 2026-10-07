@@ -243,13 +243,13 @@ STUB_PAYLOADS = {
     ),
     # sample_map returns the map's text: one row, naming the golden's `sample.vcf.gz`.
     "sample_map": "HG00096\tgs://b/hc_vcfs/sample.vcf.gz\n",
-    # bed returns BedSignals; bare (no-'chr'-prefix) standard chromosome names are the
-    # GRCh37/b37 naming convention, so coordinate inference resolves reference_assembly to
+    # bed returns BedSignals; chr1 reaching past GRCh38's and CHM13's chr1 but inside
+    # GRCh37's leaves GRCh37 alone, so coordinate inference resolves reference_assembly to
     # GRCh37 — exercising the pipeline -> bed classifier -> value envelope path end-to-end.
     "bed": BedSignals(
         chromosomes=["1", "2"],
         has_chr_prefix=False,
-        max_coordinates={"1": 1000, "2": 2000},
+        max_coordinates={"1": 249_099_158, "2": 2000},
         line_count=2,
     ),
     # idat returns an IdatHeader: the HPRC's genotyping chip, scanned on an iScan (#603).

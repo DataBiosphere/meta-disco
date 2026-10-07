@@ -194,7 +194,7 @@ class ReferenceAssemblyEnum(str, Enum):
     """
     Reference assemblies, named as NCBI names them (issue #473). A file gets the most specific term its evidence supports, and `is_a` records the terms as a hierarchy. A record carries only its own term, so a filter on a parent includes the terms below it only where the consumer walks the hierarchy (`schema_vocab.value_ancestors`); `value == "CHM13"` alone does not.
 GRC assemblies are named at the major release: contig lengths are identical across patch releases, so contig lengths can never tell a patch (#399). Where a header's declared reference name does tell one, the patch stays on `ReferenceBuild.version`. `CHM13` is every CHM13 release, and is also the term for a CHM13 file whose release cannot be told. Under it are NCBI's T2T releases, and under each release the references that graft another genome's chrY onto it. NCBI names none of those hybrids, so each is spelled as the reference FASTA that files declare, extension dropped. A hybrid is its own coordinate system on chrY and its parent release everywhere else, which is why it sits under that release.
-`meaning` is recorded where one term is one NCBI assembly: the three T2T releases. The GRC terms each span their patch releases, and `CHM13` spans the T2T releases.
+`meaning` is recorded where one term is one NCBI assembly: the three T2T releases and the two monkey assemblies (#636). The GRC terms each span their patch releases, and `CHM13` spans the T2T releases.
     """
     GRCh37 = "GRCh37"
     GRCh38 = "GRCh38"
@@ -217,6 +217,14 @@ GRC assemblies are named at the major release: contig lengths are identical acro
     """
     T2T-CHM13v1.0 with HG002's chrY grafted on.
     """
+    Mmul_10 = "Mmul_10"
+    """
+    Rhesus macaque (Macaca mulatta). Its RefSeq pair is GCF_003339765.1, which adds only chrM.
+    """
+    mCalJa1FULL_STOP2FULL_STOPpatFULL_STOPX = "mCalJa1.2.pat.X"
+    """
+    Common marmoset (Callithrix jacchus). Its RefSeq pair is GCF_011100555.1, which drops only chrM.
+    """
 
 
 class ReferenceFamilyEnum(str, Enum):
@@ -226,6 +234,8 @@ class ReferenceFamilyEnum(str, Enum):
     GRCh37 = "GRCh37"
     GRCh38 = "GRCh38"
     CHM13 = "CHM13"
+    Mmul_10 = "Mmul_10"
+    mCalJa1FULL_STOP2FULL_STOPpatFULL_STOPX = "mCalJa1.2.pat.X"
 
 
 class ReferenceNameSourceEnum(str, Enum):

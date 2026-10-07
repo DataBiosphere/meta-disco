@@ -30,7 +30,8 @@ apart. Before #473 the row was v2.0's lengths except chr1-chr3, which were v1.0'
 — which is why three of its lengths disagreed with NCBI (#466).
 
 GRCh38 and GRCh37 match their cited NCBI accessions exactly too, on all 24
-contigs.
+contigs. The two monkey rows (#636) are checked against NCBI as well, each on that
+assembly's own chromosomes.
 
 Network-marked, so neither ``make test`` nor CI runs it. Run it with::
 
@@ -40,12 +41,14 @@ Network-marked, so neither ``make test`` nor CI runs it. Run it with::
 import pytest
 import requests
 
-from meta_disco.validators.contig_lengths import REFERENCE_CONTIG_LENGTHS
+from meta_disco import schema_vocab
+from meta_disco.validators.contig_lengths import HUMAN_ASSEMBLIES, REFERENCE_CONTIG_LENGTHS
 
 pytestmark = pytest.mark.network
 
-# 1-22, X, Y. The table's own comment calls this "all 22 autosomes + X and Y for
-# each assembly"; naming it here is what makes that checkable rather than stated.
+# 1-22, X, Y: the human rows' chromosomes. The table's own comment says each
+# assembly holds every autosome + X + Y; naming the set here is what makes that
+# checkable for the human rows rather than stated.
 PRIMARY_CHROMOSOMES = frozenset([*(str(n) for n in range(1, 23)), "X", "Y"])
 
 # The GRCh37 archive is a separate host; the current assembly lives on the main one.
@@ -140,6 +143,23 @@ def test_ensembl_covers_enough_of_our_table_to_be_a_real_check(build):
     assert not missing, f"{build}: Ensembl no longer publishes {missing}, so those contigs are unchecked"
 
 
+def _ncbi_assembled_molecules(accession: str) -> dict[str, int]:
+    """``{chromosome name: length}`` for one NCBI assembly's assembled molecules, MT left out.
+
+    NCBI filters to assembled molecules itself, so the page holds them all rather than
+    the first 100 of an assembly's thousands of scaffolds; the test fails if it does not.
+    """
+    url = f"https://api.ncbi.nlm.nih.gov/datasets/v2/genome/accession/{accession}/sequence_reports"
+    body = _get_json(url, "NCBI", page_size=1000, role_filters="assembled-molecule")
+    assert not body.get("next_page_token"), f"NCBI paged {accession}'s assembled molecules"
+    return {r["chr_name"]: r["length"] for r in body.get("reports", []) if r.get("chr_name") != "MT"}
+
+
+def _bare_names(assembly: str) -> dict[str, int]:
+    """One row of our table, by its bare contig names (``1``, ``X``)."""
+    return {c: n for c, n in REFERENCE_CONTIG_LENGTHS[assembly].items() if not c.startswith("chr")}
+
+
 # T2T-CHM13v2.0's GenBank accession; its RefSeq pair is the GCF_009914755.1 that
 # validators/contig_lengths.py cites.
 NCBI_CHM13_V2 = "GCA_009914755.4"
@@ -147,14 +167,20 @@ NCBI_CHM13_V2 = "GCA_009914755.4"
 
 def test_chm13_matches_ncbi_t2t_chm13v2():
     """The CHM13 row is NCBI's T2T-CHM13v2.0, on exactly the primary chromosomes (#473)."""
-    url = f"https://api.ncbi.nlm.nih.gov/datasets/v2/genome/accession/{NCBI_CHM13_V2}/sequence_reports"
-    upstream = {
-        r["chr_name"]: r["length"]
-        for r in _get_json(url, "NCBI", page_size=100).get("reports", [])
-        if r.get("role") == "assembled-molecule" and r.get("chr_name") in PRIMARY_CHROMOSOMES
-    }
-    ours = {c: n for c, n in REFERENCE_CONTIG_LENGTHS["CHM13"].items() if not c.startswith("chr")}
+    upstream = {c: n for c, n in _ncbi_assembled_molecules(NCBI_CHM13_V2).items() if c in PRIMARY_CHROMOSOMES}
     assert set(upstream) == PRIMARY_CHROMOSOMES, (
         f"NCBI no longer publishes {sorted(PRIMARY_CHROMOSOMES - set(upstream))}"
     )
-    assert ours == upstream
+    assert _bare_names("CHM13") == upstream
+
+
+@pytest.mark.parametrize("assembly", sorted(set(REFERENCE_CONTIG_LENGTHS) - set(HUMAN_ASSEMBLIES)))
+def test_monkey_rows_match_ncbi(assembly):
+    """Each non-human row is the assembly its schema term's ``meaning`` names, on NCBI's own
+    chromosomes, exactly (#636)."""
+    meaning = schema_vocab.value_meaning("reference_assembly", assembly)
+    assert meaning is not None, f"{assembly} records no meaning"
+    accession = meaning.removeprefix("insdc.gca:")
+    upstream = _ncbi_assembled_molecules(accession)
+    assert {"1", "X", "Y"} <= set(upstream), f"NCBI publishes {sorted(upstream)} for {accession}"
+    assert _bare_names(assembly) == upstream

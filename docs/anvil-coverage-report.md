@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-10-07 00:21:35**
+Classification run: **2026-10-07 15:52:35**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,088** files.
@@ -25,7 +25,7 @@ Processed **708,088** files.
 | **Data Modality** | 379,527 (53.6%) | 328,561 (46.4%) | 0 (0.0%) |
 | **Data Type** | 685,435 (96.8%) | 22,653 (3.2%) | 0 (0.0%) |
 | **Platform** | 69,973 (9.9%) | 638,115 (90.1%) | 0 (0.0%) |
-| **Reference Assembly** | 292,193 (41.3%) | 415,887 (58.7%) | 8 (0.0%) |
+| **Reference Assembly** | 292,948 (41.4%) | 415,132 (58.6%) | 8 (0.0%) |
 | **Assay Type** | 28,145 (4.0%) | 679,943 (96.0%) | 0 (0.0%) |
 | **Instrument Model** | 23,202 (3.3%) | 684,886 (96.7%) | 0 (0.0%) |
 
@@ -219,8 +219,8 @@ Processed **708,088** files.
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 292,193 | 41.3% |
-| **Not classified** | 415,887 | 58.7% |
+| **Classified** | 292,948 | 41.4% |
+| **Not classified** | 415,132 | 58.6% |
 | **Conflict** | 8 | 0.0% |
 
 ### What's not classified?
@@ -238,7 +238,6 @@ Processed **708,088** files.
 | .bw | 2,536 | `No rule determined a value for reference_assembly` |
 | .gff3 | 1,386 | `No rule determined a value for reference_assembly` |
 | .tsv | 899 | `No rule determined a value for reference_assembly` |
-| .bam | 688 | `No rule determined a value for reference_assembly` |
 | .sf | 634 | `No rule determined a value for reference_assembly` |
 | .fai | 477 | `No reason recorded` |
 | .gzi | 466 | `No reason recorded` |
@@ -248,12 +247,12 @@ Processed **708,088** files.
 | .gfa | 314 | `No rule determined a value for reference_assembly` |
 | .paf | 296 | `No rule determined a value for reference_assembly` |
 | .sam | 192 | `No rule determined a value for reference_assembly` |
-| .cram | 68 | `No rule determined a value for reference_assembly` |
-| .bed | 35 | `No rule determined a value for reference_assembly` |
-| .vcf | 28 | `no VCF header lines (no run of '#' lines starting the read head)` |
+| .bed | 36 | `No rule determined a value for reference_assembly` |
+| .vcf | 26 | `no VCF header lines (no run of '#' lines starting the read head)` |
 | .csv | 21 | `No rule determined a value for reference_assembly` |
 | .pbi | 7 | `No reason recorded` |
 | .fasta | 3 | `No rule determined a value for reference_assembly` |
+| .bam | 2 | `No rule determined a value for reference_assembly` |
 | .chain | 1 | `No rule determined a value for reference_assembly` |
 | .dict | 1 | `No rule determined a value for reference_assembly` |
 
@@ -272,13 +271,15 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 
 | Reference Assembly | count | % | extensions |
 |---|---:|---:|---|
-| `not_classified` | 415,887 | 58.7% | .tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.crai (10,317)<br>.psam (2,854)<br>.pgen (2,853)<br>.bai (2,742)<br>.bw (2,536)<br>.gff3 (1,386)<br>.tsv (899)<br>.bam (688)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (456)<br>.h5ad (350)<br>.gfa (314)<br>.paf (296)<br>.sam (192)<br>.cram (68)<br>.bed (35)<br>.vcf (28)<br>.csv (21)<br>.pbi (7)<br>.fasta (3)<br>.chain (1)<br>.dict (1) |
+| `not_classified` | 415,132 | 58.6% | .tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.crai (10,317)<br>.psam (2,854)<br>.pgen (2,853)<br>.bai (2,742)<br>.bw (2,536)<br>.gff3 (1,386)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (456)<br>.h5ad (350)<br>.gfa (314)<br>.paf (296)<br>.sam (192)<br>.bed (36)<br>.vcf (26)<br>.csv (21)<br>.pbi (7)<br>.fasta (3)<br>.bam (2)<br>.chain (1)<br>.dict (1) |
 | `t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r` | 111,756 | 15.8% | .vcf (108,478)<br>.cram (3,202)<br>.bam (76) |
 | `T2T-CHM13v2.0` | 87,747 | 12.4% | .vcf (83,804)<br>.cram (3,481)<br>.bam (462) |
 | `not_applicable` | 62,913 | 8.9% | .fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,509)<br>.bed (3,922)<br>.log (3,637)<br>.bam (3,113)<br>.png (3,074)<br>.fa (936)<br>.idat (160)<br>.fasta (24)<br>.tsv (24)<br>.pod5 (11) |
 | `GRCh38` | 20,705 | 2.9% | .vcf (9,186)<br>.cram (3,837)<br>.g.vcf (2,504)<br>.bam (2,341)<br>.pvar (1,427)<br>.bed (817)<br>.chain (462)<br>.gff3 (88)<br>.gfa (6)<br>.fasta (3)<br>.dict (3)<br>.snarls (3)<br>.min (3)<br>.gg (3)<br>.dist (3)<br>.trans (3)<br>.xg (3)<br>.gbwt (3)<br>.fna (2)<br>.fa (1)<br>.pgen (1)<br>.sizes (1)<br>.hal (1)<br>.paf (1)<br>.delta (1)<br>.hapl (1)<br>.gbz (1) |
 | `CHM13` | 7,395 | 1.0% | .bed (6,744)<br>.chain (462)<br>.gff3 (90)<br>.vcf (54)<br>.fasta (7)<br>.gfa (6)<br>.dict (4)<br>.fa (3)<br>.gg (3)<br>.snarls (3)<br>.trans (3)<br>.min (3)<br>.dist (3)<br>.gbwt (3)<br>.xg (3)<br>.sizes (1)<br>.hal (1)<br>.gbz (1)<br>.hapl (1) |
-| `GRCh37` | 1,464 | 0.2% | .pvar (1,427)<br>.vcf (34)<br>.bed (3) |
+| `GRCh37` | 1,463 | 0.2% | .pvar (1,427)<br>.vcf (34)<br>.bed (2) |
+| `Mmul_10` | 422 | 0.1% | .bam (372)<br>.cram (49)<br>.vcf (1) |
+| `mCalJa1.2.pat.X` | 334 | 0.0% | .bam (314)<br>.cram (19)<br>.vcf (1) |
 | `CHM13Y_EBV_v1.1` | 95 | 0.0% | .bam (94)<br>.vcf (1) |
 | `T2T-CHM13v1.0` | 59 | 0.0% | .vcf (59) |
 | `t2t-chm13.20200921.HG002chrY.chrEBV` | 35 | 0.0% | .cram (35) |

@@ -11,7 +11,6 @@ too complex to express in YAML rules, such as:
 from .contig_lengths import (
     REFERENCE_CONTIG_LENGTHS,
     detect_reference_from_contigs,
-    detect_reference_from_max_positions,
 )
 from .header_extractors import (
     SAMHeader,
@@ -57,7 +56,6 @@ __all__ = [
     # Contig length validators
     "REFERENCE_CONTIG_LENGTHS",
     "detect_reference_from_contigs",
-    "detect_reference_from_max_positions",
     # Reference build identity (#340)
     "ContigSignature",
     "DeclaredReference",

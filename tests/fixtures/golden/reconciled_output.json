@@ -384,7 +384,7 @@
             "credited_to": "filled_by_inference",
             "evidence": [
               {
-                "reason": "Chromosomes lack 'chr' prefix, consistent with GRCh37/b37 naming",
+                "reason": "Only GRCh37 not ruled out. 1:249099158 exceeds GRCh38 chr1 length 248956422; 1:249099158 exceeds CHM13 chr1 length 248387328",
                 "rule_id": "bed_coordinate_reference",
                 "source_type": "contig_detection",
                 "tier": 4,

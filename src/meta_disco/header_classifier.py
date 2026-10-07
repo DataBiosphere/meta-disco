@@ -1255,7 +1255,9 @@ def _infer_bed_reference(signals: BedSignals) -> tuple[str | None, str]:
     """Infer reference assembly from BED coordinate signals.
 
     Uses max coordinates to rule out references where coordinates exceed
-    chromosome lengths. The remaining reference(s) are candidates.
+    chromosome lengths. The remaining reference(s) are candidates. The candidates are
+    ``contig_lengths.HUMAN_ASSEMBLIES``, which says why. Bare names (``1``, ``X``) are
+    eliminated like ``chr`` ones: a missing prefix is a naming habit, not a reference (#636).
 
     Returns:
         Tuple of (assembly, rationale)
@@ -1271,12 +1273,9 @@ def _infer_bed_reference(signals: BedSignals) -> tuple[str | None, str]:
     if not standard_chroms:
         return None, ("Non-standard chromosome names — likely de novo assembly, not aligned to a standard reference")
 
-    if not has_chr_prefix:
-        return "GRCh37", "Chromosomes lack 'chr' prefix, consistent with GRCh37/b37 naming"
+    from .validators.contig_lengths import CONTIG_LENGTH_TOLERANCE, HUMAN_CONTIG_LENGTHS
 
-    from .validators.contig_lengths import CONTIG_LENGTH_TOLERANCE
-
-    ref_lengths = _get_engine().rules.reference_contig_lengths
+    ref_lengths = HUMAN_CONTIG_LENGTHS
 
     # The allowance contig-length matching makes (#473). It covers CHM13 v1.0's
     # small overhangs past the v2.0 row (chr1 169 bp, chr3 657 bp), not its

@@ -1,11 +1,12 @@
 """Resolve the specific reference *build* a file was aligned to (issue #340).
 
 This sits beside :mod:`validators.contig_lengths` and answers a narrower
-question. That module answers "which reference *family*" — GRCh38, GRCh37, CHM13
-— and answers it robustly, on purpose: it matches contig lengths with a 1000 bp
-tolerance precisely so that minor build differences do not defeat detection. This
-module answers "which *build*", and so it does the opposite: exact matching only,
-and ``None`` rather than a nearest neighbour.
+question. That module answers "which reference *family*" — a
+``reference_contig_lengths`` row, such as GRCh38 or CHM13 — and answers it robustly,
+on purpose: it matches contig lengths with a 1000 bp tolerance precisely so that minor
+build differences do not defeat detection. This module answers "which *build*", and
+so it does the opposite: exact matching only, and ``None`` rather than a nearest
+neighbour.
 
 The family comes from ``contig_lengths`` alone; this module never introduces
 one. What it adds is the release: where the build resolves inside the detected

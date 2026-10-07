@@ -862,6 +862,23 @@ class TestContigLengthDetection:
         result = classify_from_header(header)
         assert val(result, "reference_assembly") == "CHM13"
 
+    @pytest.mark.parametrize(
+        "sq, assembly",
+        [
+            # ANVIL_nhp_dGTEx's rhesus (RHGTEX…) and marmoset (CJGTEX…) headers (#636);
+            # an unplaced contig, which the table does not hold, votes for nothing.
+            (
+                [("chr1", 223616942), ("chr1_NW_021160094v1_random", 26680), ("chr2", 196197964), ("chrY", 11753682)],
+                "Mmul_10",
+            ),
+            ([("chr1", 216975769), ("chr21", 50614742), ("chrX", 146897247), ("chrY", 4974773)], "mCalJa1.2.pat.X"),
+        ],
+    )
+    def test_bam_sq_monkey_assemblies(self, sq, assembly):
+        """A rhesus or marmoset @SQ dictionary is its own assembly, by contig length (#636)."""
+        header = "@HD\tVN:1.6\tSO:coordinate\n" + "\n".join(f"@SQ\tSN:{name}\tLN:{length}" for name, length in sq)
+        assert val(classify_from_header(header), "reference_assembly") == assembly
+
     def test_bam_sq_single_contig_identifies_assembly(self):
         """A single contig with exact length match definitively identifies assembly."""
         # chr22 length 50818468 is unique to GRCh38 (CHM13=51324926, GRCh37=51304566)
