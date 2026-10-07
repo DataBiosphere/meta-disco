@@ -111,7 +111,9 @@ evidence}` entry — plus the controlled vocabulary:
   (#533): EFO's, except `Histology`'s, which is OBI's `histological assay` as EFO imports it; a
   term of our own (`snATAC-seq`) has no id and sits under the EFO term it narrows; the two
   array assays (`Methylation array`, `Genotyping array`) are EFO terms with no parent among the values
-- also **data_type_enum**, **platform_enum**
+- **data_type_enum**: dotted terms with `is_a` to the term before the last dot (#607),
+  e.g. `variants.germline.gvcf` under `variants.germline` under `variants`
+- also **platform_enum**
 
 `status` is required on every dimension; `value` is null unless status is `classified`.
 

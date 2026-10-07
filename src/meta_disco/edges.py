@@ -31,7 +31,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, replace
 
-from . import activities, code_rules
+from . import activities, code_rules, schema_vocab
 from .code_rules import EdgeRule
 from .file_name import EXTENSION_MAP, FileName
 from .models import ClaimSource
@@ -354,17 +354,21 @@ def _distinct(items):
 
 
 def _outside(kind: str | None, allowed: set[str]) -> bool:
-    """Whether a known ``data_type`` ``kind`` falls outside ``allowed``, judged by its top term: the dotted path is the vocabulary's hierarchy."""
-    return bool(allowed) and kind is not None and kind.split(".")[0] not in allowed
+    """Whether a known ``data_type`` ``kind`` falls outside ``allowed``, judged by its top term in the ``is_a`` hierarchy.
+
+    A kind outside the vocabulary is not known, so it is not judged.
+    """
+    top = schema_vocab.top_term("data_type", kind) if kind is not None else None
+    return bool(allowed) and top is not None and top not in allowed
 
 
 def misfits(step: dict, child_kind: str | None, parent_kinds: dict[str, str | None]) -> list[tuple[str, str]]:
     """How a step does not fit its activity's declaration, as ``(problem, detail)`` pairs; flagged, never refused.
 
     ``child_kind`` is the child's ``data_type`` value and ``parent_kinds`` each input's
-    by its ``parent_key``; a kind is judged by its top term (``annotations.coverage`` is
-    ``annotations``), and an unknown one (None, or a key ``parent_kinds`` lacks) is not
-    judged. A one-input role given several parents is not here: :func:`merge_steps` returns
+    by its ``parent_key``; a kind is judged by its top term in the ``is_a`` hierarchy
+    (``annotations.coverage``'s is ``annotations``), and an unknown one (None, a key
+    ``parent_kinds`` lacks, or a value outside the vocabulary) is not judged. A one-input role given several parents is not here: :func:`merge_steps` returns
     it as an edge conflict.
     """
     declaration = activities.declarations()[step["activity"]]

@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass
 from functools import cached_property
 
+from ..evidence import VcfHead
 from .command_lines import VcfCommand, split_command_line, vcf_commands
 
 
@@ -70,6 +71,9 @@ class VCFHeader:
     # ``other_meta`` because ``match_vcf_header_pattern`` falls back to a prefix
     # scan of that list, and these must not widen what a rule can match (#354).
     unkeyed_meta: list[str] | None = None
+    # The ALT of each record the read head held (``VcfHead.record_alts``, #607); None where
+    # the records were not read, as for a header given as text.
+    record_alts: tuple[str, ...] | None = None
 
     @cached_property
     def commands(self) -> list[VcfCommand]:
@@ -335,6 +339,13 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
     if unkeyed_meta:
         header.unkeyed_meta = unkeyed_meta
 
+    return header
+
+
+def parse_vcf_head(head: VcfHead) -> VCFHeader:
+    """A VCF fetcher's head parsed: its header text by :func:`parse_vcf_header`, with its records' ALTs."""
+    header = parse_vcf_header(head.header_text)
+    header.record_alts = tuple(head.record_alts)
     return header
 
 

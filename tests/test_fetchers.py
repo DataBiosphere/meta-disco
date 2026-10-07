@@ -13,6 +13,7 @@ Two layers:
 
 import gzip
 import io
+import json
 import subprocess
 import tarfile
 
@@ -20,7 +21,7 @@ import pytest
 import requests
 
 import meta_disco.fetchers as fetchers
-from meta_disco.evidence import TarEvidence, TarHead, VcfEvidence
+from meta_disco.evidence import TarEvidence, TarHead, VcfEvidence, VcfHead, get_evidence_path
 from meta_disco.fetchers import (
     FetchError,
     RangeNotSatisfiable,
@@ -549,19 +550,60 @@ def test_first_range_416_raises_not_empty_success(monkeypatch, evidence_dir):
 # --- fetchers end to end -----------------------------------------------------------
 
 
-def test_fetch_vcf_returns_header_and_caches(monkeypatch, evidence_dir):
-    obj = gzip.compress(b"##fileformat=VCFv4.2\n#CHROM\tPOS\tID\n1\t100\t.\n")
-    _install(monkeypatch, obj)
+GVCF_HEAD = (
+    b"##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS\n"
+    b"chr1\t1\t.\tA\t<NON_REF>\t.\t.\tEND=411\tGT\t0/0\n"
+    b"chr1\t412\t.\tG\tC,<NON_REF>\t84.8\t.\tDP=3\tGT\t1/1\n"
+    b"chr1\t413\t.\tT"  # the head ends partway through a record, which is not read
+)
 
-    header = fetch_vcf_header(evidence_dir, MD5, is_gzipped=True, use_cache=False)
-    assert header == "##fileformat=VCFv4.2\n#CHROM\tPOS\tID"
+
+def test_fetch_vcf_returns_header_and_record_alts_and_caches(monkeypatch, evidence_dir):
+    _install(monkeypatch, gzip.compress(GVCF_HEAD))
+
+    head = fetch_vcf_header(evidence_dir, MD5, is_gzipped=True, use_cache=False)
+    assert head == VcfHead(
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS", ["<NON_REF>", "C,<NON_REF>"]
+    )
 
     cached = VcfEvidence.load(evidence_dir, MD5)
-    assert cached is not None and cached.payload == header
+    assert cached is not None and (cached.payload, cached.record_alts) == (head.header_text, head.record_alts)
 
     # a second call hits the cache and never re-fetches
     monkeypatch.setattr(fetchers, "_fetch_range", lambda *a, **k: pytest.fail("re-fetched a cached VCF"))
-    assert fetch_vcf_header(evidence_dir, MD5, is_gzipped=True, use_cache=True) == header
+    assert fetch_vcf_header(evidence_dir, MD5, is_gzipped=True, use_cache=True) == head
+
+
+def test_record_alts_are_read_only_from_lines_with_a_vcf_records_eight_columns():
+    """A `.pvar` record (five columns) and a record the head cut short give no ALT (#607)."""
+    lines = [
+        "chr1\t1\t.\tA\t<NON_REF>\t.\t.\tEND=411",
+        "10\t420890\trs1\tA\tG",
+        "chr1\t500\t.\tC\tT,<NON_REF>\t30",
+    ]
+    assert fetchers.record_alts_of(lines) == ["<NON_REF>"]
+
+
+@pytest.mark.parametrize("alts", [None, "<NON_REF>", ["<NON_REF>", 1]])
+def test_a_cached_vcf_entry_whose_record_alts_are_not_a_list_of_strings_is_a_miss(evidence_dir, alts):
+    path = get_evidence_path(evidence_dir, MD5)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    entry = {"md5sum": MD5, "file_name": "x.vcf.gz", "header_text": "##fileformat=VCFv4.2", "record_alts": alts}
+    path.write_text(json.dumps(entry))
+    assert VcfEvidence.load(evidence_dir, MD5) is None
+
+
+def test_a_cached_vcf_entry_without_record_alts_is_read_again(monkeypatch, evidence_dir):
+    """An entry written before #607 holds the header only: it is a miss, so the head is fetched again."""
+    path = get_evidence_path(evidence_dir, MD5)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"md5sum": MD5, "file_name": "x.vcf.gz", "header_text": "##fileformat=VCFv4.2"}))
+    assert VcfEvidence.load(evidence_dir, MD5) is None
+    _install(monkeypatch, gzip.compress(GVCF_HEAD))
+    assert fetch_vcf_header(evidence_dir, MD5, is_gzipped=True, use_cache=True).record_alts == [
+        "<NON_REF>",
+        "C,<NON_REF>",
+    ]
 
 
 def test_fetch_vcf_no_header_raises(monkeypatch, evidence_dir):

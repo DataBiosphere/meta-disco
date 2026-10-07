@@ -59,7 +59,7 @@ from pathlib import Path
 import pytest
 
 from meta_disco import activities, schema_vocab
-from meta_disco.evidence import BedSignals, IdatHeader, SegmentTag, TarHead
+from meta_disco.evidence import BedSignals, IdatHeader, SegmentTag, TarHead, VcfHead
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
@@ -223,13 +223,13 @@ SEEDS_TAKEN = {record["file_md5sum"] for records in GOLDEN_INPUTS.values() for r
 }
 
 STUB_HEADER = "stub-header-no-network"
-# Real fetchers return str (bam/vcf header text), list[str] (fastq reads / fasta
+# Real fetchers return str (bam header text), a VcfHead (vcf header text and record ALTs), list[str] (fastq reads / fasta
 # contig names), or list[SegmentTag] (gfa segment tags) — see fetchers.py. The stub
 # honors each type's contract so the golden exercises realistic classifier input
 # and stays robust if a classifier later type-guards its argument.
 STUB_PAYLOADS = {
     "bam": STUB_HEADER,
-    "vcf": STUB_HEADER,
+    "vcf": VcfHead(STUB_HEADER, []),
     "fastq": [STUB_HEADER],
     "fasta": [STUB_HEADER],
     "gfa": [SegmentTag(sn="chr1", sr="0")],

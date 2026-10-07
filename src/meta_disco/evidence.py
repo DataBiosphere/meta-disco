@@ -229,31 +229,55 @@ class BamEvidence(_TextEvidence):
 
 @dataclass(frozen=True, kw_only=True)
 class VcfEvidence(_TextEvidence):
-    """Cached VCF header text, plus the optional per-chromosome max-position audit map.
+    """Cached VCF header text, the ALT of the first records, and the max-position audit map.
 
     ``max_positions`` is written for audit when the fetcher extracted it; it is not
     read back from the cache (the returned payload is the header text), so it is an
     optional provenance extra rather than part of :pyattr:`payload`.
+
+    ``record_alts`` is the ALT column of each line the head read held that has a VCF
+    record's eight fixed columns, in order, up to the fetcher's line limit
+    (``fetchers.record_alts_of``, #607): what tells a gVCF, whose every record carries
+    ``<NON_REF>``. Only the ALT is kept, as a joint-called record holds every sample's
+    genotype. ``[]`` where no line had eight columns: a head with no record, or a ``.pvar``,
+    whose records have fewer. An entry with no ``record_alts`` key, or one that is not a
+    list of strings, is a miss (an entry written before #607 has none), so the head is
+    read again.
     """
 
+    RECORD_ALTS_KEY: ClassVar[str] = "record_alts"
+
+    record_alts: list[str] = field(default_factory=list)
     max_positions: dict | None = None
 
     def to_json(self) -> dict:
         data = super().to_json()
         if self.max_positions:
             data["max_positions"] = self.max_positions
+        data[self.RECORD_ALTS_KEY] = self.record_alts
         return data
 
     @classmethod
     def from_json(cls, data: object) -> Any:
         # Delegate the shared identity/payload/provenance parse (and the cache-miss
-        # guard) to the base, then graft on the one Vcf-only audit field, so a new
-        # base provenance field can't silently miss this subclass on load.
+        # guard) to the base, then graft on the Vcf-only fields, so a new base
+        # provenance field can't silently miss this subclass on load.
+        alts = data.get(cls.RECORD_ALTS_KEY) if isinstance(data, dict) else None
+        if not (isinstance(alts, list) and all(isinstance(a, str) for a in alts)):
+            return None
         base = super().from_json(data)
         if base is None:
             return None
         assert isinstance(data, dict)  # base returned non-None ⇒ data parsed as a dict
-        return replace(base, max_positions=data.get("max_positions"))
+        return replace(base, max_positions=data.get("max_positions"), record_alts=alts)
+
+
+@dataclass(frozen=True)
+class VcfHead:
+    """What the VCF fetcher returns: the header text, and the ALT of each record the head read held (#607)."""
+
+    header_text: str
+    record_alts: list[str]
 
 
 @dataclass(frozen=True, kw_only=True)

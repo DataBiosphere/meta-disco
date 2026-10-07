@@ -364,19 +364,39 @@ def test_filled_counts_not_applicable_and_has_a_value_does_not():
     assert (matrix["values"], matrix["statuses"]) == (["GRCh38"], ["conflict", "not_applicable"])
 
 
-def test_a_wide_slot_is_grouped_by_top_level_term_in_the_markdown_only(monkeypatch):
-    counts = {"variants": 1, "variants.germline": 2, "reads": 4, "not_classified": 1}
-    report = {"files": {"D": 8}, "values": {"D": {"data_type": counts}}}
+def test_a_wide_slot_is_grouped_by_top_term_in_the_markdown_only(monkeypatch):
+    counts = {"variants": 1, "variants.germline": 2, "variants.germline.gvcf": 5, "reads": 4, "not_classified": 1}
+    report = {"files": {"D": 13}, "values": {"D": {"data_type": counts}}}
     matrix = rr.values_matrix(report, "data_type")
-    grouped, groups = rr._grouped(matrix)
-    assert (grouped["values"], grouped["statuses"]) == (["reads", "variants"], ["not_classified"])
-    assert grouped["rows"][0]["counts"] == {"reads": 4, "variants": 3, "not_classified": 1}
-    assert groups == {"variants": ["variants.germline", "variants"]}
+    grouped, groups = rr._grouped("data_type", matrix)
+    assert (grouped["values"], grouped["statuses"]) == (["variants", "reads"], ["not_classified"])
+    assert grouped["rows"][0]["counts"] == {"variants": 8, "reads": 4, "not_classified": 1}
+    assert groups == {"variants": ["variants.germline.gvcf", "variants.germline", "variants"]}
     # Grouping happens only past the column limit, and the matrix itself keeps every term.
     monkeypatch.setattr(rr, "MARKDOWN_VALUE_COLUMNS", 2)
     md = "\n".join(rr._values_section({slot: rr.values_matrix(report, slot) for slot in rr.CLASSIFICATION_FIELDS}))
-    assert "`variants` = `variants.germline`, `variants`" in md
-    assert matrix["values"] == ["reads", "variants.germline", "variants"]
+    assert "`variants` = `variants.germline.gvcf`, `variants.germline`, `variants`" in md
+    assert matrix["values"] == ["variants.germline.gvcf", "reads", "variants.germline", "variants"]
+
+
+def test_the_top_term_is_read_from_is_a_and_a_value_outside_the_vocabulary_is_its_own_group():
+    """A term groups under the top of its `is_a` chain (#607); a value a stored run holds that
+    today's vocabulary does not, dotted or not, stands alone rather than being guessed a parent."""
+    counts = {"variants.germline.gvcf": 1, "variants.retired": 2}
+    matrix = rr.values_matrix({"files": {"D": 3}, "values": {"D": {"data_type": counts}}}, "data_type")
+    grouped, groups = rr._grouped("data_type", matrix)
+    assert grouped["values"] == ["variants.retired", "variants"]
+    assert groups == {"variants": ["variants.germline.gvcf"]}
+
+
+def test_a_wide_slot_groups_an_is_a_family_whose_names_have_no_dot(monkeypatch):
+    """Grouping follows `is_a` in every dimension (#607): `snRNA-seq` is a `RNA-seq` though no dot says so."""
+    counts = {"RNA-seq": 1, "snRNA-seq": 2, "WGS": 4}
+    report = {"files": {"D": 7}, "values": {"D": {"assay_type": counts}}}
+    monkeypatch.setattr(rr, "MARKDOWN_VALUE_COLUMNS", 2)
+    md = "\n".join(rr._values_section({slot: rr.values_matrix(report, slot) for slot in rr.CLASSIFICATION_FIELDS}))
+    assert "`RNA-seq` = `snRNA-seq`, `RNA-seq`" in md
+    assert "| dataset | `WGS` | `RNA-seq` | files | has a value | filled |" in md
 
 
 def test_a_wide_slot_with_no_dotted_terms_is_not_grouped(monkeypatch):
@@ -384,7 +404,7 @@ def test_a_wide_slot_with_no_dotted_terms_is_not_grouped(monkeypatch):
     report = {"files": {"D": 6}, "values": {"D": {"instrument_model": counts}}}
     monkeypatch.setattr(rr, "MARKDOWN_VALUE_COLUMNS", 2)
     md = "\n".join(rr._values_section({slot: rr.values_matrix(report, slot) for slot in rr.CLASSIFICATION_FIELDS}))
-    assert "top-level term" not in md
+    assert "under its top term" not in md
     assert "| dataset | `Revio` | `PromethION` | `Illumina NovaSeq 6000` | files | has a value | filled |" in md
 
 

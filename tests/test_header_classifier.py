@@ -4,6 +4,8 @@ import importlib
 
 import pytest
 
+from meta_disco import code_rules
+from meta_disco.evidence import VcfHead
 from meta_disco.file_name import FileName
 from meta_disco.header_classifier import (
     # Result models
@@ -27,11 +29,15 @@ from meta_disco.models import (
     CONFLICT,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
+    SOURCE_CONTENT_READ,
     field_evidence,
     field_status,
     field_value,
 )
+from meta_disco.rule_engine import CONTENT_TIER
+from meta_disco.validators.header_extractors import parse_vcf_head, parse_vcf_header
 from meta_disco.validators.read_name_parsers import IlluminaFormat, PacBioFormat
+from tests.test_producer_steps import GATK3_HC, HC, gatk4, header_text
 
 
 def val(result: dict, field: str):
@@ -1161,3 +1167,129 @@ class TestAVcfHeaderIsParsedOnce:
         assert result["reference_assembly"]["value"] == "GRCh38"
         assert result["data_type"]["value"] == "variants.germline"
         assert len(calls) == 1
+
+
+class TestGvcf:
+    """A gVCF is told by its content: the step that made it is a HaplotypeCaller in a
+    reference-confidence mode, and its records all carry `<NON_REF>`, some alone (#607)."""
+
+    GVCF_LINES = (
+        '##ALT=<ID=NON_REF,Description="Represents any possible alternative allele not already represented">',
+        "##GVCFBlock0-1=minGQ=0(inclusive),maxGQ=1(exclusive)",
+    )
+    T2T_HC = HC
+    NYGC_HC = GATK3_HC.replace("showFullBamList=false", "emitRefConfidence=GVCF showFullBamList=false")
+    SELECT = gatk4(
+        "SelectVariants", "--output chr10.1_100000.genotyped.vcf --variant chr10.1_100000.margined.genotyped.vcf.gz"
+    )
+    # The ALTs of a gVCF's first records: sites with no variant (`<NON_REF>` alone) and a
+    # variant site, which carries `<NON_REF>` beside its allele.
+    GVCF_ALTS = ("<NON_REF>", "<NON_REF>", "C,<NON_REF>", "<NON_REF>")
+
+    @staticmethod
+    def classify(*lines: str, file_name: str, alts: tuple[str, ...] | None = GVCF_ALTS) -> dict:
+        """Classify a header of ``lines`` whose head read held records of ``alts`` (None: not read)."""
+        text = header_text(*lines)
+        header = parse_vcf_header(text) if alts is None else parse_vcf_head(VcfHead(text, list(alts)))
+        return classify_from_vcf_header(header, name=FileName.parse(file_name))
+
+    @pytest.mark.parametrize(
+        ("lines", "file_name"),
+        [
+            pytest.param((T2T_HC, "##source=HaplotypeCaller"), "HG00096.chr10.hc.vcf.gz", id="GATK 4, a VCF's name"),
+            pytest.param((NYGC_HC,), "HG01377.haplotypeCalls.er.raw.g.vcf.gz", id="GATK 3, a gVCF's name"),
+            pytest.param((NYGC_HC,), "NA12818.haplotypeCalls.er.raw.vcf.gz", id="GATK 3, a VCF's name"),
+            pytest.param(
+                (T2T_HC.replace("GVCF", "BP_RESOLUTION"),), "HG00096.chr10.hc.vcf.gz", id="GATK 4, BP_RESOLUTION"
+            ),
+        ],
+    )
+    def test_a_haplotypecaller_gvcf_with_reference_records_is_a_gvcf(self, lines, file_name):
+        result = self.classify(*self.GVCF_LINES, *lines, file_name=file_name)
+        assert val(result, "data_type") == "variants.germline.gvcf"
+        claims = [e for e in field_evidence(result, "data_type") if e.get("rule_id") == code_rules.VCF_GVCF.id]
+        assert [(e["tier"], e["source_type"]) for e in claims] == [(CONTENT_TIER, SOURCE_CONTENT_READ)]
+
+    @pytest.mark.parametrize(
+        ("lines", "file_name", "alts", "data_type"),
+        [
+            pytest.param(
+                (*GVCF_LINES, T2T_HC, SELECT),
+                "chr10.1_100000.genotyped.vcf.gz",
+                GVCF_ALTS,
+                "variants",
+                id="made by SelectVariants, an earlier step in GVCF mode",
+            ),
+            pytest.param((*GVCF_LINES, T2T_HC), "STU.pvar", GVCF_ALTS, "genotypes", id="a pvar"),
+            pytest.param(
+                GVCF_LINES, "HG01377.haplotypeCalls.er.raw.g.vcf.gz", GVCF_ALTS, "variants", id="no command line"
+            ),
+            pytest.param((NYGC_HC,), "", GVCF_ALTS, "variants", id="no file name to check the step against"),
+            pytest.param(
+                ("##source=HaplotypeCaller", T2T_HC.replace("GVCF", "NONE")),
+                "HG00096.chr10.hc.vcf.gz",
+                GVCF_ALTS,
+                "variants.germline",
+                id="HaplotypeCaller, mode NONE",
+            ),
+            pytest.param(
+                (T2T_HC, T2T_HC.replace("GVCF", "NONE").replace("--intervals chr10", "--intervals chr10 -L x")),
+                "HG00096.chr10.hc.vcf.gz",
+                GVCF_ALTS,
+                "variants",
+                id="two HaplotypeCaller lines alike but for the mode",
+            ),
+            pytest.param(
+                ("##source=HaplotypeCaller", T2T_HC),
+                "HG00096.chr10.hc.vcf.gz",
+                ("C,<NON_REF>", "A,<NON_REF>"),
+                "variants.germline",
+                id="records of variant sites only, as a gVCF filtered to them",
+            ),
+            pytest.param(
+                ("##source=HaplotypeCaller", T2T_HC),
+                "HG00096.chr10.hc.vcf.gz",
+                ("<NON_REF>", "C"),
+                "variants.germline",
+                id="a record without <NON_REF>",
+            ),
+            pytest.param(
+                ("##source=HaplotypeCaller", T2T_HC),
+                "HG00096.chr10.hc.vcf.gz",
+                ("<NON_REF>", "C,T<NON_REF>"),
+                "variants.germline",
+                id="an allele that contains <NON_REF> without being it",
+            ),
+            pytest.param(
+                ("##source=HaplotypeCaller", T2T_HC), "HG00096.chr10.hc.vcf.gz", (), "variants.germline", id="no record"
+            ),
+            pytest.param(
+                ("##source=HaplotypeCaller", T2T_HC),
+                "HG00096.chr10.hc.vcf.gz",
+                None,
+                "variants.germline",
+                id="records not read",
+            ),
+        ],
+    )
+    def test_without_both_the_step_and_the_records_no_gvcf_is_claimed(self, lines, file_name, alts, data_type):
+        """The `##ALT=<ID=NON_REF>` and `##GVCFBlock` lines, a `.g.vcf` name, and a GVCF-mode
+        line of an earlier step all carry over into files that are not gVCFs; a step in GVCF
+        mode over records with no site that is `<NON_REF>` alone is not one either."""
+        result = self.classify(*lines, file_name=file_name, alts=alts)
+        assert val(result, "data_type") == data_type
+        assert code_rules.VCF_GVCF.id not in (val(result, "matched_rules") or [])
+
+    def test_another_tools_reference_confidence_mode_is_not_a_germline_gvcf(self, monkeypatch):
+        """Mutect2, GATK's somatic caller, takes `-ERC` too: were its mode declared, a file it
+        made in GVCF mode would still not be a germline gVCF."""
+        from meta_disco.validators import command_lines
+
+        monkeypatch.setitem(
+            command_lines.TOOL_ARGUMENTS,
+            (command_lines.GATK, "Mutect2"),
+            command_lines.ToolArguments(inputs=("-I",), outputs=("-O",), mode=("-ERC", "--emit-ref-confidence")),
+        )
+        mutect = gatk4("Mutect2", "-ERC GVCF -I tumor.cram -O tumor.chr1.vcf")
+        result = self.classify(*self.GVCF_LINES, mutect, file_name="tumor.chr1.vcf.gz")
+        assert code_rules.VCF_GVCF.id not in (val(result, "matched_rules") or [])
