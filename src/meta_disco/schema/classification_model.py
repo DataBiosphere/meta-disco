@@ -159,7 +159,7 @@ class DataTypeEnum(str, Enum):
     variantsFULL_STOPgermline = "variants.germline"
     variantsFULL_STOPgermlineFULL_STOPgvcf = "variants.germline.gvcf"
     """
-    One sample's germline calls with reference-confidence blocks over every other position (a `<NON_REF>` ALT, `END=`), the input to joint calling (#607). Placing it under germline variants is a modelling choice: the file also holds the reference blocks. No `meaning`: EDAM names gVCF a format (format_4018), beside VCF, and has no data term for it.
+    One sample's germline calls, with a reference-confidence record covering every other position: one record per position, or a block (`END=`) per run of positions, each with a `<NON_REF>` ALT. It is the input to joint calling (#607). Placing it under germline variants is a modelling choice: the file also holds the reference-confidence records. No `meaning`: EDAM names gVCF a format (format_4018), beside VCF, and has no data term for it.
     """
     variantsFULL_STOPsomatic = "variants.somatic"
     variantsFULL_STOPstructural = "variants.structural"
