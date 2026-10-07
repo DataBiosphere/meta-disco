@@ -144,6 +144,11 @@ def test_a_haplotypecaller_lines_reference_confidence_mode_is_read_in_each_spell
     assert step.mode == mode
 
 
+def test_a_mode_option_given_twice_is_read_as_its_first_value():
+    (step,) = steps(header(gatk4("HaplotypeCaller", "-ERC GVCF -O a.vcf -I a.cram --emit-ref-confidence NONE")))
+    assert step.mode == "GVCF"
+
+
 def test_two_lines_alike_but_for_their_mode_are_two_steps_and_name_no_single_producer():
     other = HC.replace("--emit-ref-confidence GVCF", "--emit-ref-confidence NONE")
     assert len(steps(header(HC, other))) == 2

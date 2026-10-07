@@ -235,11 +235,14 @@ class VcfEvidence(_TextEvidence):
     read back from the cache (the returned payload is the header text), so it is an
     optional provenance extra rather than part of :pyattr:`payload`.
 
-    ``record_alts`` is the ALT column of each data record the head read held, in order
-    (#607): what tells a gVCF, whose every record carries ``<NON_REF>``. Only the ALT is
-    kept, as a joint-called record holds every sample's genotype. ``[]`` is a head that
-    held no record. An entry with no ``record_alts`` list (one written before #607) is a
-    miss, so the head is read again.
+    ``record_alts`` is the ALT column of each line the head read held that has a VCF
+    record's eight fixed columns, in order, up to the fetcher's line limit
+    (``fetchers.record_alts_of``, #607): what tells a gVCF, whose every record carries
+    ``<NON_REF>``. Only the ALT is kept, as a joint-called record holds every sample's
+    genotype. ``[]`` where no line had eight columns: a head with no record, or a ``.pvar``,
+    whose records have fewer. An entry with no ``record_alts`` key, or one that is not a
+    list of strings, is a miss (an entry written before #607 has none), so the head is
+    read again.
     """
 
     RECORD_ALTS_KEY: ClassVar[str] = "record_alts"

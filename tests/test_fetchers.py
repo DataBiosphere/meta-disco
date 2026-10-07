@@ -574,6 +574,25 @@ def test_fetch_vcf_returns_header_and_record_alts_and_caches(monkeypatch, eviden
     assert fetch_vcf_header(evidence_dir, MD5, is_gzipped=True, use_cache=True) == head
 
 
+def test_record_alts_are_read_only_from_lines_with_a_vcf_records_eight_columns():
+    """A `.pvar` record (five columns) and a record the head cut short give no ALT (#607)."""
+    lines = [
+        "chr1\t1\t.\tA\t<NON_REF>\t.\t.\tEND=411",
+        "10\t420890\trs1\tA\tG",
+        "chr1\t500\t.\tC\tT,<NON_REF>\t30",
+    ]
+    assert fetchers.record_alts_of(lines) == ["<NON_REF>"]
+
+
+@pytest.mark.parametrize("alts", [None, "<NON_REF>", ["<NON_REF>", 1]])
+def test_a_cached_vcf_entry_whose_record_alts_are_not_a_list_of_strings_is_a_miss(evidence_dir, alts):
+    path = get_evidence_path(evidence_dir, MD5)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    entry = {"md5sum": MD5, "file_name": "x.vcf.gz", "header_text": "##fileformat=VCFv4.2", "record_alts": alts}
+    path.write_text(json.dumps(entry))
+    assert VcfEvidence.load(evidence_dir, MD5) is None
+
+
 def test_a_cached_vcf_entry_without_record_alts_is_read_again(monkeypatch, evidence_dir):
     """An entry written before #607 holds the header only: it is a miss, so the head is fetched again."""
     path = get_evidence_path(evidence_dir, MD5)

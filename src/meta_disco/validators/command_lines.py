@@ -109,8 +109,8 @@ class Step:
     input or output. ``family`` is None for a line that is neither GATK's nor bcftools', and
     ``tool`` is then the line's ``ID``, or empty. ``stdin`` is True where a positional
     argument is ``-``: an input read from stdin, which names no file and is not in ``inputs``.
-    ``mode`` is the value of the line's :attr:`ToolArguments.mode` option, None where it
-    gives none; two lines alike but for it are two steps.
+    ``mode`` is the value of the line's :attr:`ToolArguments.mode` option (the first, where
+    the line gives it twice), None where it gives none; two lines alike but for it are two steps.
     """
 
     family: str | None

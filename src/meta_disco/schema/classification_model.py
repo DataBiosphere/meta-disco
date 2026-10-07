@@ -146,7 +146,7 @@ class DataModalityEnum(str, Enum):
 
 class DataTypeEnum(str, Enum):
     """
-    Content type, spanning two classes. BIOLOGICAL: the bytes are the signal. DESCRIPTIVE: the bytes are about another file. (See data-model doc 8c.) A dotted value is a child of the value before its last dot, and `is_a` names that parent (`variants.germline.gvcf` is a `variants.germline`, which is a `variants`). A record holds one term, the most specific its evidence supports; a consumer that filters on a parent walks `is_a`.
+    Content type, spanning two classes. BIOLOGICAL: the bytes are the signal. DESCRIPTIVE: the bytes are about another file. (See data-model doc 8c.) A dotted value is a child of the value before its last dot, and `is_a` names that parent (`variants.germline.gvcf` is a `variants.germline`, which is a `variants`). A record holds one term. Inference settles its claims by tier; where reconcile meets two values that nest, the deeper one is the value. A consumer that filters on a parent walks `is_a`.
     """
     alignments = "alignments"
     reads = "reads"

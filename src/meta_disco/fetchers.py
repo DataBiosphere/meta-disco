@@ -903,7 +903,7 @@ def fetch_vcf_header(
     the ALT column of each complete record the head read held, up to the matcher's limit
     (#607). Raises ``FetchError`` naming the cause when the range read fails or no header is
     found, so the record is kept as a ``not_classified`` row instead of vanishing (#155). A
-    cached entry with no record ALTs (written before #607) is a miss, and is read again.
+    cached entry with no ``record_alts`` key (one written before #607) is a miss, and is read again.
 
     The head is decompressed on the fly (BGZF-aware: ``gzip.GzipFile`` reads past the first
     member), so a ``##source`` caller tag beyond the first BGZF block is seen — the accuracy

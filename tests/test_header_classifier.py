@@ -1254,6 +1254,13 @@ class TestGvcf:
                 id="a record without <NON_REF>",
             ),
             pytest.param(
+                ("##source=HaplotypeCaller", T2T_HC),
+                "HG00096.chr10.hc.vcf.gz",
+                ("<NON_REF>", "C,T<NON_REF>"),
+                "variants.germline",
+                id="an allele that contains <NON_REF> without being it",
+            ),
+            pytest.param(
                 ("##source=HaplotypeCaller", T2T_HC), "HG00096.chr10.hc.vcf.gz", (), "variants.germline", id="no record"
             ),
             pytest.param(
