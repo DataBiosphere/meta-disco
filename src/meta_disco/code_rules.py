@@ -195,8 +195,8 @@ BED_COORDINATE_REFERENCE = CodeRule(
     sets=_REFERENCE,
     rationale=(
         "A coordinate past a chromosome's end in a human reference rules that reference out, "
-        "whether the names carry a chr prefix or not; a chr prefix also rules out GRCh37, and "
-        "a reference is claimed only when exactly one is left."
+        "whether the names carry a chr prefix or not; where more than one is left, a chr prefix "
+        "also rules out GRCh37; and a reference is claimed only when exactly one is left."
     ),
 )
 BED_NONSTANDARD_CONTIGS = CodeRule(
