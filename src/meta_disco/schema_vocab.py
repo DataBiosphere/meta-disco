@@ -123,16 +123,30 @@ def value_ancestors(field: str, value: str) -> tuple[str, ...]:
     """The terms above ``value`` in its dimension's ``is_a`` hierarchy, nearest first.
 
     Empty for a term with no parent, which is every term of an enum that declares no
-    ``is_a``. ``reference_assembly_enum`` (#473), ``data_modality_enum`` (#563) and
-    ``assay_type_enum`` (#533) do: a hybrid's ancestors are its T2T release and then
-    ``CHM13``, ``epigenomic.methylation``'s is ``epigenomic``, and ``snRNA-seq``'s are
-    ``sc/snRNA-seq`` and then ``RNA-seq``. Raises ValueError for a value
+    ``is_a``. ``reference_assembly_enum`` (#473), ``data_modality_enum`` (#563),
+    ``assay_type_enum`` (#533) and ``data_type_enum`` (#607) do: a hybrid's ancestors are
+    its T2T release and then ``CHM13``, ``epigenomic.methylation``'s is ``epigenomic``,
+    ``snRNA-seq``'s are ``sc/snRNA-seq`` and then ``RNA-seq``, and
+    ``variants.germline.gvcf``'s are ``variants.germline`` and then ``variants``. Raises ValueError for a value
     outside the dimension's vocabulary or an ``is_a`` chain that names a missing
     term or loops, and the same errors as ``dimension_values`` for an unrecognized
     field or a missing enum.
     """
     _term_spec(field, value)  # validates the field and value first
     return _ancestors(_load_schema_enums()[DIMENSION_ENUMS[field]], value, field)
+
+
+def top_term(field: str, value: str) -> str | None:
+    """The term at the top of ``value``'s ``is_a`` chain in its dimension: its farthest ancestor, or itself where it has none.
+
+    ``variants.germline.gvcf``'s is ``variants``. None for a value outside the dimension's
+    vocabulary, as a stored run may hold one retired since it was written. Raises the same
+    errors as :func:`value_ancestors` for an unrecognized field, a missing enum or a broken chain.
+    """
+    if not value_in_vocabulary(field, value):
+        return None
+    ancestors = value_ancestors(field, value)
+    return ancestors[-1] if ancestors else value
 
 
 def activity_ancestors(term: str) -> tuple[str, ...]:

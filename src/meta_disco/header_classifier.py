@@ -26,6 +26,7 @@ from .models import (
     all_not_classified,
     build_field_entry,
 )
+from .producer_steps import producing_step
 from .schema_vocab import most_specific
 from .validators.header_extractors import VCFHeader, parse_vcf_header
 from .validators.read_name_parsers import (
@@ -297,7 +298,7 @@ def classify_from_vcf_header(
               data_modality, data_type, assay_type, reference_assembly, platform,
               instrument_model
     """
-    from .rule_engine import ExtendedFileInfo
+    from .rule_engine import CONTENT_TIER, ExtendedFileInfo
 
     # Use the real filename so its tokens reach the tier-2 filename rules. The
     # AnVIL file_format is redundant with the name and not consulted (#157). When
@@ -342,7 +343,56 @@ def classify_from_vcf_header(
 
     _record_reference_build(result, identity)
 
+    gvcf_reason = why_gvcf(parsed, name.raw)
+    if gvcf_reason is not None:
+        result.add_claim(
+            "data_type",
+            rule_id=code_rules.VCF_GVCF.id,
+            tier=CONTENT_TIER,
+            source_type=SOURCE_CONTENT_READ,
+            reason=gvcf_reason,
+            value=GVCF_DATA_TYPE,
+        )
+
     return result.to_output_dict()
+
+
+# A gVCF's data_type (#607); the HaplotypeCaller modes that write one, GVCF (reference
+# blocks) and BP_RESOLUTION (a record per position); and the ALT allele a gVCF's every
+# record carries.
+GVCF_DATA_TYPE = "variants.germline.gvcf"
+GVCF_MODES = frozenset({"GVCF", "BP_RESOLUTION"})
+NON_REF = "<NON_REF>"
+
+
+def why_gvcf(header: VCFHeader, file_name: str) -> str | None:
+    """Why ``file_name`` is a gVCF, for the claim's reason; None where its header and records do not both say so.
+
+    Both must: the step that made the file, the end of the header's data flow
+    (``producer_steps.producing_step``), is a HaplotypeCaller in one of :data:`GVCF_MODES`
+    (``Step.mode``); and every record the head read (``VCFHeader.record_alts``) has
+    ``<NON_REF>`` among its ALT alleles, and one at least has it alone: a record of a site
+    with no variant, which a gVCF has and a VCF filtered to its variant sites does not. The header's ``##ALT=<ID=NON_REF>`` and
+    ``##GVCFBlock`` lines, and a GVCF-mode line of an earlier step, are not read: joint-called
+    VCFs and ``.pvar`` files carry them over from their gVCFs. None for an empty
+    ``file_name`` (a header-only call), which no step's output can be checked against, and
+    for a header whose records were not read.
+    """
+    if not file_name or not header.record_alts:
+        return None
+    step, _ = producing_step(header, file_name)
+    if step is None or step.tool != "HaplotypeCaller" or step.mode not in GVCF_MODES:
+        return None
+    if not all(NON_REF in alt.split(",") for alt in header.record_alts):
+        return None
+    non_variant = sum(alt == NON_REF for alt in header.record_alts)
+    if not non_variant:
+        return None
+    return (
+        f"made by HaplotypeCaller in {step.mode} mode, as its header's command line records; each of "
+        f"its first {len(header.record_alts)} records has {NON_REF} among its ALT alleles, and "
+        f"{non_variant} of them are sites with no variant ({NON_REF} alone)"
+    )
 
 
 def classify_from_fastq_header(

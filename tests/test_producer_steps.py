@@ -92,7 +92,7 @@ PASS = (
 
 def test_a_gatk4_line_is_its_tools_inputs_and_output():
     (step,) = steps(header(HC))
-    assert step == Step(GATK, "HaplotypeCaller", ("./HG00096.cram",), "HG00096.chr10.hc.vcf")
+    assert step == Step(GATK, "HaplotypeCaller", ("./HG00096.cram",), "HG00096.chr10.hc.vcf", mode="GVCF")
 
 
 def test_a_gatk3_line_reads_its_key_value_options_and_names_no_output():
@@ -123,6 +123,31 @@ def test_identical_lines_are_one_step_and_other_lines_are_not_steps():
 def test_an_undeclared_tool_is_no_reading_at_all():
     assert ps.steps_of(header(HC, gatk4("Mutect2", "-I a.bam -O b.vcf"))) is None
     assert ps.steps_of(header("##bcftools_normCommand=norm -m -any in.vcf.gz; Date=x")) is None
+
+
+@pytest.mark.parametrize(
+    "line, mode",
+    [
+        (HC, "GVCF"),
+        (gatk4("HaplotypeCaller", "-ERC BP_RESOLUTION -O a.vcf -I a.cram"), "BP_RESOLUTION"),
+        (gatk4("HaplotypeCaller", "--emit-ref-confidence=NONE -O a.vcf -I a.cram"), "NONE"),
+        (GATK3_HC.replace("showFullBamList=false", "emitRefConfidence=GVCF showFullBamList=false"), "GVCF"),
+        (GATK3_HC, None),
+        (gatk4("HaplotypeCaller", "-O a.vcf -I a.cram"), None),
+        (gatk4("GenotypeGVCFs", "-V a.g.vcf.gz -O a.vcf --emit-ref-confidence GVCF"), None),
+    ],
+)
+def test_a_haplotypecaller_lines_reference_confidence_mode_is_read_in_each_spelling(line, mode):
+    """GATK 4's two option spellings, with or without `=`, and GATK 3's `key=value`; a tool
+    whose arguments declare no mode option has none, whatever its words (#607)."""
+    (step,) = steps(header(line))
+    assert step.mode == mode
+
+
+def test_two_lines_alike_but_for_their_mode_are_two_steps_and_name_no_single_producer():
+    other = HC.replace("--emit-ref-confidence GVCF", "--emit-ref-confidence NONE")
+    assert len(steps(header(HC, other))) == 2
+    assert ps.producing_step(header(HC, other), "HG00096.chr10.hc.vcf.gz") == (None, ps.NO_SINGLE_END)
 
 
 # --- the end of the data flow ------------------------------------------------------------

@@ -91,8 +91,10 @@
 #     sample.vcf.gz, and sample.vcf.bgz alike (never list ".vcf.gz" here). An
 #     archive container with no inner format (graph.tar.gz) has no core and matches
 #     nothing — a container is not a content type. gVCF keeps its own core
-#     (".g.vcf"): both classify as data_type variants, but ".g.vcf" derives
-#     Format.GVCF (vs Format.VCF), so the distinction is not lost.
+#     (".g.vcf"), which derives Format.GVCF (vs Format.VCF). The extension rules
+#     give it the same data_type as a VCF: a gVCF's own term is read from its
+#     content, the step that made it and its first records (code_rules.VCF_GVCF,
+#     #607), since many gVCFs are named as VCFs.
 # - format: canonical file format to match (e.g., FASTA) — collapses the
 #     spelling/compression variants of one format (.fa/.fasta/.fa.gz/.fasta.gz)
 #     to a single identity, so key on this instead of re-listing extensions

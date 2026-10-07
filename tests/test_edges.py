@@ -243,6 +243,21 @@ def test_misfits_flag_a_missing_required_role_and_a_wrong_kind():
     assert misfits(step, None, {"k": None}) == [("required role missing", "reference")]
 
 
+def test_a_kind_is_judged_by_the_top_of_its_is_a_chain_and_one_outside_the_vocabulary_not_at_all():
+    """A gVCF's `variants.germline.gvcf` is a `variants`, the kind a VariantCallActivity makes
+    and a cohort merge takes (#607); a value no vocabulary term holds is not judged."""
+    step = {
+        "activity": "VariantCallActivity",
+        "named_by": [ROW],
+        "inputs": [
+            {"role": "calls_from", "parent_file": "s.cram", "parent_key": "k", "parent_kind": None, "named_by": [ROW]}
+        ],
+    }
+    assert misfits(step, "variants.germline.gvcf", {"k": "alignments"}) == []
+    assert misfits(step, "annotations.coverage", {"k": "alignments"}) == [("output kind", "annotations.coverage")]
+    assert misfits(step, "reads.retired", {"k": "reads.retired"}) == []
+
+
 def test_an_inferred_input_naming_no_source_is_attributed_to_the_steps():
     inferred = inferred_index("k-vcf", "a.vcf.gz")
     inferred["inputs"][0]["named_by"] = []

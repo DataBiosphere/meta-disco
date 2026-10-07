@@ -146,7 +146,7 @@ class DataModalityEnum(str, Enum):
 
 class DataTypeEnum(str, Enum):
     """
-    Content type, spanning two classes. BIOLOGICAL: the bytes are the signal. DESCRIPTIVE: the bytes are about another file. (See data-model doc 8c.)
+    Content type, spanning two classes. BIOLOGICAL: the bytes are the signal. DESCRIPTIVE: the bytes are about another file. (See data-model doc 8c.) A dotted value is a child of the value before its last dot, and `is_a` names that parent (`variants.germline.gvcf` is a `variants.germline`, which is a `variants`). A record holds one term, the most specific its evidence supports; a consumer that filters on a parent walks `is_a`.
     """
     alignments = "alignments"
     reads = "reads"
@@ -157,6 +157,10 @@ class DataTypeEnum(str, Enum):
     pangenomeFULL_STOPreference = "pangenome.reference"
     variants = "variants"
     variantsFULL_STOPgermline = "variants.germline"
+    variantsFULL_STOPgermlineFULL_STOPgvcf = "variants.germline.gvcf"
+    """
+    One sample's germline calls with reference-confidence blocks over every other position (a `<NON_REF>` ALT, `END=`), the input to joint calling (#607). Placing it under germline variants is a modelling choice: the file also holds the reference blocks. No `meaning`: EDAM names gVCF a format (format_4018), beside VCF, and has no data term for it.
+    """
     variantsFULL_STOPsomatic = "variants.somatic"
     variantsFULL_STOPstructural = "variants.structural"
     variantsFULL_STOPcnv = "variants.cnv"

@@ -60,6 +60,7 @@ from .evidence import (
     TarEvidence,
     TarHead,
     VcfEvidence,
+    VcfHead,
 )
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
@@ -894,21 +895,23 @@ def fetch_vcf_header(
     use_cache: bool = True,
     url: str | None = None,
     **kwargs,
-) -> str:
-    """Read VCF header from S3 via a streamed range read.
+) -> VcfHead:
+    """Read a VCF's header, and the ALT of its first records, from S3 via a streamed range read.
 
     If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
-    Returns header text: the run of ``#`` lines the head starts with (``_VcfMatcher``). Raises ``FetchError`` naming the cause when
-    the range read fails or no header is found, so the record is kept as a ``not_classified``
-    row instead of vanishing (#155).
+    Returns the header text (the run of ``#`` lines the head starts with, ``_VcfMatcher``) and
+    the ALT column of each complete record the head read held, up to the matcher's limit
+    (#607). Raises ``FetchError`` naming the cause when the range read fails or no header is
+    found, so the record is kept as a ``not_classified`` row instead of vanishing (#155). A
+    cached entry with no record ALTs (written before #607) is a miss, and is read again.
 
     The head is decompressed on the fly (BGZF-aware: ``gzip.GzipFile`` reads past the first
     member), so a ``##source`` caller tag beyond the first BGZF block is seen — the accuracy
     gain over a first-member-only decode (#263).
     """
-    payload = _load_cached(VcfEvidence, evidence_dir, md5sum, use_cache)
-    if payload is not None:
-        return payload
+    cached = VcfEvidence.load(evidence_dir, md5sum) if use_cache else None
+    if cached is not None:
+        return VcfHead(cached.header_text, cached.record_alts)
 
     stream, raw = _open_stream(md5sum, url=url, is_gzipped=is_gzipped, compressed_cap=VCF_COMPRESSED_CAP)
     matcher = _scan_lines(stream, raw, cap=MAX_DECOMPRESSED, matcher=_VcfMatcher())
@@ -916,6 +919,7 @@ def fetch_vcf_header(
     if matcher.header_lines:
         header_text = "\n".join(matcher.header_lines)
         max_positions = extract_max_positions(matcher.variant_lines) if matcher.variant_lines else None
+        record_alts = record_alts_of(matcher.variant_lines)
         _save_head_evidence(
             VcfEvidence,
             evidence_dir,
@@ -925,10 +929,20 @@ def fetch_vcf_header(
             url=url,
             header_text=header_text,
             max_positions=max_positions,
+            record_alts=record_alts,
         )
-        return header_text
+        return VcfHead(header_text, record_alts)
 
     raise FetchError("no VCF header lines (no run of '#' lines starting the read head)")
+
+
+def record_alts_of(lines: list[str]) -> list[str]:
+    """The ALT column of each line with a VCF record's eight fixed columns, in order.
+
+    A shorter line is skipped: the read head can end partway through a record, and a
+    ``.pvar`` record (read by this fetcher too) has fewer columns.
+    """
+    return [fields[4] for fields in (line.rstrip("\n").split("\t", 8) for line in lines) if len(fields) >= 8]
 
 
 # =============================================================================

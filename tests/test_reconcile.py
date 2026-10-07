@@ -417,6 +417,28 @@ def test_values_that_nest_agree_and_the_deepest_is_the_value():
     )
 
 
+@pytest.mark.parametrize(
+    ("inferred_value", "source_value", "settled"),
+    [
+        ("assembly.reference", "assembly", "assembly.reference"),
+        ("variants.germline.gvcf", "variants", "variants.germline.gvcf"),
+        ("variants", "variants.germline.gvcf", "variants.germline.gvcf"),
+    ],
+)
+def test_data_type_values_that_nest_agree_and_the_deepest_is_the_value(inferred_value, source_value, settled):
+    """A dotted data_type term is its parent's child by `is_a` (#607), so a source's broader
+    term beside inference's narrower one is one answer, not a conflict, either way round."""
+    assert resolve_slot("data_type", inferred(CLASSIFIED, inferred_value), [claim(source_value)], False) == (
+        CLASSIFIED,
+        settled,
+    )
+
+
+def test_data_type_siblings_still_conflict():
+    got = resolve_slot("data_type", inferred(CLASSIFIED, "variants.germline.gvcf"), [claim("variants.somatic")], False)
+    assert got == (CONFLICT, None)
+
+
 def test_sibling_releases_still_conflict():
     """Two releases do not nest: neither is the other's parent (#473)."""
     got = resolve_slot("reference_assembly", inferred(CLASSIFIED, "T2T-CHM13v1.0"), [claim("T2T-CHM13v2.0")], False)

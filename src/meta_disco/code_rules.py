@@ -155,6 +155,36 @@ VCF_CONTIG_LENGTH = CodeRule(
         "name, and without one the value is the family."
     ),
 )
+VCF_GVCF = CodeRule(
+    id="vcf_gvcf",
+    module=HEADER_CLASSIFIER,
+    basis=BASIS_CONTENT,
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "VCF header: the reference-confidence mode (-ERC) on the command line of the step that made "
+        "the file (the end of its data flow), where that step is a GATK HaplotypeCaller; and the ALT "
+        "column of the first records the head read"
+    ),
+    sets=("data_type",),
+    rationale=(
+        "A gVCF has a record for every site, variant or not, and carries the symbolic <NON_REF> "
+        "allele in every record's ALT (GATK, 'GVCF - Genomic Variant Call Format', "
+        "https://gatk.broadinstitute.org/hc/en-us/articles/360035531812). HaplotypeCaller writes one "
+        "when run with -ERC GVCF (non-variant sites condensed into blocks) or -ERC BP_RESOLUTION (a "
+        "record per site); NONE, the default, is regular calling (GATK, 'HaplotypeCaller', "
+        "https://gatk.broadinstitute.org/hc/en-us/articles/360037225632). Both must say so: the step "
+        "that made the file is a HaplotypeCaller in one of those modes; and every record read has "
+        "<NON_REF> among its ALT alleles, at least one with it alone, a site with no variant (#607). "
+        "The step alone is not enough: a tool that writes no command line leaves the header's last "
+        "step in place, so a gVCF filtered to its variant sites would still read as made by "
+        "HaplotypeCaller; its records then have no site with <NON_REF> alone. The records alone are "
+        "not either: GenotypeGVCFs drops <NON_REF> in a normal run, but keeps it at some sites under "
+        "--include-non-variant-sites (GATK forum, "
+        "https://gatk.broadinstitute.org/hc/en-us/community/posts/360056352871). The "
+        "##ALT=<ID=NON_REF> and ##GVCFBlock header lines, and an earlier step's -ERC GVCF line, carry "
+        "over into the joint-called VCFs and PLINK .pvar files made from gVCFs, so none of them is read."
+    ),
+)
 BED_COORDINATE_REFERENCE = CodeRule(
     id="bed_coordinate_reference",
     module=HEADER_CLASSIFIER,
@@ -337,6 +367,7 @@ INHERITED_FROM_PARENT = CodeRule(
 CODE_RULES = (
     CONTIG_LENGTH_DETECTION,
     VCF_CONTIG_LENGTH,
+    VCF_GVCF,
     BED_COORDINATE_REFERENCE,
     BED_NONSTANDARD_CONTIGS,
     FASTA_TRANSCRIPT_CONTIGS,

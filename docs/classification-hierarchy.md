@@ -48,7 +48,9 @@ file_format (extension)
 
 ## Variants (.vcf, .vcf.gz, .g.vcf.gz, .gvcf.gz, .bcf)
 
-**data_type**: `variants`, `variants.germline`, `variants.structural`
+**data_type**: `variants`, `variants.germline`, `variants.germline.gvcf`, `variants.structural`
+
+A gVCF is `variants.germline.gvcf` when the step that made it, read from its header, is a GATK HaplotypeCaller in GVCF or BP_RESOLUTION mode, and its first records all carry `<NON_REF>`, at least one alone (`vcf_gvcf`, #607). The name is not read: T2T's gVCFs are named `HG00096.chr10.hc.vcf.gz`. Neither are the `##ALT=<ID=NON_REF>` and `##GVCFBlock` lines, which joint-called VCFs and PLINK `.pvar` files carry over from their gVCFs.
 
 `variants.somatic` and `variants.cnv` are in the vocabulary but no rule emits them: every somatic and CNV caller rule fired on nothing across 204,149 VCFs and was removed (#430). Caller detection survives for GATK HaplotypeCaller, sniffles and svim, which is what the catalogs actually hold.
 

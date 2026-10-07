@@ -594,6 +594,19 @@ def test_the_families_are_the_reference_terms_with_no_parent():
     assert schema_vocab.reference_family_values() == tops
 
 
+def test_a_dotted_data_type_term_is_a_the_term_before_its_last_dot():
+    """The dotted path and ``is_a`` say the same hierarchy (#607), so a filter on
+    ``variants`` reaches ``variants.germline.gvcf`` through either."""
+    for term in schema_vocab.dimension_values("data_type"):
+        parent = term.rpartition(".")[0] or None
+        ancestors = schema_vocab.value_ancestors("data_type", term)
+        assert (ancestors[0] if ancestors else None) == parent, term
+    assert schema_vocab.value_ancestors("data_type", "variants.germline.gvcf") == ("variants.germline", "variants")
+    assert schema_vocab.top_term("data_type", "variants.germline.gvcf") == "variants"
+    assert schema_vocab.top_term("data_type", "reads") == "reads"
+    assert schema_vocab.top_term("data_type", "variants.retired") is None
+
+
 def test_dimension_values_unknown_field_raises_clear_error():
     with pytest.raises(ValueError, match="Unknown classification dimension"):
         schema_vocab.dimension_values("not_a_field")

@@ -4,12 +4,13 @@ A VCF header carries a line per program that touched the data: GATK writes
 ``##GATKCommandLine``, bcftools ``##bcftools_<subcommand>Command``, and other tools other
 ``##…command…=`` keys, all found by :func:`vcf_commands`. ``VCFHeader.commands`` reads
 them once per parsed header, and its readers inspect what it gives rather than splitting
-the text again: ``producer_steps`` the steps, ``reference_builds`` the words.
+the text again: ``producer_steps`` the steps, ``header_classifier`` a step's mode (#607),
+``reference_builds`` the words.
 
 **A step is a tool, its inputs and its output.** What a tool's arguments mean is declared
 once, in :data:`TOOL_ARGUMENTS`, about tools and not datasets: which options name an input,
-which the output, and for a tool that takes its inputs as positional arguments, which
-options take no value. A command line whose tool is not declared there is a step marked
+which the output, which the kind of output it writes (its mode), and for a tool that takes
+its inputs as positional arguments, which options take no value. A command line whose tool is not declared there is a step marked
 unread (``read=False``) naming no input or output, never a guess.
 
 **A step reads only what the tool wrote.** A command line is the tool recording its own
@@ -41,12 +42,14 @@ class ToolArguments:
     inputs (GATK's ``--sample-name-map``, #621): the list is not data the tool reads.
     ``positional`` marks a tool whose inputs are its positional arguments; ``no_value`` then lists the options that take no value, so a positional
     argument is told from an option's value. An option not in ``no_value`` is read as
-    taking one.
+    taking one. ``mode`` names the options whose value is the kind of output the tool
+    writes (HaplotypeCaller's reference-confidence mode, whose ``GVCF`` writes a gVCF, #607).
     """
 
     inputs: tuple[str, ...] = ()
     outputs: tuple[str, ...] = ()
     input_lists: tuple[str, ...] = ()
+    mode: tuple[str, ...] = ()
     positional: bool = False
     no_value: frozenset[str] = field(default_factory=frozenset)
 
@@ -57,7 +60,9 @@ _GATK_VARIANTS = ToolArguments(inputs=("-V", "--variant"), outputs=("-O", "--out
 # (measured 2026-10-03 over the cached headers): GATK 4 and 3, and the bcftools
 # subcommands the T2T joint-calling files carry. Anything else is an unread step.
 TOOL_ARGUMENTS: dict[tuple[str, str], ToolArguments] = {
-    (GATK, "HaplotypeCaller"): ToolArguments(inputs=("-I", "--input"), outputs=("-O", "--output")),
+    (GATK, "HaplotypeCaller"): ToolArguments(
+        inputs=("-I", "--input"), outputs=("-O", "--output"), mode=("-ERC", "--emit-ref-confidence")
+    ),
     (GATK, "SelectVariants"): _GATK_VARIANTS,
     (GATK, "ApplyVQSR"): _GATK_VARIANTS,
     (GATK, "GenotypeGVCFs"): _GATK_VARIANTS,
@@ -65,7 +70,7 @@ TOOL_ARGUMENTS: dict[tuple[str, str], ToolArguments] = {
     (GATK, "GenomicsDBImport"): ToolArguments(
         inputs=("-V", "--variant"), outputs=("--genomicsdb-workspace-path",), input_lists=("--sample-name-map",)
     ),
-    (GATK3, "HaplotypeCaller"): ToolArguments(inputs=("input_file",), outputs=("out",)),
+    (GATK3, "HaplotypeCaller"): ToolArguments(inputs=("input_file",), outputs=("out",), mode=("emitRefConfidence",)),
     (GATK3, "GenotypeGVCFs"): ToolArguments(inputs=("variant",), outputs=("out",)),
     (GATK3, "CombineGVCFs"): ToolArguments(inputs=("variant",), outputs=("out",)),
     (BCFTOOLS, "concat"): ToolArguments(
@@ -104,6 +109,8 @@ class Step:
     input or output. ``family`` is None for a line that is neither GATK's nor bcftools', and
     ``tool`` is then the line's ``ID``, or empty. ``stdin`` is True where a positional
     argument is ``-``: an input read from stdin, which names no file and is not in ``inputs``.
+    ``mode`` is the value of the line's :attr:`ToolArguments.mode` option, None where it
+    gives none; two lines alike but for it are two steps.
     """
 
     family: str | None
@@ -113,6 +120,7 @@ class Step:
     read: bool = True
     stdin: bool = False
     input_lists: tuple[str, ...] = ()
+    mode: str | None = None
 
 
 # A VCF header line that records how the file was produced. GATK writes
@@ -231,7 +239,8 @@ def _gatk3_step(command: VcfCommand) -> Step:
         return _unread(GATK3, tool)
     inputs = tuple(p for key in arguments.inputs for p in _gatk3_values(pairs.get(key)))
     outputs = [p for key in arguments.outputs for p in _gatk3_values(pairs.get(key))]
-    return Step(GATK3, tool, inputs, _sole(outputs))
+    mode = next((pairs[key] for key in arguments.mode if key in pairs), None)
+    return Step(GATK3, tool, inputs, _sole(outputs), mode=mode)
 
 
 def _gatk3_values(value: str | None) -> list[str]:
@@ -261,6 +270,7 @@ def _option_step(family: str, tool: str, words: Sequence[str], arguments: ToolAr
     inputs: list[str] = []
     outputs: list[str] = []
     input_lists: list[str] = []
+    mode: str | None = None
     stdin = False
     i = 0
     while i < len(words):
@@ -290,7 +300,9 @@ def _option_step(family: str, tool: str, words: Sequence[str], arguments: ToolAr
             outputs.append(value)
         elif value is not None and option in arguments.input_lists:
             input_lists.append(value)
-    return Step(family, tool, tuple(inputs), _sole(outputs), stdin=stdin, input_lists=tuple(input_lists))
+        elif value is not None and option in arguments.mode and mode is None:
+            mode = value
+    return Step(family, tool, tuple(inputs), _sole(outputs), stdin=stdin, input_lists=tuple(input_lists), mode=mode)
 
 
 def _sole(paths: list[str]) -> str | None:

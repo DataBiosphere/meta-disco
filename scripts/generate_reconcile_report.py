@@ -11,7 +11,7 @@ evidence file, and the conflicts listed by their distinct competing values (cont
 5.1), per dimension the values each dataset holds (#545), the lineage (#577) and what
 each file's parents gave it across its step (#571). With a previous reconciled
 run, each category's change per dimension, and the counts of a value in a dataset that
-moved. The markdown groups a wide dimension's dotted terms under their top-level term and
+moved. The markdown groups a wide dimension's terms under their top term by `is_a` and
 lists at most MARKDOWN_MOVED_CELLS moved counts; the dashboard shows every term and count.
 
 Usage:
@@ -53,6 +53,7 @@ from meta_disco.reconcile import (
 )
 from meta_disco.reconcile_inherit import OUTCOMES as INHERITANCE_COLUMNS
 from meta_disco.reconcile_lineage import OUTCOMES
+from meta_disco.schema_vocab import top_term
 from meta_disco.summaries import embed_json, md_code, md_table
 
 # Every outcome a producer's step reader gives, the VCF producer's first (#609, #621).
@@ -81,8 +82,8 @@ GROUP_LABELS = {
 # counted under one has no value for the slot. Read from STATUS_LABELS, so a status added
 # there is never counted as a value here.
 VALUE_STATUSES = tuple(sorted(STATUS_LABELS))
-# A slot with more values than this, some of them dotted, is shown in the markdown with each
-# dotted term under its top-level term (`variants.germline` under `variants`); the dashboard
+# A slot with more values than this, some of them below another, is shown in the markdown with
+# each term under its top term by `is_a` (`variants.germline` under `variants`); the dashboard
 # shows every term. It triggers the grouping and does not bound the table's width: a slot
 # with many top-level terms stays wide.
 MARKDOWN_VALUE_COLUMNS = 12
@@ -605,15 +606,20 @@ def _completeness_table(scope: dict, groups: list[dict]) -> list[str]:
     return md_table(header, [*rows, filled, every], align="right")
 
 
-def _grouped(matrix: dict) -> tuple[dict, dict[str, list[str]]]:
-    """``matrix`` with each dotted value summed under its top-level term, and the terms each group holds.
+def _top(slot: str, value: str) -> str:
+    """``value``'s top term in ``slot``'s ``is_a`` hierarchy, or the value itself where it is outside the vocabulary."""
+    return top_term(slot, value) or value
+
+
+def _grouped(slot: str, matrix: dict) -> tuple[dict, dict[str, list[str]]]:
+    """``matrix`` with each value summed under its top term in ``slot``'s ``is_a`` hierarchy, and the terms each group holds.
 
     Only the values are grouped; the statuses stay as they are. The groups returned are
-    those holding a dotted term, the ones a reader needs spelled out.
+    those holding a term below their top, the ones a reader needs spelled out.
     """
     groups: dict[str, list[str]] = {}
     for value in matrix["values"]:
-        groups.setdefault(value.split(".", 1)[0], []).append(value)
+        groups.setdefault(_top(slot, value), []).append(value)
     total = matrix["total"]["counts"]
     values = sorted(groups, key=lambda g: (-sum(total[v] for v in groups[g]), g))
 
@@ -661,11 +667,11 @@ def _values_section(values: dict[str, dict]) -> list[str]:
     for slot in CLASSIFICATION_FIELDS:
         matrix = values[slot]
         lines += [f"### {slot}", ""]
-        if len(matrix["values"]) > MARKDOWN_VALUE_COLUMNS and any("." in v for v in matrix["values"]):
+        if len(matrix["values"]) > MARKDOWN_VALUE_COLUMNS and any(_top(slot, v) != v for v in matrix["values"]):
             count = len(matrix["values"])
-            matrix, groups = _grouped(matrix)
+            matrix, groups = _grouped(slot, matrix)
             lines += [
-                f"{count} values, shown with each dotted term under its top-level term "
+                f"{count} values, shown with each term under its top term "
                 "(the dashboard shows every term): "
                 + "; ".join(f"{md_code(g)} = {', '.join(md_code(m) for m in members)}" for g, members in groups.items())
                 + ".",

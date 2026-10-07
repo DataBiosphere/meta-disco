@@ -42,7 +42,7 @@ from .header_classifier import (
 )
 from .producer_steps import HeaderSteps
 from .summaries import print_bam_summary, print_fastq_summary, print_vcf_summary
-from .validators.header_extractors import parse_vcf_header
+from .validators.header_extractors import parse_vcf_head
 
 
 @dataclass(frozen=True)
@@ -111,7 +111,7 @@ VCF_CONFIG = FileTypeConfig(
     fetcher=fetch_vcf_header,
     classifier=classify_from_vcf_header,
     summary_printer=print_vcf_summary,
-    parser=parse_vcf_header,
+    parser=parse_vcf_head,
     # A HaplotypeCaller's input several alignments carry is settled from their headers: the
     # BAM producer's cache, or samtools into it on a miss (#620), so every VCF run with work
     # checks for samtools first, its own headers cached or not.
