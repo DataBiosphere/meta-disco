@@ -389,6 +389,16 @@ def test_the_top_term_is_read_from_is_a_and_a_value_outside_the_vocabulary_is_it
     assert groups == {"variants": ["variants.germline.gvcf"]}
 
 
+def test_a_wide_slot_groups_an_is_a_family_whose_names_have_no_dot(monkeypatch):
+    """Grouping follows `is_a` in every dimension (#607): `snRNA-seq` is a `RNA-seq` though no dot says so."""
+    counts = {"RNA-seq": 1, "snRNA-seq": 2, "WGS": 4}
+    report = {"files": {"D": 7}, "values": {"D": {"assay_type": counts}}}
+    monkeypatch.setattr(rr, "MARKDOWN_VALUE_COLUMNS", 2)
+    md = "\n".join(rr._values_section({slot: rr.values_matrix(report, slot) for slot in rr.CLASSIFICATION_FIELDS}))
+    assert "`RNA-seq` = `snRNA-seq`, `RNA-seq`" in md
+    assert "| dataset | `WGS` | `RNA-seq` | files | has a value | filled |" in md
+
+
 def test_a_wide_slot_with_no_dotted_terms_is_not_grouped(monkeypatch):
     counts = {"Revio": 3, "PromethION": 2, "Illumina NovaSeq 6000": 1}
     report = {"files": {"D": 6}, "values": {"D": {"instrument_model": counts}}}
