@@ -14,8 +14,8 @@ the join below, reconcile's first step, and its per-source counts are a line of 
 report (6.7). Reconcile reads a stored run and never
 re-infers or fetches, so answering a review item costs a reconcile, not a corpus run
 (6.4). It writes its own artifact beside the inference output and never touches it
-(6.3): one NDJSON file per inference file under ``<run>/reconciled/`` (6.11), with an
-envelope on line 1, plus ``reconcile_report.json``.
+(6.3): one gzip-compressed NDJSON file (``.ndjson.gz``, #554) per inference file under
+``<run>/reconciled/`` (6.11), with an envelope on line 1, plus ``reconcile_report.json``.
 
 **The join** is an equality lookup on the key each evidence envelope names
 (``target_key``), against that field of our output records. A line whose key value is
@@ -83,6 +83,7 @@ from .models import (
 )
 from .output_utils import (
     RECONCILED_DIR,
+    REPORT_FILE,
     find_latest_run,
     iter_records,
     iter_run_files,
@@ -122,8 +123,6 @@ from .source_evidence import (
     require_one_published_source,
 )
 from .value_map import ValueMap, claims_from, load_value_map
-
-REPORT_FILE = "reconcile_report.json"
 
 # The per-slot instruction to the indexer (#432, second 2026-09-22 amendment).
 USE_META_DISCO = "meta_disco"

@@ -1,5 +1,7 @@
 """Shared utilities for working with classification output directories."""
 
+import gzip
+import io
 import json
 import re
 from dataclasses import dataclass
@@ -154,23 +156,35 @@ def iter_run_files(run_dir: Path, strict: bool = False):
 
 # Where the reconcile stage writes its artifact inside a run directory (#432), and the
 # key of the envelope on line 1 of each of its files. The writer and the reader of that
-# artifact are both here, so its line format is stated once.
+# artifact are both here, so its line format is stated once. Each file is NDJSON in a
+# gzip container (#554): the records repeat the same keys and values on every line, so it
+# compresses about 25 times, and is still written and read a line at a time (#374).
 RECONCILED_DIR = "reconciled"
 RECONCILED_ENVELOPE_KEY = "reconcile"
+# The reconcile report, written beside the records: the one other file the reader expects.
+REPORT_FILE = "reconcile_report.json"
+# The gzip level. On a run's BAM file, 6 measured nearly as small as 9 (25x vs 26x), and 9
+# took 1.6-1.7 times as long to write; 1 was faster still but compressed only 14x.
+RECONCILED_GZIP_LEVEL = 6
 
 
 def reconciled_name(classification_file: str) -> str:
-    """The reconciled artifact's file name for one inference file: same stem, ``.ndjson``."""
-    return Path(classification_file).with_suffix(".ndjson").name
+    """The reconciled artifact's file name for one inference file: same stem, ``.ndjson.gz``."""
+    return Path(classification_file).with_suffix(".ndjson.gz").name
 
 
 def write_reconciled_file(path: Path, envelope: dict, records) -> None:
-    """Write one reconciled artifact file: ``{"reconcile": envelope}`` on line 1, then one record per line.
+    """Write one reconciled artifact file, gzip-compressed: ``{"reconcile": envelope}`` on line 1, then one record per line.
 
     ``records`` is consumed once and written as it is iterated. Keys of the envelope are
-    sorted, so the same envelope writes the same line.
+    sorted, and the gzip header carries no time or file name, so the same envelope and
+    records, compressed by the same zlib, write the same bytes.
     """
-    with path.open("w") as f:
+    with (
+        path.open("wb") as raw,
+        gzip.GzipFile(filename="", mode="wb", fileobj=raw, compresslevel=RECONCILED_GZIP_LEVEL, mtime=0) as compressed,
+        io.TextIOWrapper(compressed, encoding="utf-8") as f,
+    ):
         f.write(json.dumps({RECONCILED_ENVELOPE_KEY: envelope}, sort_keys=True) + "\n")
         for record in records:
             f.write(json.dumps(record) + "\n")
@@ -179,27 +193,44 @@ def write_reconciled_file(path: Path, envelope: dict, records) -> None:
 def iter_reconciled_records(run_dir: Path):
     """Yield every reconciled record (a dict) under ``run_dir/reconciled/``, streaming.
 
-    One NDJSON file per inference file, in ``CLASSIFICATION_FILES`` order; line 1 of each
-    is the envelope :func:`write_reconciled_file` writes, checked and skipped; a file
-    without it raises ``ValueError`` rather than losing its first record. A file reconcile
-    did not write is skipped, as :func:`iter_records` skips one a run did not write.
+    One gzip-compressed NDJSON file per inference file, in ``CLASSIFICATION_FILES`` order;
+    line 1 of each is the envelope :func:`write_reconciled_file` writes, checked and
+    skipped; a file without it raises ``ValueError`` rather than losing its first record.
+    An expected file that is absent (the run held no such inference file) is skipped, as
+    :func:`iter_records` skips one a run did not write.
     Raises FileNotFoundError when the run has no reconciled artifact at all — reading
-    nothing would pass for a run with no coverage.
+    nothing would pass for a run with no coverage. Raises ValueError, before any record is
+    yielded, when the artifact holds a name other than the reconciled names and
+    ``REPORT_FILE`` (dot-files aside), such as an uncompressed ``.ndjson`` written before
+    #554, whose records this reader would otherwise skip as unwritten; and, when it is
+    reached, on a file that is not gzip or is cut short.
     """
     directory = run_dir / RECONCILED_DIR
     if not directory.is_dir():
         raise FileNotFoundError(f"No reconciled artifact in {run_dir}. Run 'make reconcile' first.")
+    expected = {reconciled_name(fname) for fname in CLASSIFICATION_FILES} | {REPORT_FILE}
+    unexpected = sorted(p.name for p in directory.iterdir() if not p.name.startswith(".") and p.name not in expected)
+    if unexpected:
+        raise ValueError(
+            f"{directory} holds files reconcile does not write ({', '.join(unexpected)}), such as the uncompressed "
+            ".ndjson of a run reconciled before #554. Run 'make reconcile' on the run to rewrite it."
+        )
     for fname in CLASSIFICATION_FILES:
         path = directory / reconciled_name(fname)
         if not path.exists():
             continue
-        with path.open() as f:
-            first = next(f, None)
-            envelope = json.loads(first) if first is not None else None
-            if not isinstance(envelope, dict) or RECONCILED_ENVELOPE_KEY not in envelope:
-                raise ValueError(f"{path}: line 1 is not the reconcile envelope; it is not reconcile's output")
-            for line in f:
-                yield json.loads(line)
+        try:
+            with gzip.open(path, "rt", encoding="utf-8") as f:
+                first = next(f, None)
+                envelope = json.loads(first) if first is not None else None
+                if not isinstance(envelope, dict) or RECONCILED_ENVELOPE_KEY not in envelope:
+                    raise ValueError(f"{path}: line 1 is not the reconcile envelope; it is not reconcile's output")
+                for line in f:
+                    yield json.loads(line)
+        except (EOFError, gzip.BadGzipFile) as exc:
+            raise ValueError(
+                f"{path}: not a whole gzip file ({exc}); it is damaged or cut short. Run 'make reconcile' on the run."
+            ) from exc
 
 
 # The two artifacts a run can hold (contract 6.9, #432) and the reader of each: what

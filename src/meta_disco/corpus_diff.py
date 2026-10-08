@@ -286,8 +286,10 @@ def run_labels(run_dir: Path, artifact: str) -> dict[FileKey, Counter[Labels]]:
     ``artifact`` is required and is one of :data:`ARTIFACTS`. ``inference`` reads the
     run through ``output_utils.iter_records``, so it covers the same files and tolerates
     the same shapes as the consistency linter; ``reconciled`` reads the reconcile stage's
-    NDJSON through ``output_utils.iter_reconciled_records``, which raises
-    FileNotFoundError when the run was never reconciled. Labels are read
+    gzip-compressed NDJSON through ``output_utils.iter_reconciled_records``, which raises
+    FileNotFoundError when the run was never reconciled, and ValueError when its artifact
+    holds a file reconcile does not write (such as the uncompressed files of a run
+    reconciled before #554) or one that is not gzip or is cut short. Labels are read
     with ``models.field_label``, so a classified field contributes its value and an
     unclassified one its status.
 
