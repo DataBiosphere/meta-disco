@@ -211,7 +211,7 @@ data_type
 
 ### 5.4 Platform
 
-**Definition**: The vendor's instrument family that read the data: a sequencer's, or an array scanner's (#603).
+**Definition**: The vendor whose sequencer or array scanner read the data, for example Illumina or PacBio.
 
 ```
 platform
