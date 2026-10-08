@@ -1,4 +1,4 @@
-"""HPRC's catalog names and URL, and the maps from its values to our classification values."""
+"""HPRC's catalog names and URL, and the maps from its values to ours, or to its own spelling where our vocabulary has no term."""
 
 HPRC_CATALOG_NAMES = ["sequencing-data", "alignments", "annotations", "assemblies"]
 

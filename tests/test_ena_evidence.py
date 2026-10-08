@@ -115,6 +115,18 @@ def test_a_name_not_enas_or_a_file_without_an_md5_is_never_asked_for_and_a_datas
     assert portal.asked == [("D", ["ERR000001", "ERR000002", "ERR000003", "ERR000004"])]
 
 
+@pytest.mark.parametrize("name", ["SRR1234567_1.fastq.gz", "DRR000001_2.fastq.gz", "ERR123456.fastq.gz"])
+def test_a_name_as_ena_generates_it_is_enas(name):
+    assert ena.GENERATED_FASTQ.match(name)
+
+
+@pytest.mark.parametrize(
+    "name", ["ERR12345_1.fastq.gz", "HG002_ERR123456_1.fastq.gz", "ERR123456_3.fastq.gz", "XRR123456_1.fastq.gz"]
+)
+def test_a_name_ena_does_not_generate_is_not_enas(name):
+    assert not ena.GENERATED_FASTQ.match(name)
+
+
 def test_the_envelope_names_ena_and_joins_on_file_id(imported):
     (result,), _, _ = imported
     envelope = read_envelope(evidence(result.directory))
