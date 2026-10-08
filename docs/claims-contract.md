@@ -523,7 +523,7 @@ importer's half is built — 7.12 is enforced (below), and the published importe
 - **HPRC's published source is not declared** (7.12). `PUBLISHED_TABLES` names AnVIL only; which HPRC
   catalog is the system of record for what HPRC publishes is undecided, so the HPRC run has no published
   evidence and a file claiming to be it is refused until the declaration exists.
-- **Reconcile is a command, not a phase of `make classify`** (#432). `make reconcile` runs it against a stored run; nothing runs it after inference on its own, and a stored run does not record which input it was classified from (#404), so reconcile reads the deployment's input envelope and cannot prove it is the run's.
+- **Reconcile cannot prove which input a run was classified from** (#404). `make classify` ends by reconciling the run it wrote, and `make reconcile` runs it against a stored run (#432); a stored run does not record which input it was classified from, so reconcile reads the deployment's input envelope and cannot prove it is the run's.
 - **6.9 holds for `corpus_diff` only.** It is told which artifact it compares; the coverage, validation and consistency reports still read the inference artifact.
 - **6.11 holds for the reconciled artifact only.** It is gzip-compressed NDJSON (`.ndjson.gz`) under `<run>/reconciled/`; inference output is still pretty-printed JSON at the run root (#448, #271).
 - **No curator rule exists** (4.7, #397). Every conflict stands unanswered, which 7.13 makes deliverable.

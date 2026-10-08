@@ -4,7 +4,6 @@ import gzip
 import io
 import json
 import re
-import zlib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -164,8 +163,8 @@ RECONCILED_DIR = "reconciled"
 RECONCILED_ENVELOPE_KEY = "reconcile"
 # The reconcile report, written beside the records: the one other file the reader expects.
 REPORT_FILE = "reconcile_report.json"
-# The gzip level. On a run's BAM file, 6 measured nearly as small as 9 (25x vs 26x) at
-# about half the time to write; 1 was faster still but compressed only 14x.
+# The gzip level. On a run's BAM file, 6 measured nearly as small as 9 (25x vs 26x), and 9
+# took 1.6-1.7 times as long to write; 1 was faster still but compressed only 14x.
 RECONCILED_GZIP_LEVEL = 6
 
 
@@ -197,8 +196,8 @@ def iter_reconciled_records(run_dir: Path):
     One gzip-compressed NDJSON file per inference file, in ``CLASSIFICATION_FILES`` order;
     line 1 of each is the envelope :func:`write_reconciled_file` writes, checked and
     skipped; a file without it raises ``ValueError`` rather than losing its first record.
-    A file reconcile did not write is skipped, as :func:`iter_records` skips one a run did
-    not write.
+    An expected file that is absent (the run held no such inference file) is skipped, as
+    :func:`iter_records` skips one a run did not write.
     Raises FileNotFoundError when the run has no reconciled artifact at all — reading
     nothing would pass for a run with no coverage. Raises ValueError, before any record is
     yielded, when the artifact holds a name other than the reconciled names and
@@ -228,7 +227,7 @@ def iter_reconciled_records(run_dir: Path):
                     raise ValueError(f"{path}: line 1 is not the reconcile envelope; it is not reconcile's output")
                 for line in f:
                     yield json.loads(line)
-        except (EOFError, gzip.BadGzipFile, zlib.error) as exc:
+        except (EOFError, gzip.BadGzipFile) as exc:
             raise ValueError(
                 f"{path}: not a whole gzip file ({exc}); it is damaged or cut short. Run 'make reconcile' on the run."
             ) from exc
