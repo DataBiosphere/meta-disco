@@ -60,10 +60,15 @@ for _assembly, _contigs in REFERENCE_CONTIG_LENGTHS.items():
 # among: the human rows, as no BED in the corpus is from a monkey. Elimination is sound
 # only over every assembly a file could be on, so a monkey BED can be called human (#640).
 HUMAN_ASSEMBLIES: tuple[str, ...] = ("GRCh37", "GRCh38", "CHM13")
-# Their rows as the YAML spells them (``chr``-prefixed only); built at import, so a name
-# the table lacks fails there rather than on the first BED.
+# Their rows as the YAML spells them (``chr``-prefixed only), in the table's order, which
+# is the order a BED reason names ruled-out assemblies in; built at import, so a name the
+# table lacks fails there rather than on the first BED.
+if _missing := set(HUMAN_ASSEMBLIES) - set(get_unified_rules().reference_contig_lengths):
+    raise KeyError(f"HUMAN_ASSEMBLIES names rows reference_contig_lengths lacks: {sorted(_missing)}")
 HUMAN_CONTIG_LENGTHS: dict[str, dict[str, int]] = {
-    assembly: get_unified_rules().reference_contig_lengths[assembly] for assembly in HUMAN_ASSEMBLIES
+    assembly: lengths
+    for assembly, lengths in get_unified_rules().reference_contig_lengths.items()
+    if assembly in HUMAN_ASSEMBLIES
 }
 
 

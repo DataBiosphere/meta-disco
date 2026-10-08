@@ -186,14 +186,14 @@ What each dataset holds, per dimension: every file counted once, under its recon
 
 ## Change since the previous reconciled run
 
-Against `20261007_142329` (708,088 files; the same translation table). Each cell is this run's count minus that run's.
+Against `20261007_103024` (708,088 files; the same translation table). Each cell is this run's count minus that run's.
 
 | dimension | published | published harmonized | submitter | submitter harmonized | external | external harmonized | inference | inherited | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | data_modality | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | data_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | platform | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | -1 | 0 | 0 | 0 | 0 | 0 | 0 | +1 | -1 | 0 |
+| reference_assembly | 0 | 0 | 0 | 0 | 0 | 0 | +755 | +756 | 0 | 0 | 0 | 0 | 0 | -1,511 | +1,511 | 0 |
 | assay_type | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | instrument_model | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 
@@ -201,6 +201,9 @@ Against `20261007_142329` (708,088 files; the same translation table). Each cell
 
 | dataset | dimension | value | before | after | change |
 | --- | --- | --- | --- | --- | --- |
+| `ANVIL_nhp_dGTEx_V1` | reference_assembly | `not_classified` | 3,591 | 2,079 | -1,512 |
+| `ANVIL_nhp_dGTEx_V1` | reference_assembly | `Mmul_10` | 0 | 844 | +844 |
+| `ANVIL_nhp_dGTEx_V1` | reference_assembly | `mCalJa1.2.pat.X` | 0 | 668 | +668 |
 | `ANVIL_HPRC` | reference_assembly | `GRCh37` | 2 | 1 | -1 |
 | `ANVIL_HPRC` | reference_assembly | `not_classified` | 9,313 | 9,314 | +1 |
 

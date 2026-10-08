@@ -1189,12 +1189,14 @@ reference_contig_lengths:
   # Every autosome + X + Y for each assembly: 22 autosomes for the three human
   # assemblies and marmoset, 20 for rhesus macaque (#636).
   # A chromosome name two assemblies share has a different length in each (min diff
-  # 16,408 bp, GRCh38 against GRCh37 on chr16; a primate row sits at least 302,383 bp
+  # 16,408 bp, GRCh38 against GRCh37 on chr16; a monkey row sits at least 302,383 bp
   # from a human one, Mmul_10 against GRCh38 on chr19),
   # so even a single-contig VCF can be definitively classified.
   #
   # Each row is one NCBI assembly, at the accession cited in
-  # validators/contig_lengths.py. BED coordinate elimination reads only the human rows
+  # validators/contig_lengths.py; for the monkey rows that RefSeq record is suppressed, and
+  # the schema term's meaning names its current GenBank pair, which holds the same
+  # chromosomes. BED coordinate elimination reads only the human rows
   # (HUMAN_ASSEMBLIES there). The CHM13 row is T2T-CHM13v2.0 (#473). v1.1 has
   # the same lengths and no chrY. v1.0 (no chrY) differs on all 23 of its chromosomes:
   # within 1000 bp on 18, but by 28,980-737,009 bp on the acrocentrics (chr13, 14, 15, 21,

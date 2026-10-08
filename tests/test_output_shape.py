@@ -243,7 +243,7 @@ STUB_PAYLOADS = {
     ),
     # sample_map returns the map's text: one row, naming the golden's `sample.vcf.gz`.
     "sample_map": "HG00096\tgs://b/hc_vcfs/sample.vcf.gz\n",
-    # bed returns BedSignals; chr1 reaching past GRCh38's and CHM13's chr1 but inside
+    # bed returns BedSignals; bare-named `1` reaching past GRCh38's and CHM13's chr1 but inside
     # GRCh37's leaves GRCh37 alone, so coordinate inference resolves reference_assembly to
     # GRCh37 — exercising the pipeline -> bed classifier -> value envelope path end-to-end.
     "bed": BedSignals(
