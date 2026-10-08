@@ -409,7 +409,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 6.11 Each stage writes into its own subdirectory of the run, and both artifacts are **NDJSON**.
      One run's inference output is already 1.6 GB, with a single 551 MB file; a whole-file `json.load` of that
      is the memory ceiling of #374, and the reconciled artifact is larger still. 6.5 is about the record's
-     schema, not its container, so nothing is lost by the change.
+     schema, not its container, so nothing is lost by the change. The reconciled artifact's files are also
+     gzip-compressed (`.ndjson.gz`, #554): the same lines, written and read one at a time, in a container
+     about 25 times smaller, since every record repeats the same keys and values.
 
 ## 7. Published values
 
@@ -523,7 +525,7 @@ importer's half is built — 7.12 is enforced (below), and the published importe
   evidence and a file claiming to be it is refused until the declaration exists.
 - **Reconcile is a command, not a phase of `make classify`** (#432). `make reconcile` runs it against a stored run; nothing runs it after inference on its own, and a stored run does not record which input it was classified from (#404), so reconcile reads the deployment's input envelope and cannot prove it is the run's.
 - **6.9 holds for `corpus_diff` only.** It is told which artifact it compares; the coverage, validation and consistency reports still read the inference artifact.
-- **6.11 holds for the reconciled artifact only.** It is NDJSON under `<run>/reconciled/`; inference output is still pretty-printed JSON at the run root (#448, #271).
+- **6.11 holds for the reconciled artifact only.** It is gzip-compressed NDJSON (`.ndjson.gz`) under `<run>/reconciled/`; inference output is still pretty-printed JSON at the run root (#448, #271).
 - **No curator rule exists** (4.7, #397). Every conflict stands unanswered, which 7.13 makes deliverable.
 - **5.1 is met for values, not rules.** `make reconcile-report` (#395) lists each conflict's competing values
   per input, counted per distinct set; the rule behind each value is on the reconciled record, not in the list.

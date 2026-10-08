@@ -7,6 +7,7 @@ written through ``write_evidence_file`` into the generation layout, so reconcile
 them the way it reads a real run and a real import.
 """
 
+import gzip
 import json
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -499,6 +500,15 @@ def test_ac16_the_same_inputs_write_the_same_bytes(tmp_path, run, evidence, tabl
     assert {p.name: p.read_bytes() for p in (run / RECONCILED_DIR).iterdir()} == first
 
 
+def test_the_gzip_header_carries_no_time_or_name(tmp_path, run, table):
+    """Two runs a second apart would otherwise write different bytes: gzip stamps the time by default."""
+    write_run(run, [record(1)])
+    go(run, tmp_path, None, table)
+    header = (run / RECONCILED_DIR / "bam_classifications.ndjson.gz").read_bytes()[:10]
+    assert header[4:8] == b"\0\0\0\0"  # MTIME
+    assert not header[3] & 0x08  # FLG.FNAME: no original file name follows
+
+
 def test_ac17_reconciled_and_inference_records_validate_against_the_schema(tmp_path, run, evidence, table):
     rows = [record(1, reference_assembly="GRCh38"), record(2)]
     write_run(run, rows)
@@ -508,12 +518,22 @@ def test_ac17_reconciled_and_inference_records_validate_against_the_schema(tmp_p
         ClassificationRecord(**row)
 
 
-def test_ac18_reconcile_writes_ndjson_in_its_own_subdirectory(tmp_path, run, table):
+def test_ac18_reconcile_writes_gzipped_ndjson_in_its_own_subdirectory(tmp_path, run, table):
     write_run(run, [record(1)])
     go(run, tmp_path, None, table)
-    lines = (run / RECONCILED_DIR / "bam_classifications.ndjson").read_text().splitlines()
+    lines = gzip.decompress((run / RECONCILED_DIR / "bam_classifications.ndjson.gz").read_bytes()).splitlines()
     assert "reconcile" in json.loads(lines[0]) and json.loads(lines[1])["file_id"] == "file-1"
     assert (run / "bam_classifications.json").exists()
+
+
+def test_an_uncompressed_reconciled_file_is_refused_not_skipped(tmp_path, run, table):
+    """A run reconciled before #554 holds ``.ndjson``; reading it as unwritten would yield nothing."""
+    write_run(run, [record(1)])
+    go(run, tmp_path, None, table)
+    (run / RECONCILED_DIR / "bam_classifications.ndjson.gz").unlink()
+    (run / RECONCILED_DIR / "bam_classifications.ndjson").write_text("")
+    with pytest.raises(ValueError, match=r"bam_classifications\.ndjson\).*make reconcile"):
+        list(iter_reconciled_records(run))
 
 
 def test_ac19_a_reconciled_slot_reads_alone(tmp_path, run, evidence, table):
@@ -755,7 +775,7 @@ def test_an_interrupted_swap_is_restored_not_lost(tmp_path, run, table):
     real.write_text("not json")  # the next run fails before its swap
     with pytest.raises(ValueError):
         go(run, tmp_path, None, table)
-    assert (run / RECONCILED_DIR / "bam_classifications.ndjson").exists()
+    assert (run / RECONCILED_DIR / "bam_classifications.ndjson.gz").exists()
 
 
 def test_a_value_is_attributed_by_source_precedence_verbatim_before_harmonized(tmp_path, run, evidence, table):

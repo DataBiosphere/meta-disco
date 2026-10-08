@@ -258,7 +258,7 @@ def test_an_enas_name_with_no_file_id_is_refused_naming_its_line(tmp_path):
         ena.import_all(tmp_path / "m", CATALOG, tmp_path / "ev", FakePortal(ROWS), generation=STAMP)
 
 
-@pytest.mark.parametrize("path", ["output/anvil/r/reconciled/fastq_classifications.ndjson", "r/reconciled/x.json"])
+@pytest.mark.parametrize("path", ["output/anvil/r/reconciled/fastq_classifications.ndjson.gz", "r/reconciled/x.json"])
 def test_the_ena_validator_refuses_reconciled_output(path):
     with pytest.raises(ValueError, match="circular"):
         validator.refuse_reconciled(Path(path))

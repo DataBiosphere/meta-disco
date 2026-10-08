@@ -322,7 +322,8 @@ corpus-diff:
 	uv run python scripts/compare_corpus.py $(ARGS)
 
 # Reconcile a stored inference run with the source evidence (#432): writes
-# <run>/reconciled/ (one NDJSON file per inference file, plus reconcile_report.json)
+# <run>/reconciled/ (one gzip-compressed NDJSON file, .ndjson.gz, per inference file, plus
+# reconcile_report.json)
 # and never touches the inference output. RUN_DIR defaults to the latest run under
 # output/anvil; DEPLOYMENT names whose input envelope says the repository and catalog.
 # Pass `ARGS=--no-evidence` to exclude all evidence (contract 6.6).

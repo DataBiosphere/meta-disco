@@ -243,9 +243,9 @@ evidence}` entry — plus the controlled vocabulary:
     same inference output as one without. Recording which catalog a run enhances is
     #404, and is not built.
   - **The reconcile stage** is `reconcile.py` (`make reconcile`, #432): it reads a stored
-    run plus the evidence and writes `<run>/reconciled/` — one NDJSON file per inference
-    file, envelope on line 1, plus `reconcile_report.json` — and never touches the
-    inference output (contract 6.3), which stays JSON at the run root. Which evidence
+    run plus the evidence and writes `<run>/reconciled/` — one gzip-compressed NDJSON
+    file (`.ndjson.gz`, #554) per inference file, envelope on line 1, plus
+    `reconcile_report.json` — and never touches the inference output (contract 6.3), which stays JSON at the run root. Which evidence
     applies comes from the input envelope's `repository`, and its `catalog` where it
     names one (HPRC never will). `resolve_slot` is the whole resolution rule and
     `use_for` the per-slot `use` indicator (`meta_disco` | `published`) the indexer
