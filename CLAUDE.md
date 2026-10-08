@@ -203,8 +203,7 @@ evidence}` entry — plus the controlled vocabulary:
     `library_source`, `instrument_platform` and `instrument_model`, keyed by `file_id`, under
     `data/source_evidence/ena/`, only where the md5 confirms the file is ENA's (contract 2.10).
     ENA's response is kept beside each generation (`read_run.response.json`, not evidence), and
-    `--response` re-imports from it offline. `scripts/validate_ena_accessions.py` measures
-    inference (contract 6.9) and refuses a `reconciled/` input, which carries ENA's own values.
+    `--response` re-imports from it offline.
   - **ENA run lineage** (#594) is the one place a lineage parent may be in another dataset
     (ADR-0002 decision 2): `sources/ena_run_lineage_map.yaml`, declared and checked in
     `run_lineage_map`, imported by `ena_lineage` (`make import-ena-lineage`, network), which
