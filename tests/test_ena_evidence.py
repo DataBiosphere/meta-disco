@@ -1,6 +1,6 @@
 """The ENA importer (#606), on synthetic manifests and a faked portal: the md5 decides, a
 name match alone writes nothing, a run's files are read by name, the response is kept and
-re-imports offline, and the validator refuses reconciled output."""
+re-imports offline."""
 
 import json
 from datetime import datetime, timezone
@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 import requests
-import validate_ena_accessions as validator
 
 from meta_disco import ena_evidence as ena
 from meta_disco.models import SOURCE_EXTERNAL_GROUND_TRUTH
@@ -256,13 +255,3 @@ def test_an_enas_name_with_no_file_id_is_refused_naming_its_line(tmp_path):
     write_dataset(tmp_path / "m", "D", [fastq("t1", "ERR000001_1.fastq.gz", "aa"), no_id])
     with pytest.raises(ValueError, match=r"jsonl:2: anvil_file 'ERR000002_1.fastq.gz' has no file_id"):
         ena.import_all(tmp_path / "m", CATALOG, tmp_path / "ev", FakePortal(ROWS), generation=STAMP)
-
-
-@pytest.mark.parametrize("path", ["output/anvil/r/reconciled/fastq_classifications.ndjson", "r/reconciled/x.json"])
-def test_the_ena_validator_refuses_reconciled_output(path):
-    with pytest.raises(ValueError, match="circular"):
-        validator.refuse_reconciled(Path(path))
-
-
-def test_the_ena_validator_takes_inference_output():
-    validator.refuse_reconciled(Path("output/anvil/r/fastq_classifications.json"))

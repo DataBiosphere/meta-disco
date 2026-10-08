@@ -1,8 +1,4 @@
-"""Mapping constants for validating classifications against external sources.
-
-Each external source uses different naming conventions. These maps normalize
-external values to our internal classification values.
-"""
+"""HPRC's catalog names and URL, and the maps from its values to our classification values."""
 
 HPRC_CATALOG_NAMES = ["sequencing-data", "alignments", "annotations", "assemblies"]
 
@@ -27,19 +23,6 @@ HPRC_LIBRARY_STRATEGY_MAP = {
     "Hi-C": "Hi-C",
     "isoseq": "ISO-seq",
     "Iso-Seq": "ISO-seq",
-}
-
-# ENA/SRA library_strategy → our assay_type_enum. Only strategies with a
-# clean equivalent are mapped; anything absent scores "unknown" in the ENA
-# validator rather than being force-fitted (#330).
-ENA_LIBRARY_STRATEGY_MAP = {
-    "WGS": "WGS",
-    "WXS": "WES",
-    "WES": "WES",
-    "RNA-Seq": "RNA-seq",
-    "ATAC-seq": "ATAC-seq",
-    "ChIP-Seq": "ChIP-seq",
-    "Bisulfite-Seq": "Bisulfite-seq",
 }
 
 HPRC_REF_COORDINATES_MAP = {
