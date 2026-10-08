@@ -1,6 +1,6 @@
 """The ENA importer (#606), on synthetic manifests and a faked portal: the md5 decides, a
 name match alone writes nothing, a run's files are read by name, the response is kept and
-re-imports offline, and the validator refuses reconciled output."""
+re-imports offline."""
 
 import json
 from datetime import datetime, timezone
@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 import requests
-import validate_ena_accessions as validator
 
 from meta_disco import ena_evidence as ena
 from meta_disco.models import SOURCE_EXTERNAL_GROUND_TRUTH
@@ -114,6 +113,18 @@ def test_a_name_not_enas_or_a_file_without_an_md5_is_never_asked_for_and_a_datas
     imports, portal, _ = imported
     assert [i.dataset for i in imports] == ["D"]
     assert portal.asked == [("D", ["ERR000001", "ERR000002", "ERR000003", "ERR000004"])]
+
+
+@pytest.mark.parametrize("name", ["SRR1234567_1.fastq.gz", "DRR000001_2.fastq.gz", "ERR123456.fastq.gz"])
+def test_a_name_as_ena_generates_it_is_enas(name):
+    assert ena.GENERATED_FASTQ.match(name)
+
+
+@pytest.mark.parametrize(
+    "name", ["ERR12345_1.fastq.gz", "HG002_ERR123456_1.fastq.gz", "ERR123456_3.fastq.gz", "XRR123456_1.fastq.gz"]
+)
+def test_a_name_ena_does_not_generate_is_not_enas(name):
+    assert not ena.GENERATED_FASTQ.match(name)
 
 
 def test_the_envelope_names_ena_and_joins_on_file_id(imported):
@@ -256,13 +267,3 @@ def test_an_enas_name_with_no_file_id_is_refused_naming_its_line(tmp_path):
     write_dataset(tmp_path / "m", "D", [fastq("t1", "ERR000001_1.fastq.gz", "aa"), no_id])
     with pytest.raises(ValueError, match=r"jsonl:2: anvil_file 'ERR000002_1.fastq.gz' has no file_id"):
         ena.import_all(tmp_path / "m", CATALOG, tmp_path / "ev", FakePortal(ROWS), generation=STAMP)
-
-
-@pytest.mark.parametrize("path", ["output/anvil/r/reconciled/fastq_classifications.ndjson", "r/reconciled/x.json"])
-def test_the_ena_validator_refuses_reconciled_output(path):
-    with pytest.raises(ValueError, match="circular"):
-        validator.refuse_reconciled(Path(path))
-
-
-def test_the_ena_validator_takes_inference_output():
-    validator.refuse_reconciled(Path("output/anvil/r/fastq_classifications.json"))

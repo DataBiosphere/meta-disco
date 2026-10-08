@@ -72,7 +72,7 @@ TABLE = "read_run"
 PORTAL_SEARCH = "https://www.ebi.ac.uk/ena/portal/api/search"
 # ENA's key for a run record, in its own name (the envelope's `source_key`).
 SOURCE_KEY = "run_accession"
-# A run accession of ENA, SRA or DDBJ; `validate_ena_accessions` finds one in a name by it.
+# A run accession of ENA, SRA or DDBJ.
 RUN_ACCESSION = r"[ESD]RR\d{6,}"
 # ENA's generated-FASTQ names: a run accession, the read of a pair or none, `.fastq.gz`.
 GENERATED_FASTQ = re.compile(rf"^({RUN_ACCESSION})(?:_[12])?\.fastq\.gz$")
