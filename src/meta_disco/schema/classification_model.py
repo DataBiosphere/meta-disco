@@ -765,9 +765,9 @@ class Classifications(ConfiguredBaseModel):
     data_type: DataTypeClassification = Field(default=..., description="""The content type of the file (biological or descriptive class).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
     reference_assembly: ReferenceAssemblyClassification = Field(default=..., description="""The reference genome the file's coordinates are expressed against.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
     assay_type: AssayTypeClassification = Field(default=..., description="""The experimental assay that produced the upstream data.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
-    platform: PlatformClassification = Field(default=..., description="""The vendor's family of instruments that read the data: a sequencer, or a scanner that reads genotyping or methylation arrays.""", json_schema_extra = { "linkml_meta": {'comments': ['Array scanners added under #603.'],
+    platform: PlatformClassification = Field(default=..., description="""The vendor whose sequencer or array scanner read the data, for example Illumina or PacBio.""", json_schema_extra = { "linkml_meta": {'comments': ['Array scanners added under #603.'],
          'domain_of': ['Classifications']} })
-    instrument_model: InstrumentModelClassification = Field(default=..., description="""The specific instrument model that read the data, within its platform: for example Illumina NovaSeq 6000 or Illumina iScan under Illumina. Not applicable where the platform is not applicable.""", json_schema_extra = { "linkml_meta": {'comments': ['Vocabulary from ENA/SRA instrument-model strings with EFO ids '
+    instrument_model: InstrumentModelClassification = Field(default=..., description="""The instrument model that read the data, within its platform: for example Illumina NovaSeq 6000 or Illumina iScan under Illumina. Not applicable where the platform is not applicable.""", json_schema_extra = { "linkml_meta": {'comments': ['Vocabulary from ENA/SRA instrument-model strings with EFO ids '
                       '(#532).',
                       'Illumina iScan, an array scanner SRA does not list, added under '
                       '#603.'],
