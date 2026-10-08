@@ -667,7 +667,7 @@ def test_bed_matcher_skips_headers_and_short_rows():
         matcher.feed(line)
     signals = matcher.result()
     assert signals.chromosomes == ["1", "2"]
-    assert signals.has_chr_prefix is False  # no 'chr' prefix -> the GRCh37/b37 signal
+    assert signals.has_chr_prefix is False
     assert signals.max_coordinates == {"1": 100, "2": 9999}
     assert signals.line_count == 2  # the two 3-column rows; header/short/comment skipped
 

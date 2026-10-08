@@ -99,7 +99,8 @@ six metadata dimensions nested under `classifications`, each a `{value, status,
 evidence}` entry — plus the controlled vocabulary:
 - **reference_assembly_enum**: NCBI's assembly names as an `is_a` hierarchy (#473):
   GRCh37, GRCh38, and CHM13 (any release, or release unknown) above
-  T2T-CHM13v1.0/v1.1/v2.0 and the three grafted-chrY hybrids under their release
+  T2T-CHM13v1.0/v1.1/v2.0 and the three grafted-chrY hybrids under their release;
+  and rhesus macaque's `Mmul_10` and marmoset's `mCalJa1.2.pat.X` (#636)
 - **data_modality_enum**: AnVIL FSS's recommended values, the Broad's MODAL tree, as dotted
   paths with `is_a` and MODAL ids (#563): genomic, transcriptomic, epigenomic, imaging,
   proteomic, metabolomic, microbiome and their children

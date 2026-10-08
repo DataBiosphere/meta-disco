@@ -1350,8 +1350,8 @@ enums:
       release everywhere else, which is why it sits under that release.
 
       `meaning` is recorded where one term is one NCBI assembly: the three T2T
-      releases. The GRC terms each span their patch releases, and `CHM13` spans the
-      T2T releases.
+      releases and the two monkey assemblies (#636). The GRC terms each span their
+      patch releases, and `CHM13` spans the T2T releases.
     permissible_values:
       GRCh37:
       GRCh38:
@@ -1375,6 +1375,12 @@ enums:
       t2t-chm13.20200921.HG002chrY.chrEBV:
         is_a: T2T-CHM13v1.0
         description: T2T-CHM13v1.0 with HG002's chrY grafted on.
+      Mmul_10:
+        description: Rhesus macaque (Macaca mulatta). Its RefSeq pair is GCF_003339765.1, which adds only chrM.
+        meaning: insdc.gca:GCA_003339765.3
+      mCalJa1.2.pat.X:
+        description: Common marmoset (Callithrix jacchus). Its RefSeq pair is GCF_011100555.1, which drops only chrM.
+        meaning: insdc.gca:GCA_011100555.2
       # GRCm39:  # mouse — pending issue #15
 
   reference_family_enum:
@@ -1387,6 +1393,8 @@ enums:
       GRCh37:
       GRCh38:
       CHM13:
+      Mmul_10:
+      mCalJa1.2.pat.X:
 
   reference_name_source_enum:
     description: >-

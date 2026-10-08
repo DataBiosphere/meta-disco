@@ -131,8 +131,8 @@ CONTIG_LENGTH_DETECTION = CodeRule(
     sets=_REFERENCE,
     rationale=(
         "An alignment's @SQ lines list the reference it was aligned to, contig by contig, "
-        "and the lengths of the primary chromosomes differ between GRCh37, GRCh38 and "
-        "CHM13, so matching them identifies the reference family. Where the build within it "
+        "and a primary chromosome's length differs between the reference_contig_lengths "
+        "assemblies that share its name, so matching them identifies the reference family. Where the build within it "
         "has a term of its own (#473), chr1 and chrY's lengths and checksums pick it, and a "
         "declared reference name only breaks a tie among the builds those allow."
     ),
@@ -194,10 +194,9 @@ BED_COORDINATE_REFERENCE = CodeRule(
     reads="BED body: the largest coordinate seen per chromosome, and whether names carry a chr prefix",
     sets=_REFERENCE,
     rationale=(
-        "Bare chromosome names (1, X) are the b37 convention, so they are claimed GRCh37. "
-        "With a chr prefix, a coordinate past a chromosome's end in a reference rules that "
-        "reference out, the prefix rules out GRCh37, and a reference is claimed only when "
-        "exactly one is left."
+        "A coordinate past a chromosome's end in a human reference rules that reference out, "
+        "whether the names carry a chr prefix or not; where more than one is left, a chr prefix "
+        "also rules out GRCh37; and a reference is claimed only when exactly one is left."
     ),
 )
 BED_NONSTANDARD_CONTIGS = CodeRule(

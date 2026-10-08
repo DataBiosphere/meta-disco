@@ -860,7 +860,8 @@ def fetch_bam_header(
 def extract_max_positions(variant_lines: list[str], max_variants: int = 100) -> dict[str, int]:
     """Extract max position per chromosome from variant lines.
 
-    Used for reference assembly detection when header-based detection fails.
+    Written to the VCF evidence cache for audit (``VcfEvidence.max_positions``); no
+    classifier reads it.
     """
     max_positions: dict[str, int] = {}
     count = 0

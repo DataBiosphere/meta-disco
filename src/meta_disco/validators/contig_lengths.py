@@ -1,8 +1,8 @@
 """Reference assembly detection from chromosome contig lengths.
 
-Chromosome lengths are unique to each reference assembly. This provides
-definitive reference detection even when ##reference or assembly= tags
-are missing. We use a subset of chromosomes for efficiency.
+A chromosome name two reference assemblies share has a different length in each.
+This provides definitive reference detection even when ##reference or assembly=
+tags are missing. The table holds each assembly's autosomes, X and Y.
 
 Sources:
 - GRCh38: https://www.ncbi.nlm.nih.gov/assembly/GCF_000001405.40
@@ -10,6 +10,8 @@ Sources:
 - CHM13: https://www.ncbi.nlm.nih.gov/assembly/GCF_009914755.1 (T2T-CHM13v2.0; an
   earlier release matches it on most chromosomes, not all — see
   ``CONTIG_LENGTH_TOLERANCE`` and #473)
+- Mmul_10 (rhesus macaque): https://www.ncbi.nlm.nih.gov/assembly/GCF_003339765.1 (#636)
+- mCalJa1.2.pat.X (common marmoset): https://www.ncbi.nlm.nih.gov/assembly/GCF_011100555.1
 
 Data loaded from the bundled unified_rules.yaml (package data of meta_disco.rules,
 single source of truth).
@@ -37,9 +39,8 @@ def _load_contig_lengths() -> dict[str, dict[str, int]]:
 
 
 # Chromosome lengths for each reference assembly
-# All 22 autosomes + X + Y with both chr-prefixed and bare names.
-# Every chromosome has a unique length per assembly (min diff 16,408 bp, GRCh38
-# against GRCh37 on chr16).
+# Every autosome + X + Y, with both chr-prefixed and bare names. How far apart the
+# assemblies' lengths sit is in the table's comment in unified_rules.yaml.
 REFERENCE_CONTIG_LENGTHS: dict[str, dict[str, int]] = _load_contig_lengths()
 
 # The candidates a normalized contig name can match: each assembly's length for that
@@ -55,16 +56,19 @@ for _assembly, _contigs in REFERENCE_CONTIG_LENGTHS.items():
         _CANDIDATES_BY_NAME.setdefault(_contig.removeprefix("chr"), {})[_assembly] = _length
 
 
-# Maximum chromosome lengths for position-based exclusion
-# (grch37_len, grch38_len, chm13_len) for key chromosomes
-# Derived from REFERENCE_CONTIG_LENGTHS to avoid a second hardcoded copy.
-CHROMOSOME_MAX_LENGTHS: dict[str, tuple[int, int, int]] = {
-    chrom: (
-        REFERENCE_CONTIG_LENGTHS["GRCh37"][f"chr{chrom}"],
-        REFERENCE_CONTIG_LENGTHS["GRCh38"][f"chr{chrom}"],
-        REFERENCE_CONTIG_LENGTHS["CHM13"][f"chr{chrom}"],
-    )
-    for chrom in ("1", "2", "3", "10", "22")
+# What BED coordinate elimination (``header_classifier._infer_bed_reference``) rules out
+# among: the human rows, as no BED in the corpus is from a monkey. Elimination is sound
+# only over every assembly a file could be on, so a monkey BED can be called human (#640).
+HUMAN_ASSEMBLIES: tuple[str, ...] = ("GRCh37", "GRCh38", "CHM13")
+# Their rows as the YAML spells them (``chr``-prefixed only), in the table's order, which
+# is the order a BED reason names ruled-out assemblies in; built at import, so a name the
+# table lacks fails there rather than on the first BED.
+if _missing := set(HUMAN_ASSEMBLIES) - set(get_unified_rules().reference_contig_lengths):
+    raise KeyError(f"HUMAN_ASSEMBLIES names rows reference_contig_lengths lacks: {sorted(_missing)}")
+HUMAN_CONTIG_LENGTHS: dict[str, dict[str, int]] = {
+    assembly: lengths
+    for assembly, lengths in get_unified_rules().reference_contig_lengths.items()
+    if assembly in HUMAN_ASSEMBLIES
 }
 
 
@@ -83,7 +87,8 @@ def detect_reference_from_contigs(
     """
     Detect reference assembly from ``(contig name, length)`` pairs.
 
-    This is a definitive signal - chromosome lengths are unique to each assembly.
+    This is a definitive signal - a chromosome name two assemblies share has a different
+    length in each.
     Uses fuzzy matching with tolerance to handle minor version differences, so a
     file from an earlier release matches its family's row on most chromosomes;
     the vote is per contig, so the ones that do not match (CHM13 v1.0's
@@ -100,7 +105,7 @@ def detect_reference_from_contigs(
 
     Returns:
         Tuple of (assembly, vote_count)
-        - assembly: "GRCh38", "GRCh37", "CHM13", or None
+        - assembly: a ``reference_contig_lengths`` row's name, or None
         - vote_count: Number of contigs that matched
     """
     votes: dict[str, int] = {}
@@ -126,58 +131,5 @@ def detect_reference_from_contigs(
         if sum(1 for v in votes.values() if v == top_count) > 1:
             return None, 0
         return winner, top_count
-
-    return None, 0
-
-
-def detect_reference_from_max_positions(
-    max_positions: dict[str, int],
-) -> tuple[str | None, int]:
-    """
-    Detect reference assembly by ruling out references where variant
-    positions exceed chromosome lengths.
-
-    When header-based detection fails, we can use max variant positions to
-    rule out references. If a variant sits more than ``CONTIG_LENGTH_TOLERANCE``
-    past a reference's chromosome length, that reference is ruled out.
-
-    Args:
-        max_positions: Dict mapping chromosome (without 'chr') to max position seen
-
-    Returns:
-        Tuple of (assembly, evidence_count)
-        - assembly: "GRCh38", "GRCh37", "CHM13", or None if inconclusive
-        - evidence_count: Number of chromosomes used for ruling out
-    """
-    if not max_positions:
-        return None, 0
-
-    possible = {"GRCh37", "GRCh38", "CHM13"}
-    evidence_count = 0
-
-    for chrom, max_pos in max_positions.items():
-        chrom = chrom.removeprefix("chr")
-        if chrom not in CHROMOSOME_MAX_LENGTHS:
-            continue
-
-        grch37_len, grch38_len, chm13_len = CHROMOSOME_MAX_LENGTHS[chrom]
-
-        # Rule out references where position exceeds chromosome length
-        ruled_out_any = False
-        if max_pos > chm13_len + CONTIG_LENGTH_TOLERANCE:
-            possible.discard("CHM13")
-            ruled_out_any = True
-        if max_pos > grch38_len + CONTIG_LENGTH_TOLERANCE:
-            possible.discard("GRCh38")
-            ruled_out_any = True
-        if max_pos > grch37_len + CONTIG_LENGTH_TOLERANCE:
-            possible.discard("GRCh37")
-            ruled_out_any = True
-        if ruled_out_any:
-            evidence_count += 1
-
-    # If narrowed to exactly one reference
-    if len(possible) == 1 and evidence_count > 0:
-        return possible.pop(), evidence_count
 
     return None, 0

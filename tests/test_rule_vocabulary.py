@@ -580,6 +580,16 @@ def test_reference_build_families_in_vocabulary():
     assert not violations, "reference_builds families not in the schema vocabulary:\n  " + "\n  ".join(violations)
 
 
+def test_reference_contig_length_rows_are_families():
+    """Each reference_contig_lengths row is named by a reference_family_enum value (#636).
+
+    Contig-length detection emits the row's name as the ``reference_assembly`` claim's
+    value, so a row named outside the families is a value no consumer recognises.
+    """
+    unknown = set(get_unified_rules().reference_contig_lengths) - schema_vocab.reference_family_values()
+    assert not unknown, sorted(unknown)
+
+
 def test_the_families_are_the_reference_terms_with_no_parent():
     """reference_family_enum lists exactly the reference_assembly_enum terms at the top of its is_a hierarchy (#473).
 

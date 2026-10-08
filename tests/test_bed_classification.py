@@ -273,15 +273,28 @@ class TestBedCoordinateClassification:
         result = classify_from_bed_signals(signals, name=FileName.parse("sample.regions.bed.gz"))
         assert _get_val(result, "reference_assembly") == "GRCh37"
 
-    def test_no_chr_prefix_grch37(self):
-        """No chr prefix on standard chroms -> GRCh37."""
+    @pytest.mark.parametrize(
+        "max_coordinates, expected",
+        [
+            # 1 at 249,099,158 is past GRCh38's (248,956,422) and CHM13's (248,387,328) chr1,
+            # inside GRCh37's (249,250,621): HPRC's exp_refineFinal1_merged_filter.bed.
+            ({"1": 249_099_158}, "GRCh37"),
+            # Inside every human chr1: the positions cannot tell, so no reference.
+            ({"1": 200_000_000}, None),
+            # 21 at 109,892,954 is past every human chr21: HPRC's
+            # exp_refineFinal1_merged_filter_query.bed, once called GRCh37 for its bare names.
+            ({"21": 109_892_954}, None),
+        ],
+    )
+    def test_bare_names_are_eliminated_like_chr_names(self, max_coordinates, expected):
+        """A missing chr prefix names no reference; the positions decide (#636)."""
         signals = BedSignals(
-            chromosomes=["1", "2", "3"],
+            chromosomes=list(max_coordinates),
             has_chr_prefix=False,
-            max_coordinates={"1": 200000000},
+            max_coordinates=max_coordinates,
         )
         result = classify_from_bed_signals(signals, name=FileName.parse("sample.bed"))
-        assert _get_val(result, "reference_assembly") == "GRCh37"
+        assert _get_val(result, "reference_assembly") == expected
 
     def test_nonstandard_chroms_not_applicable(self):
         """Non-standard chromosome names -> reference is not_applicable."""
@@ -318,6 +331,22 @@ class TestBedCoordinateClassification:
         result = classify_from_bed_signals(signals, name=FileName.parse("sample.bed"))
         ref = _get_val(result, "reference_assembly")
         assert ref != "GRCh38", f"GRCh38 should be ruled out, got {ref}"
+
+    def test_the_monkey_rows_are_not_candidates(self):
+        """Elimination is among the human assemblies only (#636, #640).
+
+        chr8 at 145,500,000 rules out GRCh38 (145,138,636) and marmoset (126,104,592), the
+        chr prefix rules out GRCh37, and rhesus Mmul_10's chr8 (145,679,320) would still
+        hold it. Among the human rows CHM13 alone is left; were the monkey rows
+        candidates, CHM13 and Mmul_10 would tie and the file would name no reference.
+        """
+        signals = BedSignals(
+            chromosomes=["chr8"],
+            has_chr_prefix=True,
+            max_coordinates={"chr8": 145_500_000},
+        )
+        result = classify_from_bed_signals(signals, name=FileName.parse("sample.bed"))
+        assert _get_val(result, "reference_assembly") == "CHM13"
 
     def test_no_coordinates_no_crash(self):
         """Signals with empty max_coordinates should not crash."""
