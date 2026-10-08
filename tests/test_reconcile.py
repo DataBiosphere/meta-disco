@@ -536,6 +536,28 @@ def test_an_uncompressed_reconciled_file_is_refused_not_skipped(tmp_path, run, t
         list(iter_reconciled_records(run))
 
 
+def test_a_file_reconcile_does_not_write_is_refused_and_a_dotfile_is_not(tmp_path, run, table):
+    """A name the reader does not expect would be skipped as unwritten, losing its records unseen."""
+    write_run(run, [record(1)])
+    go(run, tmp_path, None, table)
+    (run / RECONCILED_DIR / ".DS_Store").write_text("")
+    assert [r["file_id"] for r in iter_reconciled_records(run)] == ["file-1"]
+    (run / RECONCILED_DIR / "renamed_classifications.ndjson.gz").write_bytes(b"")
+    with pytest.raises(ValueError, match=r"\(renamed_classifications\.ndjson\.gz\)"):
+        next(iter_reconciled_records(run))
+
+
+@pytest.mark.parametrize("damage", ["cut short", "not gzip"])
+def test_a_damaged_reconciled_file_raises_value_error_naming_it(tmp_path, run, table, damage):
+    write_run(run, [record(n) for n in range(1, 50)])
+    go(run, tmp_path, None, table)
+    path = run / RECONCILED_DIR / "bam_classifications.ndjson.gz"
+    data = path.read_bytes()
+    path.write_bytes(data[: len(data) // 2] if damage == "cut short" else b"plain text, not gzip\n")
+    with pytest.raises(ValueError, match=r"bam_classifications\.ndjson\.gz: not a whole gzip file.*make reconcile"):
+        list(iter_reconciled_records(run))
+
+
 def test_ac19_a_reconciled_slot_reads_alone(tmp_path, run, evidence, table):
     write_run(run, [record(1, platform="PACBIO")])
     write_evidence(evidence, [("platform", drs(1), "PACBIO_SMRT")])

@@ -86,7 +86,7 @@ def main(argv=None) -> int:
     try:
         old_labels = run_labels(args.old_run, args.artifact)
         new_labels = run_labels(new_run, args.artifact)
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ValueError) as exc:
         print(exc)
         return 2
 

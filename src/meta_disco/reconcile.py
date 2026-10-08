@@ -83,6 +83,7 @@ from .models import (
 )
 from .output_utils import (
     RECONCILED_DIR,
+    REPORT_FILE,
     find_latest_run,
     iter_records,
     iter_run_files,
@@ -122,8 +123,6 @@ from .source_evidence import (
     require_one_published_source,
 )
 from .value_map import ValueMap, claims_from, load_value_map
-
-REPORT_FILE = "reconcile_report.json"
 
 # The per-slot instruction to the indexer (#432, second 2026-09-22 amendment).
 USE_META_DISCO = "meta_disco"
