@@ -1012,7 +1012,7 @@ slots:
       Illumina NovaSeq 6000 or Illumina iScan under Illumina. Not applicable where the
       platform is not applicable.
     comments:
-      - "Vocabulary from ENA/SRA instrument-model strings with EFO ids (#532)."
+      - "Vocabulary from ENA/SRA instrument-model strings, with EFO ids where EFO has the same model (#532)."
       - "Illumina iScan, an array scanner SRA does not list, added under #603."
 
   generated_by:

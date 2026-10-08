@@ -19,7 +19,7 @@ _SLOTS = yaml.safe_load(schema_vocab.default_schema_path().read_text())["slots"]
 @pytest.mark.parametrize("field", CLASSIFICATION_FIELDS)
 def test_dimension_description_is_user_facing(field):
     description = _SLOTS[field].get("description")
-    assert description, f"slot {field!r} has no description"
+    assert description and description.strip(), f"slot {field!r} has no description"
     assert not _TICKET.search(description), (
         f"slot {field!r}'s description carries a ticket reference; move it to the slot's comments: {description!r}"
     )

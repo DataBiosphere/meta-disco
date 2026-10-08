@@ -767,8 +767,8 @@ class Classifications(ConfiguredBaseModel):
     assay_type: AssayTypeClassification = Field(default=..., description="""The experimental assay that produced the upstream data.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
     platform: PlatformClassification = Field(default=..., description="""The vendor whose sequencer or array scanner read the data, for example Illumina or PacBio.""", json_schema_extra = { "linkml_meta": {'comments': ['Array scanners added under #603.'],
          'domain_of': ['Classifications']} })
-    instrument_model: InstrumentModelClassification = Field(default=..., description="""The instrument model that read the data, within its platform: for example Illumina NovaSeq 6000 or Illumina iScan under Illumina. Not applicable where the platform is not applicable.""", json_schema_extra = { "linkml_meta": {'comments': ['Vocabulary from ENA/SRA instrument-model strings with EFO ids '
-                      '(#532).',
+    instrument_model: InstrumentModelClassification = Field(default=..., description="""The instrument model that read the data, within its platform: for example Illumina NovaSeq 6000 or Illumina iScan under Illumina. Not applicable where the platform is not applicable.""", json_schema_extra = { "linkml_meta": {'comments': ['Vocabulary from ENA/SRA instrument-model strings, with EFO ids '
+                      'where EFO has the same model (#532).',
                       'Illumina iScan, an array scanner SRA does not list, added under '
                       '#603.'],
          'domain_of': ['Classifications']} })
