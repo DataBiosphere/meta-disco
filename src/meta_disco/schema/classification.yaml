@@ -1002,13 +1002,18 @@ slots:
     description: The experimental assay that produced the upstream data.
   platform:
     description: >-
-      The vendor's instrument family that read the data: a sequencer's, or an array
-      scanner's (#603).
+      The vendor's family of instruments that read the data: a sequencer, or a scanner
+      that reads genotyping or methylation arrays.
+    comments:
+      - "Array scanners added under #603."
   instrument_model:
     description: >-
-      The model of the sequencer or array scanner that read the data, refining `platform`
-      (#532, #603): `Illumina NovaSeq 6000` or `Illumina iScan` where `platform` says
-      `ILLUMINA`. Not applicable wherever `platform` is not.
+      The specific instrument model that read the data, within its platform: for
+      example Illumina NovaSeq 6000 or Illumina iScan under Illumina. Not applicable
+      where the platform is not applicable.
+    comments:
+      - "Vocabulary from ENA/SRA instrument-model strings with EFO ids (#532)."
+      - "Illumina iScan, an array scanner SRA does not list, added under #603."
 
   generated_by:
     description: >-
