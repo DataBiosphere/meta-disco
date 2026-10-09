@@ -544,12 +544,14 @@ When header-based detection fails, max variant positions can rule out references
 | sniffles        | variants.structural | `vcf_sniffles`             |
 | svim            | variants.structural | `vcf_svim`                 |
 
-The records decide too, read from the file at the content tier (#630). A VCF whose
-first records' alleles are all structural variants their caller declared (a symbolic
-ALT, a breakend, or `SVTYPE` in INFO) is `variants.structural`
+The records decide too, read from the file at the content tier (#630). Each ALT allele
+of the first records is counted, except those that are no variant (`*`, `.`,
+`<NON_REF>`, `<*>`). A VCF with one counted allele at least, every one a structural
+variant its caller declared (a symbolic ALT, a breakend, or `SVTYPE` in INFO), is
+`variants.structural`
 (`vcf_records_structural`). One whose header declares an `##INFO` field `SVTYPE`,
 `SVLEN`, `CIPOS`, `CIEND`, `MATEID` or `IMPRECISE` but whose first records include a
-small variant is `variants` (`vcf_records_small_variants`): such a header says
+counted small variant is `variants` (`vcf_records_small_variants`): such a header says
 structural variants may appear, not that the file holds only them. The somatic and CNV
 caller rules fired on nothing across 204,149 VCFs and were removed (#430).
 
@@ -674,6 +676,9 @@ High confidence (≥80%): 20,462 (88.6%)
 | vcf_contig_length        | 170,688 |
 | vcf_gatk_haplotypecaller | 158,858 |
 | vcf_ref_chm13            | 1,398   |
+
+The two record rules that replaced `vcf_info_sv` (#630) were counted on a later run,
+`20261009_005912`: `vcf_records_structural` 153, `vcf_records_small_variants` 62.
 
 High confidence (≥80%): 204,085 (99.5%)
 

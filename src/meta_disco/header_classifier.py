@@ -467,8 +467,9 @@ def records_verdict(header: VCFHeader, file_name: str) -> RecordsVerdict | None:
     if structural and not small:
         return RecordsVerdict(
             True,
-            f"each of the {structural} alleles in its first {read} records is a structural variant its caller "
-            "declared: a symbolic ALT, a breakend, or SVTYPE in INFO",
+            f"each of the {structural} variant alleles counted in its first {read} records is a structural variant "
+            "its caller declared: a symbolic ALT, a breakend, or SVTYPE in INFO (no-variant alleles such as "
+            "<NON_REF> are not counted)",
         )
     declared = sorted(declared_info_ids(header, SV_INFO_IDS)) if small else []
     if not declared:

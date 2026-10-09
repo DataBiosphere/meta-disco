@@ -217,8 +217,9 @@ VCF_RECORDS_STRUCTURAL = CodeRule(
     reads="VCF records: the ALT and INFO of the first records the head read",
     sets=("data_type",),
     rationale=(
-        "Every allele read is a structural variant its caller declared, so the file is structural "
-        "variant calls. " + _RECORDS_NOT_HEADER + _DECLARED_ONLY + _FIRST_RECORDS
+        "Every variant allele counted in the records read is a structural variant its caller declared, "
+        "one at least, so the file is structural variant calls. Alleles that are no variant (*, ., "
+        "<NON_REF>, <*>) are not counted. " + _RECORDS_NOT_HEADER + _DECLARED_ONLY + _FIRST_RECORDS
     ),
 )
 VCF_RECORDS_SMALL_VARIANTS = CodeRule(
