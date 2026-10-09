@@ -146,11 +146,6 @@ JOIN_KEY_DRS_URI = "drs_uri"
 JOIN_KEY_FILE_NAME = "file_name"
 JOIN_KEY_FILE_ID = "file_id"
 JOIN_KEY_ENTRY_ID = "entry_id"
-# Not a field of the input record but a fact classification *derives* — read from a
-# fastq's read headers. ENA's run records reach the files ENA generated, which carry
-# the run accession in their name, by `file_id` instead (#606): the accession in the
-# name is only a lookup, and the md5 decides.
-JOIN_KEY_ARCHIVE_ACCESSION = "archive_accession"
 JOIN_KEYS = frozenset(
     {
         JOIN_KEY_FILE_PATH,
@@ -159,7 +154,6 @@ JOIN_KEYS = frozenset(
         JOIN_KEY_FILE_NAME,
         JOIN_KEY_FILE_ID,
         JOIN_KEY_ENTRY_ID,
-        JOIN_KEY_ARCHIVE_ACCESSION,
     }
 )
 
@@ -508,8 +502,7 @@ def require_join_key(value: object, label: str, where: str) -> str:
     Checked here for a claim recording which key attached it (``join_key``,
     ``rule_engine.make_claim``); an evidence file's envelope declaring which key it is
     keyed by (``target_key``) is held to the same vocabulary by the generated model's
-    ``JoinKeyEnum`` (#494). One vocabulary either way — ``archive_accession`` is the
-    live example of a member that moves, a derived fact rather than a record field.
+    ``JoinKeyEnum`` (#494). One vocabulary either way.
     """
     return _require_one_of(value, JOIN_KEYS, "a key of the target", label, where)
 

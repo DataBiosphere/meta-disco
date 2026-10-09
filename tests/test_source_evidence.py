@@ -581,7 +581,7 @@ class TestMalformedFiles:
         `EvidenceRow.target_key_value` carries `pattern: "^[^\\r\\n]+\\Z"`, so a row like
         this validated against the gate and was refused by nothing — the writer could
         publish a file its own schema rejects. Every key in `JOIN_KEYS` is a file name,
-        checksum, URI or accession and none contains a line break (#421 review). The
+        path, checksum, URI or identifier and none contains a line break (#421 review). The
         trailing case matters on its own: a Python `$` matches before a final newline,
         which is why the schema pattern ends in `\\Z`.
         """

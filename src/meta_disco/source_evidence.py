@@ -87,7 +87,8 @@ writes ``target_key_value`` already in the target's value space, transforming a
 source's own key where it must, so the run performs equality lookup and nothing else.
 That is what keeps corpus knowledge in the importer and transform logic out of the
 join, and it is why a source keyed by an ENA run accession adds no term to the key
-vocabulary: it maps that accession to ``archive_accession`` itself. Mapping the
+vocabulary: ``ena_evidence`` maps that accession to the file's ``file_id``, written
+only where the md5 confirms it (#606, contract 2.10). Mapping the
 *value* is the other half, and the importer does not have it (contract 1.3).
 
 **What a line does not carry, and why each is absent.**
@@ -1167,7 +1168,7 @@ def _check_entry(where: str, field: Any, target_key_value: Any, raw_value: Any) 
     # the gate rejects — the disagreement this module exists to prevent, in the
     # direction that is *not* safe (#421 review). It is the same rule the schema's
     # pattern applies to the envelope's identifiers, and for a stronger reason here: every key
-    # in `JOIN_KEYS` is a file name, checksum, URI or accession, and none of them
+    # in `JOIN_KEYS` is a file name, path, checksum, URI or identifier, and none of them
     # contains one.
     if "\n" in target_key_value or "\r" in target_key_value:
         raise ValueError(

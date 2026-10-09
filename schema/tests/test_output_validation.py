@@ -489,13 +489,6 @@ def test_evidence_file_envelope_refuses_a_target_key_outside_the_vocabulary(enve
     assert report.results, "a target_key outside join_key_enum should have failed"
 
 
-def test_evidence_file_envelope_accepts_a_derived_target_key(envelope_validator):
-    # archive_accession is read from a fastq's read headers rather than from the
-    # input record, which is why the join runs after inference.
-    report = envelope_validator.validate(_envelope(target_key="archive_accession"), target_class="EvidenceFileEnvelope")
-    assert not report.results, str([r.message for r in report.results])
-
-
 @pytest.mark.parametrize(
     "missing", ["source", "source_type", "fetched_at", "source_version", "source_key", "target", "target_key"]
 )
