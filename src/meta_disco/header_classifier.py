@@ -352,7 +352,7 @@ def classify_from_vcf_header(
 
     _record_reference_build(result, identity)
 
-    verdict = records_verdict(parsed)
+    verdict = records_verdict(parsed, name.raw)
     if verdict is not None and verdict.structural:
         _add_content_data_type(result, code_rules.VCF_RECORDS_STRUCTURAL.id, STRUCTURAL_DATA_TYPE, verdict.reason)
     elif verdict is not None:
@@ -451,14 +451,17 @@ def allele_counts(header: VCFHeader) -> tuple[int, int]:
     return structural, small
 
 
-def records_verdict(header: VCFHeader) -> RecordsVerdict | None:
+def records_verdict(header: VCFHeader, file_name: str) -> RecordsVerdict | None:
     """What the records a VCF's head read give its data_type, or None (#630).
 
     Structural where one allele at least is counted and every one counted is a declared
     structural variant. Not structural where the header declares an INFO field of
     ``SV_INFO_IDS`` and a counted allele is small: such a header says structural variants may
-    appear, and the small one shows the file does not hold them alone. None otherwise.
+    appear, and the small one shows the file does not hold them alone. None otherwise, and
+    for a PLINK 2 ``.pvar``, which is genotypes whatever its records hold (``plink_genomic``).
     """
+    if file_name.lower().endswith(".pvar"):
+        return None
     structural, small = allele_counts(header)
     read = len(header.records or ())
     if structural and not small:

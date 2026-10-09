@@ -1201,13 +1201,13 @@ class TestRecordsDataType:
     LONG = "A" + "C" * 60  # a 60 bp insertion, written out as small-variant callers write one
 
     @staticmethod
-    def classify(*lines: str, records: tuple[str, ...] | None) -> dict:
+    def classify(*lines: str, records: tuple[str, ...] | None, file_name: str = "calls.vcf.gz") -> dict:
         """Classify a header of ``lines`` whose head read held ``records``, each ``REF ALT INFO`` (None: not read)."""
         text = header_text(*lines)
         if records is None:
-            return classify_from_vcf_header(text, name=FileName.parse("calls.vcf.gz"))
+            return classify_from_vcf_header(text, name=FileName.parse(file_name))
         header = vcf_head(text, [record.split(" ") for record in records])
-        return classify_from_vcf_header(header, name=FileName.parse("calls.vcf.gz"))
+        return classify_from_vcf_header(header, name=FileName.parse(file_name))
 
     def claims(self, result: dict) -> list[tuple[str, int, str]]:
         rules = {code_rules.VCF_RECORDS_STRUCTURAL.id, code_rules.VCF_RECORDS_SMALL_VARIANTS.id}
@@ -1251,6 +1251,15 @@ class TestRecordsDataType:
         result = self.classify(f'##INFO=<ID={info_id},Number=1,Type=String,Description="x">', records=("A C .",))
         assert val(result, "data_type") == "variants"
         assert self.claims(result) == [(code_rules.VCF_RECORDS_SMALL_VARIANTS.id, CONTENT_TIER, SOURCE_CONTENT_READ)]
+
+    @pytest.mark.parametrize(
+        "records", [("N <DEL> SVTYPE=DEL", "N <INS> ."), ("N <DEL> SVTYPE=DEL", "A C .")], ids=["SVs", "mixed"]
+    )
+    def test_a_pvar_of_eight_columns_is_genotypes_whatever_its_records_hold(self, records):
+        """A `.pvar` with PLINK 2's optional QUAL, FILTER and INFO columns has a VCF record's eight."""
+        result = self.classify(self.SV_INFO, records=records, file_name="chr1.STU.pvar")
+        assert val(result, "data_type") == "genotypes"
+        assert self.claims(result) == []
 
     @pytest.mark.parametrize(
         ("lines", "records", "data_type"),
