@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 from functools import cached_property
 
-from ..evidence import VcfHead
+from ..evidence import VcfHead, VcfRecord, records_of
 from .command_lines import VcfCommand, split_command_line, vcf_commands
 
 
@@ -71,9 +71,9 @@ class VCFHeader:
     # ``other_meta`` because ``match_vcf_header_pattern`` falls back to a prefix
     # scan of that list, and these must not widen what a rule can match (#354).
     unkeyed_meta: list[str] | None = None
-    # The ALT of each record the read head held (``VcfHead.record_alts``, #607); None where
-    # the records were not read, as for a header given as text.
-    record_alts: tuple[str, ...] | None = None
+    # Each record the read head held (``VcfHead.record_lines``, #630); None where the records
+    # were not read, as for a header given as text.
+    records: tuple[VcfRecord, ...] | None = None
 
     @cached_property
     def commands(self) -> list[VcfCommand]:
@@ -343,9 +343,9 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
 
 
 def parse_vcf_head(head: VcfHead) -> VCFHeader:
-    """A VCF fetcher's head parsed: its header text by :func:`parse_vcf_header`, with its records' ALTs."""
+    """A VCF fetcher's head parsed: its header text by :func:`parse_vcf_header`, with its records."""
     header = parse_vcf_header(head.header_text)
-    header.record_alts = tuple(head.record_alts)
+    header.records = records_of(head.record_lines)
     return header
 
 
@@ -362,9 +362,19 @@ def sam_command_words(header: SAMHeader) -> list[list[str]]:
     return [split_command_line(pg["CL"]) for pg in header.pg or [] if pg.get("CL")]
 
 
+# INFO fields that describe a structural variant (VCF 4.3, section 3): a header declaring
+# one says structural variants may appear among its records (#630).
+SV_INFO_IDS = frozenset({"SVTYPE", "SVLEN", "CIPOS", "CIEND", "MATEID", "IMPRECISE"})
+
+
+def declared_info_ids(header: VCFHeader, ids: frozenset[str]) -> set[str]:
+    """Which of ``ids`` the header's ``##INFO`` lines declare."""
+    return {info.fields.get("ID", "") for info in header.info_fields or []} & ids
+
+
 def is_lifted(header: VCFHeader) -> bool:
     """Whether the header declares any of ``LIFTOVER_INFO_IDS``."""
-    return any(info.fields.get("ID") in LIFTOVER_INFO_IDS for info in header.info_fields or [])
+    return bool(declared_info_ids(header, LIFTOVER_INFO_IDS))
 
 
 def match_vcf_header_pattern(header: VCFHeader, header_type: str, pattern: str) -> bool:

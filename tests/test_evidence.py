@@ -13,7 +13,9 @@ from meta_disco.evidence import (
     GfaEvidence,
     SegmentTag,
     VcfEvidence,
+    VcfRecord,
     get_evidence_path,
+    records_of,
 )
 
 
@@ -59,6 +61,13 @@ class TestRoundTrip:
         VcfEvidence(md5sum="c" * 32, file_name="x.vcf", header_text="#CHROM").save(tmp_path)
         assert "max_positions" not in get_evidence_path(tmp_path, "c" * 32).read_text()
         assert VcfEvidence.load(tmp_path, "c" * 32).max_positions is None
+
+    def test_a_vcf_entry_without_record_lines_is_a_miss_but_still_gives_its_header(self, tmp_path):
+        """A reader of the header text alone (``generate_reference_builds``) keeps an entry from before #630."""
+        old = {"md5sum": "e" * 32, "file_name": "x.vcf.gz", "header_text": "##fileformat=VCFv4.2", "record_alts": []}
+        assert VcfEvidence.from_json(old) is None
+        loaded = VcfEvidence.from_json_header(old)
+        assert loaded is not None and (loaded.header_text, loaded.record_lines) == ("##fileformat=VCFv4.2", [])
 
     def test_fastq_round_trips(self, tmp_path):
         ev = FastqEvidence(md5sum="d" * 32, file_name="x.fastq.gz", read_names=["@r1", "@r2"], raw_bytes_fetched=256)
@@ -305,3 +314,25 @@ class TestCachedMd5sums:
         from meta_disco.evidence import cached_md5sums
 
         assert cached_md5sums(tmp_path / "absent") == set()
+
+
+class TestVcfRecord:
+    """A record line as the VCF fetcher keeps it, its fixed columns (#630)."""
+
+    def test_a_record_with_format_drops_its_sample_columns(self):
+        record = VcfRecord.from_line("chr1\t10\trs1\tA\tC,<DEL>\t50\tPASS\tSVTYPE=DEL;IMPRECISE;END=90\tGT:DP\t0/1:3")
+        assert record is not None
+        assert (record.chrom, record.pos, record.ref, record.format) == ("chr1", "10", "A", "GT:DP")
+        assert record.alts == ["C", "<DEL>"]
+        assert record.info_keys == {"SVTYPE", "IMPRECISE", "END"}
+        assert record.line == "chr1\t10\trs1\tA\tC,<DEL>\t50\tPASS\tSVTYPE=DEL;IMPRECISE;END=90\tGT:DP"
+
+    def test_a_record_with_no_format_and_no_info(self):
+        record = VcfRecord.from_line("chr1\t10\t.\tA\tC\t.\t.\t.")
+        assert record is not None and record.format is None and record.info_keys == frozenset()
+        assert record.line == "chr1\t10\t.\tA\tC\t.\t.\t."
+
+    def test_a_line_of_fewer_than_eight_columns_is_no_record(self):
+        assert VcfRecord.from_line("chr1\t10\t.\tA\tC\t.\t.") is None
+        with pytest.raises(ValueError, match="eight fixed columns"):
+            records_of(["chr1\t10\t.\tA\tC\t.\t."])

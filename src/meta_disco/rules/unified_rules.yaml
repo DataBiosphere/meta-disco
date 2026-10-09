@@ -1036,17 +1036,6 @@ rules:
 
 
 
-  - id: vcf_info_sv
-    tier: 3
-    scope: vcf_header
-    when:
-      extensions: [".vcf", ".bcf"]
-      vcf_header_type: "##INFO"
-      vcf_pattern: "^(SVTYPE|SVLEN|CIPOS|CIEND|MATEID|IMPRECISE)$"
-    then:
-      data_type: variants.structural
-    rationale: "Standard SV INFO fields (SVTYPE, SVLEN, CIPOS, etc.) indicate structural variant calls"
-
   - id: fastq_illumina_modern
     tier: 3
     scope: fastq_header

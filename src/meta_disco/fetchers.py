@@ -61,6 +61,7 @@ from .evidence import (
     TarHead,
     VcfEvidence,
     VcfHead,
+    VcfRecord,
 )
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
@@ -897,14 +898,15 @@ def fetch_vcf_header(
     url: str | None = None,
     **kwargs,
 ) -> VcfHead:
-    """Read a VCF's header, and the ALT of its first records, from S3 via a streamed range read.
+    """Read a VCF's header, and the fixed columns of its first records, from S3 via a streamed range read.
 
     If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
     Returns the header text (the run of ``#`` lines the head starts with, ``_VcfMatcher``) and
-    the ALT column of each complete record the head read held, up to the matcher's limit
-    (#607). Raises ``FetchError`` naming the cause when the range read fails or no header is
-    found, so the record is kept as a ``not_classified`` row instead of vanishing (#155). A
-    cached entry with no ``record_alts`` key (one written before #607) is a miss, and is read again.
+    the first nine columns of each whole record line the head read held, up to the matcher's
+    limit (:func:`record_lines_of`, #630). Raises ``FetchError`` naming the cause when the range
+    read fails or no header is found, so the record is kept as a ``not_classified`` row instead
+    of vanishing (#155). A cached entry with no ``record_lines`` key (one written before #630,
+    or by code from before it reading the same cache) is a miss, and is read again.
 
     The head is decompressed on the fly (BGZF-aware: ``gzip.GzipFile`` reads past the first
     member), so a ``##source`` caller tag beyond the first BGZF block is seen — the accuracy
@@ -912,7 +914,7 @@ def fetch_vcf_header(
     """
     cached = VcfEvidence.load(evidence_dir, md5sum) if use_cache else None
     if cached is not None:
-        return VcfHead(cached.header_text, cached.record_alts)
+        return VcfHead(cached.header_text, cached.record_lines)
 
     stream, raw = _open_stream(md5sum, url=url, is_gzipped=is_gzipped, compressed_cap=VCF_COMPRESSED_CAP)
     matcher = _scan_lines(stream, raw, cap=MAX_DECOMPRESSED, matcher=_VcfMatcher())
@@ -920,7 +922,7 @@ def fetch_vcf_header(
     if matcher.header_lines:
         header_text = "\n".join(matcher.header_lines)
         max_positions = extract_max_positions(matcher.variant_lines) if matcher.variant_lines else None
-        record_alts = record_alts_of(matcher.variant_lines)
+        record_lines = record_lines_of(matcher.variant_lines)
         _save_head_evidence(
             VcfEvidence,
             evidence_dir,
@@ -930,20 +932,22 @@ def fetch_vcf_header(
             url=url,
             header_text=header_text,
             max_positions=max_positions,
-            record_alts=record_alts,
+            record_lines=record_lines,
         )
-        return VcfHead(header_text, record_alts)
+        return VcfHead(header_text, record_lines)
 
     raise FetchError("no VCF header lines (no run of '#' lines starting the read head)")
 
 
-def record_alts_of(lines: list[str]) -> list[str]:
-    """The ALT column of each line with a VCF record's eight fixed columns, in order.
+def record_lines_of(lines: list[str]) -> list[str]:
+    """The fixed columns (:class:`~meta_disco.evidence.VcfRecord`) of each line with a VCF record's eight, in order.
 
-    A shorter line is skipped: the read head can end partway through a record, and a
-    ``.pvar`` record (read by this fetcher too) has fewer columns.
+    The per-sample columns after FORMAT are dropped. A shorter line is skipped, such as a
+    ``.pvar`` record (read by this fetcher too) without PLINK 2's optional QUAL, FILTER and
+    INFO columns. Each line is whole, as ``_iter_lines`` drops a final line the read cut off,
+    and its line ending is removed.
     """
-    return [fields[4] for fields in (line.rstrip("\n").split("\t", 8) for line in lines) if len(fields) >= 8]
+    return [record.line for line in lines if (record := VcfRecord.from_line(line.rstrip("\r\n"))) is not None]
 
 
 # =============================================================================
