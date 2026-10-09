@@ -201,9 +201,10 @@ _DECLARED_ONLY = (
     "snp_indel, ClinVar), because small-variant callers write long indels too. "
 )
 _FIRST_RECORDS = (
-    "The first 100 records are enough, because the records need only tell a file of structural "
-    "variants alone from one that is not: one small allele proves it is not, and an SV caller's file "
-    "is structural variants throughout. The one known miss is a mixed file whose first 100 records "
+    "Reading the first 100 records is a sampling trade-off, not a guarantee. The records need only tell "
+    "a file of structural variants alone from one that is not: one small allele among them proves it is "
+    "not, and an SV caller's file is expected to hold structural variants throughout, so its first "
+    "records stand for the rest. The one known miss is a mixed file whose first 100 records "
     "are all declared structural variants, say an SV callset concatenated in front of a small-variant "
     "one without re-sorting; it would be labelled structural. Of 599 VCFs sampled for #630, none "
     "outside the SV callers' own files read as structural variants alone."
