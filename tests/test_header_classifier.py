@@ -1244,6 +1244,12 @@ class TestRecordsDataType:
         assert val(result, "data_type") == "variants"
         assert self.claims(result) == [(code_rules.VCF_RECORDS_SMALL_VARIANTS.id, CONTENT_TIER, SOURCE_CONTENT_READ)]
 
+    @pytest.mark.parametrize("info_id", ["SVTYPE", "SVLEN", "CIPOS", "CIEND", "MATEID", "IMPRECISE"])
+    def test_each_sv_info_field_opens_the_gate(self, info_id):
+        result = self.classify(f'##INFO=<ID={info_id},Number=1,Type=String,Description="x">', records=("A C .",))
+        assert val(result, "data_type") == "variants"
+        assert self.claims(result) == [(code_rules.VCF_RECORDS_SMALL_VARIANTS.id, CONTENT_TIER, SOURCE_CONTENT_READ)]
+
     @pytest.mark.parametrize(
         ("lines", "records", "data_type"),
         [

@@ -600,7 +600,7 @@ def test_record_lines_keep_a_vcf_records_first_nine_columns_of_lines_with_eight(
 
 
 @pytest.mark.parametrize(
-    "lines", [None, "chr1\t1\t.\tA\tC\t.\t.\t.", ["chr1\t1\t.\tA\tC\t.\t.\t.", 1], ["chr1\t1\t.\tA\tC"]]
+    "lines", [None, "chr1\t1\t.\tA\tC\t.\t.\t.", ["chr1\t1\t.\tA\tC\t.\t.\t.", 1], ["chr1\t1\t.\tA\tC\t.\t."]]
 )
 def test_a_cached_vcf_entry_whose_record_lines_are_not_lines_of_eight_columns_is_a_miss(evidence_dir, lines):
     path = get_evidence_path(evidence_dir, MD5)
@@ -608,6 +608,16 @@ def test_a_cached_vcf_entry_whose_record_lines_are_not_lines_of_eight_columns_is
     entry = {"md5sum": MD5, "file_name": "x.vcf.gz", "header_text": "##fileformat=VCFv4.2", "record_lines": lines}
     path.write_text(json.dumps(entry))
     assert VcfEvidence.load(evidence_dir, MD5) is None
+
+
+def test_the_vcf_fetcher_keeps_the_first_100_records(monkeypatch, evidence_dir):
+    """The rules' "first 100 records" (#630) is the matcher's limit."""
+    records = b"".join(b"chr1\t%d\t.\tA\tC\t.\t.\t.\n" % pos for pos in range(1, 102))
+    _install(
+        monkeypatch, gzip.compress(b"##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n" + records)
+    )
+    lines = fetch_vcf_header(evidence_dir, MD5, is_gzipped=True, use_cache=False).record_lines
+    assert len(lines) == 100 and lines[-1].startswith("chr1\t100\t")
 
 
 def test_a_cached_vcf_entry_without_record_lines_is_read_again(monkeypatch, evidence_dir):

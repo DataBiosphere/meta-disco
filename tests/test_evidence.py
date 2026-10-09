@@ -60,6 +60,13 @@ class TestRoundTrip:
         assert "max_positions" not in get_evidence_path(tmp_path, "c" * 32).read_text()
         assert VcfEvidence.load(tmp_path, "c" * 32).max_positions is None
 
+    def test_a_vcf_entry_without_record_lines_is_a_miss_but_still_gives_its_header(self, tmp_path):
+        """A reader of the header text alone (``generate_reference_builds``) keeps an entry from before #630."""
+        old = {"md5sum": "e" * 32, "file_name": "x.vcf.gz", "header_text": "##fileformat=VCFv4.2", "record_alts": []}
+        assert VcfEvidence.from_json(old) is None
+        loaded = VcfEvidence.from_json_header(old)
+        assert loaded is not None and (loaded.header_text, loaded.record_lines) == ("##fileformat=VCFv4.2", [])
+
     def test_fastq_round_trips(self, tmp_path):
         ev = FastqEvidence(md5sum="d" * 32, file_name="x.fastq.gz", read_names=["@r1", "@r2"], raw_bytes_fetched=256)
         ev.save(tmp_path)

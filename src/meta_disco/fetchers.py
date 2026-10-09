@@ -904,8 +904,8 @@ def fetch_vcf_header(
     the first nine columns of each whole record line the head read held, up to the matcher's
     limit (:func:`record_lines_of`, #630). Raises ``FetchError`` naming the cause when the range
     read fails or no header is found, so the record is kept as a ``not_classified`` row instead
-    of vanishing (#155). A cached entry with no ``record_lines`` key (one written before #630)
-    is a miss, and is read again.
+    of vanishing (#155). A cached entry with no ``record_lines`` key (one written before #630,
+    or by code from before it reading the same cache) is a miss, and is read again.
 
     The head is decompressed on the fly (BGZF-aware: ``gzip.GzipFile`` reads past the first
     member), so a ``##source`` caller tag beyond the first BGZF block is seen — the accuracy
@@ -941,8 +941,9 @@ def fetch_vcf_header(
 def record_lines_of(lines: list[str]) -> list[str]:
     """The first nine columns (CHROM to INFO, and FORMAT where present) of each line with a VCF record's eight fixed columns, in order.
 
-    The per-sample columns after FORMAT are dropped. A shorter line is skipped: a ``.pvar``
-    record (read by this fetcher too) has fewer columns. Each line is whole, as
+    The per-sample columns after FORMAT are dropped. A shorter line is skipped, such as a
+    ``.pvar`` record (read by this fetcher too) without PLINK 2's optional QUAL, FILTER and
+    INFO columns. Each line is whole, as
     ``_iter_lines`` drops a final line the read cut off, and its line ending is removed.
     """
     return [

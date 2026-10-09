@@ -213,7 +213,7 @@ VCF_RECORDS_STRUCTURAL = CodeRule(
     module=HEADER_CLASSIFIER,
     basis=BASIS_CONTENT,
     source_type=SOURCE_CONTENT_READ,
-    reads="VCF records: the REF, ALT and INFO of the first records the head read",
+    reads="VCF records: the ALT and INFO of the first records the head read",
     sets=("data_type",),
     rationale=(
         "Every allele read is a structural variant its caller declared, so the file is structural "
@@ -226,8 +226,8 @@ VCF_RECORDS_SMALL_VARIANTS = CodeRule(
     basis=BASIS_CONTENT,
     source_type=SOURCE_CONTENT_READ,
     reads=(
-        "VCF header: its ##INFO declarations of structural-variant fields; and VCF records: the REF, "
-        "ALT and INFO of the first records the head read"
+        "VCF header: its ##INFO declarations of structural-variant fields; and VCF records: the ALT "
+        "and INFO of the first records the head read"
     ),
     sets=("data_type",),
     rationale=(

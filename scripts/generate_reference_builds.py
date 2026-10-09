@@ -60,7 +60,7 @@ from meta_disco.evidence import BamEvidence, VcfEvidence
 from meta_disco.rule_loader import KEY_CONTIGS, SIGNATURE_FIELDS, fields_for
 from meta_disco.validators.reference_builds import observe_sam, observe_vcf
 
-# (evidence directory, observer, evidence class). The observers are imported
+# (evidence directory, observer, reader of a cached entry's JSON). The observers are imported
 # from the resolver, and the key and field layout from the loader that owns the
 # row type, rather than reimplemented here: this script measures the table the
 # resolver matches against, so a parser or key that differed would produce a table describing
@@ -68,8 +68,9 @@ from meta_disco.validators.reference_builds import observe_sam, observe_vcf
 # an earlier version of this script used a stricter ##contig pattern than the
 # resolver and would silently have under-populated the table.
 EVIDENCE_SOURCES = (
-    (Path("data/evidence/anvil/bam"), observe_sam, BamEvidence),
-    (Path("data/evidence/anvil/vcf"), observe_vcf, VcfEvidence),
+    (Path("data/evidence/anvil/bam"), observe_sam, BamEvidence.from_json),
+    # The header text alone is read, so an entry without the record lines (#630) is not skipped.
+    (Path("data/evidence/anvil/vcf"), observe_vcf, VcfEvidence.from_json_header),
 )
 
 # Reference-name -> (family, version). The measured signatures are facts; this
@@ -155,13 +156,13 @@ def collect() -> tuple[dict[str, Counter], dict[str, Counter]]:
     """
     observed: dict[str, Counter] = defaultdict(Counter)
     sources: dict[str, Counter] = defaultdict(Counter)
-    for directory, observe, evidence_cls in EVIDENCE_SOURCES:
+    for directory, observe, read_entry in EVIDENCE_SOURCES:
         for path in directory.glob("*/*"):
             if not path.is_file():
                 continue
             try:
                 with path.open() as handle:
-                    entry = evidence_cls.from_json(json.load(handle))
+                    entry = read_entry(json.load(handle))
             except (OSError, ValueError):
                 # ValueError covers JSONDecodeError and UnicodeDecodeError — a
                 # cache member that is not valid UTF-8 raises the latter, which

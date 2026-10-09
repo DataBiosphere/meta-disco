@@ -461,7 +461,11 @@ def allele_counts(header: VCFHeader) -> tuple[int, int]:
 
 
 def why_structural(header: VCFHeader) -> str | None:
-    """Why a VCF is ``variants.structural``, for the claim's reason; None unless every allele counted in the records read is a declared structural variant (#630)."""
+    """Why a VCF is ``variants.structural``, for the claim's reason (#630).
+
+    None unless one allele at least is counted in the records read, and every one counted is a
+    declared structural variant.
+    """
     structural, small = allele_counts(header)
     if not structural or small:
         return None

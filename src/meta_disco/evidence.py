@@ -239,15 +239,18 @@ class VcfEvidence(_TextEvidence):
     eight fixed columns, cut to its first nine (CHROM to INFO, and FORMAT where the line has
     one), in order, up to the fetcher's line limit (``fetchers.record_lines_of``, #630). The
     per-sample columns are not kept: they are individual genotypes, and a joint call holds
-    thousands. A record-based reader derives what it needs from these lines when it reads
-    them, so a new one needs no re-read. ``[]`` where no line had eight columns: a head with
-    no record, or a ``.pvar``, whose records have fewer.
+    thousands. A reader of the first records' fixed columns derives what it needs from these
+    lines when it reads them, so a new one needs no re-read; one that needs sample columns or
+    later records does. ``[]`` where no line had eight columns: a head with no record, or a
+    ``.pvar`` whose records have fewer (PLINK 2's QUAL, FILTER and INFO columns are optional;
+    a ``.pvar`` with all three would be kept, its CM column read as FORMAT).
 
     The change is additive, so the cache is written in place rather than versioned (Dave's
     decision on #630, #639): an entry still carries ``record_alts``, the ALT of each line in
     ``record_lines`` (#607), which code from before #630 reads, and an entry with no
     ``record_lines`` key, or one that is not a list of lines of eight columns at least, is a miss
-    here, so the head is read again. ``record_alts`` is written, never read back.
+    here, so the head is read again (:meth:`from_json_header` reads the header text whatever
+    the entry holds). ``record_alts`` is written, never read back.
     """
 
     RECORD_LINES_KEY: ClassVar[str] = "record_lines"
@@ -277,6 +280,16 @@ class VcfEvidence(_TextEvidence):
             return None
         assert isinstance(data, dict)  # base returned non-None ⇒ data parsed as a dict
         return replace(base, max_positions=data.get("max_positions"), record_lines=lines)
+
+    @classmethod
+    def from_json_header(cls, data: object) -> Any:
+        """Build from a cached JSON dict for a reader of the header text alone, or return ``None`` for a miss.
+
+        The base class's miss rule only: an entry with no ``record_lines`` (written before #630,
+        or by code from before it reading the same cache) loads, with ``record_lines`` empty, so
+        a reader that never looks at the records does not lose it.
+        """
+        return super().from_json(data)
 
 
 @dataclass(frozen=True)
