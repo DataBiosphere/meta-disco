@@ -61,6 +61,7 @@ from .evidence import (
     TarHead,
     VcfEvidence,
     VcfHead,
+    VcfRecord,
 )
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
@@ -939,16 +940,14 @@ def fetch_vcf_header(
 
 
 def record_lines_of(lines: list[str]) -> list[str]:
-    """The first nine columns (CHROM to INFO, and FORMAT where present) of each line with a VCF record's eight fixed columns, in order.
+    """The fixed columns (:class:`~meta_disco.evidence.VcfRecord`) of each line with a VCF record's eight, in order.
 
     The per-sample columns after FORMAT are dropped. A shorter line is skipped, such as a
     ``.pvar`` record (read by this fetcher too) without PLINK 2's optional QUAL, FILTER and
-    INFO columns. Each line is whole, as
-    ``_iter_lines`` drops a final line the read cut off, and its line ending is removed.
+    INFO columns. Each line is whole, as ``_iter_lines`` drops a final line the read cut off,
+    and its line ending is removed.
     """
-    return [
-        "\t".join(fields[:9]) for fields in (line.rstrip("\r\n").split("\t", 9) for line in lines) if len(fields) >= 8
-    ]
+    return [record.line for line in lines if (record := VcfRecord.from_line(line.rstrip("\r\n"))) is not None]
 
 
 # =============================================================================

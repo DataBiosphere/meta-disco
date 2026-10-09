@@ -11,10 +11,10 @@ The actual classification rules are defined in the bundled unified_rules.yaml
 import re
 from dataclasses import dataclass, fields, replace
 from functools import cache
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from . import code_rules
-from .evidence import BedSignals, IdatHeader, SegmentTag
+from .evidence import BedSignals, IdatHeader, SegmentTag, VcfRecord
 from .file_name import FileName
 from .models import (
     CLASSIFICATION_FIELDS,
@@ -28,7 +28,7 @@ from .models import (
 )
 from .producer_steps import producing_step
 from .schema_vocab import most_specific
-from .validators.header_extractors import VCFHeader, VcfRecord, parse_vcf_header
+from .validators.header_extractors import SV_INFO_IDS, VCFHeader, declared_info_ids, parse_vcf_header
 from .validators.read_name_parsers import (
     detect_paired_end_indicators,
     extract_archive_accession,
@@ -87,6 +87,15 @@ def _get_engine() -> "RuleEngine":
 # =============================================================================
 # PUBLIC API FUNCTIONS
 # =============================================================================
+
+
+def _add_content_data_type(result, rule_id: str, value: str, reason: str) -> None:
+    """Claim ``value`` for data_type at ``CONTENT_TIER``, read from the file's bytes, under ``rule_id``."""
+    from .rule_engine import CONTENT_TIER
+
+    result.add_claim(
+        "data_type", rule_id=rule_id, tier=CONTENT_TIER, source_type=SOURCE_CONTENT_READ, reason=reason, value=value
+    )
 
 
 def _add_contig_claim(result, rule_id: str, family: str, matches: int, identity) -> None:
@@ -298,7 +307,7 @@ def classify_from_vcf_header(
               data_modality, data_type, assay_type, reference_assembly, platform,
               instrument_model
     """
-    from .rule_engine import CONTENT_TIER, ExtendedFileInfo
+    from .rule_engine import ExtendedFileInfo
 
     # Use the real filename so its tokens reach the tier-2 filename rules. The
     # AnVIL file_format is redundant with the name and not consulted (#157). When
@@ -343,37 +352,15 @@ def classify_from_vcf_header(
 
     _record_reference_build(result, identity)
 
-    structural_reason = why_structural(parsed)
-    if structural_reason is not None:
-        result.add_claim(
-            "data_type",
-            rule_id=code_rules.VCF_RECORDS_STRUCTURAL.id,
-            tier=CONTENT_TIER,
-            source_type=SOURCE_CONTENT_READ,
-            reason=structural_reason,
-            value=STRUCTURAL_DATA_TYPE,
-        )
-    small_variants_reason = why_small_variants(parsed)
-    if small_variants_reason is not None:
-        result.add_claim(
-            "data_type",
-            rule_id=code_rules.VCF_RECORDS_SMALL_VARIANTS.id,
-            tier=CONTENT_TIER,
-            source_type=SOURCE_CONTENT_READ,
-            reason=small_variants_reason,
-            value=VARIANTS_DATA_TYPE,
-        )
+    verdict = records_verdict(parsed)
+    if verdict is not None and verdict.structural:
+        _add_content_data_type(result, code_rules.VCF_RECORDS_STRUCTURAL.id, STRUCTURAL_DATA_TYPE, verdict.reason)
+    elif verdict is not None:
+        _add_content_data_type(result, code_rules.VCF_RECORDS_SMALL_VARIANTS.id, VARIANTS_DATA_TYPE, verdict.reason)
 
     gvcf_reason = why_gvcf(parsed, name.raw)
     if gvcf_reason is not None:
-        result.add_claim(
-            "data_type",
-            rule_id=code_rules.VCF_GVCF.id,
-            tier=CONTENT_TIER,
-            source_type=SOURCE_CONTENT_READ,
-            reason=gvcf_reason,
-            value=GVCF_DATA_TYPE,
-        )
+        _add_content_data_type(result, code_rules.VCF_GVCF.id, GVCF_DATA_TYPE, gvcf_reason)
 
     return result.to_output_dict()
 
@@ -416,24 +403,28 @@ def why_gvcf(header: VCFHeader, file_name: str) -> str | None:
     )
 
 
-# The data_type of a VCF whose records read are all structural variants, and of one whose
-# header declares structural-variant INFO fields but whose records include a small variant
-# (#630); the INFO fields that declaration names; and the ALT alleles that are no variant
-# (a spanning deletion's ``*``, no ALT ``.``, and a gVCF's reference-confidence alleles).
 STRUCTURAL_DATA_TYPE = "variants.structural"
 VARIANTS_DATA_TYPE = "variants"
-SV_INFO_IDS = frozenset({"SVTYPE", "SVLEN", "CIPOS", "CIEND", "MATEID", "IMPRECISE"})
+# ALT alleles that are no variant, not counted by the record rules (#630): a spanning
+# deletion's ``*``, no ALT ``.``, and the reference-confidence alleles of GATK and bcftools.
 NO_VARIANT_ALLELES = frozenset({"*", ".", NON_REF, "<*>"})
 
 
-def is_declared_sv(record: VcfRecord, allele: str) -> bool:
-    """Whether ``allele`` of ``record`` is a structural variant its caller declared as one.
+class RecordsVerdict(NamedTuple):
+    """What a VCF's records read say of its data_type (#630): structural variants alone, or not, and why."""
+
+    structural: bool
+    reason: str
+
+
+def declares_sv(record: VcfRecord, allele: str) -> bool:
+    """Whether ``allele`` of ``record`` is a structural variant its caller declared as one (#630).
 
     Declared: the record's INFO has ``SVTYPE``, or the allele is symbolic (``<DEL>``), a
     breakend joined to another position (``G]17:198982]``), or a single breakend (``G.``,
-    ``.G``). An allele's length is not read: small-variant callers write long indels too (#630).
+    ``.G``). Its length is not read: small-variant callers write long indels too.
     """
-    if "SVTYPE" in record.info_keys:
+    if "SVTYPE" in record.info and "SVTYPE" in record.info_keys:
         return True
     if allele.startswith("<") and allele.endswith(">"):
         return True
@@ -445,7 +436,7 @@ def is_declared_sv(record: VcfRecord, allele: str) -> bool:
 def allele_counts(header: VCFHeader) -> tuple[int, int]:
     """How many ALT alleles of the records a VCF's head read are declared structural variants, and how many small (#630).
 
-    Each allele is a declared structural variant (:func:`is_declared_sv`), no variant
+    Each allele is a declared structural variant (:func:`declares_sv`), no variant
     (:data:`NO_VARIANT_ALLELES`, not counted), or a small variant. ``(0, 0)`` where no record was read.
     """
     structural = small = 0
@@ -453,43 +444,36 @@ def allele_counts(header: VCFHeader) -> tuple[int, int]:
         for allele in record.alts:
             if allele in NO_VARIANT_ALLELES:
                 continue
-            if is_declared_sv(record, allele):
+            if declares_sv(record, allele):
                 structural += 1
             else:
                 small += 1
     return structural, small
 
 
-def why_structural(header: VCFHeader) -> str | None:
-    """Why a VCF is ``variants.structural``, for the claim's reason (#630).
+def records_verdict(header: VCFHeader) -> RecordsVerdict | None:
+    """What the records a VCF's head read give its data_type, or None (#630).
 
-    None unless one allele at least is counted in the records read, and every one counted is a
-    declared structural variant.
+    Structural where one allele at least is counted and every one counted is a declared
+    structural variant. Not structural where the header declares an INFO field of
+    ``SV_INFO_IDS`` and a counted allele is small: such a header says structural variants may
+    appear, and the small one shows the file does not hold them alone. None otherwise.
     """
     structural, small = allele_counts(header)
-    if not structural or small:
+    read = len(header.records or ())
+    if structural and not small:
+        return RecordsVerdict(
+            True,
+            f"each of the {structural} alleles in its first {read} records is a structural variant its caller "
+            "declared: a symbolic ALT, a breakend, or SVTYPE in INFO",
+        )
+    declared = sorted(declared_info_ids(header, SV_INFO_IDS)) if small else []
+    if not declared:
         return None
-    return (
-        f"each of the {structural} alleles in its first {len(header.records or ())} records is a structural "
-        "variant its caller declared: a symbolic ALT, a breakend, or SVTYPE in INFO"
-    )
-
-
-def why_small_variants(header: VCFHeader) -> str | None:
-    """Why a VCF whose header declares structural-variant INFO fields is ``variants``, for the claim's reason (#630).
-
-    None unless the header declares an INFO field of :data:`SV_INFO_IDS` and the records read
-    hold a small variant: such a header says structural variants may appear, and the small
-    variant shows the file does not hold them alone.
-    """
-    _, small = allele_counts(header)
-    declared = sorted({info.fields.get("ID", "") for info in header.info_fields or []} & SV_INFO_IDS)
-    if not small or not declared:
-        return None
-    return (
+    return RecordsVerdict(
+        False,
         f"its header declares structural-variant INFO fields ({', '.join(declared)}), but {small} of the "
-        f"alleles in its first {len(header.records or ())} records are small variants: no symbolic ALT, "
-        "breakend or SVTYPE"
+        f"alleles in its first {read} records are small variants: no symbolic ALT, breakend or SVTYPE",
     )
 
 

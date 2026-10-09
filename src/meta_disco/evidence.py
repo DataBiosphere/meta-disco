@@ -31,6 +31,7 @@ import json
 import os
 import time
 from dataclasses import asdict, dataclass, field, replace
+from functools import cached_property
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -227,6 +228,70 @@ class BamEvidence(_TextEvidence):
     """Cached SAM header text from a BAM/CRAM read. ``raw_bytes_fetched`` is always None."""
 
 
+@dataclass(frozen=True)
+class VcfRecord:
+    """A VCF record's fixed columns: CHROM to INFO, and the ninth column, FORMAT, where the line has one (#630).
+
+    A PLINK 2 ``.pvar`` line with its optional QUAL, FILTER and INFO columns has eight columns
+    too, and its CM column, where present, is read as ``format``.
+    """
+
+    # The columns every record line has, CHROM to INFO.
+    FIXED_COLUMNS: ClassVar[int] = 8
+
+    chrom: str
+    pos: str
+    id: str
+    ref: str
+    alt: str
+    qual: str
+    filter: str
+    info: str
+    format: str | None = None
+
+    @classmethod
+    def is_record_line(cls, line: str) -> bool:
+        """Whether a tab-separated line has a record's eight fixed columns."""
+        return line.count("\t") >= cls.FIXED_COLUMNS - 1
+
+    @classmethod
+    def from_line(cls, line: str) -> VcfRecord | None:
+        """The record a tab-separated line holds, its sample columns dropped; None for a line of fewer than eight columns."""
+        if not cls.is_record_line(line):
+            return None
+        fields = line.split("\t", cls.FIXED_COLUMNS + 1)
+        return cls(
+            *fields[: cls.FIXED_COLUMNS], format=fields[cls.FIXED_COLUMNS] if len(fields) > cls.FIXED_COLUMNS else None
+        )
+
+    @property
+    def line(self) -> str:
+        """The record's columns as a tab-separated line, as the cache keeps it."""
+        columns = [self.chrom, self.pos, self.id, self.ref, self.alt, self.qual, self.filter, self.info]
+        return "\t".join(columns if self.format is None else [*columns, self.format])
+
+    @property
+    def alts(self) -> list[str]:
+        """The ALT alleles, in order."""
+        return self.alt.split(",")
+
+    @cached_property
+    def info_keys(self) -> frozenset[str]:
+        """The keys of the INFO column's entries, a flag's and a ``key=value`` entry's alike; empty for ``.``."""
+        return frozenset(entry.split("=", 1)[0] for entry in self.info.split(";") if entry and entry != ".")
+
+
+def records_of(lines: list[str]) -> tuple[VcfRecord, ...]:
+    """The records of ``lines``, as the fetcher and the cache keep them; raises ``ValueError`` on a line of fewer than eight columns."""
+    records = []
+    for line in lines:
+        record = VcfRecord.from_line(line)
+        if record is None:
+            raise ValueError(f"a VCF record has eight fixed columns, this line fewer: {line[:80]!r}")
+        records.append(record)
+    return tuple(records)
+
+
 @dataclass(frozen=True, kw_only=True)
 class VcfEvidence(_TextEvidence):
     """Cached VCF header text, the first records' fixed columns, and the max-position audit map.
@@ -235,26 +300,14 @@ class VcfEvidence(_TextEvidence):
     read back from the cache (the returned payload is the header text), so it is an
     optional provenance extra rather than part of :pyattr:`payload`.
 
-    ``record_lines`` is each whole record line the head read held that has a VCF record's
-    eight fixed columns, cut to its first nine (CHROM to INFO, and FORMAT where the line has
-    one), in order, up to the fetcher's line limit (``fetchers.record_lines_of``, #630). The
-    per-sample columns are not kept: they are individual genotypes, and a joint call holds
-    thousands. A reader of the first records' fixed columns derives what it needs from these
-    lines when it reads them, so a new one needs no re-read; one that needs sample columns or
-    later records does. ``[]`` where no line had eight columns: a head with no record, or a
-    ``.pvar`` whose records have fewer (PLINK 2's QUAL, FILTER and INFO columns are optional;
-    a ``.pvar`` with all three would be kept, its CM column read as FORMAT).
-
-    The change is additive, so the cache is written in place rather than versioned (Dave's
-    decision on #630, #639): an entry still carries ``record_alts``, the ALT of each line in
-    ``record_lines`` (#607), which code from before #630 reads, and an entry with no
-    ``record_lines`` key, or one that is not a list of lines of eight columns at least, is a miss
-    here, so the head is read again (:meth:`from_json_header` reads the header text whatever
-    the entry holds). ``record_alts`` is written, never read back.
+    ``record_lines`` holds the first records the head read, each cut to its fixed columns
+    (``fetchers.record_lines_of``, #630); the per-sample columns are not kept. An entry with
+    no ``record_lines``, or one holding a line of fewer than eight columns, is a miss here, so
+    the head is read again; :meth:`from_json_header` reads the header text whatever the entry
+    holds. The key was added in place rather than in a versioned cache (#639).
     """
 
     RECORD_LINES_KEY: ClassVar[str] = "record_lines"
-    RECORD_ALTS_KEY: ClassVar[str] = "record_alts"
 
     record_lines: list[str] = field(default_factory=list)
     max_positions: dict | None = None
@@ -263,7 +316,8 @@ class VcfEvidence(_TextEvidence):
         data = super().to_json()
         if self.max_positions:
             data["max_positions"] = self.max_positions
-        data[self.RECORD_ALTS_KEY] = [line.split("\t", 5)[4] for line in self.record_lines]
+        # Written for code from before #630 reading the same cache (#607); never read back.
+        data["record_alts"] = [record.alt for record in records_of(self.record_lines)]
         data[self.RECORD_LINES_KEY] = self.record_lines
         return data
 
@@ -273,7 +327,9 @@ class VcfEvidence(_TextEvidence):
         # guard) to the base, then graft on the Vcf-only fields, so a new base
         # provenance field can't silently miss this subclass on load.
         lines = data.get(cls.RECORD_LINES_KEY) if isinstance(data, dict) else None
-        if not (isinstance(lines, list) and all(isinstance(line, str) and line.count("\t") >= 7 for line in lines)):
+        if not (
+            isinstance(lines, list) and all(isinstance(line, str) and VcfRecord.is_record_line(line) for line in lines)
+        ):
             return None
         base = super().from_json(data)
         if base is None:
@@ -294,7 +350,7 @@ class VcfEvidence(_TextEvidence):
 
 @dataclass(frozen=True)
 class VcfHead:
-    """What the VCF fetcher returns: the header text, and the first nine columns of each record the head read held (#630)."""
+    """What the VCF fetcher returns: the header text, and the fixed columns of each record the head read held (#630)."""
 
     header_text: str
     record_lines: list[str]

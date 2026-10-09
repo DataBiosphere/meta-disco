@@ -5,7 +5,7 @@ import importlib
 import pytest
 
 from meta_disco import code_rules
-from meta_disco.evidence import VcfHead
+from meta_disco.evidence import VcfHead, VcfRecord
 from meta_disco.file_name import FileName
 from meta_disco.header_classifier import (
     # Result models
@@ -16,6 +16,7 @@ from meta_disco.header_classifier import (
     classify_from_header,
     classify_from_tar_members,
     classify_from_vcf_header,
+    declares_sv,
     detect_paired_end_indicators,
     # Helper functions
     extract_archive_accession,
@@ -35,9 +36,15 @@ from meta_disco.models import (
     field_value,
 )
 from meta_disco.rule_engine import CONTENT_TIER
-from meta_disco.validators.header_extractors import parse_vcf_head, parse_vcf_header
+from meta_disco.validators.header_extractors import VCFHeader, parse_vcf_head, parse_vcf_header
 from meta_disco.validators.read_name_parsers import IlluminaFormat, PacBioFormat
 from tests.test_producer_steps import GATK3_HC, HC, gatk4, header_text
+
+
+def vcf_head(text: str, records) -> VCFHeader:
+    """The header ``text`` parsed, with records of chr1, each given as ``(ref, alt, info)`` (#630)."""
+    lines = [f"chr1\t{pos}\t.\t{ref}\t{alt}\t.\tPASS\t{info}" for pos, (ref, alt, info) in enumerate(records, 1)]
+    return parse_vcf_head(VcfHead(text, lines))
 
 
 def val(result: dict, field: str):
@@ -516,8 +523,7 @@ class TestVcfClassification:
 ##source=Manta
 ##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
-        records = ["chr1\t9000\tMantaDEL:1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;END=9500"]
-        result = classify_from_vcf_header(parse_vcf_head(VcfHead(text, records)))
+        result = classify_from_vcf_header(vcf_head(text, [("N", "<DEL>", "SVTYPE=DEL;END=9500")]))
         assert val(result, "data_modality") == "genomic"
         assert val(result, "data_type") == "variants.structural"
 
@@ -1200,12 +1206,8 @@ class TestRecordsDataType:
         text = header_text(*lines)
         if records is None:
             return classify_from_vcf_header(text, name=FileName.parse("calls.vcf.gz"))
-        record_lines = [
-            "chr1\t{}\t.\t{}\t{}\t.\tPASS\t{}".format(pos, *record.split(" ")) for pos, record in enumerate(records, 1)
-        ]
-        return classify_from_vcf_header(
-            parse_vcf_head(VcfHead(text, record_lines)), name=FileName.parse("calls.vcf.gz")
-        )
+        header = vcf_head(text, [record.split(" ") for record in records])
+        return classify_from_vcf_header(header, name=FileName.parse("calls.vcf.gz"))
 
     def claims(self, result: dict) -> list[tuple[str, int, str]]:
         rules = {code_rules.VCF_RECORDS_STRUCTURAL.id, code_rules.VCF_RECORDS_SMALL_VARIANTS.id}
@@ -1291,8 +1293,7 @@ class TestGvcf:
     def classify(*lines: str, file_name: str, alts: tuple[str, ...] | None = GVCF_ALTS) -> dict:
         """Classify a header of ``lines`` whose head read held records of ``alts`` (None: not read)."""
         text = header_text(*lines)
-        records = [f"chr1\t{pos}\t.\tA\t{alt}\t.\t.\t.\tGT" for pos, alt in enumerate(alts or (), 1)]
-        header = parse_vcf_header(text) if alts is None else parse_vcf_head(VcfHead(text, records))
+        header = parse_vcf_header(text) if alts is None else vcf_head(text, [("A", alt, ".") for alt in alts])
         return classify_from_vcf_header(header, name=FileName.parse(file_name))
 
     @pytest.mark.parametrize(
@@ -1395,3 +1396,12 @@ class TestGvcf:
         mutect = gatk4("Mutect2", "-ERC GVCF -I tumor.cram -O tumor.chr1.vcf")
         result = self.classify(*self.GVCF_LINES, mutect, file_name="tumor.chr1.vcf.gz")
         assert code_rules.VCF_GVCF.id not in (val(result, "matched_rules") or [])
+
+
+@pytest.mark.parametrize(
+    ("info", "declared"),
+    [("SVTYPE=DEL", True), ("IMPRECISE;SVTYPE", True), ("NOTSVTYPE=1", False), ("AC=1;SVTYPEX=1", False)],
+)
+def test_svtype_is_read_as_an_info_key_not_a_substring(info, declared):
+    record = VcfRecord.from_line(f"chr1\t10\t.\tA\tC\t.\t.\t{info}")
+    assert record is not None and declares_sv(record, "C") is declared

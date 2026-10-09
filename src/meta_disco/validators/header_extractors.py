@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 from functools import cached_property
 
-from ..evidence import VcfHead
+from ..evidence import VcfHead, VcfRecord, records_of
 from .command_lines import VcfCommand, split_command_line, vcf_commands
 
 
@@ -52,42 +52,6 @@ class VcfStructuredMeta:
 
 # A single parsed ``##`` VCF header line: a key=value line or a structured ``<...>`` line.
 VcfHeaderLine = VcfSimpleMeta | VcfStructuredMeta
-
-
-@dataclass(frozen=True)
-class VcfRecord:
-    """A VCF record's fixed columns, as the fetcher keeps them (``VcfHead.record_lines``, #630).
-
-    ``format`` is None for a record with no FORMAT column, a VCF with no samples.
-    """
-
-    chrom: str
-    pos: str
-    id: str
-    ref: str
-    alt: str
-    qual: str
-    filter: str
-    info: str
-    format: str | None = None
-
-    @classmethod
-    def from_line(cls, line: str) -> "VcfRecord":
-        """The record a line of at least eight tab-separated columns holds; raises ``ValueError`` on a shorter one."""
-        fields = line.split("\t", 9)
-        if len(fields) < 8:
-            raise ValueError(f"a VCF record has eight fixed columns, this line {len(fields)}: {line[:80]!r}")
-        return cls(*fields[:8], format=fields[8] if len(fields) > 8 else None)
-
-    @property
-    def alts(self) -> list[str]:
-        """The ALT alleles, in order."""
-        return self.alt.split(",")
-
-    @property
-    def info_keys(self) -> frozenset[str]:
-        """The keys of the INFO column's entries, a flag's and a ``key=value`` entry's alike; empty for ``.``."""
-        return frozenset(entry.split("=", 1)[0] for entry in self.info.split(";") if entry and entry != ".")
 
 
 @dataclass
@@ -381,7 +345,7 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
 def parse_vcf_head(head: VcfHead) -> VCFHeader:
     """A VCF fetcher's head parsed: its header text by :func:`parse_vcf_header`, with its records."""
     header = parse_vcf_header(head.header_text)
-    header.records = tuple(VcfRecord.from_line(line) for line in head.record_lines)
+    header.records = records_of(head.record_lines)
     return header
 
 
@@ -398,9 +362,19 @@ def sam_command_words(header: SAMHeader) -> list[list[str]]:
     return [split_command_line(pg["CL"]) for pg in header.pg or [] if pg.get("CL")]
 
 
+# INFO fields that describe a structural variant (VCF 4.3, section 3): a header declaring
+# one says structural variants may appear among its records (#630).
+SV_INFO_IDS = frozenset({"SVTYPE", "SVLEN", "CIPOS", "CIEND", "MATEID", "IMPRECISE"})
+
+
+def declared_info_ids(header: VCFHeader, ids: frozenset[str]) -> set[str]:
+    """Which of ``ids`` the header's ``##INFO`` lines declare."""
+    return {info.fields.get("ID", "") for info in header.info_fields or []} & ids
+
+
 def is_lifted(header: VCFHeader) -> bool:
     """Whether the header declares any of ``LIFTOVER_INFO_IDS``."""
-    return any(info.fields.get("ID") in LIFTOVER_INFO_IDS for info in header.info_fields or [])
+    return bool(declared_info_ids(header, LIFTOVER_INFO_IDS))
 
 
 def match_vcf_header_pattern(header: VCFHeader, header_type: str, pattern: str) -> bool:
