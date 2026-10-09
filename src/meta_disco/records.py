@@ -75,7 +75,7 @@ OUTPUT_MD5SUM_FIELD = "md5sum"
 # the row field each is read from (#432). The schema's terms are the input's spellings,
 # so the one rename above applies here too. The rest of ``models.JOIN_KEYS`` (today
 # ``file_path``) are not fields of an output row, and ``reconcile.select_evidence``
-# refuses an evidence file keyed by one.
+# refuses a slot-evidence file it selects for the run that is keyed by one.
 JOIN_KEY_OUTPUT_FIELDS = {
     "file_id": "file_id",
     "entry_id": "entry_id",
