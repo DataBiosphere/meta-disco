@@ -502,7 +502,7 @@ def require_join_key(value: object, label: str, where: str) -> str:
     Checked here for a claim recording which key attached it (``join_key``,
     ``rule_engine.make_claim``); an evidence file's envelope declaring which key it is
     keyed by (``target_key``) is held to the same vocabulary by the generated model's
-    ``JoinKeyEnum`` (#494). One vocabulary either way.
+    ``JoinKeyEnum`` (#494).
     """
     return _require_one_of(value, JOIN_KEYS, "a key of the target", label, where)
 

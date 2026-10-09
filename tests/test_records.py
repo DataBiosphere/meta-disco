@@ -180,3 +180,13 @@ def test_the_output_spelling_of_the_checksum_is_the_records_field():
     from meta_disco.records import OUTPUT_MD5SUM_FIELD, OutputRecord
 
     assert OUTPUT_MD5SUM_FIELD in {f.name for f in fields(OutputRecord)}
+
+
+def test_every_key_reconcile_joins_on_is_a_key_of_the_target():
+    """`JOIN_KEY_OUTPUT_FIELDS` is the subset of `JOIN_KEYS` an output row holds; a term
+    dropped from the vocabulary but left here would name a key no envelope can declare
+    (#647)."""
+    from meta_disco.models import JOIN_KEYS
+    from meta_disco.records import JOIN_KEY_OUTPUT_FIELDS
+
+    assert set(JOIN_KEY_OUTPUT_FIELDS) <= JOIN_KEYS
