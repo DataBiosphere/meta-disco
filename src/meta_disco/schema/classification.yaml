@@ -716,10 +716,7 @@ classes:
         required: true
         description: >-
           Which key of the target each line's `target_key_value` is to be matched
-          against. Drawn from `join_key_enum`, which spans the target's own record
-          fields *and* facts classification derives — `archive_accession` is read
-          from a fastq's read headers, so a claim keyed by it can only be joined
-          after inference has run.
+          against. Drawn from `join_key_enum`.
       fetched_at:
         required: true
         pattern: "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])[T ]([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d(\\.\\d+)?)?([+-]([01]\\d|2[0-3]):[0-5]\\d|Z)?\\Z"
@@ -1987,13 +1984,6 @@ enums:
           per-dataset — 2 rows in 16,271 within `AnVIL_HPRC_R2`, against 99.3%
           within `ANVIL_1000G_PRIMED_data_model` — so it is usable only with a
           dataset scope, which is what `EvidenceTarget.dataset` is for.
-      archive_accession:
-        description: >-
-          Sequence-archive run accession (ENA, SRA). Not a field of the input
-          record but a fact classification *derives*, read from a fastq's read
-          headers — accessions appear in no input file name at all. A claim from
-          an archive can be attached only by this, which is why the join runs
-          after inference rather than over the input corpus.
 
   lineage_parent_key_enum:
     description: >-
