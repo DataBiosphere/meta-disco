@@ -229,32 +229,39 @@ class BamEvidence(_TextEvidence):
 
 @dataclass(frozen=True, kw_only=True)
 class VcfEvidence(_TextEvidence):
-    """Cached VCF header text, the ALT of the first records, and the max-position audit map.
+    """Cached VCF header text, the first records' fixed columns, and the max-position audit map.
 
     ``max_positions`` is written for audit when the fetcher extracted it; it is not
     read back from the cache (the returned payload is the header text), so it is an
     optional provenance extra rather than part of :pyattr:`payload`.
 
-    ``record_alts`` is the ALT column of each line the head read held that has a VCF
-    record's eight fixed columns, in order, up to the fetcher's line limit
-    (``fetchers.record_alts_of``, #607): what tells a gVCF, whose every record carries
-    ``<NON_REF>``. Only the ALT is kept, as a joint-called record holds every sample's
-    genotype. ``[]`` where no line had eight columns: a head with no record, or a ``.pvar``,
-    whose records have fewer. An entry with no ``record_alts`` key, or one that is not a
-    list of strings, is a miss (an entry written before #607 has none), so the head is
-    read again.
+    ``record_lines`` is each whole record line the head read held that has a VCF record's
+    eight fixed columns, cut to its first nine (CHROM to INFO, and FORMAT where the line has
+    one), in order, up to the fetcher's line limit (``fetchers.record_lines_of``, #630). The
+    per-sample columns are not kept: they are individual genotypes, and a joint call holds
+    thousands. A record-based reader derives what it needs from these lines when it reads
+    them, so a new one needs no re-read. ``[]`` where no line had eight columns: a head with
+    no record, or a ``.pvar``, whose records have fewer.
+
+    The change is additive, so the cache is written in place rather than versioned (Dave's
+    decision on #630, #639): an entry still carries ``record_alts``, the ALT of each line in
+    ``record_lines`` (#607), which code from before #630 reads, and an entry with no
+    ``record_lines`` key, or one that is not a list of lines of eight columns at least, is a miss
+    here, so the head is read again. ``record_alts`` is written, never read back.
     """
 
+    RECORD_LINES_KEY: ClassVar[str] = "record_lines"
     RECORD_ALTS_KEY: ClassVar[str] = "record_alts"
 
-    record_alts: list[str] = field(default_factory=list)
+    record_lines: list[str] = field(default_factory=list)
     max_positions: dict | None = None
 
     def to_json(self) -> dict:
         data = super().to_json()
         if self.max_positions:
             data["max_positions"] = self.max_positions
-        data[self.RECORD_ALTS_KEY] = self.record_alts
+        data[self.RECORD_ALTS_KEY] = [line.split("\t", 5)[4] for line in self.record_lines]
+        data[self.RECORD_LINES_KEY] = self.record_lines
         return data
 
     @classmethod
@@ -262,22 +269,22 @@ class VcfEvidence(_TextEvidence):
         # Delegate the shared identity/payload/provenance parse (and the cache-miss
         # guard) to the base, then graft on the Vcf-only fields, so a new base
         # provenance field can't silently miss this subclass on load.
-        alts = data.get(cls.RECORD_ALTS_KEY) if isinstance(data, dict) else None
-        if not (isinstance(alts, list) and all(isinstance(a, str) for a in alts)):
+        lines = data.get(cls.RECORD_LINES_KEY) if isinstance(data, dict) else None
+        if not (isinstance(lines, list) and all(isinstance(line, str) and line.count("\t") >= 7 for line in lines)):
             return None
         base = super().from_json(data)
         if base is None:
             return None
         assert isinstance(data, dict)  # base returned non-None ⇒ data parsed as a dict
-        return replace(base, max_positions=data.get("max_positions"), record_alts=alts)
+        return replace(base, max_positions=data.get("max_positions"), record_lines=lines)
 
 
 @dataclass(frozen=True)
 class VcfHead:
-    """What the VCF fetcher returns: the header text, and the ALT of each record the head read held (#607)."""
+    """What the VCF fetcher returns: the header text, and the first nine columns of each record the head read held (#630)."""
 
     header_text: str
-    record_alts: list[str]
+    record_lines: list[str]
 
 
 @dataclass(frozen=True, kw_only=True)

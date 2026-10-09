@@ -558,52 +558,72 @@ GVCF_HEAD = (
 )
 
 
-def test_fetch_vcf_returns_header_and_record_alts_and_caches(monkeypatch, evidence_dir):
+def test_fetch_vcf_returns_header_and_record_lines_and_caches(monkeypatch, evidence_dir):
     _install(monkeypatch, gzip.compress(GVCF_HEAD))
 
     head = fetch_vcf_header(evidence_dir, MD5, is_gzipped=True, use_cache=False)
     assert head == VcfHead(
-        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS", ["<NON_REF>", "C,<NON_REF>"]
+        "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS",
+        ["chr1\t1\t.\tA\t<NON_REF>\t.\t.\tEND=411\tGT", "chr1\t412\t.\tG\tC,<NON_REF>\t84.8\t.\tDP=3\tGT"],
     )
 
     cached = VcfEvidence.load(evidence_dir, MD5)
-    assert cached is not None and (cached.payload, cached.record_alts) == (head.header_text, head.record_alts)
+    assert cached is not None and (cached.payload, cached.record_lines) == (head.header_text, head.record_lines)
 
     # a second call hits the cache and never re-fetches
     monkeypatch.setattr(fetchers, "_fetch_range", lambda *a, **k: pytest.fail("re-fetched a cached VCF"))
     assert fetch_vcf_header(evidence_dir, MD5, is_gzipped=True, use_cache=True) == head
 
 
-def test_record_alts_are_read_only_from_lines_with_a_vcf_records_eight_columns():
-    """A `.pvar` record (five columns) and a record the head cut short give no ALT (#607)."""
+def test_a_vcf_entry_still_carries_the_keys_code_before_630_reads(monkeypatch, evidence_dir):
+    """`record_alts` (#607) and `max_positions` are written beside `record_lines`, so older code reading the
+    same cache still hits rather than re-fetching and writing the entry without the lines (#630)."""
+    _install(monkeypatch, gzip.compress(GVCF_HEAD))
+    fetch_vcf_header(evidence_dir, MD5, is_gzipped=True, use_cache=False)
+    entry = json.loads(get_evidence_path(evidence_dir, MD5).read_text())
+    assert entry["record_alts"] == ["<NON_REF>", "C,<NON_REF>"]
+    assert entry["max_positions"] == {"1": 413}
+
+
+def test_record_lines_keep_a_vcf_records_first_nine_columns_of_lines_with_eight():
+    """A `.pvar` record (five columns) gives no line; the sample columns are dropped; a record with no
+    FORMAT keeps its eight columns; the line ending is not kept (#630)."""
     lines = [
-        "chr1\t1\t.\tA\t<NON_REF>\t.\t.\tEND=411",
+        "chr1\t1\t.\tA\t<NON_REF>\t.\t.\tEND=411\tGT:DP\t0/0:3\t0/1:5",
         "10\t420890\trs1\tA\tG",
-        "chr1\t500\t.\tC\tT,<NON_REF>\t30",
+        "chr1\t500\t.\tC\tT\t30\tPASS\tAC=1\r",
     ]
-    assert fetchers.record_alts_of(lines) == ["<NON_REF>"]
+    assert fetchers.record_lines_of(lines) == [
+        "chr1\t1\t.\tA\t<NON_REF>\t.\t.\tEND=411\tGT:DP",
+        "chr1\t500\t.\tC\tT\t30\tPASS\tAC=1",
+    ]
 
 
-@pytest.mark.parametrize("alts", [None, "<NON_REF>", ["<NON_REF>", 1]])
-def test_a_cached_vcf_entry_whose_record_alts_are_not_a_list_of_strings_is_a_miss(evidence_dir, alts):
+@pytest.mark.parametrize(
+    "lines", [None, "chr1\t1\t.\tA\tC\t.\t.\t.", ["chr1\t1\t.\tA\tC\t.\t.\t.", 1], ["chr1\t1\t.\tA\tC"]]
+)
+def test_a_cached_vcf_entry_whose_record_lines_are_not_lines_of_eight_columns_is_a_miss(evidence_dir, lines):
     path = get_evidence_path(evidence_dir, MD5)
     path.parent.mkdir(parents=True, exist_ok=True)
-    entry = {"md5sum": MD5, "file_name": "x.vcf.gz", "header_text": "##fileformat=VCFv4.2", "record_alts": alts}
+    entry = {"md5sum": MD5, "file_name": "x.vcf.gz", "header_text": "##fileformat=VCFv4.2", "record_lines": lines}
     path.write_text(json.dumps(entry))
     assert VcfEvidence.load(evidence_dir, MD5) is None
 
 
-def test_a_cached_vcf_entry_without_record_alts_is_read_again(monkeypatch, evidence_dir):
-    """An entry written before #607 holds the header only: it is a miss, so the head is fetched again."""
+def test_a_cached_vcf_entry_without_record_lines_is_read_again(monkeypatch, evidence_dir):
+    """An entry written before #630 holds the ALTs but not the lines: it is a miss, so the head is fetched
+    again, and the entry rewritten with them."""
     path = get_evidence_path(evidence_dir, MD5)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"md5sum": MD5, "file_name": "x.vcf.gz", "header_text": "##fileformat=VCFv4.2"}))
+    old = {"md5sum": MD5, "file_name": "x.vcf.gz", "header_text": "##fileformat=VCFv4.2", "record_alts": ["C"]}
+    path.write_text(json.dumps(old))
     assert VcfEvidence.load(evidence_dir, MD5) is None
     _install(monkeypatch, gzip.compress(GVCF_HEAD))
-    assert fetch_vcf_header(evidence_dir, MD5, is_gzipped=True, use_cache=True).record_alts == [
-        "<NON_REF>",
-        "C,<NON_REF>",
+    assert fetch_vcf_header(evidence_dir, MD5, is_gzipped=True, use_cache=True).record_lines == [
+        "chr1\t1\t.\tA\t<NON_REF>\t.\t.\tEND=411\tGT",
+        "chr1\t412\t.\tG\tC,<NON_REF>\t84.8\t.\tDP=3\tGT",
     ]
+    assert VcfEvidence.load(evidence_dir, MD5) is not None
 
 
 def test_fetch_vcf_no_header_raises(monkeypatch, evidence_dir):

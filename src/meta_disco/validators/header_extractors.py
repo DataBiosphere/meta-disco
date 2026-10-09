@@ -54,6 +54,42 @@ class VcfStructuredMeta:
 VcfHeaderLine = VcfSimpleMeta | VcfStructuredMeta
 
 
+@dataclass(frozen=True)
+class VcfRecord:
+    """A VCF record's fixed columns, as the fetcher keeps them (``VcfHead.record_lines``, #630).
+
+    ``format`` is None for a record with no FORMAT column, a VCF with no samples.
+    """
+
+    chrom: str
+    pos: str
+    id: str
+    ref: str
+    alt: str
+    qual: str
+    filter: str
+    info: str
+    format: str | None = None
+
+    @classmethod
+    def from_line(cls, line: str) -> "VcfRecord":
+        """The record a line of at least eight tab-separated columns holds; raises ``ValueError`` on a shorter one."""
+        fields = line.split("\t", 9)
+        if len(fields) < 8:
+            raise ValueError(f"a VCF record has eight fixed columns, this line {len(fields)}: {line[:80]!r}")
+        return cls(*fields[:8], format=fields[8] if len(fields) > 8 else None)
+
+    @property
+    def alts(self) -> list[str]:
+        """The ALT alleles, in order."""
+        return self.alt.split(",")
+
+    @property
+    def info_keys(self) -> frozenset[str]:
+        """The keys of the INFO column's entries, a flag's and a ``key=value`` entry's alike; empty for ``.``."""
+        return frozenset(entry.split("=", 1)[0] for entry in self.info.split(";") if entry and entry != ".")
+
+
 @dataclass
 class VCFHeader:
     """Parsed VCF header."""
@@ -71,9 +107,9 @@ class VCFHeader:
     # ``other_meta`` because ``match_vcf_header_pattern`` falls back to a prefix
     # scan of that list, and these must not widen what a rule can match (#354).
     unkeyed_meta: list[str] | None = None
-    # The ALT of each record the read head held (``VcfHead.record_alts``, #607); None where
-    # the records were not read, as for a header given as text.
-    record_alts: tuple[str, ...] | None = None
+    # Each record the read head held (``VcfHead.record_lines``, #630); None where the records
+    # were not read, as for a header given as text.
+    records: tuple[VcfRecord, ...] | None = None
 
     @cached_property
     def commands(self) -> list[VcfCommand]:
@@ -343,9 +379,9 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
 
 
 def parse_vcf_head(head: VcfHead) -> VCFHeader:
-    """A VCF fetcher's head parsed: its header text by :func:`parse_vcf_header`, with its records' ALTs."""
+    """A VCF fetcher's head parsed: its header text by :func:`parse_vcf_header`, with its records."""
     header = parse_vcf_header(head.header_text)
-    header.record_alts = tuple(head.record_alts)
+    header.records = tuple(VcfRecord.from_line(line) for line in head.record_lines)
     return header
 
 

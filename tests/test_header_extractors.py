@@ -1,6 +1,9 @@
 """Tests for VCF header extraction and its typed line records."""
 
+import pytest
+
 from meta_disco.validators.header_extractors import (
+    VcfRecord,
     VcfSimpleMeta,
     VcfStructuredMeta,
     get_contig_lines,
@@ -154,3 +157,22 @@ class TestGetContigLines:
     def test_empty_when_no_contigs(self):
         header = parse_vcf_header("##fileformat=VCFv4.2")
         assert get_contig_lines(header) == []
+
+
+class TestVcfRecord:
+    """A record line as the VCF fetcher keeps it, its first nine columns (#630)."""
+
+    def test_a_record_with_format(self):
+        record = VcfRecord.from_line("chr1\t10\trs1\tA\tC,<DEL>\t50\tPASS\tSVTYPE=DEL;IMPRECISE;END=90\tGT:DP")
+        assert (record.chrom, record.pos, record.ref, record.format) == ("chr1", "10", "A", "GT:DP")
+        assert record.alts == ["C", "<DEL>"]
+        assert record.info_keys == {"SVTYPE", "IMPRECISE", "END"}
+
+    def test_a_record_with_no_format_and_no_info(self):
+        record = VcfRecord.from_line("chr1\t10\t.\tA\tC\t.\t.\t.")
+        assert record.format is None
+        assert record.info_keys == frozenset()
+
+    def test_a_line_of_fewer_than_eight_columns_is_refused(self):
+        with pytest.raises(ValueError, match="eight fixed columns"):
+            VcfRecord.from_line("10\t420890\trs1\tA\tG")

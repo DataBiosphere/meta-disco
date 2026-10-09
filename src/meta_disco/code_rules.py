@@ -186,6 +186,60 @@ VCF_GVCF = CodeRule(
         "over into the joint-called VCFs and PLINK .pvar files made from gVCFs, so none of them is read."
     ),
 )
+_RECORDS_NOT_HEADER = (
+    "Records, not the header: a header declaring structural-variant INFO fields (SVTYPE, SVLEN, CIPOS, "
+    "CIEND, MATEID, IMPRECISE) says structural variants may appear, not that the file holds only them. "
+    "1000G's SNV_INDEL_SV phased panels and phase 3 integrated callsets declare them and hold mostly "
+    "SNVs and indels; Broad's known-indels resources carry them over from a 1000G phase 1 header and "
+    "hold indels; NIA CARD's harmonized_variants name SVIM in their header and hold small-variant "
+    "calls. "
+)
+_DECLARED_ONLY = (
+    "Only what the caller declared makes an allele a structural variant (a symbolic ALT such as <DEL>, "
+    "a breakend, or SVTYPE in the record's INFO), never its length: in 449 sampled callsets that are "
+    "not structural, a 50 bp length test flagged 30 (CCDG recalibrated_variants, chr*.genotyped, 1kGP "
+    "snp_indel, ClinVar), because small-variant callers write long indels too. "
+)
+_FIRST_RECORDS = (
+    "The first 100 records are enough, because the records need only tell a file of structural "
+    "variants alone from one that is not: one small allele proves it is not, and an SV caller's file "
+    "is structural variants throughout. The one known miss is a mixed file whose first 100 records "
+    "are all declared structural variants, say an SV callset concatenated in front of a small-variant "
+    "one without re-sorting; it would be labelled structural. Of 599 VCFs sampled for #630, none "
+    "outside the SV callers' own files read as structural variants alone."
+)
+VCF_RECORDS_STRUCTURAL = CodeRule(
+    id="vcf_records_structural",
+    module=HEADER_CLASSIFIER,
+    basis=BASIS_CONTENT,
+    source_type=SOURCE_CONTENT_READ,
+    reads="VCF records: the REF, ALT and INFO of the first records the head read",
+    sets=("data_type",),
+    rationale=(
+        "Every allele read is a structural variant its caller declared, so the file is structural "
+        "variant calls. " + _RECORDS_NOT_HEADER + _DECLARED_ONLY + _FIRST_RECORDS
+    ),
+)
+VCF_RECORDS_SMALL_VARIANTS = CodeRule(
+    id="vcf_records_small_variants",
+    module=HEADER_CLASSIFIER,
+    basis=BASIS_CONTENT,
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "VCF header: its ##INFO declarations of structural-variant fields; and VCF records: the REF, "
+        "ALT and INFO of the first records the head read"
+    ),
+    sets=("data_type",),
+    rationale=(
+        "The header declares structural-variant INFO fields, but a record read holds a small variant "
+        "(an SNV, indel or MNV its caller did not declare a structural variant), so the file is not "
+        "structural variants alone: variants. It overrides an SV caller named in the header, as the "
+        "records are read from the file itself. The header gate keeps this rule to files that say they "
+        "may hold structural variants (203 of the 204,219 cached VCF heads when #630 measured), so a "
+        "small-variant callset, gVCF or HaplotypeCaller file that declares none of those fields is not "
+        "touched. " + _RECORDS_NOT_HEADER + _DECLARED_ONLY + _FIRST_RECORDS
+    ),
+)
 BED_COORDINATE_REFERENCE = CodeRule(
     id="bed_coordinate_reference",
     module=HEADER_CLASSIFIER,
@@ -368,6 +422,8 @@ CODE_RULES = (
     CONTIG_LENGTH_DETECTION,
     VCF_CONTIG_LENGTH,
     VCF_GVCF,
+    VCF_RECORDS_STRUCTURAL,
+    VCF_RECORDS_SMALL_VARIANTS,
     BED_COORDINATE_REFERENCE,
     BED_NONSTANDARD_CONTIGS,
     FASTA_TRANSCRIPT_CONTIGS,

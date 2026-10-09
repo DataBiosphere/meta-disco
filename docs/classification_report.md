@@ -544,8 +544,13 @@ When header-based detection fails, max variant positions can rule out references
 | sniffles        | variants.structural | `vcf_sniffles`             |
 | svim            | variants.structural | `vcf_svim`                 |
 
-An `##INFO` line declaring `SVTYPE`, `SVLEN`, `CIPOS`, `CIEND`, `MATEID` or
-`IMPRECISE` also marks `variants.structural` (`vcf_info_sv`). The somatic and CNV
+The records decide too, read from the file at the content tier (#630). A VCF whose
+first records' alleles are all structural variants their caller declared (a symbolic
+ALT, a breakend, or `SVTYPE` in INFO) is `variants.structural`
+(`vcf_records_structural`). One whose header declares an `##INFO` field `SVTYPE`,
+`SVLEN`, `CIPOS`, `CIEND`, `MATEID` or `IMPRECISE` but whose first records include a
+small variant is `variants` (`vcf_records_small_variants`): such a header says
+structural variants may appear, not that the file holds only them. The somatic and CNV
 caller rules fired on nothing across 204,149 VCFs and were removed (#430).
 
 ### 4.3 FASTQ Read Name Rules
@@ -666,7 +671,6 @@ High confidence (≥80%): 20,462 (88.6%)
 | Rule                     | Matches |
 | ------------------------ | ------- |
 | vcf_ref_grch38           | 873,506 |
-| vcf_info_sv              | 204,083 |
 | vcf_contig_length        | 170,688 |
 | vcf_gatk_haplotypecaller | 158,858 |
 | vcf_ref_chm13            | 1,398   |

@@ -511,17 +511,18 @@ class TestVcfClassification:
         assert matched is not None and "vcf_gatk_haplotypecaller" in matched
 
     def test_manta_sv(self):
-        """Detect Manta as structural variants."""
-        header = """##fileformat=VCFv4.2
+        """Manta's records are structural variants (#630): its header alone does not say so."""
+        text = """##fileformat=VCFv4.2
 ##source=Manta
 ##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
-        result = classify_from_vcf_header(header)
+        records = ["chr1\t9000\tMantaDEL:1\tN\t<DEL>\t.\tPASS\tSVTYPE=DEL;END=9500"]
+        result = classify_from_vcf_header(parse_vcf_head(VcfHead(text, records)))
         assert val(result, "data_modality") == "genomic"
         assert val(result, "data_type") == "variants.structural"
 
-    def test_sv_info_fields(self):
-        """Detect SV from INFO fields."""
+    def test_sv_info_fields_alone_are_not_structural(self):
+        """A header declaring SV INFO fields says SVs may appear, not that the file holds only them (#630)."""
         header = """##fileformat=VCFv4.2
 ##INFO=<ID=SVTYPE,Number=1,Type=String,Description="SV type">
 ##INFO=<ID=SVLEN,Number=1,Type=Integer,Description="SV length">
@@ -529,7 +530,7 @@ class TestVcfClassification:
 #CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"""
         result = classify_from_vcf_header(header)
         assert val(result, "data_modality") == "genomic"
-        assert val(result, "data_type") == "variants.structural"
+        assert val(result, "data_type") == "variants"
 
     def test_empty_header(self):
         """Handle minimal VCF header."""
@@ -1186,6 +1187,83 @@ class TestAVcfHeaderIsParsedOnce:
         assert len(calls) == 1
 
 
+class TestRecordsDataType:
+    """A VCF's records decide whether it holds structural variants alone (#630): a header
+    declaring SV INFO fields says only that they may appear."""
+
+    SV_INFO = '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">'
+    LONG = "A" + "C" * 60  # a 60 bp insertion, written out as small-variant callers write one
+
+    @staticmethod
+    def classify(*lines: str, records: tuple[str, ...] | None) -> dict:
+        """Classify a header of ``lines`` whose head read held ``records``, each ``REF ALT INFO`` (None: not read)."""
+        text = header_text(*lines)
+        if records is None:
+            return classify_from_vcf_header(text, name=FileName.parse("calls.vcf.gz"))
+        record_lines = [
+            "chr1\t{}\t.\t{}\t{}\t.\tPASS\t{}".format(pos, *record.split(" ")) for pos, record in enumerate(records, 1)
+        ]
+        return classify_from_vcf_header(
+            parse_vcf_head(VcfHead(text, record_lines)), name=FileName.parse("calls.vcf.gz")
+        )
+
+    def claims(self, result: dict) -> list[tuple[str, int, str]]:
+        rules = {code_rules.VCF_RECORDS_STRUCTURAL.id, code_rules.VCF_RECORDS_SMALL_VARIANTS.id}
+        return [
+            (e["rule_id"], e["tier"], e["source_type"])
+            for e in field_evidence(result, "data_type")
+            if e.get("rule_id") in rules
+        ]
+
+    @pytest.mark.parametrize(
+        "records",
+        [
+            pytest.param(("N <DEL> END=900", "N <INS> ."), id="symbolic"),
+            pytest.param(("G G]17:198982] .", "A A[2:321682[ ."), id="breakends"),
+            pytest.param(("G G. .", "T .T ."), id="single breakends"),
+            pytest.param(("A ACGT SVTYPE=INS", "ACGT A SVTYPE=DEL;SVLEN=-3"), id="SVTYPE, however short"),
+            pytest.param(("N <DEL>,* .", "N <INV>,<NON_REF> ."), id="beside alleles that are no variant"),
+        ],
+    )
+    def test_records_all_declared_structural_variants_are_structural(self, records):
+        result = self.classify(records=records)
+        assert val(result, "data_type") == "variants.structural"
+        assert self.claims(result) == [(code_rules.VCF_RECORDS_STRUCTURAL.id, CONTENT_TIER, SOURCE_CONTENT_READ)]
+
+    @pytest.mark.parametrize(
+        "records",
+        [
+            pytest.param(("N <DEL> SVTYPE=DEL", "A C ."), id="an SNV beside a structural variant"),
+            pytest.param(("A C .", "AT A ."), id="small variants only"),
+            pytest.param(("N <DEL> .", f"A {LONG} ."), id="a long indel its caller did not declare"),
+        ],
+    )
+    def test_an_sv_header_over_a_small_variant_is_variants(self, records):
+        """It outranks an SV caller the header names (`vcf_sniffles`, tier 3)."""
+        result = self.classify(self.SV_INFO, "##source=Sniffles2", records=records)
+        assert val(result, "data_type") == "variants"
+        assert self.claims(result) == [(code_rules.VCF_RECORDS_SMALL_VARIANTS.id, CONTENT_TIER, SOURCE_CONTENT_READ)]
+
+    @pytest.mark.parametrize(
+        ("lines", "records", "data_type"),
+        [
+            pytest.param(
+                ("##source=HaplotypeCaller",),
+                ("A C .", f"A {LONG} ."),
+                "variants.germline",
+                id="no SV header: a small-variant callset, long indel and all",
+            ),
+            pytest.param((SV_INFO,), ("A * .", "A . .", "A <NON_REF> .", "A <*> ."), "variants", id="no variant"),
+            pytest.param((SV_INFO,), (), "variants", id="no record"),
+            pytest.param((SV_INFO, "##source=Sniffles2"), None, "variants.structural", id="records not read"),
+        ],
+    )
+    def test_otherwise_the_records_claim_nothing(self, lines, records, data_type):
+        result = self.classify(*lines, records=records)
+        assert val(result, "data_type") == data_type
+        assert self.claims(result) == []
+
+
 class TestGvcf:
     """A gVCF is told by its content: the step that made it is a HaplotypeCaller in a
     reference-confidence mode, and its records all carry `<NON_REF>`, some alone (#607)."""
@@ -1207,7 +1285,8 @@ class TestGvcf:
     def classify(*lines: str, file_name: str, alts: tuple[str, ...] | None = GVCF_ALTS) -> dict:
         """Classify a header of ``lines`` whose head read held records of ``alts`` (None: not read)."""
         text = header_text(*lines)
-        header = parse_vcf_header(text) if alts is None else parse_vcf_head(VcfHead(text, list(alts)))
+        records = [f"chr1\t{pos}\t.\tA\t{alt}\t.\t.\t.\tGT" for pos, alt in enumerate(alts or (), 1)]
+        header = parse_vcf_header(text) if alts is None else parse_vcf_head(VcfHead(text, records))
         return classify_from_vcf_header(header, name=FileName.parse(file_name))
 
     @pytest.mark.parametrize(
