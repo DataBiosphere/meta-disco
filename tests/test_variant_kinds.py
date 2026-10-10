@@ -82,8 +82,15 @@ def test_bcftools_norm_annotate_and_merge_are_read(line, inputs, output):
     assert (step.family, step.inputs, step.output) == (BCFTOOLS, inputs, output)
 
 
-def test_bcftools_merges_file_list_is_a_list_of_inputs_not_an_input():
-    (step,) = steps(header("##bcftools_mergeCommand=merge -l gvcfs.txt -o m.vcf a.vcf.gz; Date=x"))
+@pytest.mark.parametrize(
+    "line",
+    [
+        "##bcftools_mergeCommand=merge -l gvcfs.txt -o m.vcf a.vcf.gz; Date=x",
+        "##bcftools_concatCommand=concat -f gvcfs.txt -o m.vcf a.vcf.gz; Date=x",
+    ],
+)
+def test_a_bcftools_file_list_is_a_list_of_inputs_not_an_input(line):
+    (step,) = steps(header(line))
     assert (step.inputs, step.input_lists) == (("a.vcf.gz",), ("gvcfs.txt",))
 
 

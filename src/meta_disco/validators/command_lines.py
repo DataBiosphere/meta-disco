@@ -81,8 +81,9 @@ TOOL_ARGUMENTS: dict[tuple[str, str], ToolArguments] = {
     (GATK3, "GenotypeGVCFs"): ToolArguments(inputs=("variant",), outputs=("out",)),
     (GATK3, "CombineGVCFs"): ToolArguments(inputs=("variant",), outputs=("out",)),
     (GATK3, "ApplyRecalibration"): ToolArguments(inputs=("input",), outputs=("out",)),
+    # `-f` names a file listing the inputs, as GATK's sample-name map does.
     (BCFTOOLS, "concat"): ToolArguments(
-        inputs=("-f", "--file-list"),
+        input_lists=("-f", "--file-list"),
         outputs=("-o", "--output"),
         positional=True,
         no_value=frozenset(
