@@ -217,7 +217,7 @@ def test_every_callers_kind_is_a_variant_kind_term():
     from meta_disco.schema_vocab import dimension_values
 
     table = vk.load_caller_kinds()
-    assert {c.kind for c in table.callers} <= dimension_values(vk.VARIANT_KIND)
+    assert {c.kind for c in table.callers} <= dimension_values("variant_kind")
 
 
 def test_a_caller_name_matches_whole_and_case_insensitively():

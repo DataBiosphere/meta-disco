@@ -68,7 +68,11 @@ class VCFHeader:
     info_fields: list[VcfStructuredMeta] | None = None  # ##INFO fields
     format_fields: list[VcfStructuredMeta] | None = None  # ##FORMAT fields
     filter_fields: list[VcfStructuredMeta] | None = None  # ##FILTER fields
+    alt_fields: list[VcfStructuredMeta] | None = None  # ##ALT declarations (#654)
     other_meta: list[str] | None = None  # Other ## lines the line parser accepted
+    # The key of each ``##key=value`` line in ``other_meta``, in header order (#654), so a
+    # reader looking for a key (``##DeepVariant_version``) does not parse the lines again.
+    meta_keys: tuple[str, ...] = ()
     # ``##`` lines the line parser rejected (a key it cannot match, such as GATK3's
     # dotted ``##GATKCommandLine.<Tool>``), verbatim. Kept apart from
     # ``other_meta`` because ``match_vcf_header_pattern`` falls back to a prefix
@@ -297,7 +301,9 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
     info_fields = []
     format_fields = []
     filter_fields = []
+    alt_fields = []
     other_meta = []
+    meta_keys = []
     unkeyed_meta = []
 
     for line in header_text.splitlines():
@@ -319,6 +325,7 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
                 header.sources += (parsed.value,)
             else:
                 other_meta.append(line)
+                meta_keys.append(parsed.type)
         elif parsed.type == "contig":
             contigs.append(parsed)
         elif parsed.type == "INFO":
@@ -327,6 +334,8 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
             format_fields.append(parsed)
         elif parsed.type == "FILTER":
             filter_fields.append(parsed)
+        elif parsed.type == "ALT":
+            alt_fields.append(parsed)
         else:
             other_meta.append(line)
 
@@ -338,8 +347,11 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
         header.format_fields = format_fields
     if filter_fields:
         header.filter_fields = filter_fields
+    if alt_fields:
+        header.alt_fields = alt_fields
     if other_meta:
         header.other_meta = other_meta
+        header.meta_keys = tuple(meta_keys)
     if unkeyed_meta:
         header.unkeyed_meta = unkeyed_meta
 
@@ -374,6 +386,11 @@ SV_INFO_IDS = frozenset({"SVTYPE", "SVLEN", "CIPOS", "CIEND", "MATEID", "IMPRECI
 def declared_info_ids(header: VCFHeader, ids: frozenset[str]) -> set[str]:
     """Which of ``ids`` the header's ``##INFO`` lines declare."""
     return {info.fields.get("ID", "") for info in header.info_fields or []} & ids
+
+
+def declared_alt_ids(header: VCFHeader, ids: frozenset[str]) -> set[str]:
+    """Which of ``ids`` the header's ``##ALT`` lines declare, a subtype (``DEL:ME``) read as its type (``DEL``)."""
+    return {alt.fields.get("ID", "").split(":", 1)[0] for alt in header.alt_fields or []} & ids
 
 
 def is_lifted(header: VCFHeader) -> bool:
@@ -424,6 +441,11 @@ def match_vcf_header_pattern(header: VCFHeader, header_type: str, pattern: str) 
         for flt in header.filter_fields:
             flt_id = flt.fields.get("ID")
             if flt_id and compiled.search(flt_id):
+                return True
+    elif header_type == "##ALT" and header.alt_fields:
+        for alt in header.alt_fields:
+            alt_id = alt.fields.get("ID")
+            if alt_id and compiled.search(alt_id):
                 return True
     elif header.other_meta:
         # header_type already includes ## prefix (e.g., "##reference")

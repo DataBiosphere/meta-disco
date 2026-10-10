@@ -66,8 +66,8 @@ rules:
     description: >-
       A microscopy image carries no sequencing signal: when classified, data_type
       must be images and assay_type must be Histology, the one microscopy assay in
-      today's vocabulary (widen it as others arrive); platform, instrument_model
-      and reference_assembly must not be classified at all (a slide image with
+      today's vocabulary (widen it as others arrive); platform, instrument_model,
+      reference_assembly and variant_kind must not be classified at all (a slide image with
       platform=ILLUMINA or reference=GRCh38 is unmistakably wrong).
     when: {data_modality: {under: imaging.microscopy}}
     require:
@@ -76,6 +76,7 @@ rules:
       platform: {status_not: "classified"}
       instrument_model: {status_not: "classified"}
       reference_assembly: {status_not: "classified"}
+      variant_kind: {status_not: "classified"}
 
   # --- 5. platform <-> modality family ----------------------------------------
   # Conservative form: a platform, a sequencer's or an array scanner's (#603), must not
@@ -99,7 +100,7 @@ rules:
   - id: auxiliary_inert
     description: >-
       A checksum, log or sample map describes other files and carries no signal of its own,
-      so modality / reference / assay / platform / instrument model must not be
+      so modality / reference / assay / platform / instrument model / variant kind must not be
       classified (e.g. a .md5 classified genomic is inconsistent). Index inertness
       is the #312 propagation question and is intentionally out of scope here.
     when: {data_type: {value_in: ["checksum", "log", "sample_map"]}}
@@ -109,3 +110,12 @@ rules:
       assay_type: {status_not: "classified"}
       platform: {status_not: "classified"}
       instrument_model: {status_not: "classified"}
+      variant_kind: {status_not: "classified"}
+
+  # --- 7. variant kind <-> data type (#654) -------------------------------------
+  - id: variant_kind_on_variants
+    description: >-
+      A variant kind is the kind of a callset's calls, so a file given one holds variants:
+      its data_type, if classified, must be variants or a term under it.
+    when: {variant_kind: {status: "classified"}}
+    require: {data_type: {under: variants}}

@@ -75,6 +75,8 @@ def test_rules_file_loads_and_is_nonempty():
         "rules:\n  - {id: a, when: {data_modality: {under: imaging.histology}}, require: {}}\n",  # not a term
         "rules:\n  - {id: a, when: {}, require: {data_modality: {not_under: nonsense}}}\n",  # not a term
         "rules:\n  - {id: a, when: {}, require: {assay_type: {under: scRNA-seq}}}\n",  # not a term
+        "rules:\n  - id: a\n    when: {}\n    require:\n      platform: {status_not: classified}\n"
+        "      platform: {status_not: classified}\n",  # a key twice in one mapping
     ],
 )
 def test_load_rules_rejects_malformed(tmp_path, yaml_text):
@@ -115,10 +117,8 @@ def test_under_matches_a_term_and_every_term_below_it():
 
 
 def test_a_malformed_value_is_under_nothing_rather_than_an_error():
-    # a list of several where one term belongs is outside every subtree; the schema gate reports it
-    rec = _rec(
-        data_modality=(["transcriptomic", "genomic"], "classified"), platform=_c("ILLUMINA"), assay_type=_c("WGS")
-    )
+    # a list where a term belongs is outside every subtree; the schema gate reports it
+    rec = _rec(data_modality=(["transcriptomic"], "classified"), platform=_c("ILLUMINA"), assay_type=_c("WGS"))
     assert {"assay_for_transcriptomic", "sequencing_platform_excludes_imaging"}.isdisjoint(_rule_ids(rec))
 
 

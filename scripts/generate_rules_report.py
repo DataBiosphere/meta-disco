@@ -337,7 +337,7 @@ def _won(field_name: str, claimed: str, answer: dict) -> bool:
     answer outside today's vocabulary (a term retired since the run) has no ancestors
     to compare with, so only equality counts for it.
     """
-    answered = declaration(answer)
+    answered = declaration(answer, field_name)
     if answered is None:
         return False
     if claimed == answered:

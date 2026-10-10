@@ -12,7 +12,8 @@
 # kind of what they write is their input's. A selection may narrow a mixed callset, but a
 # caller here calls one kind, which a narrowing keeps.
 # `merges`: steps joining several callsets into one; their kind is settled by every caller
-# the header names (rule 5 of #654).
+# the header names (rule 5 of #654). `producer_steps.STEP_RULES` names `concat` too, for
+# the step it writes (MergeActivity); a merge tool added here may belong there as well.
 
 callers:
   - name: HaplotypeCaller

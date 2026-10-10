@@ -219,9 +219,9 @@ def _field_entry(record: Mapping[str, Any], field_name: str):
     return record.get(field_name)
 
 
-def _entry_value(entry):
+def _entry_value(entry, field_name: str):
     """Resolved value from a per-field entry (a dict ``{"value": ...}`` or scalar), as :func:`settled_value` reads it."""
-    return settled_value(entry.get("value") if isinstance(entry, dict) else entry)
+    return settled_value(field_name, entry.get("value") if isinstance(entry, dict) else entry)
 
 
 def stored_value(field_name: str, value: str | None) -> str | list[str] | None:
@@ -234,19 +234,19 @@ def stored_value(field_name: str, value: str | None) -> str | list[str] | None:
     return [value]
 
 
-def settled_value(value):
-    """A stored value as resolution reads it: a one-item list's item, else as given.
+def settled_value(field_name: str, value: Any) -> Any:
+    """A stored value as resolution reads it: for a dimension in ``MULTIVALUED_FIELDS``, a one-item list's item.
 
-    The read side of :func:`stored_value`. Raises ValueError on an empty list, which is
-    no value, and on a list of several: nothing settles a dimension to several values
-    yet (each claim declares one, and two different ones at the winning tier are a
-    conflict), so a record holding several was not written by this code.
+    The read side of :func:`stored_value`, whose lists hold one value. For such a dimension
+    an empty list reads as no value, so a ``classified`` status beside it fails the
+    coherence check, and a list of several raises ValueError: nothing settles several yet
+    (#656). Any other dimension's value is returned as it is.
     """
-    if not isinstance(value, list):
+    if field_name not in MULTIVALUED_FIELDS or not isinstance(value, list):
         return value
-    if len(value) != 1:
-        raise ValueError(f"a stored value list holds exactly one value until a rule settles several, got {value!r}")
-    return value[0]
+    if len(value) > 1:
+        raise ValueError(f"{field_name} holds several values {value!r}; nothing settles several yet (#656)")
+    return value[0] if value else None
 
 
 def status_for_value(value) -> str:
@@ -358,7 +358,7 @@ def all_not_classified(evidence: list[dict]) -> dict:
     }
 
 
-def _entry_status(entry) -> str:
+def _entry_status(entry, field_name: str) -> str:
     """Status from a per-field entry: explicit ``status`` if set, else derived.
 
     When the entry carries an explicit ``status``, it is validated against ``value``
@@ -373,12 +373,9 @@ def _entry_status(entry) -> str:
     if isinstance(entry, dict):
         status = entry.get("status")
         if status is not None:
-            _assert_coherent(settled_value(entry.get("value")), status)
+            _assert_coherent(_entry_value(entry, field_name), status)
             return status
-        value = entry.get("value")
-    else:
-        value = entry
-    return status_for_value(settled_value(value))
+    return status_for_value(_entry_value(entry, field_name))
 
 
 def field_value(record: dict, field_name: str):
@@ -391,7 +388,7 @@ def field_value(record: dict, field_name: str):
     value-reads, status-checks, and bucket labels stay correctly separated and
     call sites do not need to change again.
     """
-    return _entry_value(_field_entry(record, field_name))
+    return _entry_value(_field_entry(record, field_name), field_name)
 
 
 def field_status(record: dict, field_name: str) -> str:
@@ -403,7 +400,7 @@ def field_status(record: dict, field_name: str) -> str:
     yielding one of CLASSIFIED / NOT_APPLICABLE / NOT_CLASSIFIED; a missing/None
     value reads as NOT_CLASSIFIED.
     """
-    return _entry_status(_field_entry(record, field_name))
+    return _entry_status(_field_entry(record, field_name), field_name)
 
 
 def field_detail(record: dict, field_name: str) -> dict:
@@ -449,8 +446,8 @@ def field_label(record: dict, field_name: str) -> str | None:
     status such as ``conflict`` would likewise surface here).
     """
     entry = _field_entry(record, field_name)
-    status = _entry_status(entry)
-    return _entry_value(entry) if status == CLASSIFIED else status
+    status = _entry_status(entry, field_name)
+    return _entry_value(entry, field_name) if status == CLASSIFIED else status
 
 
 def required_str(value: object, label: str, where: str) -> str:

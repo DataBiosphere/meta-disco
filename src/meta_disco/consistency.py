@@ -24,6 +24,7 @@ import yaml
 from meta_disco import schema_vocab
 from meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED, _entry_value, _field_entry, status_for_value
 from meta_disco.output_utils import find_latest_run, iter_records
+from meta_disco.slot_map import unique_key_loader
 
 
 @dataclass
@@ -110,8 +111,8 @@ def load_rules(resource=None) -> list[dict]:
     """Load and shape-validate the declarative invariant set (defaults to the bundled
     package resource).
 
-    Raises ``ValueError`` on a malformed file — an unrecognized shape, a missing/
-    duplicate ``id``, a non-mapping ``when``/``require``, a matcher whose key/type
+    Raises ``ValueError`` on a malformed file — a key given twice in one mapping, an
+    unrecognized shape, a missing/duplicate ``id``, a non-mapping ``when``/``require``, a matcher whose key/type
     the evaluator can't interpret, or an ``under``/``not_under`` naming something that
     is not a term of a classification dimension, or a term whose enum has a broken
     ``is_a`` chain — so an authoring typo fails loudly instead of
@@ -119,7 +120,7 @@ def load_rules(resource=None) -> list[dict]:
     linter).
     """
     resource = resource or default_consistency_rules_resource()
-    data = yaml.safe_load(resource.read_text(encoding="utf-8"))
+    data = yaml.load(resource.read_text(encoding="utf-8"), Loader=unique_key_loader("consistency rules"))
     if not isinstance(data, dict) or not isinstance(data.get("rules"), list):
         raise ValueError("consistency rules file must be a mapping with a 'rules' list")
     seen: set[str] = set()
@@ -155,11 +156,7 @@ def _dim(record: Mapping[str, Any], name: str) -> tuple[str | None, str, list]:
     here. Evidence has no shared accessor and is read off the entry.
     """
     entry = _field_entry(record, name)
-    try:
-        value = _entry_value(entry)
-    except ValueError:
-        # A list of several values, which nothing writes yet: read as it stands, under nothing.
-        value = entry.get("value") if isinstance(entry, dict) else entry
+    value = _entry_value(entry, name)
     if isinstance(entry, dict):
         status = entry.get("status") or status_for_value(value)
         ev = entry.get("evidence")
