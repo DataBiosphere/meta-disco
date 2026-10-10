@@ -117,8 +117,9 @@ TOOL_ARGUMENTS: dict[tuple[str, str], ToolArguments] = {
             {"-k", "--keep-sites", "--force", "--single-overlaps", "--no-version", "-W", "--write-index"}
         ),
     ),
+    # `-l` names a file listing the inputs, as GATK's sample-name map does.
     (BCFTOOLS, "merge"): ToolArguments(
-        inputs=("-l", "--file-list"),
+        input_lists=("-l", "--file-list"),
         outputs=("-o", "--output"),
         positional=True,
         no_value=frozenset(

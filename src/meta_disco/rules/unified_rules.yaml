@@ -711,6 +711,7 @@ rules:
         assay_type: not_applicable
         platform: not_applicable
         instrument_model: not_applicable
+        variant_kind: not_applicable
     rationale: "Target/capture region file — reference data, not primary experimental data"
 
   # ---------------------------------------------------------------------------

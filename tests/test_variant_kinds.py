@@ -82,6 +82,11 @@ def test_bcftools_norm_annotate_and_merge_are_read(line, inputs, output):
     assert (step.family, step.inputs, step.output) == (BCFTOOLS, inputs, output)
 
 
+def test_bcftools_merges_file_list_is_a_list_of_inputs_not_an_input():
+    (step,) = steps(header("##bcftools_mergeCommand=merge -l gvcfs.txt -o m.vcf a.vcf.gz; Date=x"))
+    assert (step.inputs, step.input_lists) == (("a.vcf.gz",), ("gvcfs.txt",))
+
+
 def test_a_dragen_line_is_read_and_names_no_single_output():
     line = (
         '##DRAGENCommandLine=<ID=dragen,Version="4.3.6",CommandLineOptions="--ht-reference /r '
