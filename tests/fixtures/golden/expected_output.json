@@ -74,6 +74,19 @@
             ],
             "status": "not_applicable",
             "value": null
+          },
+          "variant_kind": {
+            "evidence": [
+              {
+                "reason": "No @SQ lines: the header declares no reference, so the file holds unaligned reads. Common for PacBio HiFi and ONT mod-base deliverables",
+                "rule_id": "unaligned_no_sq",
+                "source_type": "header_rule",
+                "status": "not_applicable",
+                "tier": 3
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -174,6 +187,19 @@
             ],
             "status": "classified",
             "value": "GRCh37"
+          },
+          "variant_kind": {
+            "evidence": [
+              {
+                "reason": "mosdepth's `<prefix>.regions.bed.gz`: mean read depth per genome window, measured from an alignment",
+                "rule_id": "bed_mosdepth_regions",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -310,6 +336,33 @@
             ],
             "status": "not_applicable",
             "value": null
+          },
+          "variant_kind": {
+            "evidence": [
+              {
+                "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
+                "rule_id": "fasta_base",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              },
+              {
+                "reason": "Filename contains assembly/assembler indicator \u2014 de novo assembly",
+                "rule_id": "fasta_assembly_filename",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              },
+              {
+                "reason": "Filename contains haplotype/phasing indicator \u2014 de novo assembly",
+                "rule_id": "fasta_haplotype_filename",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -405,6 +458,19 @@
             "value": null
           },
           "reference_assembly": {
+            "evidence": [
+              {
+                "reason": "FASTQ files contain raw sequencing reads. Reference not applicable until alignment",
+                "rule_id": "reads_base",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
+          "variant_kind": {
             "evidence": [
               {
                 "reason": "FASTQ files contain raw sequencing reads. Reference not applicable until alignment",
@@ -531,6 +597,17 @@
             ],
             "status": "classified",
             "value": "GRCh38"
+          },
+          "variant_kind": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for variant_kind",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -639,6 +716,19 @@
             ],
             "status": "not_applicable",
             "value": null
+          },
+          "variant_kind": {
+            "evidence": [
+              {
+                "reason": "IDAT is Illumina's BeadChip intensity format, written by genotyping and methylation chips alike, so the extension cannot say which chip wrote the file, only that it is array signal (#603). Its intensities are keyed by probe, not by genome coordinate, so no reference applies until genotypes are called against a chip manifest",
+                "rule_id": "idat_array_signal",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -736,6 +826,19 @@
             "value": null
           },
           "reference_assembly": {
+            "evidence": [
+              {
+                "reason": "1 row of a sample name and a VCF path: a list of files, not their data",
+                "rule_id": "sample_map_content",
+                "source_type": "content_read",
+                "status": "not_applicable",
+                "tier": 4
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
+          "variant_kind": {
             "evidence": [
               {
                 "reason": "1 row of a sample name and a VCF path: a list of files, not their data",
@@ -875,6 +978,17 @@
             ],
             "status": "not_classified",
             "value": null
+          },
+          "variant_kind": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for variant_kind",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -1003,6 +1117,19 @@
             ],
             "status": "not_classified",
             "value": null
+          },
+          "variant_kind": {
+            "evidence": [
+              {
+                "reason": "no caller line: no command line, ##source or tool version line",
+                "rule_id": "vcf_source_caller_kind",
+                "source_type": "content_read",
+                "status": "not_classified",
+                "tier": 4
+              }
+            ],
+            "status": "not_classified",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -1103,6 +1230,19 @@
               }
             ],
             "status": "conflict",
+            "value": null
+          },
+          "variant_kind": {
+            "evidence": [
+              {
+                "reason": "no caller line: no command line, ##source or tool version line",
+                "rule_id": "vcf_source_caller_kind",
+                "source_type": "content_read",
+                "status": "not_classified",
+                "tier": 4
+              }
+            ],
+            "status": "not_classified",
             "value": null
           }
         },

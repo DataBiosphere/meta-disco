@@ -122,7 +122,7 @@ def test_identical_lines_are_one_step_and_other_lines_are_not_steps():
 
 def test_an_undeclared_tool_is_no_reading_at_all():
     assert ps.steps_of(header(HC, gatk4("Mutect2", "-I a.bam -O b.vcf"))) is None
-    assert ps.steps_of(header("##bcftools_normCommand=norm -m -any in.vcf.gz; Date=x")) is None
+    assert ps.steps_of(header("##bcftools_pluginCommand=plugin fill-tags -- -t AF; Date=x")) is None
 
 
 @pytest.mark.parametrize(
@@ -547,8 +547,8 @@ def test_a_quoted_input_is_read_without_its_quotes():
 
 
 def test_any_other_tools_command_line_is_an_undeclared_tool():
-    dragen = '##DRAGENCommandLine=<ID=dragen,Version="SW: 4.2",CommandLine="dragen -f -r /ref --vc-target-bed x">'
-    assert ps.producing_step(header(dragen), "x.vcf.gz") == (None, ps.UNKNOWN_TOOL)
+    freebayes = '##commandline="freebayes -f ref.fa a.bam"'
+    assert ps.producing_step(header(freebayes), "x.vcf.gz") == (None, ps.UNKNOWN_TOOL)
 
 
 def test_a_bcftools_short_option_with_its_value_attached_takes_no_next_word():

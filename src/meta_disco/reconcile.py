@@ -80,6 +80,8 @@ from .models import (
     UNMAPPED,
     field_detail,
     field_label,
+    settled_value,
+    stored_value,
 )
 from .output_utils import (
     RECONCILED_DIR,
@@ -237,10 +239,11 @@ def declaration(entry: dict) -> str | None:
     Reads ``value`` then ``status``. ``not_classified`` declares no answer (4.6) and
     ``conflict`` is not a declaration, so both are None, like a claim declaring nothing.
     A conclusion carries a value only when it is ``classified`` (the schema's rule), so
-    one function serves both.
+    one function serves both, and reads a record's stored list as its one value
+    (``models.settled_value``).
     """
     if entry.get("value") is not None:
-        return entry["value"]
+        return settled_value(entry["value"])
     if entry.get("status") == NOT_APPLICABLE:
         return NOT_APPLICABLE
     return None
@@ -742,7 +745,7 @@ def reconcile_record(
         said = record_slots.get(slot, NO_EVIDENCE)
         passed = (inherited or {}).get(slot, [])
         claims = [i.claim() for i in passed]
-        inferred = {"value": entry.get("value"), "status": entry["status"]}
+        inferred = {"value": settled_value(entry.get("value")), "status": entry["status"]}
         status, value = resolve_slot(slot, inferred, said.claims, SOURCE_PUBLISHED_VALUE in said.unreviewed, claims)
         settled: dict = {
             "value": value,
@@ -756,6 +759,9 @@ def reconcile_record(
             settled.update(field_detail(record, slot))
         elif status == CLASSIFIED:
             settled.update(build_detail(build_for(value, passed)))
+        # Settled as strings; written as the record stores a value (ADR-0003).
+        settled["value"] = stored_value(slot, value)
+        settled["inferred"] = {"value": stored_value(slot, inferred["value"]), "status": inferred["status"]}
         classifications[slot] = settled
     out["classifications"] = classifications
     return out
@@ -864,7 +870,7 @@ class Report:
                 and settled["inferred"]["status"] != CONFLICT
                 and settled["status"] in (CLASSIFIED, NOT_APPLICABLE)
                 # A source's, not an inherited one's (#571): the answer a source declared.
-                and any(declaration(c) == (settled["value"] or settled["status"]) for c in said.claims)
+                and any(declaration(c) == (settled_value(settled["value"]) or settled["status"]) for c in said.claims)
             ):
                 self.filled_over_inference[dataset][slot] += 1
             per_input = self.inputs[dataset][slot]
@@ -1106,7 +1112,7 @@ class _Graph:
         for slot in self.carried:
             entry = classifications.get(slot) or {}
             said = record_slots.get(slot, NO_EVIDENCE)
-            inferred = {"value": entry.get("value"), "status": entry.get("status")}
+            inferred = {"value": settled_value(entry.get("value")), "status": entry.get("status")}
             inference_conflict, declared = own_inputs(inferred, said.claims)
             unreviewed = SOURCE_PUBLISHED_VALUE in said.unreviewed
             answers[slot] = self.intern(settle(slot, inference_conflict, declared, False, unreviewed))

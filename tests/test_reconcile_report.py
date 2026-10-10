@@ -72,10 +72,10 @@ def test_the_report_is_rendered_from_the_reconcile_report_alone(tmp_path, confli
     # The headline names every category, published included though it filled nothing.
     assert "| dimension | published | published harmonized | submitter | submitter harmonized | inference |" in md
     assert "| platform | 0 | 0 | 0 | 1 | 0 |" in md
-    # The conflicts by their competing values, and the corpus rate: 2 conflicts of 18 slots.
+    # The conflicts by their competing values, and the corpus rate: 2 conflicts of 21 slots.
     assert f"inference: GRCh38; {SOURCE_REPOSITORY_METADATA}: CHM13" in md
     assert 'published_value (unreviewed): ["GRCm39"]' in md
-    assert "**2 of 18 slots (11.111%)**" in md
+    assert "**2 of 21 slots (9.524%)**" in md
     assert f"### `{DATASET}`" in md
     assert rr.PLACEHOLDER not in html and '"(every dataset)"' in html and f'"{DATASET}"' in html
 
@@ -218,7 +218,7 @@ def test_the_catalog_today_counts_its_own_dimensions_and_the_values_it_publishes
         "filled": 1,  # the one unreviewed published reference_assembly
     }
     md = rr.render_markdown(data)
-    assert "|  | meta-disco (6 dimensions) | % | catalog today (2 dimensions) | % |" in md
+    assert "|  | meta-disco (7 dimensions) | % | catalog today (2 dimensions) | % |" in md
     # What the catalog publishes is the original metadata: its count is in that row, and no other.
     c, slots, share = whole["completeness"], whole["slots"], rr._of_slots(1, whole["files"] * 2)
     original = f"| original (catalog's published values) | {c['published']:,} | {rr._of_slots(c['published'], slots)} |"

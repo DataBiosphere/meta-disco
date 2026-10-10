@@ -243,7 +243,9 @@ def test_the_pipeline_reads_a_real_idat_through_its_own_fetch_call(monkeypatch, 
         workers=1,
     )
     (row,) = pipeline.run()
-    assert {slot: c["value"] for slot, c in row["classifications"].items() if slot != "reference_assembly"} == {
+    # reference_assembly and variant_kind do not apply to array signal: `idat_array_signal` says so.
+    unread = {"reference_assembly", "variant_kind"}
+    assert {slot: c["value"] for slot, c in row["classifications"].items() if slot not in unread} == {
         "data_type": "array_signal",
         "data_modality": IDAT_CHIPS[(CHIP, PROBES)][1],
         "assay_type": IDAT_CHIPS[(CHIP, PROBES)][2],

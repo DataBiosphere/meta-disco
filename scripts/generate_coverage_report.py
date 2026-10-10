@@ -68,6 +68,16 @@ _DIMENSION_TEXT = {
             " the submitter tables, which reconcile reads, name models far more often."
         ),
     ),
+    "variant_kind": (
+        "Variant Kind",
+        (
+            "**Note**: Read from the caller that made a VCF: its header's producing step, "
+            "walked back through steps that keep the kind, or a `##source` naming one tool, "
+            "looked up in `rules/caller_kinds.yaml` (#654). Not applicable to a file whose "
+            "rule says it holds no variants. An index or a GenomicsDB workspace takes its "
+            "parent's kind only at reconcile, which this report does not read."
+        ),
+    ),
 }
 DIMENSIONS = [(field, *_DIMENSION_TEXT[field]) for field in CLASSIFICATION_FIELDS]
 

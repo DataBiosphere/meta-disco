@@ -164,7 +164,7 @@ JOIN_KEYS = frozenset(
 # matters: make_claim runs a few million times per corpus, and schema_vocab was
 # test- and validation-only before this.
 
-# The six classification dimension fields, in canonical output order. Single
+# The seven classification dimension fields, in canonical output order. Single
 # source of truth for the field set — the rule engine, rule_loader's 'then' key
 # validation, and schema_vocab's dimensions all derive from this.
 CLASSIFICATION_FIELDS = (
@@ -174,7 +174,15 @@ CLASSIFICATION_FIELDS = (
     "reference_assembly",
     "assay_type",
     "instrument_model",
+    "variant_kind",
 )
+
+# The dimensions a record stores as a list (ADR-0003, #654): the schema's slots whose
+# ``value`` is ``multivalued``, held to it by test_output_shape. A claim still declares
+# one value, a string, and resolution runs over strings as for any other dimension;
+# only the settled value on a record is a list, written by :func:`stored_value` and read
+# back by :func:`settled_value`.
+MULTIVALUED_FIELDS = frozenset({"variant_kind"})
 
 
 def _field_entry(record: Mapping[str, Any], field_name: str):
@@ -212,8 +220,33 @@ def _field_entry(record: Mapping[str, Any], field_name: str):
 
 
 def _entry_value(entry):
-    """Resolved value from a per-field entry (a dict ``{"value": ...}`` or scalar)."""
-    return entry.get("value") if isinstance(entry, dict) else entry
+    """Resolved value from a per-field entry (a dict ``{"value": ...}`` or scalar), as :func:`settled_value` reads it."""
+    return settled_value(entry.get("value") if isinstance(entry, dict) else entry)
+
+
+def stored_value(field_name: str, value: str | None) -> str | list[str] | None:
+    """A settled value as a record stores it: a one-item list for a dimension in ``MULTIVALUED_FIELDS``, else as given.
+
+    The write side of :func:`settled_value`. ``None`` stays ``None``.
+    """
+    if value is None or field_name not in MULTIVALUED_FIELDS:
+        return value
+    return [value]
+
+
+def settled_value(value):
+    """A stored value as resolution reads it: a one-item list's item, else as given.
+
+    The read side of :func:`stored_value`. Raises ValueError on an empty list, which is
+    no value, and on a list of several: nothing settles a dimension to several values
+    yet (each claim declares one, and two different ones at the winning tier are a
+    conflict), so a record holding several was not written by this code.
+    """
+    if not isinstance(value, list):
+        return value
+    if len(value) != 1:
+        raise ValueError(f"a stored value list holds exactly one value until a rule settles several, got {value!r}")
+    return value[0]
 
 
 def status_for_value(value) -> str:
@@ -340,12 +373,12 @@ def _entry_status(entry) -> str:
     if isinstance(entry, dict):
         status = entry.get("status")
         if status is not None:
-            _assert_coherent(entry.get("value"), status)
+            _assert_coherent(settled_value(entry.get("value")), status)
             return status
         value = entry.get("value")
     else:
         value = entry
-    return status_for_value(value)
+    return status_for_value(settled_value(value))
 
 
 def field_value(record: dict, field_name: str):

@@ -155,7 +155,11 @@ def _dim(record: Mapping[str, Any], name: str) -> tuple[str | None, str, list]:
     here. Evidence has no shared accessor and is read off the entry.
     """
     entry = _field_entry(record, name)
-    value = _entry_value(entry)
+    try:
+        value = _entry_value(entry)
+    except ValueError:
+        # A list of several values, which nothing writes yet: read as it stands, under nothing.
+        value = entry.get("value") if isinstance(entry, dict) else entry
     if isinstance(entry, dict):
         status = entry.get("status") or status_for_value(value)
         ev = entry.get("evidence")

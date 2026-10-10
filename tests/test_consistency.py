@@ -115,8 +115,10 @@ def test_under_matches_a_term_and_every_term_below_it():
 
 
 def test_a_malformed_value_is_under_nothing_rather_than_an_error():
-    # a list where a term belongs is outside every subtree; the schema gate reports it
-    rec = _rec(data_modality=(["transcriptomic"], "classified"), platform=_c("ILLUMINA"), assay_type=_c("WGS"))
+    # a list of several where one term belongs is outside every subtree; the schema gate reports it
+    rec = _rec(
+        data_modality=(["transcriptomic", "genomic"], "classified"), platform=_c("ILLUMINA"), assay_type=_c("WGS")
+    )
     assert {"assay_for_transcriptomic", "sequencing_platform_excludes_imaging"}.isdisjoint(_rule_ids(rec))
 
 

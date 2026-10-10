@@ -32,6 +32,7 @@ from .models import (
     build_field_entry,
     require_join_key,
     status_for_value,
+    stored_value,
 )
 from .rule_loader import UnifiedRule, get_unified_rules
 
@@ -470,6 +471,9 @@ class ExtendedClassificationResult:
     assay_type: str | None = None
     platform: str | None = None
     instrument_model: str | None = None
+    # One kind, a string, like every other dimension here: the list a record stores is
+    # written by ``to_output_dict`` (``models.stored_value``, ADR-0003).
+    variant_kind: str | None = None
     field_evidence: dict[str, list[dict]] = field(default_factory=lambda: {fld: [] for fld in CLASSIFICATION_FIELDS})
     # Resolved status per dimension (epic #116 / #136): the dimension attributes
     # above hold a real value or None only — the sentinel (not_applicable /
@@ -717,14 +721,15 @@ class ExtendedClassificationResult:
         Each dimension emits ``{value, status, evidence}`` via
         ``models.build_field_entry``. The dimension attribute holds a real value or
         None and ``field_status`` holds the resolved status (epic #116 / #136), so
-        both are passed straight through — the sentinel is never in ``value``,
-        internally or in the output.
+        both are passed through — the sentinel is never in ``value``, internally or in
+        the output — the value as ``models.stored_value`` stores it (a one-item list
+        for a multivalued dimension).
         """
         classifications = {}
         for fld in self._CLASSIFICATION_FIELDS:
             evidence = self.field_evidence.get(fld, [])
             classifications[fld] = build_field_entry(
-                getattr(self, fld),
+                stored_value(fld, getattr(self, fld)),
                 status=self.field_status[fld],
                 evidence=evidence,
                 detail=self.field_detail.get(fld),

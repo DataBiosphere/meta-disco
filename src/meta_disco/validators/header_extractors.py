@@ -61,7 +61,10 @@ class VCFHeader:
     fileformat: str | None = None  # ##fileformat
     reference: str | None = None  # ##reference
     contigs: list[VcfStructuredMeta] | None = None  # ##contig lines
-    source: str | None = None  # ##source
+    source: str | None = None  # ##source: the last such line, which the YAML rules match
+    # Every ##source line's value, in header order (#654): a joint-called file carries one
+    # per tool that wrote it, and ``source`` keeps only the last.
+    sources: tuple[str, ...] = ()
     info_fields: list[VcfStructuredMeta] | None = None  # ##INFO fields
     format_fields: list[VcfStructuredMeta] | None = None  # ##FORMAT fields
     filter_fields: list[VcfStructuredMeta] | None = None  # ##FILTER fields
@@ -313,6 +316,7 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
                 header.reference = parsed.value
             elif parsed.type == "source":
                 header.source = parsed.value
+                header.sources += (parsed.value,)
             else:
                 other_meta.append(line)
         elif parsed.type == "contig":
