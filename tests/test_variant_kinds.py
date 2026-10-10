@@ -46,6 +46,11 @@ def test_sniffles_plain_command_line_is_a_step_of_the_program_its_first_word_nam
     )
 
 
+def test_a_sniffles_flag_that_takes_no_value_does_not_swallow_the_next_option():
+    (step,) = steps(header('##command="/usr/local/bin/sniffles --phase -i a.bam --non-germline -v s.vcf"'))
+    assert (step.inputs, step.output) == (("a.bam",), "s.vcf")
+
+
 def test_a_plain_command_line_of_an_undeclared_program_is_unread():
     assert ps.steps_of(header('##command="/bin/freebayes -f ref.fa a.bam"')) is None
 
@@ -69,6 +74,7 @@ def test_gatk3_apply_recalibration_reads_its_rod_binding_input_and_its_output():
     "line, inputs, output",
     [
         ("##bcftools_normCommand=norm -m -any -Oz -o out.vcf.gz in.vcf.gz; Date=x", ("in.vcf.gz",), "out.vcf.gz"),
+        ("##bcftools_normCommand=norm -D -o out.vcf in.vcf; Date=x", ("in.vcf",), "out.vcf"),
         ("##bcftools_annotateCommand=annotate -x INFO/AT -a ann.bed -o out.vcf in.vcf; Date=x", ("in.vcf",), "out.vcf"),
         (
             "##bcftools_mergeCommand=merge --force-samples -o m.vcf a.vcf.gz b.vcf.gz; Date=x",

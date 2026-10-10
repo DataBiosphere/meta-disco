@@ -106,7 +106,8 @@ TOOL_ARGUMENTS: dict[tuple[str, str], ToolArguments] = {
         outputs=("-o", "--output"),
         positional=True,
         no_value=frozenset(
-            {"-a", "--atomize", "-N", "--do-not-normalize", "-s", "--strict-filter", "--force"}
+            {"-a", "--atomize", "-D", "--remove-duplicates", "-N", "--do-not-normalize", "-s", "--strict-filter"}
+            | {"--force"}
             | {"--no-version", "-W", "--write-index"}
         ),
     ),
@@ -133,7 +134,14 @@ TOOL_ARGUMENTS: dict[tuple[str, str], ToolArguments] = {
         inputs=("-b", "--bam-input", "--cram-input", "--vc-gvcf-input", "--variant"),
         input_lists=("--variant-list",),
     ),
-    (PROGRAM, "sniffles"): ToolArguments(inputs=("-i", "--input"), outputs=("-v", "--vcf")),
+    (PROGRAM, "sniffles"): ToolArguments(
+        inputs=("-i", "--input"),
+        outputs=("-v", "--vcf"),
+        no_value=frozenset(
+            {"--phase", "--non-germline", "--mosaic", "--output-rnames", "--no-qc", "--symbolic"}
+            | {"--allow-overwrite", "--quiet", "--no-consensus", "--combine-consensus", "--no-sort", "--no-progress"}
+        ),
+    ),
 }
 
 
