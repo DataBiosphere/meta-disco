@@ -70,8 +70,9 @@ class VCFHeader:
     filter_fields: list[VcfStructuredMeta] | None = None  # ##FILTER fields
     alt_fields: list[VcfStructuredMeta] | None = None  # ##ALT declarations (#654)
     other_meta: list[str] | None = None  # Other ## lines the line parser accepted
-    # The key of each ``##key=value`` line in ``other_meta``, in header order (#654), so a
-    # reader looking for a key (``##DeepVariant_version``) does not parse the lines again.
+    # The key of each simple ``##key=value`` line in ``other_meta``, in header order (#654),
+    # so a reader looking for a key (``##DeepVariant_version``) does not parse the lines
+    # again. A structured ``##key=<...>`` line in ``other_meta`` adds no key here.
     meta_keys: tuple[str, ...] = ()
     # ``##`` lines the line parser rejected (a key it cannot match, such as GATK3's
     # dotted ``##GATKCommandLine.<Tool>``), verbatim. Kept apart from

@@ -1935,7 +1935,7 @@ code, basis content, in `src/meta_disco/header_classifier.py`
 Reads:
 
 ```text
-VCF header: its command lines, as steps; the producing step (the end of their data flow), walked back through steps that keep the kind (SelectVariants, ApplyVQSR, bcftools view, norm, annotate) to the step that called the variants
+VCF header: its command lines, as steps; the producing step (the end of their data flow), walked back through steps that keep the kind (SelectVariants, ApplyVQSR, ApplyRecalibration, bcftools view, norm, annotate) to the step that called the variants
 ```
 
 Sets:

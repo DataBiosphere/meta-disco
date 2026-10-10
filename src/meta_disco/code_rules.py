@@ -255,8 +255,8 @@ VCF_STEP_CALLER_KIND = CodeRule(
     source_type=SOURCE_CONTENT_READ,
     reads=(
         "VCF header: its command lines, as steps; the producing step (the end of their data flow), "
-        "walked back through steps that keep the kind (SelectVariants, ApplyVQSR, bcftools view, norm, "
-        "annotate) to the step that called the variants"
+        "walked back through steps that keep the kind (SelectVariants, ApplyVQSR, ApplyRecalibration, "
+        "bcftools view, norm, annotate) to the step that called the variants"
     ),
     sets=("variant_kind",),
     rationale=(
