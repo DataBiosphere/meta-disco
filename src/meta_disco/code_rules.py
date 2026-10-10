@@ -271,12 +271,15 @@ VCF_SOURCE_CALLER_KIND = CodeRule(
     module=HEADER_CLASSIFIER,
     basis=BASIS_CONTENT,
     source_type=SOURCE_CONTENT_READ,
-    reads="VCF header with no command line: its ##source lines and a ##DeepVariant_version line",
+    reads=(
+        "VCF header whose command lines name no caller (or that has none): its ##source lines and a "
+        "##DeepVariant_version line"
+    ),
     sets=("variant_kind",),
     rationale=(
         _CALLER_KINDS + "Structural-variant callers (Sniffles, SVIM) and DeepVariant record "
-        "themselves only so. Taken only where they name exactly one tool: a header naming two "
-        "(SVIM-asm beside DeepVariant, in a concatenation of their calls) gives no kind."
+        "themselves only so. Taken only where they name exactly one tool, spellings of one caller "
+        "counted once: a header naming two tools gives no kind."
     ),
 )
 VCF_MERGE_SMALL_CALLERS = CodeRule(

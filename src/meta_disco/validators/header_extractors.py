@@ -406,13 +406,13 @@ def match_vcf_header_pattern(header: VCFHeader, header_type: str, pattern: str) 
     Args:
         header: Parsed VCFHeader object
         header_type: Type of header line (##reference, ##source, ##contig, ##INFO,
-            ##FORMAT, ##FILTER)
+            ##FORMAT, ##FILTER, ##ALT)
         pattern: Regex pattern to match
 
     Returns:
         True if a matching header line satisfies the pattern. What the pattern is
         tested against depends on the type: the value for ##reference/##source,
-        the ID for ##INFO/##FORMAT/##FILTER, the ``assembly`` subfield for
+        the ID for ##INFO/##FORMAT/##FILTER/##ALT, the ``assembly`` subfield for
         ##contig, and the raw line for any other (##-prefixed) type.
     """
     compiled = re.compile(pattern, re.IGNORECASE)

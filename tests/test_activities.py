@@ -189,3 +189,9 @@ def test_read_through_names_each_role_of_a_term_that_reads_through_its_parent():
     assert roles and set(roles) <= {i.role for i in activities.declarations()[activities.COHORT_MERGE].inputs}
     for through in roles.values():
         assert any(through in {i.role for i in d.inputs} for d in activities.declarations().values())
+
+
+def test_the_variant_kind_passes_across_an_index_a_merge_and_a_cohort_merge_only():
+    """A call creates a kind and a filter can narrow one, so neither passes it (#654)."""
+    passing = {term for term in activities.declarations() if "variant_kind" in activities.passes(term)}
+    assert passing == {activities.INDEXING, activities.MERGE, activities.COHORT_MERGE}

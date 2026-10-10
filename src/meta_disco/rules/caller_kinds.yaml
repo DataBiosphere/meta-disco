@@ -2,9 +2,11 @@
 #
 # A VCF's `variant_kind` is read from the caller that made it (`meta_disco.variant_kinds`):
 # the producing step of its header, walked back through the steps listed under
-# `keeps_kind`, or, where its header records no command line, the one tool its
-# `##source` lines name. Each name below is matched whole and case-insensitively against a
-# step's tool (as `validators.command_lines` reads it) and against a `##source` value.
+# `keeps_kind`, or, where no command line names a caller, the one tool its
+# `##source` and `##DeepVariant_version` lines name. A caller's `pattern` is matched whole
+# and case-insensitively against a step's tool (as `validators.command_lines` reads it) and
+# against a `##source` value; the `keeps_kind` and `merges` names are matched whole,
+# case-insensitively, against a step's tool.
 #
 # `callers`: a tool and the kind of variant it calls, with why. A tool not listed gives no
 # kind, and its file is `not_classified`, never guessed.
@@ -57,8 +59,7 @@ callers:
     kind: structural
     reason: >-
       A long-read structural-variant caller (Sniffles and Sniffles2): it calls
-      insertions, deletions, duplications, inversions and breakends of 50 bp or more by
-      default.
+      insertions, deletions, duplications, inversions and breakends.
   - name: SVIM
     pattern: "svim(?:-asm)?(?:[_-]v?[0-9][0-9.]*)?"
     kind: structural

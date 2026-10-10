@@ -116,6 +116,7 @@ rules:
   - id: variant_kind_on_variants
     description: >-
       A variant kind is the kind of a callset's calls, so a file given one holds variants:
-      its data_type, if classified, must be variants or a term under it.
+      its data_type, if classified, must be variants or a term under it. Read on inference
+      output, as every rule here is: an index takes its parent's kind only at reconcile.
     when: {variant_kind: {status: "classified"}}
     require: {data_type: {under: variants}}

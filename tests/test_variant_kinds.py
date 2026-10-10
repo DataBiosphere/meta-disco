@@ -118,6 +118,15 @@ def test_a_kept_step_whose_input_no_step_wrote_takes_the_headers_one_other_step(
     assert "the header's one other step" in reading.reason
 
 
+@pytest.mark.parametrize(
+    "extra, doubt",
+    [(SVTYPE, "declares structural-variant fields"), ("##source=Sniffles2_2.0.7", "also names Sniffles2_2.0.7")],
+)
+def test_the_headers_one_other_step_is_not_taken_where_the_rest_of_the_header_doubts_it(extra, doubt):
+    reading = kind(IMPORT, SELECT, extra, name="chr1.100000001_100100000.genotyped.vcf.gz")
+    assert reading.kind is None and reading.reason.startswith(vk.FALLBACK_DISAGREES) and doubt in reading.reason
+
+
 def test_a_kept_step_with_no_caller_in_the_header_gives_no_kind():
     reading = kind(PASS, name="1kgp.chr1.recalibrated.snp_indel.pass.vcf.gz")
     assert reading.kind is None and reading.reason.startswith(vk.NO_CALLER_ON_CHAIN)
@@ -144,6 +153,23 @@ def test_a_renamed_callers_output_takes_the_headers_one_step():
     assert reading.kind == "structural"
 
 
+def test_with_no_one_producing_step_two_other_tools_give_no_kind():
+    # Neither step wrote this file, and the header's other steps are two callers of two kinds.
+    reading = kind(HC, SNIFFLES_COMMAND, name="x.vcf.gz")
+    assert reading.kind is None and reading.reason.startswith(vk.NO_CALLER_ON_CHAIN)
+    assert "2 other tools" in reading.reason
+
+
+def test_a_kept_steps_input_written_by_two_steps_is_not_walked_to_either():
+    combine = gatk4("CombineGVCFs", "-V a.g.vcf -O chr1.100000001_100100000.margined.genotyped.vcf.gz")
+    reading = kind(GENOTYPE, combine, SELECT, name="chr1.100000001_100100000.genotyped.vcf.gz")
+    assert reading.kind is None and "several steps" in reading.reason
+
+
+def test_an_empty_fastq_holds_no_variants():
+    assert header_classifier.classify_from_fastq_header([])["variant_kind"]["status"] == "not_applicable"
+
+
 # --- rule 3: the one tool a header with no command line names -----------------------------
 
 
@@ -160,6 +186,12 @@ def test_a_renamed_callers_output_takes_the_headers_one_step():
 def test_the_one_tool_a_header_names_gives_its_kind(lines, expected):
     reading = kind(*lines)
     assert (reading.by, reading.kind) == (vk.BY_SOURCE, expected)
+
+
+def test_where_the_command_lines_name_no_caller_the_tool_the_header_names_gives_the_kind():
+    # PEPPER-Margin-DeepVariant's rejected calls: a DeepVariant version line and bcftools filters.
+    reading = kind("##DeepVariant_version=1.1.0", PASS, name="1kgp.chr1.recalibrated.snp_indel.pass.vcf.gz")
+    assert (reading.by, reading.kind) == (vk.BY_SOURCE, "small")
 
 
 def test_two_tools_naming_themselves_give_no_kind():

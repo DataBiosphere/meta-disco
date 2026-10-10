@@ -13,9 +13,11 @@ and the caller is found in the header, in this order:
    whose input no step the header records wrote (T2T's
    ``SelectVariants`` reads a callset whose ``GenotypeGVCFs`` line is not in the header) —
    the header's other steps, those that do not keep the kind, name it: a merge among them
-   (rule 5), else the one tool they are, if they are exactly one.
-3. **Where the header records no command line**, the one tool its ``##source`` lines, and
-   a ``##DeepVariant_version`` line, name (:data:`SELF_NAMING_KEYS`): exactly one, or none.
+   (rule 5), else the one tool they are, if they are exactly one and the rest of the header
+   bears it out, as rule 5's guard does a merge's callers (:func:`_fallback_doubt`).
+3. **Where no command line names a caller** (the header records none, or rules 1 and 2 find
+   none), the one tool its ``##source`` lines, and a ``##DeepVariant_version`` line, name
+   (:data:`SELF_NAMING_KEYS`): exactly one, or none.
 4. **A caller's kind** is its ``callers`` row's.
 5. **A merge** (``merges``) is ``small`` when every caller the header names, on a command
    line or a self-naming line (rule 3's), is a small-variant caller and the header declares no
@@ -60,6 +62,7 @@ NO_CALLER_ON_CHAIN = "no caller on the step chain"
 NOT_IN_TABLE = "caller not in the kind table"
 MIXED_MERGE = "a merge whose callers are not all small-variant callers"
 SV_DECLARED = "a merge whose header declares structural-variant fields"
+FALLBACK_DISAGREES = "the header's one other step is not borne out by the rest of the header"
 PVAR = "not a VCF"
 
 
@@ -162,21 +165,37 @@ def read_kind(header: VCFHeader, file_name: str) -> KindReading:
         return _none(BY_STEP, UNREAD_STEP, _unread_tools(header))
     steps = steps_of(header) or []
     if step is None:
-        caller, how = _header_caller(steps, table, f"no one step made this file ({outcome})")
+        caller, how, fallback = _header_caller(steps, table, f"no one step made this file ({outcome})")
     else:
-        caller, how = _walk_back(step, steps, table)
+        caller, how, fallback = _walk_back(step, steps, table)
     if caller is None:
-        return _none(BY_STEP, NO_CALLER_ON_CHAIN, how)
+        # Rule 3 where no command line names a caller: the tools the header names itself.
+        return _from_sources(header, table) if self_named_tools(header) else _none(BY_STEP, NO_CALLER_ON_CHAIN, how)
     if table.merges_callsets(caller.tool):
         return _merge(header, steps, caller, table)
     row = table.caller(caller.tool)
     if row is None:
         return _none(BY_STEP, NOT_IN_TABLE, f"{caller.tool} ({how})")
+    if fallback and (doubt := _fallback_doubt(header, row, table)):
+        return _none(BY_STEP, FALLBACK_DISAGREES, f"{caller.tool} ({how}); {doubt}")
     return KindReading(BY_STEP, row.kind, f"called by {row.name} ({how})")
 
 
-def _walk_back(step: Step, steps: list[Step], table: CallerKinds) -> tuple[Step | None, str]:
-    """The caller behind the producing ``step``, and how it was reached; None and why where none is."""
+def _fallback_doubt(header: VCFHeader, row: Caller, table: CallerKinds) -> str | None:
+    """Why the fallback's one other step cannot be taken as the caller, as rule 5 doubts a merge; None where nothing does.
+
+    A small-variant caller's header that declares a structural-variant field, or a header naming
+    itself a tool that is not a caller of the same kind, leaves the kind open.
+    """
+    if row.kind == "small" and declares_sv(header):
+        return "the header declares structural-variant fields"
+    named = [n for n in self_named_tools(header) if not table.keeps(n) and not table.merges_callsets(n)]
+    other = [n for n in named if getattr(table.caller(n), "kind", None) != row.kind]
+    return f"the header also names {', '.join(other)}" if other else None
+
+
+def _walk_back(step: Step, steps: list[Step], table: CallerKinds) -> tuple[Step | None, str, bool]:
+    """The caller behind the producing ``step``, how it was reached, and whether by rule 2's fallback; None and why where none is."""
     path = [step.tool]
     seen = {step}
     while table.keeps(step.tool):
@@ -189,24 +208,27 @@ def _walk_back(step: Step, steps: list[Step], table: CallerKinds) -> tuple[Step 
         seen.add(step)
         path.append(step.tool)
     if len(path) == 1:
-        return step, "the producing step"
-    return step, f"producing step {' <- '.join(path)}"
+        return step, "the producing step", False
+    return step, f"producing step {' <- '.join(path)}", False
 
 
-def _header_caller(steps: list[Step], table: CallerKinds, why: str) -> tuple[Step | None, str]:
-    """Where the chain names no caller: rule 2's fallback (module docstring). ``why`` says how the chain fell short."""
+def _header_caller(steps: list[Step], table: CallerKinds, why: str) -> tuple[Step | None, str, bool]:
+    """Where the chain names no caller: rule 2's fallback (module docstring). ``why`` says how the chain fell short.
+
+    The flag is True where the one other step is taken, which :func:`_fallback_doubt` then checks.
+    """
     others = [s for s in steps if not table.keeps(s.tool)]
     merge = next((s for s in others if table.merges_callsets(s.tool)), None)
     if merge is not None:
-        return merge, f"{why}; a {merge.tool} in the header"
+        return merge, f"{why}; a {merge.tool} in the header", False
     tools = list(dict.fromkeys(s.tool for s in others))
     if len(tools) != 1:
-        return None, f"{why}; the header records {len(tools)} other tools"
-    return others[0], f"{why}; {tools[0]}, the header's one other step"
+        return None, f"{why}; the header records {len(tools)} other tools", False
+    return others[0], f"{why}; {tools[0]}, the header's one other step", True
 
 
 def _from_sources(header: VCFHeader, table: CallerKinds) -> KindReading:
-    """Rule 3: the one tool the header's self-naming lines name, where it records no command line.
+    """Rule 3: the one tool the header's self-naming lines name, where no command line names a caller.
 
     Spellings of one caller (``Sniffles2_2.0.6`` and ``Sniffles2_2.0.7``) are one tool, the
     table's row; a spelling the table does not list is a tool of its own.
