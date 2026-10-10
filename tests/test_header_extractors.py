@@ -3,6 +3,7 @@
 from meta_disco.validators.header_extractors import (
     VcfSimpleMeta,
     VcfStructuredMeta,
+    declared_alt_ids,
     get_contig_lines,
     match_vcf_header_pattern,
     parse_vcf_header,
@@ -66,6 +67,16 @@ class TestParseVcfHeader:
     def test_unrecognized_simple_line_falls_to_other_meta(self):
         header = parse_vcf_header(self.HEADER)
         assert header.other_meta == ["##fileDate=20090805"]
+        assert header.meta_keys == ("fileDate",)
+
+    def test_alt_declarations_are_typed_and_read_as_their_type(self):
+        header = parse_vcf_header(
+            '##fileformat=VCFv4.2\n##ALT=<ID=DEL:ME,Description="Deletion of a mobile element">\n'
+            '##ALT=<ID=NON_REF,Description="Any other allele">\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO'
+        )
+        assert [alt.fields["ID"] for alt in header.alt_fields or []] == ["DEL:ME", "NON_REF"]
+        assert header.other_meta is None
+        assert declared_alt_ids(header, frozenset({"DEL", "INS"})) == {"DEL"}
 
 
 class TestMatchVcfHeaderPattern:

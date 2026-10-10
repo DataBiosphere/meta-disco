@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Meta-disco extracts and validates metadata from biological data files (BAM, CRAM, FASTQ, etc.) for the AnVIL Explorer and Terra Data Repository. It infers six dimensions — `data_modality`, `data_type`, `reference_assembly`, `assay_type`, `platform`, `instrument_model` — from filenames, extensions, and file headers (BAM/SAM `@SQ`/`@RG`, VCF `##contig`, FASTQ read names, FASTA/GFA content, IDAT chip type and scanner), using a deterministic tiered rule engine.
+Meta-disco extracts and validates metadata from biological data files (BAM, CRAM, FASTQ, etc.) for the AnVIL Explorer and Terra Data Repository. It infers seven dimensions — `data_modality`, `data_type`, `reference_assembly`, `assay_type`, `platform`, `instrument_model`, `variant_kind` — from filenames, extensions, and file headers (BAM/SAM `@SQ`/`@RG`, VCF `##contig`, FASTQ read names, FASTA/GFA content, IDAT chip type and scanner), using a deterministic tiered rule engine.
 
 ## Architecture
 
@@ -13,7 +13,7 @@ The project has two main components:
 1. **Classification** (`src/meta_disco/`, `src/meta_disco/rules/unified_rules.yaml`): the tiered rule engine that classifies files. Rules are declared in YAML and executed by `rule_engine.py`; content-based classifiers in `header_classifier.py` inspect fetched headers. `ClassifyPipeline` (`pipeline.py`) fetches, classifies, and writes output for each file type in `file_types.py`. This is what every classification runs through.
 
 2. **Schema** (`schema/` directory): LinkML-based schema and validation of the classification output.
-   - `src/meta_disco/schema/classification.yaml`: LinkML schema defining the `ClassificationRecord` (the six metadata dimensions nested under `classifications`, each a `{value, status, evidence}` entry) and the controlled vocabulary
+   - `src/meta_disco/schema/classification.yaml`: LinkML schema defining the `ClassificationRecord` (the seven metadata dimensions nested under `classifications`, each a `{value, status, evidence}` entry) and the controlled vocabulary
    - `scripts/validate_outputs.py`: Validates YAML instances against the schema
    - Uses uv for dependency management (Python 3.10+); its own env, separate from the runtime
 
@@ -95,7 +95,7 @@ make probe-tdr PROJECT=<tdr data project> SNAPSHOT=<snapshot name>
 ## Schema Details
 
 The LinkML schema (`classification.yaml`) defines the `ClassificationRecord` — the
-six metadata dimensions nested under `classifications`, each a `{value, status,
+seven metadata dimensions nested under `classifications`, each a `{value, status,
 evidence}` entry — plus the controlled vocabulary:
 - **reference_assembly_enum**: NCBI's assembly names as an `is_a` hierarchy (#473):
   GRCh37, GRCh38, and CHM13 (any release, or release unknown) above
@@ -113,7 +113,12 @@ evidence}` entry — plus the controlled vocabulary:
   term of our own (`snATAC-seq`) has no id and sits under the EFO term it narrows; the two
   array assays (`Methylation array`, `Genotyping array`) are EFO terms with no parent among the values
 - **data_type_enum**: dotted terms with `is_a` to the term before the last dot (#607),
-  e.g. `variants.germline.gvcf` under `variants.germline` under `variants`
+  e.g. `variants.germline.gvcf` under `variants.germline` under `variants`; each `variants`
+  subterm names its axis, origin or kind, which ADR-0003 separates (#654)
+- **variant_kind_enum**: `small` and `structural`, the one dimension whose value is a list
+  (`models.MULTIVALUED_FIELDS`, ADR-0003, #654): a claim declares one kind, a string, and
+  the record stores the settled value as `["small"]` (`models.stored_value` /
+  `settled_value`); read from a VCF's caller (`variant_kinds`, `rules/caller_kinds.yaml`)
 - also **platform_enum**
 
 `status` is required on every dimension; `value` is null unless status is `classified`.

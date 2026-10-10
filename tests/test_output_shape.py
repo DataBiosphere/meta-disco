@@ -57,6 +57,7 @@ import json
 from pathlib import Path
 
 import pytest
+import yaml
 
 from meta_disco import activities, schema_vocab
 from meta_disco.evidence import BedSignals, IdatHeader, SegmentTag, TarHead, VcfHead
@@ -65,6 +66,7 @@ from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
     ENTRY_KEYS,
+    MULTIVALUED_FIELDS,
     SOURCE_PUBLISHED_VALUE,
     SOURCE_REPOSITORY_METADATA,
     ClaimSource,
@@ -517,7 +519,13 @@ def test_output_structural_contract(output):
                 assert any(v is not None for v in entry["build"].values()), (
                     f"{ftype}.{field}: an all-null build should be omitted, not emitted"
                 )
-            assert entry["value"] is None or isinstance(entry["value"], str)
+            if field in MULTIVALUED_FIELDS:
+                # A list of one value until a rule settles several (ADR-0003, #654).
+                assert entry["value"] is None or (
+                    isinstance(entry["value"], list) and len(entry["value"]) == 1 and isinstance(entry["value"][0], str)
+                ), f"{ftype}.{field}: value={entry['value']!r}"
+            else:
+                assert entry["value"] is None or isinstance(entry["value"], str)
             # Stage 3 (#116) coherence: status is a schema-defined value (incl.
             # conflict, #88); sentinels live only in `status`; `value` is non-null
             # iff the field is CLASSIFIED.
@@ -539,6 +547,18 @@ def test_output_structural_contract(output):
                     assert ev.get("source_type") in schema_vocab.source_type_values(), (
                         f"{ftype}.{field} claim has missing or unknown source_type: {ev}"
                     )
+
+
+def test_the_multivalued_dimensions_are_the_schemas():
+    """``models.MULTIVALUED_FIELDS`` names exactly the dimensions whose ``value`` the schema makes a list."""
+    classes = yaml.safe_load(schema_vocab.default_schema_path().read_text())["classes"]
+    usage = classes["Classifications"]["slot_usage"]
+    multivalued = {
+        field
+        for field in CLASSIFICATION_FIELDS
+        if classes[usage[field]["range"]]["slot_usage"]["value"].get("multivalued")
+    }
+    assert multivalued == MULTIVALUED_FIELDS
 
 
 def test_the_golden_carries_a_conflict(output):
@@ -572,8 +592,9 @@ def test_output_values_in_vocabulary(output):
             value = record["classifications"][field]["value"]
             if value is None:
                 continue
-            if not schema_vocab.value_in_vocabulary(field, value):
-                violations.append(f"{ftype}: {field}={value!r}")
+            for term in value if field in MULTIVALUED_FIELDS else [value]:
+                if not schema_vocab.value_in_vocabulary(field, term):
+                    violations.append(f"{ftype}: {field}={term!r}")
     assert not violations, (
         "Pipeline output emits dimension values not in the LinkML schema vocabulary:\n  " + "\n  ".join(violations)
     )
@@ -681,7 +702,7 @@ def build_reconciled_output(pipeline_output: dict, standalone: dict) -> dict:
         def one(declared: str, build=None) -> list[Inherited]:
             return [Inherited(step["activity"], role, parents, declared, build)]
 
-        made = {"data_modality": one("genomic"), "assay_type": one("mixed")}
+        made = {"data_modality": one("genomic"), "assay_type": one("mixed"), "variant_kind": one("small")}
         if skip != "reference_assembly":
             made["reference_assembly"] = one("GRCh38", ("GRCh38", "p14"))
         return {slot: declared for slot, declared in made.items() if slot in passes}

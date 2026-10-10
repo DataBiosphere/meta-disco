@@ -22,7 +22,7 @@ nothing else.
 import json
 from pathlib import Path
 
-from meta_disco.models import CLASSIFICATION_FIELDS, STATUS_LABELS, build_field_entry
+from meta_disco.models import CLASSIFICATION_FIELDS, STATUS_LABELS, build_field_entry, stored_value
 
 OUTPUT_FILE = "bam_classifications.json"
 
@@ -44,7 +44,9 @@ def classifications(**dims) -> dict:
 
     A dimension not named, or named as ``None``, is ``not_classified``. Otherwise it takes a real value
     or a status label from ``models.STATUS_LABELS`` (``not_classified``,
-    ``not_applicable``, ``conflict``), which becomes that status with a null value. A
+    ``not_applicable``, ``conflict``), which becomes that status with a null value. A real
+    value is stored as a producer stores it (``models.stored_value``: a list of one for a
+    multivalued dimension). A
     keyword that is not a dimension is refused rather than ignored, so a misspelled
     one cannot leave the dimension it meant silently ``not_classified``.
     """
@@ -54,7 +56,9 @@ def classifications(**dims) -> dict:
     block = {}
     for dim in CLASSIFICATION_FIELDS:
         cell = dims.get(dim)
-        block[dim] = build_field_entry(None, cell) if cell in STATUS_LABELS else build_field_entry(cell)
+        block[dim] = (
+            build_field_entry(None, cell) if cell in STATUS_LABELS else build_field_entry(stored_value(dim, cell))
+        )
     return block
 
 

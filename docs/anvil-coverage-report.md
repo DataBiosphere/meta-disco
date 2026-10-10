@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-10-07 15:52:35**
+Classification run: **2026-10-09 23:09:11**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,088** files.
@@ -28,6 +28,7 @@ Processed **708,088** files.
 | **Reference Assembly** | 292,948 (41.4%) | 415,132 (58.6%) | 8 (0.0%) |
 | **Assay Type** | 28,145 (4.0%) | 679,943 (96.0%) | 0 (0.0%) |
 | **Instrument Model** | 23,202 (3.3%) | 684,886 (96.7%) | 0 (0.0%) |
+| **Variant Kind** | 325,529 (46.0%) | 382,559 (54.0%) | 0 (0.0%) |
 
 ---
 
@@ -129,7 +130,7 @@ Processed **708,088** files.
 |---|---:|---:|---|
 | `index` | 224,726 | 31.7% | .tbi (169,531)<br>.csi (41,186)<br>.crai (10,317)<br>.bai (2,742)<br>.fai (477)<br>.gzi (466)<br>.pbi (7) |
 | `variants.germline.gvcf` | 168,825 | 23.8% | .vcf (166,321)<br>.g.vcf (2,504) |
-| `variants` | 159,442 | 22.5% | (none) (124,335)<br>.vcf (35,107) |
+| `variants` | 159,504 | 22.5% | (none) (124,335)<br>.vcf (35,169) |
 | `qc_report` | 37,548 | 5.3% | .txt (37,548) |
 | `reads` | 24,383 | 3.4% | .fastq (21,270)<br>.bam (3,113) |
 | `not_classified` | 22,653 | 3.2% | (none) (10,069)<br>.txt (4,929)<br>.bed (2,771)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.bigwig (462)<br>.sizes (458)<br>.paf (297)<br>.sam (192)<br>.vcf (23)<br>.csv (18)<br>.dict (9)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
@@ -145,8 +146,8 @@ Processed **708,088** files.
 | `quantification` | 634 | 0.1% | .sf (634) |
 | `pangenome` | 449 | 0.1% | .gfa (314)<br>(none) (135) |
 | `expression_matrix` | 419 | 0.1% | .h5ad (350)<br>(none) (64)<br>.csv (3)<br>.txt (2) |
-| `variants.structural` | 215 | 0.0% | .vcf (215) |
 | `array_signal` | 160 | 0.0% | .idat (160) |
+| `variants.structural` | 153 | 0.0% | .vcf (153) |
 | `pangenome.reference` | 28 | 0.0% | .gfa (12)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
 | `sample_map` | 24 | 0.0% | .tsv (24) |
 | `sequence` | 20 | 0.0% | .fasta (14)<br>.fa (4)<br>.fna (2) |
@@ -412,4 +413,63 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | `Illumina NovaSeq X` | 68 | 0.0% | .cram (68) |
 
 **Note**: Inference reads the instrument model from a BAM/CRAM `@RG PM` value that names exactly one model (#532) and from an IDAT's run log naming the iScan's software (#603); a read-name serial prefix is a vendor numbering convention and is not read. Most files carry no such value, so the high not-classified rate is expected. This report reads inference only; the submitter tables, which reconcile reads, name models far more often.
+
+---
+
+## Variant Kind
+
+| | count | % |
+|---|---:|---:|
+| **Classified** | 325,529 | 46.0% |
+| **Not classified** | 382,559 | 54.0% |
+| **Conflict** | 0 | 0.0% |
+
+### What's not classified?
+
+| extension | count | reason (from evidence) |
+|---|---:|---|
+| .tbi | 169,531 | `No reason recorded` |
+| (none) | 134,605 | `No rule determined a value for variant_kind` |
+| .csi | 41,186 | `No reason recorded` |
+| .crai | 10,317 | `No reason recorded` |
+| .txt | 4,929 | `No rule determined a value for variant_kind` |
+| .pvar | 2,854 | `not a VCF: a PLINK 2 .pvar records no step of its own` |
+| .psam | 2,854 | `No rule determined a value for variant_kind` |
+| .pgen | 2,854 | `No rule determined a value for variant_kind` |
+| .bed | 2,771 | `No rule determined a value for variant_kind` |
+| .bai | 2,742 | `No reason recorded` |
+| .vcf | 1,763 | `no caller on the step chain: no one step made this file (no_single_end); the header records 0 other tools` |
+| .gff3 | 1,565 | `No rule determined a value for variant_kind` |
+| .chain | 926 | `No rule determined a value for variant_kind` |
+| .tsv | 899 | `No rule determined a value for variant_kind` |
+| .fai | 477 | `No reason recorded` |
+| .gzi | 466 | `No reason recorded` |
+| .bigwig | 462 | `No rule determined a value for variant_kind` |
+| .sizes | 458 | `No rule determined a value for variant_kind` |
+| .gfa | 326 | `No rule determined a value for variant_kind` |
+| .paf | 297 | `No rule determined a value for variant_kind` |
+| .sam | 192 | `No rule determined a value for variant_kind` |
+| .csv | 18 | `No rule determined a value for variant_kind` |
+| .dict | 9 | `No rule determined a value for variant_kind` |
+| .xg | 8 | `No rule determined a value for variant_kind` |
+| .pbi | 7 | `No reason recorded` |
+| .snarls | 6 | `No rule determined a value for variant_kind` |
+| .gg | 6 | `No rule determined a value for variant_kind` |
+| .min | 6 | `No rule determined a value for variant_kind` |
+| .dist | 6 | `No rule determined a value for variant_kind` |
+| .trans | 6 | `No rule determined a value for variant_kind` |
+| .gbwt | 6 | `No rule determined a value for variant_kind` |
+| .hal | 2 | `No rule determined a value for variant_kind` |
+| .gbz | 2 | `No rule determined a value for variant_kind` |
+| .hapl | 2 | `No rule determined a value for variant_kind` |
+| .delta | 1 | `No rule determined a value for variant_kind` |
+
+| Variant Kind | count | % | extensions |
+|---|---:|---:|---|
+| `not_classified` | 382,559 | 54.0% | .tbi (169,531)<br>(none) (134,605)<br>.csi (41,186)<br>.crai (10,317)<br>.txt (4,929)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bed (2,771)<br>.bai (2,742)<br>.vcf (1,763)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.gfa (326)<br>.paf (297)<br>.sam (192)<br>.csv (18)<br>.dict (9)<br>.xg (8)<br>.pbi (7)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.gbwt (6)<br>.hal (2)<br>.gbz (2)<br>.hapl (2)<br>.delta (1) |
+| `small` | 202,256 | 28.6% | .vcf (199,752)<br>.g.vcf (2,504) |
+| `not_applicable` | 123,120 | 17.4% | .txt (37,550)<br>.fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,509)<br>.cram (10,623)<br>.bed (8,752)<br>.bam (6,774)<br>.log (3,637)<br>.png (3,074)<br>.bw (2,536)<br>.fa (940)<br>.sf (634)<br>.h5ad (350)<br>.idat (160)<br>.fasta (38)<br>.tsv (24)<br>.pod5 (11)<br>.csv (3)<br>.fna (2) |
+| `structural` | 153 | 0.0% | .vcf (153) |
+
+**Note**: Read from the caller that made a VCF: its header's producing step, walked back through steps that keep the kind, or a `##source` naming one tool, looked up in `rules/caller_kinds.yaml` (#654). Not applicable to a file whose rule says it holds no variants. An index or a GenomicsDB workspace takes its parent's kind only at reconcile, which this report does not read.
 

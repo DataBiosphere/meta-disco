@@ -242,6 +242,63 @@ VCF_RECORDS_SMALL_VARIANTS = CodeRule(
         "touched. " + _RECORDS_NOT_HEADER + _DECLARED_ONLY + _FIRST_RECORDS
     ),
 )
+_CALLER_KINDS = (
+    "The caller calls one kind of variant, so its kind is the file's, looked up in "
+    "rules/caller_kinds.yaml; a tool the table does not list gives no kind (#654). The records "
+    "cannot settle it: a mixed callset shows a structural variant in its first records only by "
+    "chance (#630). "
+)
+VCF_STEP_CALLER_KIND = CodeRule(
+    id="vcf_step_caller_kind",
+    module=HEADER_CLASSIFIER,
+    basis=BASIS_CONTENT,
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "VCF header: its command lines, as steps; the producing step (the end of their data flow), "
+        "walked back through steps that keep the kind (SelectVariants, ApplyVQSR, ApplyRecalibration, "
+        "bcftools view, norm, annotate) to the step that called the variants"
+    ),
+    sets=("variant_kind",),
+    rationale=(
+        _CALLER_KINDS + "Where the chain names no caller (no one producing step, or a kept step's "
+        "input written by no step the header records), the header's steps that do not keep the kind "
+        "name it: a merge among them (vcf_merge_small_callers), else the one tool they are, if they are "
+        "exactly one. A command line the reader does not know gives no kind."
+    ),
+)
+VCF_SOURCE_CALLER_KIND = CodeRule(
+    id="vcf_source_caller_kind",
+    module=HEADER_CLASSIFIER,
+    basis=BASIS_CONTENT,
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "VCF header whose command lines name no caller (or that has none): its ##source lines and a "
+        "##DeepVariant_version line"
+    ),
+    sets=("variant_kind",),
+    rationale=(
+        _CALLER_KINDS + "Structural-variant callers (Sniffles, SVIM) and DeepVariant record "
+        "themselves only so. Taken only where they name exactly one tool, spellings of one caller "
+        "counted once: a header naming two tools gives no kind."
+    ),
+)
+VCF_MERGE_SMALL_CALLERS = CodeRule(
+    id="vcf_merge_small_callers",
+    module=HEADER_CLASSIFIER,
+    basis=BASIS_CONTENT,
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "VCF header whose caller is a merge (bcftools concat, merge): every caller its command lines "
+        "and ##source lines name, and its ##INFO and ##ALT declarations of structural variants"
+    ),
+    sets=("variant_kind",),
+    rationale=(
+        "A merge holds what its inputs held. It is small variants where every caller the header names "
+        "calls small variants and the header declares no structural-variant field: a merged header can "
+        "lose an input's ##source line, but the VCF spec requires a structural variant to be declared, "
+        "so an input's structural variants leave their declarations behind (#654)."
+    ),
+)
 BED_COORDINATE_REFERENCE = CodeRule(
     id="bed_coordinate_reference",
     module=HEADER_CLASSIFIER,
@@ -351,10 +408,18 @@ SAMPLE_MAP_CONTENT = CodeRule(
     basis=BASIS_CONTENT,
     source_type=SOURCE_CONTENT_READ,
     reads="a GATK sample-name map's rows: two or three tab-separated columns, the second a VCF path",
-    sets=("data_type", "data_modality", "reference_assembly", "assay_type", "platform", "instrument_model"),
+    sets=(
+        "data_type",
+        "data_modality",
+        "reference_assembly",
+        "assay_type",
+        "platform",
+        "instrument_model",
+        "variant_kind",
+    ),
     rationale=(
         "A file whose rows are a sample name and a VCF path is a list of files, not their "
-        "data (#621): its data_type is sample_map, and the five dimensions of the data do "
+        "data (#621): its data_type is sample_map, and the six dimensions of the data do "
         "not apply to it, as for a checksum (#596). Read from the content, so a file that "
         "is only named like a map keeps what its name says."
     ),
@@ -426,6 +491,9 @@ CODE_RULES = (
     VCF_GVCF,
     VCF_RECORDS_STRUCTURAL,
     VCF_RECORDS_SMALL_VARIANTS,
+    VCF_STEP_CALLER_KIND,
+    VCF_SOURCE_CALLER_KIND,
+    VCF_MERGE_SMALL_CALLERS,
     BED_COORDINATE_REFERENCE,
     BED_NONSTANDARD_CONTIGS,
     FASTA_TRANSCRIPT_CONTIGS,

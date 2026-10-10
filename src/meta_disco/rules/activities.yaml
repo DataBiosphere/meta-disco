@@ -58,7 +58,8 @@ activities:
         passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
     reason: >-
       Variants are called in the coordinates of the alignments (or gVCFs) they are called
-      from, so the reference passes with the sequencer and the library.
+      from, so the reference passes with the sequencer and the library. The variant kind
+      does not: the caller decides it (#654).
   - term: ExpressionActivity
     output: {form: [file], kind: [quantification, expression_matrix]}
     inputs:
@@ -94,7 +95,7 @@ activities:
         form: [file]
         required: true
         many: false
-        passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
+        passes: [data_modality, assay_type, platform, instrument_model, reference_assembly, variant_kind]
     reason: >-
       An index describes the data it points into, so it takes every dimension but its own
       kind, `data_type`.
@@ -155,6 +156,8 @@ activities:
       A callset processed into another keeps the calls it keeps as they were made: rows are
       labelled, removed or annotated, or some samples are dropped, but every call left came
       from the same reads, aligned to the same reference, so what those say still holds.
+      The variant kind does not pass: a selection by type (SelectVariants keeping SNPs)
+      narrows it (#654).
   - term: VariantFilterActivity
     reason: >-
       A filter labels or drops rows and changes nothing about the reads or reference behind
@@ -166,7 +169,7 @@ activities:
         form: [file]
         required: true
         many: true
-        passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
+        passes: [data_modality, assay_type, platform, instrument_model, reference_assembly, variant_kind]
     reason: >-
       Files of one kind joined into one keep what they share; where the inputs differ, the
       output is mixed (ADR-0002 decision 8).
@@ -178,7 +181,7 @@ activities:
         required: true
         many: false
         read_through: member
-        passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
+        passes: [data_modality, assay_type, platform, instrument_model, reference_assembly, variant_kind]
     reason: >-
       A merge of the files a cohort's list names (a GenomicsDB workspace built from a GATK
       sample-name map, #621): its input is the list, not each file, and the list passes

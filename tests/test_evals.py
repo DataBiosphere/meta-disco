@@ -976,3 +976,4 @@ class TestDerivedFileTierPrecedence:
         """Capture target BED without competing rules should get not_applicable."""
         result = engine.classify_extended(FileInfo.from_filename("exome_capture_targets.bed"))
         assert result.status_of("data_modality") == NOT_APPLICABLE
+        assert result.status_of("variant_kind") == NOT_APPLICABLE

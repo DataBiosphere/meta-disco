@@ -75,6 +75,8 @@ def test_rules_file_loads_and_is_nonempty():
         "rules:\n  - {id: a, when: {data_modality: {under: imaging.histology}}, require: {}}\n",  # not a term
         "rules:\n  - {id: a, when: {}, require: {data_modality: {not_under: nonsense}}}\n",  # not a term
         "rules:\n  - {id: a, when: {}, require: {assay_type: {under: scRNA-seq}}}\n",  # not a term
+        "rules:\n  - id: a\n    when: {}\n    require:\n      platform: {status_not: classified}\n"
+        "      platform: {status_not: classified}\n",  # a key twice in one mapping
     ],
 )
 def test_load_rules_rejects_malformed(tmp_path, yaml_text):
@@ -273,3 +275,22 @@ def test_iter_records_unwraps_shapes_and_skips_non_dicts(tmp_path):
     (run / "bam_classifications.json").write_text(json.dumps({"results": [good, "stray"]}))
     records = list(iter_records(run))
     assert records == [good]
+
+
+# --- variant kind (#654) --------------------------------------------------------
+
+
+def test_a_variant_kind_requires_a_variants_data_type():
+    kind = (["small"], "classified")
+    assert "variant_kind_on_variants" not in _rule_ids(_rec(variant_kind=kind, data_type=_c("variants.germline.gvcf")))
+    assert "variant_kind_on_variants" in _rule_ids(_rec(variant_kind=kind, data_type=_c("alignments")))
+    assert "variant_kind_on_variants" not in _rule_ids(_rec(variant_kind=NA, data_type=_c("alignments")))
+
+
+def test_a_microscopy_image_or_a_checksum_carries_no_variant_kind():
+    kind = (["small"], "classified")
+    image = _rec(data_modality=_c("imaging.microscopy"), data_type=_c("images"), variant_kind=kind)
+    checksum = _rec(data_type=_c("checksum"), variant_kind=kind)
+    assert "imaging_exclusive" in _rule_ids(image)
+    assert "auxiliary_inert" in _rule_ids(checksum)
+    assert "auxiliary_inert" not in _rule_ids(_rec(data_type=_c("checksum"), variant_kind=NA))

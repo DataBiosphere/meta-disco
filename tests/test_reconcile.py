@@ -382,6 +382,30 @@ def test_the_report_counts_each_datasets_values_and_they_sum_to_its_files(tmp_pa
         assert sum(counts.values()) == report["files"][DATASET], slot
 
 
+def test_a_multivalued_slot_is_settled_as_its_one_value_and_written_back_as_a_list(tmp_path, run, evidence, table):
+    """``variant_kind`` is stored as a list (ADR-0003): reconcile reads it as one value and writes a list again."""
+    write_run(run, [record(1, variant_kind="small"), record(2)])
+    report = go(run, tmp_path, evidence, table)
+    settled = slot(run, 1, "variant_kind")
+    assert (settled["value"], settled["inferred"]["value"]) == (["small"], ["small"])
+    assert report["values"][DATASET]["variant_kind"] == {"small": 1, NOT_CLASSIFIED: 1}
+
+
+def test_a_source_filling_a_multivalued_gap_is_counted_as_filled_over_inference(tmp_path, run, evidence):
+    """The settled list ``["small"]`` is the source's ``small``: the report compares them as one value."""
+    rows = TABLE + (
+        "  - id: variant_kind.small\n"
+        "    match: {slot: variant_kind, value: SNV_INDEL}\n"
+        "    declares: {variant_kind: small}\n"
+        "    reason: Small variants.\n"
+    )
+    write_run(run, [record(1), record(2)])
+    write_evidence(evidence, [("variant_kind", drs(1), "SNV_INDEL")])
+    report = go(run, tmp_path, evidence, load(tmp_path, rows))
+    assert slot(run, 1, "variant_kind")["value"] == ["small"]
+    assert report["filled_over_inference"] == {DATASET: {"variant_kind": 1}}
+
+
 def test_ac11_not_applicable_beside_a_value_is_a_conflict():
     assert resolve_slot("reference_assembly", inferred(NOT_APPLICABLE, None), [claim("GRCh38")], False) == (
         CONFLICT,

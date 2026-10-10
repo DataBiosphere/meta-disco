@@ -200,7 +200,7 @@ rules:
   # and `platform` explicitly to be reconsidered. This is that reconsideration: the
   # dimensions a parent supplies all behave alike now, and none is stamped.
   #
-  # Contrast `checksum_file` below, which stamps all five `not_applicable`: a checksum is
+  # Contrast `checksum_file` below, which stamps all six `not_applicable`: a checksum is
   # a hash of bytes with no coordinate space, while an index indexes coordinates into
   # its file's reference (#596).
   #
@@ -233,7 +233,7 @@ rules:
   # `data_type_enum`, and stamping the dimension `not_applicable` asserted the file
   # has no kind when the vocabulary has a word for its kind.
   #
-  # The other five are `not_applicable`: a checksum is a hash of a file's bytes. An
+  # The other six are `not_applicable`: a checksum is a hash of a file's bytes. An
   # `.md5` whose step is `ChecksumActivity` inherits nothing to meet this, since that
   # activity passes nothing (ADR-0002 decision 8, amended by #596).
   # ---------------------------------------------------------------------------
@@ -250,6 +250,7 @@ rules:
         assay_type: not_applicable
         platform: not_applicable
         instrument_model: not_applicable
+        variant_kind: not_applicable
     rationale: "Checksum file — a checksum, and no data of its own"
 
   # ---------------------------------------------------------------------------
@@ -268,6 +269,7 @@ rules:
         assay_type: not_applicable
         platform: not_applicable
         instrument_model: not_applicable
+        variant_kind: not_applicable
     rationale: "Log file — a log, and no data of its own"
 
   # ---------------------------------------------------------------------------
@@ -310,6 +312,7 @@ rules:
       data_type: array_signal
       status:
         reference_assembly: not_applicable
+        variant_kind: not_applicable
     rationale: "IDAT is Illumina's BeadChip intensity format, written by genotyping and methylation chips alike, so the extension cannot say which chip wrote the file, only that it is array signal (#603). Its intensities are keyed by probe, not by genome coordinate, so no reference applies until genotypes are called against a chip manifest"
 
   # ---------------------------------------------------------------------------
@@ -324,6 +327,8 @@ rules:
       data_modality: transcriptomic
       data_type: expression_matrix
       assay_type: sc/snRNA-seq
+      status:
+        variant_kind: not_applicable
     rationale: "Single-cell matrix format: transcriptomic data from a single-cell or single-nucleus assay, which one the format does not say (#563, #533)"
 
   # ---------------------------------------------------------------------------
@@ -342,6 +347,7 @@ rules:
         platform: not_applicable
         instrument_model: not_applicable
         reference_assembly: not_applicable
+        variant_kind: not_applicable
     rationale: "SVS files are Aperio whole-slide histology images used for pathology analysis"
 
   # ---------------------------------------------------------------------------
@@ -364,6 +370,7 @@ rules:
         instrument_model: not_applicable
         reference_assembly: not_applicable
         assay_type: not_applicable
+        variant_kind: not_applicable
     rationale: "Image files are derived visualizations (QC plots, assembly graphs) — not primary experimental data"
 
   # ---------------------------------------------------------------------------
@@ -379,6 +386,7 @@ rules:
       platform: ONT
       status:
         reference_assembly: not_applicable
+        variant_kind: not_applicable
     rationale: "FAST5 files contain raw Oxford Nanopore electrical signal data. Reference not applicable until basecalling/alignment"
 
   - id: nanopore_pod5
@@ -391,6 +399,7 @@ rules:
       platform: ONT
       status:
         reference_assembly: not_applicable
+        variant_kind: not_applicable
     rationale: "POD5 files contain raw Oxford Nanopore electrical signal data (newer format replacing FAST5)"
 
   # ---------------------------------------------------------------------------
@@ -405,6 +414,7 @@ rules:
       data_type: reads
       status:
         reference_assembly: not_applicable
+        variant_kind: not_applicable
     rationale: "FASTQ files contain raw sequencing reads. Reference not applicable until alignment"
 
   # ---------------------------------------------------------------------------
@@ -421,6 +431,7 @@ rules:
         platform: not_applicable
         instrument_model: not_applicable
         assay_type: not_applicable
+        variant_kind: not_applicable
     rationale: "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences"
 
   # ---------------------------------------------------------------------------
@@ -587,6 +598,7 @@ rules:
       data_type: assembly
       status:
         reference_assembly: not_applicable
+        variant_kind: not_applicable
     rationale: "Filename contains assembly/assembler indicator — de novo assembly"
 
   - id: fasta_haplotype_filename
@@ -600,6 +612,7 @@ rules:
       data_type: assembly
       status:
         reference_assembly: not_applicable
+        variant_kind: not_applicable
     rationale: "Filename contains haplotype/phasing indicator — de novo assembly"
 
   # ---------------------------------------------------------------------------
@@ -614,6 +627,8 @@ rules:
     then:
       data_modality: epigenomic.methylation
       data_type: annotations
+      status:
+        variant_kind: not_applicable
     rationale: "BED file is modbam2bed output or names CpG methylation calls; which assay produced them is not in the name"
 
   - id: bed_expression
@@ -626,6 +641,8 @@ rules:
       data_modality: transcriptomic
       data_type: annotations
       assay_type: RNA-seq
+      status:
+        variant_kind: not_applicable
     rationale: "BED file contains gene expression quantification or splicing data"
 
   - id: bed_assembly_qc
@@ -637,6 +654,8 @@ rules:
     then:
       data_modality: genomic
       data_type: annotations
+      status:
+        variant_kind: not_applicable
     rationale: "BED file is assembly QC output (haplotype regions, error flags) on de novo genomic assemblies"
 
   - id: bed_mosdepth_regions
@@ -649,6 +668,8 @@ rules:
     # does not show: mosdepth writes this file for any alignment (#541).
     then:
       data_type: annotations.coverage
+      status:
+        variant_kind: not_applicable
     rationale: "mosdepth's `<prefix>.regions.bed.gz`: mean read depth per genome window, measured from an alignment"
 
   # ---------------------------------------------------------------------------
@@ -668,6 +689,8 @@ rules:
       data_modality: transcriptomic
       data_type: annotations.coverage
       assay_type: RNA-seq
+      status:
+        variant_kind: not_applicable
     rationale: "A `Signal.Unique[Multiple].strand±` bigWig: STAR's per-base read depth, and STAR is an RNA-seq aligner"
 
   # ---------------------------------------------------------------------------
@@ -688,6 +711,7 @@ rules:
         assay_type: not_applicable
         platform: not_applicable
         instrument_model: not_applicable
+        variant_kind: not_applicable
     rationale: "Target/capture region file — reference data, not primary experimental data"
 
   # ---------------------------------------------------------------------------
@@ -703,6 +727,8 @@ rules:
       filename_pattern: "(?i)\\.stats\\.txt$|samtools\\.stats|(^|[._-])mosdepth"
     then:
       data_type: qc_report
+      status:
+        variant_kind: not_applicable
     rationale: "QC report (samtools stats, mosdepth, bcftools stats) about another file"
 
   - id: text_expression
@@ -714,6 +740,8 @@ rules:
     then:
       data_modality: transcriptomic
       data_type: expression_matrix
+      status:
+        variant_kind: not_applicable
     # No bare `counts.txt`: a count says nothing about what is counted, so a gene-count
     # table is left unclassified too. ANVIL_T2T's chrN.<population>.counts.txt are
     # chromosome/bin/count tables, not expression matrices (#485).
@@ -729,6 +757,8 @@ rules:
       data_modality: transcriptomic
       data_type: quantification
       assay_type: RNA-seq
+      status:
+        variant_kind: not_applicable
     rationale: "Salmon/Sailfish transcript-level quantification (quant.sf)"
 
   # ===========================================================================
@@ -905,6 +935,8 @@ rules:
       header_present: true
     then:
       data_type: alignments
+      status:
+        variant_kind: not_applicable
     rationale: "@SQ lines declare a reference, so the file is aligned to it. The reads themselves are not read (#538)"
 
   - id: unaligned_no_sq
@@ -918,6 +950,7 @@ rules:
       data_type: reads
       status:
         reference_assembly: not_applicable
+        variant_kind: not_applicable
     rationale: "No @SQ lines: the header declares no reference, so the file holds unaligned reads. Common for PacBio HiFi and ONT mod-base deliverables"
 
   # ===========================================================================
@@ -1080,6 +1113,8 @@ rules:
     then:
       platform: PACBIO
       data_type: reads
+      status:
+        variant_kind: not_applicable
     rationale: "PacBio CCS (HiFi) read names follow @movie/zmw/ccs format. The 'ccs' suffix indicates high-accuracy long reads (>Q20)"
 
 
@@ -1092,6 +1127,8 @@ rules:
     then:
       platform: PACBIO
       data_type: reads
+      status:
+        variant_kind: not_applicable
     rationale: "Generic PacBio read names follow @movie/zmw format"
 
   # ---------------------------------------------------------------------------
@@ -1106,6 +1143,8 @@ rules:
     then:
       platform: ONT
       data_type: reads
+      status:
+        variant_kind: not_applicable
     rationale: "ONT read names are UUIDs (format: 8-4-4-4-12 hex characters). Uniquely identifies Oxford Nanopore data"
 
   - id: fastq_ont_metadata
@@ -1117,6 +1156,8 @@ rules:
     then:
       platform: ONT
       data_type: reads
+      status:
+        variant_kind: not_applicable
     rationale: "ONT reads often include 'runid=' metadata in the header line"
 
   # ---------------------------------------------------------------------------

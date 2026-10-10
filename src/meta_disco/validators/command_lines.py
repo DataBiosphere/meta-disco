@@ -31,6 +31,10 @@ from functools import cached_property
 GATK = "gatk"
 GATK3 = "gatk3"
 BCFTOOLS = "bcftools"
+DRAGEN = "dragen"
+# A program that records its own invocation under a plain ``##command=`` key (Sniffles):
+# its tool is the file name of the line's first word.
+PROGRAM = "program"
 
 
 @dataclass(frozen=True)
@@ -58,7 +62,10 @@ _GATK_VARIANTS = ToolArguments(inputs=("-V", "--variant"), outputs=("-O", "--out
 
 # Keyed by (family, tool). The tools are the ones the corpus's VCF headers carry
 # (measured 2026-10-03 over the cached headers): GATK 4 and 3, and the bcftools
-# subcommands the T2T joint-calling files carry. Anything else is an unread step.
+# subcommands the T2T joint-calling files carry; and since #654 the callers a variant
+# kind is read from (Sniffles, DRAGEN) and the steps between a caller and its file
+# (GATK 3's ApplyRecalibration, bcftools norm, annotate and merge), measured 2026-10-09.
+# Anything else is an unread step.
 TOOL_ARGUMENTS: dict[tuple[str, str], ToolArguments] = {
     (GATK, "HaplotypeCaller"): ToolArguments(
         inputs=("-I", "--input"), outputs=("-O", "--output"), mode=("-ERC", "--emit-ref-confidence")
@@ -73,8 +80,10 @@ TOOL_ARGUMENTS: dict[tuple[str, str], ToolArguments] = {
     (GATK3, "HaplotypeCaller"): ToolArguments(inputs=("input_file",), outputs=("out",), mode=("emitRefConfidence",)),
     (GATK3, "GenotypeGVCFs"): ToolArguments(inputs=("variant",), outputs=("out",)),
     (GATK3, "CombineGVCFs"): ToolArguments(inputs=("variant",), outputs=("out",)),
+    (GATK3, "ApplyRecalibration"): ToolArguments(inputs=("input",), outputs=("out",)),
+    # `-f` names a file listing the inputs, as GATK's sample-name map does.
     (BCFTOOLS, "concat"): ToolArguments(
-        inputs=("-f", "--file-list"),
+        input_lists=("-f", "--file-list"),
         outputs=("-o", "--output"),
         positional=True,
         no_value=frozenset(
@@ -93,6 +102,46 @@ TOOL_ARGUMENTS: dict[tuple[str, str], ToolArguments] = {
             | {"--force-samples", "-W", "--write-index"}
         ),
     ),
+    (BCFTOOLS, "norm"): ToolArguments(
+        outputs=("-o", "--output"),
+        positional=True,
+        no_value=frozenset(
+            {"-a", "--atomize", "-D", "--remove-duplicates", "-N", "--do-not-normalize", "-s", "--strict-filter"}
+            | {"--force"}
+            | {"--no-version", "-W", "--write-index"}
+        ),
+    ),
+    # `-a` names the annotation source, not the data annotated, so it is not an input.
+    (BCFTOOLS, "annotate"): ToolArguments(
+        outputs=("-o", "--output"),
+        positional=True,
+        no_value=frozenset(
+            {"-k", "--keep-sites", "--force", "--single-overlaps", "--no-version", "-W", "--write-index"}
+        ),
+    ),
+    # `-l` names a file listing the inputs, as GATK's sample-name map does.
+    (BCFTOOLS, "merge"): ToolArguments(
+        input_lists=("-l", "--file-list"),
+        outputs=("-o", "--output"),
+        positional=True,
+        no_value=frozenset(
+            {"-0", "--missing-to-ref", "--force-samples", "--force-single", "--no-index", "--print-header"}
+            | {"--no-version", "-W", "--write-index"}
+        ),
+    ),
+    # DRAGEN writes into a directory under a prefix, so its line names no single output.
+    (DRAGEN, "dragen"): ToolArguments(
+        inputs=("-b", "--bam-input", "--cram-input", "--vc-gvcf-input", "--variant"),
+        input_lists=("--variant-list",),
+    ),
+    (PROGRAM, "sniffles"): ToolArguments(
+        inputs=("-i", "--input"),
+        outputs=("-v", "--vcf"),
+        no_value=frozenset(
+            {"--phase", "--non-germline", "--mosaic", "--output-rnames", "--no-qc", "--symbolic"}
+            | {"--allow-overwrite", "--quiet", "--no-consensus", "--combine-consensus", "--no-sort", "--no-progress"}
+        ),
+    ),
 }
 
 
@@ -106,8 +155,9 @@ class Step:
     ``output`` is None where the tool wrote to stdout (bcftools with no ``-o``) or the
     line names no single output (GATK 3's HaplotypeCaller names none). ``read`` is False
     for a line whose tool :data:`TOOL_ARGUMENTS` does not declare; such a step names no
-    input or output. ``family`` is None for a line that is neither GATK's nor bcftools', and
-    ``tool`` is then the line's ``ID``, or empty. ``stdin`` is True where a positional
+    input or output. ``family`` is None for a line of no family :meth:`VcfCommand.step`
+    reads (GATK's, bcftools', DRAGEN's, or a plain ``##command=`` line), and ``tool`` is
+    then the line's ``ID``, or empty. ``stdin`` is True where a positional
     argument is ``-``: an input read from stdin, which names no file and is not in ``inputs``.
     ``mode`` is the value of the line's :attr:`ToolArguments.mode` option (the first, where
     the line gives it twice), None where it gives none; two lines alike but for it are two steps.
@@ -168,17 +218,27 @@ class VcfCommand:
 
     @cached_property
     def step(self) -> Step:
-        """The command as a step, unread where :data:`TOOL_ARGUMENTS` does not declare its tool."""
-        if self.key.lower().startswith("gatkcommandline"):
+        """The command as a step, unread where :data:`TOOL_ARGUMENTS` does not declare its tool.
+
+        A plain ``##command=`` line (Sniffles') is a :data:`PROGRAM`'s, its tool the file
+        name of its first word, which is dropped from the words read.
+        """
+        words = self.words
+        key = self.key.lower()
+        if key.startswith("gatkcommandline"):
             if self.options_form:
                 return _gatk3_step(self)
             family, tool = GATK, self.tool_id or ""
         elif bcftools := _BCFTOOLS_KEY.match(self.key):
             family, tool = BCFTOOLS, bcftools.group(1)
+        elif key.startswith("dragencommandline"):
+            family, tool = DRAGEN, self.tool_id or ""
+        elif key == "command" and self.tool_id is None and words:
+            family, tool, words = PROGRAM, words[0].rsplit("/", 1)[-1], words[1:]
         else:
             return _unread(None, self.tool_id or "")
         arguments = TOOL_ARGUMENTS.get((family, tool))
-        return _unread(family, tool) if arguments is None else _option_step(family, tool, self.words, arguments)
+        return _unread(family, tool) if arguments is None else _option_step(family, tool, words, arguments)
 
 
 def vcf_commands(lines: Iterable[str]) -> list[VcfCommand]:

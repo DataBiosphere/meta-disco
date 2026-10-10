@@ -19,6 +19,8 @@ from meta_disco.models import (
     field_label,
     field_status,
     field_value,
+    settled_value,
+    stored_value,
 )
 
 
@@ -261,3 +263,26 @@ class TestBuildFieldEntry:
         # reject the contradiction instead.
         with pytest.raises(ValueError, match="must not carry a real value"):
             build_field_entry("genomic", status=NOT_CLASSIFIED)
+
+
+# --- a multivalued dimension's stored list (ADR-0003, #654) -----------------
+
+
+class TestStoredList:
+    def test_a_one_item_list_reads_as_its_value_and_writes_back_as_a_list(self):
+        record = _wrapped("variant_kind", build_field_entry(stored_value("variant_kind", "small")))
+        assert record["classifications"]["variant_kind"]["value"] == ["small"]
+        assert (field_value(record, "variant_kind"), field_label(record, "variant_kind")) == ("small", "small")
+
+    def test_an_empty_list_under_a_classified_status_is_incoherent(self):
+        record = _wrapped("variant_kind", {"value": [], "status": CLASSIFIED, "evidence": []})
+        with pytest.raises(ValueError, match="CLASSIFIED status requires a real value"):
+            field_label(record, "variant_kind")
+
+    def test_a_list_of_several_is_refused_until_a_rule_settles_several(self):
+        record = _wrapped("variant_kind", {"value": ["small", "structural"], "status": CLASSIFIED, "evidence": []})
+        with pytest.raises(ValueError, match="#656"):
+            field_label(record, "variant_kind")
+
+    def test_a_list_in_a_single_valued_dimension_is_not_read_as_its_item(self):
+        assert settled_value("data_modality", ["genomic"]) == ["genomic"]

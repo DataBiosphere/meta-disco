@@ -317,6 +317,13 @@ def test_a_broader_term_of_the_answer_counts_as_won(tmp_path):
     assert (rows["study_ref"]["files"], rows["study_ref"]["won"]) == (1, 1)
 
 
+def test_a_claim_of_one_kind_wins_a_slot_stored_as_a_list(tmp_path):
+    """``variant_kind`` is stored as ``["small"]`` (ADR-0003); a rule's ``small`` is that answer."""
+    rule = code_rules.VCF_STEP_CALLER_KIND.id
+    rows = run_of(tmp_path, {"variant_kind": slot(["small"], evidence=[claim(rule, "small")])})
+    assert (rows[rule]["files"], rows[rule]["won"]) == (1, 1)
+
+
 def test_a_claim_that_declares_no_answer_is_not_counted(tmp_path):
     inherited = code_rules.INHERITED_FROM_PARENT.id
     rows = run_of(

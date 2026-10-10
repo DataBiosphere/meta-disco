@@ -164,7 +164,7 @@ JOIN_KEYS = frozenset(
 # matters: make_claim runs a few million times per corpus, and schema_vocab was
 # test- and validation-only before this.
 
-# The six classification dimension fields, in canonical output order. Single
+# The seven classification dimension fields, in canonical output order. Single
 # source of truth for the field set — the rule engine, rule_loader's 'then' key
 # validation, and schema_vocab's dimensions all derive from this.
 CLASSIFICATION_FIELDS = (
@@ -174,7 +174,15 @@ CLASSIFICATION_FIELDS = (
     "reference_assembly",
     "assay_type",
     "instrument_model",
+    "variant_kind",
 )
+
+# The dimensions a record stores as a list (ADR-0003, #654): the schema's slots whose
+# ``value`` is ``multivalued``, held to it by test_output_shape. A claim still declares
+# one value, a string, and resolution runs over strings as for any other dimension;
+# only the settled value on a record is a list, written by :func:`stored_value` and read
+# back by :func:`settled_value`.
+MULTIVALUED_FIELDS = frozenset({"variant_kind"})
 
 
 def _field_entry(record: Mapping[str, Any], field_name: str):
@@ -211,9 +219,34 @@ def _field_entry(record: Mapping[str, Any], field_name: str):
     return record.get(field_name)
 
 
-def _entry_value(entry):
-    """Resolved value from a per-field entry (a dict ``{"value": ...}`` or scalar)."""
-    return entry.get("value") if isinstance(entry, dict) else entry
+def _entry_value(entry, field_name: str):
+    """Resolved value from a per-field entry (a dict ``{"value": ...}`` or scalar), as :func:`settled_value` reads it."""
+    return settled_value(field_name, entry.get("value") if isinstance(entry, dict) else entry)
+
+
+def stored_value(field_name: str, value: str | None) -> str | list[str] | None:
+    """A settled value as a record stores it: a one-item list for a dimension in ``MULTIVALUED_FIELDS``, else as given.
+
+    The write side of :func:`settled_value`. ``None`` stays ``None``.
+    """
+    if value is None or field_name not in MULTIVALUED_FIELDS:
+        return value
+    return [value]
+
+
+def settled_value(field_name: str, value: Any) -> Any:
+    """A stored value as resolution reads it: for a dimension in ``MULTIVALUED_FIELDS``, a one-item list's item.
+
+    The read side of :func:`stored_value`, whose lists hold one value. For such a dimension
+    an empty list reads as no value, so a ``classified`` status beside it fails the
+    coherence check, and a list of several raises ValueError: nothing settles several yet
+    (#656). Any other dimension's value is returned as it is.
+    """
+    if field_name not in MULTIVALUED_FIELDS or not isinstance(value, list):
+        return value
+    if len(value) > 1:
+        raise ValueError(f"{field_name} holds several values {value!r}; nothing settles several yet (#656)")
+    return value[0] if value else None
 
 
 def status_for_value(value) -> str:
@@ -325,7 +358,7 @@ def all_not_classified(evidence: list[dict]) -> dict:
     }
 
 
-def _entry_status(entry) -> str:
+def _entry_status(entry, field_name: str) -> str:
     """Status from a per-field entry: explicit ``status`` if set, else derived.
 
     When the entry carries an explicit ``status``, it is validated against ``value``
@@ -340,12 +373,9 @@ def _entry_status(entry) -> str:
     if isinstance(entry, dict):
         status = entry.get("status")
         if status is not None:
-            _assert_coherent(entry.get("value"), status)
+            _assert_coherent(_entry_value(entry, field_name), status)
             return status
-        value = entry.get("value")
-    else:
-        value = entry
-    return status_for_value(value)
+    return status_for_value(_entry_value(entry, field_name))
 
 
 def field_value(record: dict, field_name: str):
@@ -358,7 +388,7 @@ def field_value(record: dict, field_name: str):
     value-reads, status-checks, and bucket labels stay correctly separated and
     call sites do not need to change again.
     """
-    return _entry_value(_field_entry(record, field_name))
+    return _entry_value(_field_entry(record, field_name), field_name)
 
 
 def field_status(record: dict, field_name: str) -> str:
@@ -370,7 +400,7 @@ def field_status(record: dict, field_name: str) -> str:
     yielding one of CLASSIFIED / NOT_APPLICABLE / NOT_CLASSIFIED; a missing/None
     value reads as NOT_CLASSIFIED.
     """
-    return _entry_status(_field_entry(record, field_name))
+    return _entry_status(_field_entry(record, field_name), field_name)
 
 
 def field_detail(record: dict, field_name: str) -> dict:
@@ -416,8 +446,8 @@ def field_label(record: dict, field_name: str) -> str | None:
     status such as ``conflict`` would likewise surface here).
     """
     entry = _field_entry(record, field_name)
-    status = _entry_status(entry)
-    return _entry_value(entry) if status == CLASSIFIED else status
+    status = _entry_status(entry, field_name)
+    return _entry_value(entry, field_name) if status == CLASSIFIED else status
 
 
 def required_str(value: object, label: str, where: str) -> str:
