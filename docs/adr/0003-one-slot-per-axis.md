@@ -1,6 +1,6 @@
 # ADR-0003: One slot per axis — facets, not combined terms
 
-- **Status:** Proposed (2026-10-09), to be accepted when #654 merges; storage and user model decided by Dave the same day
+- **Status:** Accepted (2026-10-10, with #654's PR #661); proposed 2026-10-09, when the storage and user model were decided by Dave
 - **Decision record for:** [#654](https://github.com/DataBiosphere/meta-disco/issues/654) (variant kind), and the vocabularies it touches
 - **Related:** #630, #651, #652, #607 (gVCF), #580 (activity vocabulary), #563 (MODAL), #533 (EFO), #655 (sample count)
 

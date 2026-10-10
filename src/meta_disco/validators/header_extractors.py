@@ -62,8 +62,9 @@ class VCFHeader:
     reference: str | None = None  # ##reference
     contigs: list[VcfStructuredMeta] | None = None  # ##contig lines
     source: str | None = None  # ##source: the last such line, which the YAML rules match
-    # Every ##source line's value, in header order (#654): a joint-called file carries one
-    # per tool that wrote it, and ``source`` keeps only the last.
+    # Every ##source line's value, in header order (#654); ``source`` keeps only the last.
+    # A header can carry several (T2T's joint-called files name GenomicsDBImport and
+    # SelectVariants), and a merged one may keep only one input's.
     sources: tuple[str, ...] = ()
     info_fields: list[VcfStructuredMeta] | None = None  # ##INFO fields
     format_fields: list[VcfStructuredMeta] | None = None  # ##FORMAT fields
