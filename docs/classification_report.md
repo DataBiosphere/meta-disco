@@ -174,7 +174,7 @@ Each JSON file contains:
 Each record carries the file's identity and a `classifications` object with one
 `{value, status, evidence}` entry per dimension; `value` is null unless `status` is
 `classified`. An abridged record from the output-shape golden fixture
-(`tests/fixtures/golden/expected_output.json`), with two of the six entries shown
+(`tests/fixtures/golden/expected_output.json`), with two of the seven entries shown
 in full:
 
 ```json
