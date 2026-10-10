@@ -154,6 +154,7 @@ def test_a_renamed_callers_output_takes_the_headers_one_step():
         (["##source=SVIM-asm-v1.0.2"], "structural"),
         (["##DeepVariant_version=1.4.0"], "small"),
         (["##source=HaplotypeCaller", "##source=HaplotypeCaller"], "small"),
+        (["##source=Sniffles2_2.0.6", "##source=Sniffles2_2.0.7"], "structural"),
     ],
 )
 def test_the_one_tool_a_header_names_gives_its_kind(lines, expected):
@@ -164,6 +165,11 @@ def test_the_one_tool_a_header_names_gives_its_kind(lines, expected):
 def test_two_tools_naming_themselves_give_no_kind():
     # NIA CARD's concatenation of PEPPER-Margin-DeepVariant calls and SVIM-asm calls.
     reading = kind("##source=SVIM-asm-v1.0.2", "##DeepVariant_version=1.4.0")
+    assert reading.kind is None and reading.reason.startswith(vk.SEVERAL_TOOLS)
+
+
+def test_a_caller_beside_a_tool_the_table_does_not_list_is_two_tools():
+    reading = kind("##source=Sniffles2_2.0.7", "##source=dbSNP")
     assert reading.kind is None and reading.reason.startswith(vk.SEVERAL_TOOLS)
 
 

@@ -206,16 +206,21 @@ def _header_caller(steps: list[Step], table: CallerKinds, why: str) -> tuple[Ste
 
 
 def _from_sources(header: VCFHeader, table: CallerKinds) -> KindReading:
-    """Rule 3: the one tool the header's self-naming lines name, where it records no command line."""
-    tools = self_named_tools(header)
-    if not tools:
+    """Rule 3: the one tool the header's self-naming lines name, where it records no command line.
+
+    Spellings of one caller (``Sniffles2_2.0.6`` and ``Sniffles2_2.0.7``) are one tool, the
+    table's row; a spelling the table does not list is a tool of its own.
+    """
+    spellings = self_named_tools(header)
+    if not spellings:
         return _none(BY_SOURCE, NO_CALLER_LINE, "no command line, ##source or tool version line")
+    tools = {(row.name if (row := table.caller(name)) else name): row for name in spellings}
     if len(tools) > 1:
-        return _none(BY_SOURCE, SEVERAL_TOOLS, ", ".join(tools))
-    row = table.caller(tools[0])
+        return _none(BY_SOURCE, SEVERAL_TOOLS, ", ".join(spellings))
+    ((tool, row),) = tools.items()
     if row is None:
-        return _none(BY_SOURCE, NOT_IN_TABLE, tools[0])
-    return KindReading(BY_SOURCE, row.kind, f"called by {row.name} (named by the header: {tools[0]})")
+        return _none(BY_SOURCE, NOT_IN_TABLE, tool)
+    return KindReading(BY_SOURCE, row.kind, f"called by {row.name} (named by the header: {', '.join(spellings)})")
 
 
 def _merge(header: VCFHeader, steps: Iterable[Step], merge: Step, table: CallerKinds) -> KindReading:

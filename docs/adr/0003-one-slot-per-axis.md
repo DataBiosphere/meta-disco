@@ -71,7 +71,7 @@ through the *format*; it does not subtype the data.
 |---|---|---|---|
 | what it is | `data_type` | `variants` (EDAM `data_3498`) | extension, content |
 | representation | file format (VCF, gVCF) | EDAM `format_3016`, `format_4018` | content (#607) |
-| kind | `variant_kind` (multivalued) | small, structural, CNV, bound to EDAM operations `0484`/`0452`, `3228`, `3961` | the producing step's caller (#654); whole-file scan (#652) |
+| kind | `variant_kind` (multivalued) | small, structural (#654); CNV later, when a rule can give it. Bound to EDAM operations `0484`/`0452`, `3228` (and `3961` for CNV) | the producing step's caller (#654); whole-file scan (#652) |
 | origin | `variant_origin` | germline, somatic (no EDAM term; SO's, unchecked) | the caller, or the dataset |
 
 ### Storage (decided by Dave, 2026-10-09)

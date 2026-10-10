@@ -2,11 +2,11 @@
 
 ## Executive Summary
 
-This report documents the rule-based metadata classification system for biological data files from the AnVIL (Analysis, Visualization, and Informatics Lab-space) platform. The system infers six classification dimensions from file metadata without requiring full file downloads.
+This report documents the rule-based metadata classification system for biological data files from the AnVIL (Analysis, Visualization, and Informatics Lab-space) platform. The system infers seven classification dimensions from file metadata without requiring full file downloads.
 
 ### Classification Dimensions
 
-The classifier populates six metadata fields:
+The classifier populates seven metadata fields:
 
 | Field | Question Answered | Example Values |
 | ----- | ----------------- | -------------- |
@@ -16,6 +16,7 @@ The classifier populates six metadata fields:
 | `reference_assembly` | What reference genome? | GRCh38, GRCh37, CHM13 and its T2T releases |
 | `assay_type` | What method class? | WGS, WES, RNA-seq, snRNA-seq |
 | `instrument_model` | Which instrument model, within the platform? | Illumina NovaSeq 6000, Revio, PromethION |
+| `variant_kind` | What kinds of variant does a callset hold, by its caller (#654)? A list. | small, structural |
 
 #### data_modality
 
