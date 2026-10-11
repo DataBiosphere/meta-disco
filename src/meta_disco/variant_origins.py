@@ -21,6 +21,8 @@ from .callers import (
     FoundMerge,
     NotFound,
     Reading,
+    load_callers,
+    named_callers,
     others_disagreeing,
     self_named_tools,
 )
@@ -57,7 +59,7 @@ def read_origin(header: VCFHeader, found: Found | FoundMerge | NotFound) -> Read
         return Reading(found.by, None, f"{doubt} ({found.how})")
     if row.origin == GERMLINE and declares_somatic(header):
         return Reading(found.by, None, f"{SOMATIC_DECLARED}: called by {row.name} ({found.how})")
-    if found.fallback and (other := others_disagreeing(header, row, "origin")):
+    if found.fallback and (other := others_disagreeing(header, row, "origin") + _moded_others(header, row)):
         detail = f"{found.tool} ({found.how}); the header also names {', '.join(other)}"
         return Reading(found.by, None, f"{FALLBACK_DISAGREES}: {detail}")
     return Reading(found.by, row.origin, f"called by {row.name} ({found.how})")
@@ -84,6 +86,13 @@ def _mode_doubt(header: VCFHeader, row: Caller, merged: bool = False) -> str | N
     if merged:
         return f"{MODE_NOT_STATED}: {row.name}, in a merge whose inputs' command lines may be lost"
     return f"{MODE_NOT_STATED}: {row.name}, no command line of it"
+
+
+def _moded_others(header: VCFHeader, row: Caller) -> list[str]:
+    """The tools the header names, other than ``row``'s, of a caller whose somatic mode it leaves open: rule 2's fallback doubts them as a merge does."""
+    table = load_callers()
+    others = [(n, r) for n in named_callers(header, table) if (r := table.caller(n)) is not None and r is not row]
+    return [n for n, r in others if _mode_doubt(header, r, merged=True)]
 
 
 def _turns_on(option: str, flags: frozenset[str]) -> bool:

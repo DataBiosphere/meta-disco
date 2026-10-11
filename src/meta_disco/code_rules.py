@@ -300,7 +300,8 @@ VCF_MERGE_SMALL_CALLERS = CodeRule(
     ),
 )
 _CALLER_ORIGINS = (
-    "A caller calls variants of one origin, germline or somatic, so its origin is the file's, "
+    "Each caller the table lists calls variants of one origin, germline or somatic (a caller that "
+    "mixes them, as Mutect2 can, is not listed), so its origin is the file's, "
     "looked up in rules/callers.yaml; a tool the table does not list gives no origin (#658). A "
     "caller with a somatic mode (Sniffles2's --non-germline, --mosaic) gives its origin only where "
     "the header records its command line without the mode's flags, or names it by a ##source "

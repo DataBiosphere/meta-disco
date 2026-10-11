@@ -1,8 +1,9 @@
 """The caller that made a VCF, found in its header (#654, #658), for the dimensions read from it.
 
 A VCF's records cannot settle what its caller calls: a mixed callset shows a structural
-variant in its first hundred records only by chance (#630). The caller can, because a caller
-calls one kind of variant, of one origin. So ``variant_kind`` (:mod:`.variant_kinds`) and
+variant in its first hundred records only by chance (#630). The caller can, because each caller
+the table lists calls one kind of variant, of one origin (one whose origin turns on a mode is
+listed with its ``somatic_mode``; one that mixes origins is not listed). So ``variant_kind`` (:mod:`.variant_kinds`) and
 ``variant_origin`` (:mod:`.variant_origins`) are the caller's, looked up in
 ``rules/callers.yaml``, and the caller is found in the header, in this order:
 

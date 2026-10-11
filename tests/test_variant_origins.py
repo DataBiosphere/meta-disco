@@ -64,6 +64,18 @@ def test_the_headers_one_other_step_is_refused_where_the_header_names_a_caller_o
     assert reading.value is None and reading.reason.startswith(callers.FALLBACK_DISAGREES)
 
 
+def test_the_headers_one_other_step_is_refused_where_the_header_names_a_caller_whose_mode_is_open():
+    reading = origin(IMPORT, SELECT, "##source=Sniffles2_2.0.7", name="chr1.100000001_100100000.genotyped.vcf.gz")
+    assert reading.value is None and reading.reason.startswith(callers.FALLBACK_DISAGREES)
+    assert "Sniffles2_2.0.7" in reading.reason
+
+
+def test_a_fallback_to_a_caller_with_a_mode_is_cleared_by_its_own_command_line():
+    # Sniffles wrote `sniffles.vcf`; the file was published under another name.
+    reading = origin(SNIFFLES_COMMAND, "##source=Sniffles2_2.0.7", name="sniffles_sv.vcf")
+    assert reading.value == "germline"
+
+
 def test_no_caller_gives_no_origin_with_the_callers_reason():
     reading = origin("##source=dbSNP")
     assert reading.value is None and reading.reason == f"{callers.NOT_IN_TABLE}: dbSNP"
