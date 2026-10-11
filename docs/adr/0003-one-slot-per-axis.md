@@ -1,7 +1,7 @@
 # ADR-0003: One slot per axis — facets, not combined terms
 
 - **Status:** Accepted (2026-10-10, with #654's PR #661); proposed 2026-10-09, when the storage and user model were decided by Dave
-- **Decision record for:** [#654](https://github.com/DataBiosphere/meta-disco/issues/654) (variant kind), and the vocabularies it touches
+- **Decision record for:** [#654](https://github.com/DataBiosphere/meta-disco/issues/654) (variant kind), [#658](https://github.com/DataBiosphere/meta-disco/issues/658) (variant origin), and the vocabularies it touches
 - **Related:** #630, #651, #652, #607 (gVCF), #580 (activity vocabulary), #563 (MODAL), #533 (EFO), #655 (sample count)
 
 ## Context
@@ -72,7 +72,7 @@ through the *format*; it does not subtype the data.
 | what it is | `data_type` | `variants` (EDAM `data_3498`) | extension, content |
 | representation | file format (VCF, gVCF) | EDAM `format_3016`, `format_4018` | content (#607) |
 | kind | `variant_kind` (multivalued) | small, structural (#654); CNV later, when a rule can give it. Bound to EDAM operations `0484`/`0452`, `3228` (and `3961` for CNV) | the producing step's caller (#654); whole-file scan (#652) |
-| origin | `variant_origin` | germline, somatic (no EDAM term; SO's, unchecked) | the caller, or the dataset |
+| origin | `variant_origin` | germline, somatic (no EDAM term; SO:0001778, SO:0001777 under SO's `variant_origin`, SO:0001762) | the caller (#658) |
 
 ### Storage (decided by Dave, 2026-10-09)
 
@@ -135,6 +135,29 @@ is shown as "Not determined".
   filter can narrow a kind, and a call creates one.
 - **Reference resources** (dbSNP, ClinVar, known-indels) name no caller and stay `not_classified`; a
   curator knowledge base keyed on md5 is a later option.
+
+### How #658 builds the origin (decided 2026-10-10)
+
+- **The caller only, never the dataset.** A dataset rule guesses for every file in it, as the
+  dataset reference rule #561 removed did. The caller is found as for the kind, and
+  `rules/caller_kinds.yaml` became `rules/callers.yaml`, each row giving its origin beside its
+  kind (`meta_disco.callers`, `meta_disco.variant_origins`).
+- **The slot is named for SO's term**, `variant_origin` (SO:0001762); GENO's and ClinVar's
+  "allele origin" describes one allele, and its other values (maternal, paternal, de novo) are
+  not in a callset's header.
+- **A caller with a somatic mode** (Sniffles2's `--non-germline`, `--mosaic`) gives its origin
+  only where its command line shows the mode off, or where its `##source` spelling is a version's
+  without the mode (Sniffles 1's plain `Sniffles`, whose 1.0.12 options were read). A run in the
+  mode, or a mode not stated, is `not_classified`.
+- **A germline reading is refused** where the header declares the `SOMATIC` INFO flag or
+  Mutect2's tumour and normal sample lines; a merge is germline only where every caller is.
+- **No somatic caller is in the table yet.** Mutect2 is not always somatic (its mitochondria mode
+  calls germline variants, and a tumour-only run mixes germline calls in), and no corpus file has
+  a somatic caller to write its rule from; the step reader knows Mutect2 and FilterMutectCalls,
+  so a Mutect2 file is `not_classified` as a caller the table does not list, until a somatic
+  dataset's own issue adds the row from its headers.
+- **Reconcile carries the origin** across index, merge and cohort-merge steps, and across
+  variant processing (filters), which can drop calls but not change where they arose.
 
 ## Consequences
 

@@ -2,7 +2,7 @@ id: https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/
 name: meta_disco_classification
 title: Meta-Disco File Classification Model
 description: >-
-  Full classification data model for meta-disco: the seven metadata dimensions,
+  Full classification data model for meta-disco: the eight metadata dimensions,
   per-field evidence, classification status, and typed derivation edges. Supersedes
   the retired anvil_file.yaml stub (issue #33) and realizes the data-model decision
   record in docs/derived-file-data-model.md.
@@ -25,6 +25,7 @@ prefixes:
   EFO: http://www.ebi.ac.uk/efo/EFO_
   OBI: http://purl.obolibrary.org/obo/OBI_
   EDAM: http://edamontology.org/
+  SO: http://purl.obolibrary.org/obo/SO_
   TerraCore: "https://datamodel.terra.bio/TerraCore#"
   MODAL: "https://datamodel.terra.bio/BioCoreTerms#"
   insdc.gca: "https://identifiers.org/insdc.gca:"
@@ -43,7 +44,7 @@ classes:
     tree_root: true
     description: >-
       One classified file. `classifications` carries the file's identity (the
-      seven dimension fields — what it is); generated_by names the step that made it
+      eight dimension fields — what it is); generated_by names the step that made it
       and the files it used (where it came from; ADR-0002). Matches the
       pipeline output shape.
     slots:
@@ -60,7 +61,7 @@ classes:
 
   Classifications:
     description: >-
-      The seven metadata dimensions for one file, each a Classification entry.
+      The eight metadata dimensions for one file, each a Classification entry.
       The pipeline also emits some file-type-specific scalar hints here (e.g.
       fastq's is_paired_end / instrument_hint); those are not modeled yet and
       pass under the gate's closed=False mode (see #134 follow-up).
@@ -72,6 +73,7 @@ classes:
       - platform
       - instrument_model
       - variant_kind
+      - variant_origin
     slot_usage:
       data_modality:
         range: DataModalityClassification
@@ -93,6 +95,9 @@ classes:
         required: true
       variant_kind:
         range: VariantKindClassification
+        required: true
+      variant_origin:
+        range: VariantOriginClassification
         required: true
 
   Classification:
@@ -166,6 +171,12 @@ classes:
         range: variant_kind_enum
         multivalued: true
 
+  VariantOriginInferred:
+    is_a: InferredConclusion
+    slot_usage:
+      value:
+        range: variant_origin_enum
+
   DataModalityClassification:
     is_a: Classification
     slot_usage:
@@ -228,6 +239,14 @@ classes:
         multivalued: true
       inferred:
         range: VariantKindInferred
+
+  VariantOriginClassification:
+    is_a: Classification
+    slot_usage:
+      value:
+        range: variant_origin_enum
+      inferred:
+        range: VariantOriginInferred
 
   ReferenceBuild:
     description: >-
@@ -511,10 +530,10 @@ classes:
     attributes:
       field:
         required: true
-        pattern: "^(data_modality|data_type|platform|reference_assembly|assay_type|instrument_model|variant_kind)\\Z"
+        pattern: "^(data_modality|data_type|platform|reference_assembly|assay_type|instrument_model|variant_kind|variant_origin)\\Z"
         description: >-
           The slot this row speaks to, spelled `field` on the wire and in the code
-          (contract 2.1). One of the seven classification dimensions.
+          (contract 2.1). One of the eight classification dimensions.
 
           Pinned by pattern rather than by an enum because the dimension names are
           slot *names* in this schema and not a vocabulary it declares;
@@ -1007,12 +1026,12 @@ slots:
   dataset_title:
     description: Title of the dataset the file belongs to.
   classifications:
-    description: The seven classified dimensions for this file.
+    description: The eight classified dimensions for this file.
     range: Classifications
     required: true
     inlined: true
 
-  # --- the seven dimensions (ranges narrowed to *Classification in slot_usage) ---
+  # --- the eight dimensions (ranges narrowed to *Classification in slot_usage) ---
   data_modality:
     description: The biological signal the file carries.
   data_type:
@@ -1042,6 +1061,13 @@ slots:
       file that holds no variants.
     comments:
       - "Its own dimension under ADR-0003 (one slot per axis), #654."
+  variant_origin:
+    description: >-
+      Whether a callset's variants are germline (carried from conception, in every cell) or
+      somatic (arisen later, in some cells), from the caller that made it. Not applicable to
+      a file that holds no variants.
+    comments:
+      - "Its own dimension under ADR-0003 (one slot per axis), #658; named for Sequence Ontology's variant_origin (SO:0001762), whose two children are its values."
 
   generated_by:
     description: >-
@@ -1328,8 +1354,8 @@ enums:
         description: >-
           Origin axis: calls of germline variants, inherited or present from conception.
           Assigned by the `##source` rule for GATK HaplotypeCaller, a germline caller
-          (`vcf_gatk_haplotypecaller`). Origin is an axis of its own under ADR-0003, and
-          this term moves to its own dimension when one is built.
+          (`vcf_gatk_haplotypecaller`). The same fact is `variant_origin`'s `germline`
+          (#658), read from the caller; this term is kept until its consumers move (#657).
       "variants.germline.gvcf":
         is_a: variants.germline
         description: >-
@@ -1345,7 +1371,7 @@ enums:
         is_a: variants
         description: >-
           Origin axis: calls of variants acquired in some cells only, typically a tumor's.
-          No rule assigns it.
+          No rule assigns it; the same fact is `variant_origin`'s `somatic` (#658).
       "variants.structural":
         is_a: variants
         description: >-
@@ -1659,6 +1685,23 @@ enums:
           them.
         meaning: EDAM:operation_3228
 
+  variant_origin_enum:
+    description: >-
+      Where a callset's variants arose (ADR-0003, #658), read from the caller that made it:
+      Sequence Ontology's two children of variant_origin (SO:0001762).
+    permissible_values:
+      germline:
+        description: >-
+          Variants present from the embryo on, in every cell, as a germline caller (GATK
+          HaplotypeCaller and joint genotyping, DeepVariant, Sniffles in its default mode)
+          calls them.
+        meaning: SO:0001778
+      somatic:
+        description: >-
+          Variants arisen after the embryo split, in some cells only, as a somatic caller
+          (GATK Mutect2) calls them against a matched normal.
+        meaning: SO:0001777
+
   classification_status_enum:
     description: >-
       Why a field has (or lacks) a value. Replaces sentinel values that were
@@ -1869,7 +1912,7 @@ enums:
 
   passed_dimension_enum:
     description: >-
-      The dimensions an activity's output can take from an input (#580): the seven
+      The dimensions an activity's output can take from an input (#580): the eight
       classification dimensions but `data_type`, which names a file's own kind and never
       passes (ADR-0002 decision 8: a VCF is not an alignment).
     permissible_values:
@@ -1879,6 +1922,7 @@ enums:
       assay_type:
       instrument_model:
       variant_kind:
+      variant_origin:
 
   parent_kind_enum:
     description: The kind of file a derivation edge points at.

@@ -294,3 +294,22 @@ def test_a_microscopy_image_or_a_checksum_carries_no_variant_kind():
     assert "imaging_exclusive" in _rule_ids(image)
     assert "auxiliary_inert" in _rule_ids(checksum)
     assert "auxiliary_inert" not in _rule_ids(_rec(data_type=_c("checksum"), variant_kind=NA))
+
+
+# --- variant origin (#658) ------------------------------------------------------
+
+
+def test_a_variant_origin_requires_a_variants_data_type():
+    origin = ("germline", "classified")
+    assert "variant_origin_on_variants" not in _rule_ids(_rec(variant_origin=origin, data_type=_c("variants")))
+    assert "variant_origin_on_variants" in _rule_ids(_rec(variant_origin=origin, data_type=_c("alignments")))
+    assert "variant_origin_on_variants" not in _rule_ids(_rec(variant_origin=NA, data_type=_c("alignments")))
+
+
+def test_a_microscopy_image_or_a_checksum_carries_no_variant_origin():
+    origin = ("germline", "classified")
+    image = _rec(data_modality=_c("imaging.microscopy"), data_type=_c("images"), variant_origin=origin)
+    checksum = _rec(data_type=_c("checksum"), variant_origin=origin)
+    assert "imaging_exclusive" in _rule_ids(image)
+    assert "auxiliary_inert" in _rule_ids(checksum)
+    assert "auxiliary_inert" not in _rule_ids(_rec(data_type=_c("checksum"), variant_origin=NA))
