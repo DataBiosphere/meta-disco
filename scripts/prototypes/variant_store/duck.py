@@ -124,12 +124,15 @@ def measure(sql: str, source: Source, label: str) -> dict[str, Any]:
     if result is None:
         con = _connect(server is not None)
         warm_times = []
+        warm: dict[str, Any] | None = None
         for _ in range(REPEATS):
             warm_rows, elapsed = _run_capped(con, sql)
             if warm_rows is None:
+                # Reported as capped even after runs that finished, never as a shorter median.
+                warm = {"capped": CAP_SECONDS, "completed_runs": len(warm_times)}
                 break
             warm_times.append(elapsed)
-        warm = summarize(warm_times) if warm_times else {"capped": CAP_SECONDS}
+        warm = warm or summarize(warm_times)
         result = {"rows": rows, "fresh": summarize(fresh_times), "warm": warm, "first_fresh_run": requests}
     took = f"capped at {CAP_SECONDS} s" if "capped" in result else f"{result['fresh']['median_ms']:,.0f} ms"
     print(f"  {label}: {took} {requests or ''}", file=sys.stderr, flush=True)
