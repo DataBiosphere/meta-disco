@@ -4,7 +4,7 @@ Measured on Apple M1 Max, 10 cores, 64.0 GB RAM, local SSD (macOS-15.6.1-arm64-a
 
 The pgen answers are checked on the carrier set and each carrier's zygosity; the .pgen stores phase but it was not compared. The bitmap file holds carriers only. pgen and the bitmap file are read from local disk only (`pgenlib` cannot read over HTTP). Their timings are given as **fresh / warm**: fresh opens the file (a `PgenReader`, or a mapping of the bitmap file) on every run; warm opens it once beforehand, as a running server would. Neither includes turning sample indices into names.
 
-Latency is the median of 5 runs. **fresh** = a new DuckDB per run (nothing cached in DuckDB; the OS file cache is warm after the first run, which cannot be dropped without `sudo purge`); **warm** = one DuckDB reused. **Simulated S3** is a local HTTP server that delays every request by 20 or 80 ms: it models round trips, not S3's throughput or variance. `req` is the requests and bytes the first fresh run made.
+Latency is the median of 5 runs, except where a cell says **1 run**: a question whose first run took over 10 s was not repeated. **fresh** = a new DuckDB per run (nothing cached in DuckDB; the OS file cache is warm after the first run, which cannot be dropped without `sudo purge`); **warm** = one DuckDB reused. **Simulated S3** is a local HTTP server that delays every request by 20 or 80 ms: it models round trips, not S3's throughput or variance. `req` is the requests and bytes the first fresh run made.
 
 ## Build
 
@@ -29,7 +29,7 @@ Genotypes in the VCF, tallied by bcftools: `0|0` 3,207,591,550, `0|1` 69,137,480
 
 ## Which samples carry variant V
 
-| Variant | Carriers | bcftools (tabix) | Parquet fresh | Parquet warm | Sim. S3 20 ms | Sim. S3 80 ms | pgen (fresh / warm) | Bitmap file (fresh / warm) |
+| Variant | Carriers | bcftools (tabix, 1 run) | Parquet fresh | Parquet warm | Sim. S3 20 ms | Sim. S3 80 ms | pgen (fresh / warm) | Bitmap file (fresh / warm) |
 |---|---|---|---|---|---|---|---|---|
 | SNV, AC 4 | 4 | 12 ms | 18 ms | 20 ms | 240 ms (8 req, 1.4 MB) | 726 ms (8 req, 1.4 MB) | 2.6 ms / 0.01 ms | 0.08 ms / 0.01 ms |
 | SNV, AC 64 | 64 | 14 ms | 20 ms | 19 ms | 241 ms (8 req, 1.4 MB) | 734 ms (8 req, 1.4 MB) | 2.6 ms / 0.01 ms | 0.07 ms / 0.01 ms |
@@ -46,7 +46,7 @@ Genotypes in the VCF, tallied by bcftools: `0|0` 3,207,591,550, `0|1` 69,137,480
 
 ## Which samples carry all of V1…V50
 
-| Set | Carriers | bcftools (tabix) | Parquet fresh | Parquet warm | Sim. S3 20 ms | Sim. S3 80 ms | pgen, read + filter (fresh / warm) | pgen, masks at query (fresh / warm) | Bitmap file (fresh / warm) |
+| Set | Carriers | bcftools (tabix, 1 run) | Parquet fresh | Parquet warm | Sim. S3 20 ms | Sim. S3 80 ms | pgen, read + filter (fresh / warm) | pgen, masks at query (fresh / warm) | Bitmap file (fresh / warm) |
 |---|---|---|---|---|---|---|---|---|---|
 | 50 consecutive common (AF>0.3) variants | 277 | 885 ms | 21 ms | 19 ms | 131 ms (6 req, 1.5 MB) | 387 ms (6 req, 1.5 MB) | 2.8 ms / 0.12 ms | 2.9 ms / 0.09 ms | 0.10 ms / 0.03 ms |
 | 50 random variants with AF>0.5 | 6 | 880 ms | 27 ms | 27 ms | 248 ms (51 req, 5.0 MB) | 770 ms (51 req, 5.0 MB) | 2.8 ms / 0.10 ms | 2.9 ms / 0.12 ms | 0.25 ms / 0.03 ms |
@@ -54,11 +54,11 @@ Genotypes in the VCF, tallied by bcftools: `0|0` 3,207,591,550, `0|1` 69,137,480
 
 ## All variants sample X carries
 
-| Sample | Variants | bcftools (full VCF) | Parquet by pos, fresh | Parquet by sample, fresh | By pos, sim. S3 80 ms | By sample, sim. S3 80 ms | pgen (fresh / warm) |
+| Sample | Variants | bcftools (full VCF, 1 run) | Parquet by pos, fresh | Parquet by sample, fresh | By pos, sim. S3 80 ms | By sample, sim. S3 80 ms | pgen (fresh / warm) |
 |---|---|---|---|---|---|---|---|
-| HG01354 | 59,303 | 15 s | 337 ms | 27 ms | 46 s (5,060 req, 151.3 MB) | 576 ms (6 req, 2.0 MB) | 141 ms / 137 ms |
-| HG01377 | 61,549 | 15 s | 313 ms | 28 ms | 46 s (5,056 req, 151.3 MB) | 570 ms (6 req, 2.1 MB) | 145 ms / 137 ms |
-| NA10855 | 56,451 | 20 s | 307 ms | 28 ms | 46 s (5,050 req, 151.2 MB) | 573 ms (9 req, 2.7 MB) | 141 ms / 138 ms |
+| HG01354 | 59,303 | 15 s | 337 ms | 27 ms | 46 s (1 run, 5,060 req, 151.3 MB) | 576 ms (6 req, 2.0 MB) | 141 ms / 137 ms |
+| HG01377 | 61,549 | 15 s | 313 ms | 28 ms | 46 s (1 run, 5,056 req, 151.3 MB) | 570 ms (6 req, 2.1 MB) | 145 ms / 137 ms |
+| NA10855 | 56,451 | 20 s | 307 ms | 28 ms | 46 s (1 run, 5,050 req, 151.2 MB) | 573 ms (9 req, 2.7 MB) | 141 ms / 138 ms |
 
 ## Carriers joined to the sample table
 
@@ -116,7 +116,7 @@ Projected rows: 15.1 billion. Projected build time on this machine, one chromoso
 - A precomputed bitmap file answers all of 50 in 0.02–0.03 ms with the file open, but pgen is already at 0.1 ms there. The file is 2.5 times pgen's size (428 MB; 31 GB genome-wide), holds carriers only, and sits on local disk.
 
 **Sample-keyed questions need a second copy if they must be interactive remotely.**
-- On the position-sorted table, "all variants of sample X" took 0.31–0.34 s locally but about 15 s at 20 ms and 46 s at 80 ms per request: a full scan, about 5,050 requests and 151 MB.
+- On the position-sorted table, "all variants of sample X" took 0.31–0.34 s locally but about 15 s at 20 ms and 46 s at 80 ms per request (single runs, as each took over 10 s): a full scan, about 5,050 requests and 151 MB.
 - The sample-sorted copy answered in 27–28 ms locally, about 0.2 s at 20 ms and about 0.57 s at 80 ms (6–9 requests). As built, though, it is nearly 12 times the size (projected 139 GB, about $3.20 a month).
 - Build it only if remote sample-keyed questions are wanted, and with an integer variant number in place of the strings (unmeasured). From an open `.pgen` the same question took 137–145 ms locally.
 

@@ -46,10 +46,12 @@ def ms(d: dict[str, Any] | float | None) -> str:
     return f"{value:,.2f} ms" if value >= 0.005 else "< 0.01 ms"
 
 
-def fresh(m: dict[str, Any]) -> str:
+def fresh(m: dict[str, Any], *notes: str) -> str:
+    """A fresh timing, with "1 run" where it was not repeated and any ``notes``, in one parenthesis."""
     if "capped" in m:
         return f"> {m['capped']['cap_seconds'] // 60} min, not interactive"
-    return ms(m["fresh"])
+    notes = ("1 run", *notes) if m["fresh"]["runs"] == 1 else notes
+    return ms(m["fresh"]) + (f" ({', '.join(notes)})" if notes else "")
 
 
 def fw(d: dict[str, Any]) -> str:
@@ -59,7 +61,7 @@ def fw(d: dict[str, Any]) -> str:
 
 def with_requests(m: dict[str, Any]) -> str:
     req = m["first_fresh_run"]
-    return f"{fresh(m)} ({req['requests']:,} req, {mb(req['bytes'])})" if req else fresh(m)
+    return fresh(m, f"{req['requests']:,} req", mb(req["bytes"])) if req else fresh(m)
 
 
 def panel_sizes() -> dict[str, int]:
@@ -116,7 +118,8 @@ def main() -> None:
     )
     out.append(
         "Latency is the median of "
-        f"{q['params']['repeats']} runs. **fresh** = a new DuckDB per run (nothing cached in DuckDB; the OS file cache is "
+        f"{q['params']['repeats']} runs, except where a cell says **1 run**: a question whose first run took "
+        f"over {q['params']['repeat_under_seconds']} s was not repeated. **fresh** = a new DuckDB per run (nothing cached in DuckDB; the OS file cache is "
         "warm after the first run, which cannot be dropped without `sudo purge`); **warm** = one DuckDB reused. "
         "**Simulated S3** is a local HTTP server that delays every request by "
         f"{near_ms} or {far_ms} ms: it models round "
@@ -178,7 +181,7 @@ def main() -> None:
     header = [
         "Variant",
         "Carriers",
-        "bcftools (tabix)",
+        "bcftools (tabix, 1 run)",
         "Parquet fresh",
         "Parquet warm",
         f"Sim. S3 {near_ms} ms",
@@ -211,7 +214,7 @@ def main() -> None:
     header = [
         "Set",
         "Carriers",
-        "bcftools (tabix)",
+        "bcftools (tabix, 1 run)",
         "Parquet fresh",
         "Parquet warm",
         f"Sim. S3 {near_ms} ms",
@@ -243,7 +246,7 @@ def main() -> None:
     header = [
         "Sample",
         "Variants",
-        "bcftools (full VCF)",
+        "bcftools (full VCF, 1 run)",
         "Parquet by pos, fresh",
         "Parquet by sample, fresh",
         f"By pos, sim. S3 {far_ms} ms",
