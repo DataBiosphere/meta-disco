@@ -43,7 +43,7 @@ from typing import Any
 import numpy as np
 import pgenlib
 import truth
-from common import PGEN_PREFIX, REPEATS, VCF, Checker, load, machine, save, size, stale, summarize, time_ms
+from common import PGEN_PREFIX, REPEATS, VCF, Checker, load, machine, machine_id, save, size, stale, summarize, time_ms
 
 CHUNK = 10_000  # variants read at a time while building the bitmap file
 BITMAP = PGEN_PREFIX.with_suffix(".carriers.bitmap")
@@ -100,11 +100,14 @@ def build_bitmap(pgen: bytes, variant_ct: int, sample_ct: int) -> float:
 
 def main() -> None:
     PGEN_PREFIX.parent.mkdir(parents=True, exist_ok=True)
-    # A rerun keeps each output that is no older than what it is made from, with its saved build time.
+    # A rerun keeps each output that is no older than what it is made from, with its saved build
+    # time, where that time was measured on this machine; otherwise it builds the output again.
+    result: dict[str, Any] = {"machine": machine(), "repeats": REPEATS}
     saved = load("pgen") or {}
+    if machine_id(saved.get("machine", {})) != machine_id(result["machine"]):
+        saved = {}
     pgen_file = PGEN_PREFIX.with_suffix(".pgen")
     king = PGEN_PREFIX.with_name("king")
-    result: dict[str, Any] = {"machine": machine(), "repeats": REPEATS}
     # pvar-cols=cm keeps the .pvar to its required columns (and an all-zero CM): the
     # panel's INFO, which plink2 would otherwise copy, is not in the Parquet table either.
     result["build_seconds"] = built(

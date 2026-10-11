@@ -40,6 +40,7 @@ from common import (
     fingerprint,
     load,
     machine,
+    machine_id,
     save,
     size,
     stale,
@@ -124,6 +125,9 @@ def main() -> None:
         "questions": fingerprint(load("questions")),
         "queries": QUERIES,
         "genotypes": fingerprint([measured.st_size, measured.st_mtime_ns]),
+        # Timings from another machine or DuckDB are not resumed into this one's.
+        "machine": machine_id(machine()),
+        "duckdb": duckdb.__version__,
     }
     saved: dict[str, Any] = load("query_parquet") or {}
     result: dict[str, Any] = saved

@@ -106,6 +106,11 @@ def machine() -> dict[str, Any]:
     }
 
 
+def machine_id(info: dict[str, Any]) -> str:
+    """A fingerprint of :func:`machine`'s description, less free disk space, which changes run to run."""
+    return fingerprint({k: v for k, v in info.items() if k != "disk_free_gb"})
+
+
 def time_ms(fn: Callable[[], Any], repeats: int) -> tuple[Any, list[float]]:
     """Run ``fn`` ``repeats`` times; return its last result and each run's wall time in ms."""
     times = []

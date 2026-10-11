@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from common import PROD_INPUT, load
+from common import PROD_INPUT, load, machine_id
 
 RESULTS_MD = Path(__file__).with_name("RESULTS.md")
 MARKER = "<!-- recommendation -->"
@@ -91,6 +91,12 @@ def table(header: list[str], rows: list[list[str]]) -> str:
 
 def main() -> None:
     b, q, p, s = need("build_parquet"), need("query_parquet"), need("pgen"), need("samples")
+    machines = {
+        name: machine_id(r["machine"])
+        for name, r in zip(("build_parquet", "query_parquet", "pgen", "samples"), (b, q, p, s), strict=True)
+    }
+    if len(set(machines.values())) > 1:
+        raise SystemExit(f"results were measured on different machines; rerun them on one: {machines}")
     m = b["machine"]
     g = q["genotypes"]
     bs = q["genotypes_by_sample"]
