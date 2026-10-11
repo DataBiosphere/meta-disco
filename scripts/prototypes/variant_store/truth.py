@@ -15,7 +15,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
-from common import CHROM, SEED, VCF, WORK, cached_lines, fingerprint, load, save, sh, time_ms
+from common import CHROM, SEED, VCF, WORK, cached_lines, fingerprint, load, machine, machine_id, save, sh, time_ms
 
 AN = 6404  # 3,202 samples, diploid on chr22
 ANSWERS_FORMAT = 2  # 2: a sample's answer is a sorted list of pairs
@@ -156,9 +156,10 @@ class Answers:
 
 
 def answers() -> Answers:
-    """The answers, from ``results/truth.json`` where it answers the current questions, else from bcftools."""
-    # The answers' format is part of what they were made for, so a format change recomputes them.
-    asked = fingerprint([_raw_questions(), ANSWERS_FORMAT])
+    """The answers, from ``results/truth.json`` where it answers the current questions on this machine, else from bcftools."""
+    # The answers' format, and the machine that timed bcftools, are part of what they were made
+    # for, so a change in either recomputes them.
+    asked = fingerprint([_raw_questions(), ANSWERS_FORMAT, machine_id(machine())])
     saved: dict[str, Any] | None = load("truth")
     if not saved or saved["questions"] != asked:
         singles, sets, samples = questions()

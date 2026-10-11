@@ -132,15 +132,11 @@ def main() -> None:
     saved: dict[str, Any] = load("query_parquet") or {}
     result: dict[str, Any] = saved
     if saved.get("params") != params:
-        # Start afresh, keeping only the sample-sorted copy's build time (the copy is kept too,
-        # unless it is older than the table it is sorted from).
-        build = (
-            {"by_sample_build_seconds": saved["by_sample_build_seconds"]} if "by_sample_build_seconds" in saved else {}
-        )
-        result = {"machine": machine(), "duckdb": duckdb.__version__, "params": params, **build}
+        result = {"machine": machine(), "duckdb": duckdb.__version__, "params": params}
     check = Checker(result.get("mismatches"))
     result["bcftools_ms"] = answers.bcftools_ms
-    if stale(GENOTYPES_BY_SAMPLE, GENOTYPES):
+    # Built again unless this run resumes one that timed the build, so the time is this run's.
+    if stale(GENOTYPES_BY_SAMPLE, GENOTYPES) or "by_sample_build_seconds" not in result:
         result["by_sample_build_seconds"] = round(build_by_sample(), 1)
     result["by_sample_bytes"] = size(GENOTYPES_BY_SAMPLE)
     save("query_parquet", result)
