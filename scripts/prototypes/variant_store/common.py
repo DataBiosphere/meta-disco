@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import platform
+import shlex
 import shutil
 import statistics
 import subprocess
@@ -67,12 +68,17 @@ def cached_lines(cache: Path, shell: str) -> list[list[str]]:
     """The tab-separated lines ``shell`` prints, run once and kept in ``cache``.
 
     ``shell`` runs under ``bash -o pipefail``, so a failed stage of a pipeline fails the
-    run and nothing is cached.
+    run and nothing is cached. A path in ``shell`` must be quoted by the caller (:func:`sh`).
     """
     if not cache.exists():
-        subprocess.run(["bash", "-o", "pipefail", "-c", f"{shell} > {cache}.part"], check=True)
+        subprocess.run(["bash", "-o", "pipefail", "-c", f"{shell} > {sh(Path(f'{cache}.part'))}"], check=True)
         Path(f"{cache}.part").rename(cache)
     return [line.split("\t") for line in cache.read_text().splitlines()]
+
+
+def sh(path: Path) -> str:
+    """``path`` quoted for a shell command line."""
+    return shlex.quote(str(path))
 
 
 def _first_line(cmd: list[str]) -> str | None:

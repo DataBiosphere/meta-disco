@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 
 import duckdb
-from common import GENOTYPES, PARQUET_OPTIONS, ROW_GROUP_SIZE, VCF, WORK, cached_lines, machine, save, size
+from common import GENOTYPES, PARQUET_OPTIONS, ROW_GROUP_SIZE, VCF, WORK, cached_lines, machine, save, sh, size
 
 QUERY_FORMAT = r"[%CHROM\t%POS\t%REF\t%ALT\t%SAMPLE\t%GT\n]"
 
@@ -40,7 +40,7 @@ def build() -> float:
         fifo = Path(tmp) / "genotypes.tsv"
         os.mkfifo(fifo)
         proc = subprocess.Popen(
-            f"bcftools query -i 'GT=\"alt\"' -f '{QUERY_FORMAT}' {VCF} > {fifo}",
+            f"bcftools query -i 'GT=\"alt\"' -f '{QUERY_FORMAT}' {sh(VCF)} > {sh(fifo)}",
             shell=True,
         )
         con = duckdb.connect()
@@ -66,7 +66,7 @@ def genotype_histogram() -> dict[str, int]:
     """Every genotype in the VCF tallied by value, cached in ``gt_histogram.tsv``."""
     rows = cached_lines(
         WORK / "gt_histogram.tsv",
-        f"bcftools query -f '[%GT\\n]' {VCF} 2>/dev/null"
+        f"bcftools query -f '[%GT\\n]' {sh(VCF)} 2>/dev/null"
         f" | LC_ALL=C awk '{{c[$1]++}} END{{for(k in c) print k\"\\t\"c[k]}}'",
     )
     return {gt: int(n) for gt, n in rows}

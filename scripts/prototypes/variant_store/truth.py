@@ -15,7 +15,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
-from common import CHROM, SEED, VCF, WORK, cached_lines, fingerprint, load, save, time_ms
+from common import CHROM, SEED, VCF, WORK, cached_lines, fingerprint, load, save, sh, time_ms
 
 AN = 6404  # 3,202 samples, diploid on chr22
 ANSWERS_FORMAT = 2  # 2: a sample's answer is a sorted list of pairs
@@ -50,7 +50,9 @@ def variant_id(pos: int, ref: str, alt: str) -> str:
 
 def sites() -> list[Variant]:
     """Every site of the VCF with its allele count, cached in ``sites.tsv``."""
-    rows = cached_lines(WORK / "sites.tsv", f"bcftools query -f '%POS\\t%REF\\t%ALT\\t%INFO/AC\\n' {VCF} 2>/dev/null")
+    rows = cached_lines(
+        WORK / "sites.tsv", f"bcftools query -f '%POS\\t%REF\\t%ALT\\t%INFO/AC\\n' {sh(VCF)} 2>/dev/null"
+    )
     return [Variant(int(pos), ref, alt, int(ac)) for pos, ref, alt, ac in rows]
 
 
