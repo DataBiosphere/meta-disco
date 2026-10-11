@@ -89,7 +89,16 @@ def test_sniffles2_whose_command_line_uses_no_mode_flag_is_germline():
     assert reading.value == "germline"
 
 
-@pytest.mark.parametrize("flags", ["--non-germline", "--mosaic", "-t 8 --mosaic --minsvlen 30"])
+@pytest.mark.parametrize(
+    "flags",
+    [
+        "--non-germline",
+        "--mosaic",
+        "-t 8 --mosaic --minsvlen 30",
+        "--mosaic-include-germline",
+        "--combine-output-filtered",
+    ],
+)
 def test_sniffles2_run_in_its_somatic_mode_gives_no_origin(flags):
     reading = origin("##source=Sniffles2_2.0.3", sniffles(flags), name="sniffles.vcf")
     assert reading.value is None and reading.reason.startswith(vo.SOMATIC_MODE)
@@ -105,10 +114,25 @@ def test_sniffles2_named_only_by_its_source_line_leaves_the_mode_unstated():
     assert reading.value is None and reading.reason.startswith(vo.MODE_NOT_STATED)
 
 
-@pytest.mark.parametrize("flags", ["--non", "--mos", "--non-germ"])
+@pytest.mark.parametrize("flags", ["--non", "--mosaic-incl", "--non-germ"])
 def test_a_shortened_mode_flag_counts_as_argparse_takes_it(flags):
     reading = origin(sniffles(flags), name="sniffles.vcf")
     assert reading.value is None and reading.reason.startswith(vo.SOMATIC_MODE)
+
+
+def test_a_bare_double_dash_is_not_a_mode_flag():
+    reading = origin(sniffles("-t 8 --"), name="sniffles.vcf")
+    assert reading.value == "germline"
+
+
+def test_a_spelling_that_predates_the_mode_beside_one_that_does_not_leaves_it_open():
+    reading = origin("##source=Sniffles", "##source=Sniffles2_2.0.7")
+    assert reading.value is None and reading.reason.startswith(vo.MODE_NOT_STATED)
+
+
+def test_a_declined_reason_that_mentions_a_caller_names_none():
+    reason = f"{vo.SOMATIC_DECLARED}: called by HaplotypeCaller (the producing step)"
+    assert callers.callers_in_reason(reason) == []
 
 
 def test_a_flag_that_only_shares_a_prefix_with_no_mode_flag_does_not_count():
@@ -198,7 +222,12 @@ def test_every_callers_origin_is_a_variant_origin_term():
 def test_a_somatic_mode_names_its_flags_and_the_spellings_that_predate_it():
     sniffles_row = callers.load_callers().caller("Sniffles")
     assert sniffles_row is not None and sniffles_row.somatic_mode is not None
-    assert sniffles_row.somatic_mode.flags == {"--non-germline", "--mosaic"}
+    assert sniffles_row.somatic_mode.flags == {
+        "--non-germline",
+        "--mosaic",
+        "--mosaic-include-germline",
+        "--combine-output-filtered",
+    }
     assert sniffles_row.somatic_mode.predates == {"sniffles"}
 
 
@@ -275,7 +304,8 @@ def test_every_rule_that_says_a_file_holds_no_calls_says_so_for_both_call_dimens
     declared = [m for m in mappings(rules) if {"variant_kind", "variant_origin"} & m.keys()]
     assert declared
     for m in declared:
-        assert m.get("variant_kind") == m.get("variant_origin") == "not_applicable", m
+        not_applicable = {k for k in ("variant_kind", "variant_origin") if m.get(k) == "not_applicable"}
+        assert len(not_applicable) in (0, 2), m
 
 
 @pytest.mark.parametrize(

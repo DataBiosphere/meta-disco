@@ -388,7 +388,14 @@ def test_a_rule_named_like_a_marker_is_refused(tmp_path):
 def test_the_caller_table_counts_the_files_each_caller_gave_a_kind_or_an_origin(tmp_path):
     """Each row of ``rules/callers.yaml``, counted by the caller rules' claims that name it (#658)."""
     step_kind, merge_origin = code_rules.VCF_STEP_CALLER_KIND.id, code_rules.VCF_MERGE_GERMLINE_CALLERS.id
+    step_origin, source_kind = code_rules.VCF_STEP_CALLER_ORIGIN.id, code_rules.VCF_SOURCE_CALLER_KIND.id
     called = dict(claim(step_kind, "small"), reason="called by HaplotypeCaller (the producing step)")
+    called_origin = dict(claim(step_origin, "germline"), reason="called by HaplotypeCaller (the producing step)")
+    sniffles = dict(claim(source_kind, "structural"), reason="called by Sniffles (named by the header: Sniffles)")
+    # Not counted: a declined claim, though its reason reads like a reading's; and an origin
+    # rule's claim in the kind's slot.
+    refused = dict(claim(step_origin, status="not_classified"), reason="called by Sniffles (the producing step)")
+    misplaced = dict(claim(step_origin, "germline"), reason="called by SVIM (the producing step)")
     merged = dict(
         claim(merge_origin, "germline"), reason="concat of calls by SVIM, DeepVariant; no somatic field declared"
     )
@@ -396,7 +403,20 @@ def test_the_caller_table_counts_the_files_each_caller_gave_a_kind_or_an_origin(
     run_dir = reconciled_run(
         tmp_path,
         [
-            {"dataset_title": "A", "classifications": {"variant_kind": slot(["small"], evidence=[called])}},
+            {
+                "dataset_title": "A",
+                "classifications": {
+                    "variant_kind": slot(["small"], evidence=[called]),
+                    "variant_origin": slot("germline", evidence=[called_origin]),
+                },
+            },
+            {
+                "dataset_title": "A",
+                "classifications": {
+                    "variant_kind": slot(["structural"], evidence=[sniffles, misplaced]),
+                    "variant_origin": slot(evidence=[refused], status="not_classified"),
+                },
+            },
             {"dataset_title": "A", "classifications": {"variant_origin": slot("germline", evidence=[merged])}},
             {
                 "dataset_title": "A",
@@ -406,8 +426,8 @@ def test_the_caller_table_counts_the_files_each_caller_gave_a_kind_or_an_origin(
     )
     data = grr.build(*rule_files(tmp_path), iter_reconciled_records(run_dir), run_dir)
     rows = {c["name"]: (c["kind_files"], c["origin_files"]) for c in data["callers"]}
-    assert rows["HaplotypeCaller"] == (1, 0)
+    assert rows["HaplotypeCaller"] == (1, 1)
     assert rows["SVIM"] == rows["DeepVariant"] == (0, 1)
-    assert rows["Sniffles"] == (0, 0)
+    assert rows["Sniffles"] == (1, 0)
     text = grr.render_markdown(data)
     assert "## Caller table" in text and "| Sniffles | structural | germline |" in text

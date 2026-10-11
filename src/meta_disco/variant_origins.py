@@ -4,7 +4,8 @@
   line shows none of its flags, or a ``##source`` spelling predates the mode (:func:`_mode_doubt`).
 - **A germline reading** is refused where the header declares the ``SOMATIC`` INFO flag or
   Mutect2's tumour / normal sample lines (:func:`declares_somatic`).
-- **Rule 2's fallback** is refused where the header names a tool of another origin.
+- **Rule 2's fallback** is refused where the header names a tool of another origin, or a caller
+  whose somatic mode it leaves open.
 - **A merge** is ``germline`` where every named caller is and nothing somatic is declared; there a
   command line clears a mode for its own input only, so only a ``predates`` spelling clears it.
 
@@ -96,7 +97,7 @@ def _moded_others(header: VCFHeader, row: Caller) -> list[str]:
 
 
 def _turns_on(option: str, flags: frozenset[str]) -> bool:
-    """Whether ``option`` is one of ``flags``, or a ``--`` prefix of one, which argparse takes for it by default."""
+    """Whether ``option`` is one of ``flags`` or a ``--`` prefix of one: every prefix argparse takes for a flag, and ambiguous ones it refuses."""
     return option in flags or (option.startswith("--") and len(option) > 2 and any(f.startswith(option) for f in flags))
 
 

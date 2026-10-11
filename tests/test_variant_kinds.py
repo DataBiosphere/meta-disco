@@ -186,7 +186,14 @@ def test_a_kept_steps_input_written_by_two_steps_is_not_walked_to_either():
 
 
 def test_an_empty_fastq_holds_no_variants():
-    assert header_classifier.classify_from_fastq_header([])["variant_kind"]["status"] == "not_applicable"
+    out = header_classifier.classify_from_fastq_header([])
+    assert out["variant_kind"]["status"] == out["variant_origin"]["status"] == "not_applicable"
+
+
+def test_a_chain_with_no_caller_and_only_filter_steps_named_does_not_fall_to_the_named_tools():
+    # Rule 3 applies where the header names a tool that can be a caller; SelectVariants cannot.
+    reading = kind(PASS, "##source=SelectVariants", name="1kgp.chr1.recalibrated.snp_indel.pass.vcf.gz")
+    assert reading.value is None and reading.reason.startswith(callers.NO_CALLER_ON_CHAIN)
 
 
 # --- rule 3: the one tool a header with no command line names -----------------------------

@@ -71,12 +71,15 @@ callers:
     kind: structural
     origin: germline
     somatic_mode:
-      flags: [--non-germline, --mosaic]
+      flags: [--non-germline, --mosaic, --mosaic-include-germline, --combine-output-filtered]
       predates: [Sniffles]
       reason: >-
         Sniffles2 calls germline structural variants by default, and rare, somatic or mosaic
-        ones with --non-germline (2.0.x) or --mosaic (2.2 on), as each version's own options
-        say; it records its command line under ##command. Sniffles 1 has no such mode (1.0.12's
+        ones with --non-germline (2.0.x) or --mosaic (2.2 on); --mosaic-include-germline (2.2
+        on) turns mosaic mode on and reports germline SVs beside the mosaic ones, and
+        --combine-output-filtered (2.0.7 on) includes low-confidence / mosaic SVs in
+        multi-calling. As each version's own options say; it records its command line under
+        ##command. Sniffles 1 has no such mode (1.0.12's
         options were read on 2026-10-10) and writes its ##source as plain "Sniffles".
     reason: >-
       A long-read structural-variant caller (Sniffles and Sniffles2): it calls

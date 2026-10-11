@@ -300,10 +300,11 @@ VCF_MERGE_SMALL_CALLERS = CodeRule(
     ),
 )
 _CALLER_ORIGINS = (
-    "Each caller the table lists calls variants of one origin, germline or somatic (a caller that "
-    "mixes them, as Mutect2 can, is not listed), so its origin is the file's, "
+    "Each caller the table lists calls variants of one origin, germline or somatic, or, for one "
+    "listed with a somatic mode, of one origin unless a mode flag is set (a caller that mixes "
+    "them, as Mutect2 can, is not listed), so its origin is the file's, "
     "looked up in rules/callers.yaml; a tool the table does not list gives no origin (#658). A "
-    "caller with a somatic mode (Sniffles2's --non-germline, --mosaic) gives its origin only where "
+    "caller with a somatic mode (Sniffles2's --non-germline, --mosaic and two more) gives its origin only where "
     "the header records its command line without the mode's flags, or names it by a ##source "
     "spelling of a version without the mode (Sniffles 1). A germline reading is refused where the "
     "header declares the SOMATIC INFO flag or ##tumor_sample / ##normal_sample. "
@@ -315,12 +316,14 @@ VCF_STEP_CALLER_ORIGIN = CodeRule(
     source_type=SOURCE_CONTENT_READ,
     reads=(
         "VCF header: its command lines, as steps; the caller vcf_step_caller_kind finds behind the "
-        "producing step, and that caller's own command line for a somatic mode's flags"
+        "producing step, and that caller's own command line for a somatic mode's flags; its ##source "
+        "spellings; and its SOMATIC INFO, ##tumor_sample and ##normal_sample declarations"
     ),
     sets=("variant_origin",),
     rationale=(
         _CALLER_ORIGINS + "The caller is found as for the kind; the header's one other step, taken "
-        "where the chain names none, is refused where the header names itself a tool of another origin."
+        "where the chain names none, is refused where the header names itself a tool of another origin, "
+        "or a caller whose somatic mode it leaves open."
     ),
 )
 VCF_SOURCE_CALLER_ORIGIN = CodeRule(
@@ -330,7 +333,7 @@ VCF_SOURCE_CALLER_ORIGIN = CodeRule(
     source_type=SOURCE_CONTENT_READ,
     reads=(
         "VCF header whose command lines name no caller (or that has none): its ##source lines and a "
-        "##DeepVariant_version line"
+        "##DeepVariant_version line, and its SOMATIC INFO, ##tumor_sample and ##normal_sample declarations"
     ),
     sets=("variant_origin",),
     rationale=(_CALLER_ORIGINS + "Taken only where they name exactly one tool, as for vcf_source_caller_kind."),
@@ -342,7 +345,8 @@ VCF_MERGE_GERMLINE_CALLERS = CodeRule(
     source_type=SOURCE_CONTENT_READ,
     reads=(
         "VCF header whose caller is a merge (bcftools concat, merge): every caller its command lines "
-        "and ##source lines name, and its declarations of somatic calls"
+        "and ##source lines name, those callers' command lines for a somatic mode's flags, and its "
+        "declarations of somatic calls"
     ),
     sets=("variant_origin",),
     rationale=(
