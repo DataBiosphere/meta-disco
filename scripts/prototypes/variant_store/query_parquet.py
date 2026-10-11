@@ -14,7 +14,8 @@ prunes row groups by their min/max. The tables are written without Bloom filters
 written with them is recorded (``with_bloom_filters``) to show what they cost over HTTP.
 
 Results are saved after each table and mode; a rerun skips the modes already saved, unless
-the saved file was made with other parameters or questions, when it starts afresh.
+the saved file was made with other parameters, questions or ``genotypes.parquet`` (its size
+and modification time), when it starts afresh.
 """
 
 from __future__ import annotations
@@ -116,7 +117,14 @@ def build_with_bloom() -> None:
 
 def main() -> None:
     answers = truth.answers()
-    params = {**PARAMS, "questions": fingerprint(load("questions")), "queries": QUERIES}
+    # The table measured is part of the key too: a rebuilt genotypes.parquet invalidates every saved mode.
+    measured = GENOTYPES.stat()
+    params = {
+        **PARAMS,
+        "questions": fingerprint(load("questions")),
+        "queries": QUERIES,
+        "genotypes": fingerprint([measured.st_size, measured.st_mtime_ns]),
+    }
     saved: dict[str, Any] = load("query_parquet") or {}
     result: dict[str, Any] = saved
     if saved.get("params") != params:

@@ -3,7 +3,8 @@
 Each question is timed two ways:
 
 - **fresh**: a new in-memory DuckDB per run, so nothing is cached in DuckDB (the OS may
-  still cache the file locally); this is what a cold serverless request pays.
+  still cache the file locally). The connection, and loading ``httpfs``, happen before the
+  timing starts: it is the query's cost with nothing cached, not a whole cold request's.
 - **warm**: one DuckDB reused across runs, which may keep the Parquet footer and, over
   HTTP, the bytes already read.
 
