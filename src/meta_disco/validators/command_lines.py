@@ -140,7 +140,8 @@ TOOL_ARGUMENTS: dict[tuple[str, str], ToolArguments] = {
         inputs=("-i", "--input"),
         outputs=("-v", "--vcf"),
         no_value=frozenset(
-            {"--phase", "--non-germline", "--mosaic", "--output-rnames", "--no-qc", "--symbolic"}
+            {"--phase", "--non-germline", "--mosaic", "--mosaic-include-germline", "--output-rnames", "--no-qc"}
+            | {"--symbolic", "--combine-output-filtered"}
             | {"--allow-overwrite", "--quiet", "--no-consensus", "--combine-consensus", "--no-sort", "--no-progress"}
         ),
     ),

@@ -47,8 +47,11 @@ def test_sniffles_plain_command_line_is_a_step_of_the_program_its_first_word_nam
     )
 
 
-def test_a_sniffles_flag_that_takes_no_value_does_not_swallow_the_next_option():
-    (step,) = steps(header('##command="/usr/local/bin/sniffles --phase -i a.bam --non-germline -v s.vcf"'))
+@pytest.mark.parametrize(
+    "flag", ["--phase", "--non-germline", "--mosaic", "--mosaic-include-germline", "--combine-output-filtered"]
+)
+def test_a_sniffles_flag_that_takes_no_value_does_not_swallow_the_next_option(flag):
+    (step,) = steps(header(f'##command="/usr/local/bin/sniffles {flag} -i a.bam {flag} -v s.vcf"'))
     assert (step.inputs, step.output) == (("a.bam",), "s.vcf")
 
 
