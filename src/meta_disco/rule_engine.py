@@ -474,6 +474,7 @@ class ExtendedClassificationResult:
     # One kind, a string, like every other dimension here: the list a record stores is
     # written by ``to_output_dict`` (``models.stored_value``, ADR-0003).
     variant_kind: str | None = None
+    variant_origin: str | None = None
     field_evidence: dict[str, list[dict]] = field(default_factory=lambda: {fld: [] for fld in CLASSIFICATION_FIELDS})
     # Resolved status per dimension (epic #116 / #136): the dimension attributes
     # above hold a real value or None only — the sentinel (not_applicable /

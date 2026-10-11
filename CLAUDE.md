@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Meta-disco extracts and validates metadata from biological data files (BAM, CRAM, FASTQ, etc.) for the AnVIL Explorer and Terra Data Repository. It infers seven dimensions — `data_modality`, `data_type`, `reference_assembly`, `assay_type`, `platform`, `instrument_model`, `variant_kind` — from filenames, extensions, and file headers (BAM/SAM `@SQ`/`@RG`, VCF `##contig`, FASTQ read names, FASTA/GFA content, IDAT chip type and scanner), using a deterministic tiered rule engine.
+Meta-disco extracts and validates metadata from biological data files (BAM, CRAM, FASTQ, etc.) for the AnVIL Explorer and Terra Data Repository. It infers eight dimensions — `data_modality`, `data_type`, `reference_assembly`, `assay_type`, `platform`, `instrument_model`, `variant_kind`, `variant_origin` — from filenames, extensions, and file headers (BAM/SAM `@SQ`/`@RG`, VCF `##contig`, FASTQ read names, FASTA/GFA content, IDAT chip type and scanner), using a deterministic tiered rule engine.
 
 ## Architecture
 
@@ -13,7 +13,7 @@ The project has two main components:
 1. **Classification** (`src/meta_disco/`, `src/meta_disco/rules/unified_rules.yaml`): the tiered rule engine that classifies files. Rules are declared in YAML and executed by `rule_engine.py`; content-based classifiers in `header_classifier.py` inspect fetched headers. `ClassifyPipeline` (`pipeline.py`) fetches, classifies, and writes output for each file type in `file_types.py`. This is what every classification runs through.
 
 2. **Schema** (`schema/` directory): LinkML-based schema and validation of the classification output.
-   - `src/meta_disco/schema/classification.yaml`: LinkML schema defining the `ClassificationRecord` (the seven metadata dimensions nested under `classifications`, each a `{value, status, evidence}` entry) and the controlled vocabulary
+   - `src/meta_disco/schema/classification.yaml`: LinkML schema defining the `ClassificationRecord` (the eight metadata dimensions nested under `classifications`, each a `{value, status, evidence}` entry) and the controlled vocabulary
    - `scripts/validate_outputs.py`: Validates YAML instances against the schema
    - Uses uv for dependency management (Python 3.10+); its own env, separate from the runtime
 
@@ -75,7 +75,8 @@ make reconcile-report
 
 # Every rule that classifies a file (the YAML rules, the rules written in Python and
 # the translation rows), each with its basis and how often it fired in a reconciled
-# run (RUN_DIR=, default the latest), to docs/rules-report.md + docs/rules-dashboard.html (#572)
+# run (RUN_DIR=, default the latest), and the caller table's rows (#658), to
+# docs/rules-report.md + docs/rules-dashboard.html (#572)
 make rules-report
 
 # What a run could not classify, and why: excluded (no checksum), contract
@@ -95,7 +96,7 @@ make probe-tdr PROJECT=<tdr data project> SNAPSHOT=<snapshot name>
 ## Schema Details
 
 The LinkML schema (`classification.yaml`) defines the `ClassificationRecord` — the
-seven metadata dimensions nested under `classifications`, each a `{value, status,
+eight metadata dimensions nested under `classifications`, each a `{value, status,
 evidence}` entry — plus the controlled vocabulary:
 - **reference_assembly_enum**: NCBI's assembly names as an `is_a` hierarchy (#473):
   GRCh37, GRCh38, and CHM13 (any release, or release unknown) above
@@ -118,7 +119,10 @@ evidence}` entry — plus the controlled vocabulary:
 - **variant_kind_enum**: `small` and `structural`, the one dimension whose value is a list
   (`models.MULTIVALUED_FIELDS`, ADR-0003, #654): a claim declares one kind, a string, and
   the record stores the settled value as `["small"]` (`models.stored_value` /
-  `settled_value`); read from a VCF's caller (`variant_kinds`, `rules/caller_kinds.yaml`)
+  `settled_value`); read from a VCF's caller (`variant_kinds`, `rules/callers.yaml`)
+- **variant_origin_enum**: `germline` and `somatic`, Sequence Ontology's two children of
+  `variant_origin` (#658); read from the same caller (`variant_origins`, found by `callers`),
+  a caller with a somatic mode (Sniffles2) only where its command line shows the mode off
 - also **platform_enum**
 
 `status` is required on every dimension; `value` is null unless status is `classified`.

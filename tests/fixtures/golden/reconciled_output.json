@@ -139,6 +139,23 @@
             "status": "not_classified",
             "use": "published",
             "value": null
+          },
+          "variant_origin": {
+            "credited_to": "not_classified",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for variant_origin",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -297,6 +314,25 @@
             "status": "not_applicable",
             "use": "meta_disco",
             "value": null
+          },
+          "variant_origin": {
+            "credited_to": "not_applicable",
+            "evidence": [
+              {
+                "reason": "No @SQ lines: the header declares no reference, so the file holds unaligned reads. Common for PacBio HiFi and ONT mod-base deliverables",
+                "rule_id": "unaligned_no_sq",
+                "source_type": "header_rule",
+                "status": "not_applicable",
+                "tier": 3
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -436,6 +472,25 @@
             "value": "GRCh37"
           },
           "variant_kind": {
+            "credited_to": "not_applicable",
+            "evidence": [
+              {
+                "reason": "mosdepth's `<prefix>.regions.bed.gz`: mean read depth per genome window, measured from an alignment",
+                "rule_id": "bed_mosdepth_regions",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          },
+          "variant_origin": {
             "credited_to": "not_applicable",
             "evidence": [
               {
@@ -659,6 +714,39 @@
             "status": "not_applicable",
             "use": "meta_disco",
             "value": null
+          },
+          "variant_origin": {
+            "credited_to": "not_applicable",
+            "evidence": [
+              {
+                "reason": "FASTA file detected; header inspection needed to determine if de novo assembly, reference genome, or transcript sequences",
+                "rule_id": "fasta_base",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              },
+              {
+                "reason": "Filename contains assembly/assembler indicator \u2014 de novo assembly",
+                "rule_id": "fasta_assembly_filename",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              },
+              {
+                "reason": "Filename contains haplotype/phasing indicator \u2014 de novo assembly",
+                "rule_id": "fasta_haplotype_filename",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -804,6 +892,25 @@
             "value": null
           },
           "variant_kind": {
+            "credited_to": "not_applicable",
+            "evidence": [
+              {
+                "reason": "FASTQ files contain raw sequencing reads. Reference not applicable until alignment",
+                "rule_id": "reads_base",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          },
+          "variant_origin": {
             "credited_to": "not_applicable",
             "evidence": [
               {
@@ -990,6 +1097,23 @@
             "status": "not_classified",
             "use": "published",
             "value": null
+          },
+          "variant_origin": {
+            "credited_to": "not_classified",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for variant_origin",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -1154,6 +1278,25 @@
             "status": "not_applicable",
             "use": "meta_disco",
             "value": null
+          },
+          "variant_origin": {
+            "credited_to": "not_applicable",
+            "evidence": [
+              {
+                "reason": "IDAT is Illumina's BeadChip intensity format, written by genotyping and methylation chips alike, so the extension cannot say which chip wrote the file, only that it is array signal (#603). Its intensities are keyed by probe, not by genome coordinate, so no reference applies until genotypes are called against a chip manifest",
+                "rule_id": "idat_array_signal",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -1301,6 +1444,25 @@
             "value": null
           },
           "variant_kind": {
+            "credited_to": "not_applicable",
+            "evidence": [
+              {
+                "reason": "SVS files are Aperio whole-slide histology images used for pathology analysis",
+                "rule_id": "image_svs_histology",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          },
+          "variant_origin": {
             "credited_to": "not_applicable",
             "evidence": [
               {
@@ -1489,6 +1651,17 @@
             "value": [
               "small"
             ]
+          },
+          "variant_origin": {
+            "credited_to": "not_classified",
+            "evidence": [],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -1652,6 +1825,22 @@
             "status": "not_classified",
             "use": "published",
             "value": null
+          },
+          "variant_origin": {
+            "credited_to": "not_classified",
+            "evidence": [
+              {
+                "reason": "No parent to inherit variant_origin from: no file in this dataset carries a candidate parent name, matched case-insensitively",
+                "rule_id": "no_matching_parent_in_dataset"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -1792,6 +1981,23 @@
               {
                 "marker": "not_classified",
                 "reason": "No rule determined a value for variant_kind",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "variant_origin": {
+            "credited_to": "not_classified",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for variant_origin",
                 "status": "not_classified"
               }
             ],
@@ -1944,6 +2150,25 @@
             "value": null
           },
           "variant_kind": {
+            "credited_to": "not_applicable",
+            "evidence": [
+              {
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          },
+          "variant_origin": {
             "credited_to": "not_applicable",
             "evidence": [
               {
@@ -2130,6 +2355,25 @@
             "value": null
           },
           "variant_kind": {
+            "credited_to": "not_applicable",
+            "evidence": [
+              {
+                "reason": "1 row of a sample name and a VCF path: a list of files, not their data",
+                "rule_id": "sample_map_content",
+                "source_type": "content_read",
+                "status": "not_applicable",
+                "tier": 4
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          },
+          "variant_origin": {
             "credited_to": "not_applicable",
             "evidence": [
               {
@@ -2373,6 +2617,23 @@
             "value": [
               "small"
             ]
+          },
+          "variant_origin": {
+            "credited_to": "not_classified",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for variant_origin",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -2551,6 +2812,25 @@
             "status": "not_classified",
             "use": "published",
             "value": null
+          },
+          "variant_origin": {
+            "credited_to": "not_classified",
+            "evidence": [
+              {
+                "reason": "no caller line: no command line, ##source or tool version line",
+                "rule_id": "vcf_source_caller_origin",
+                "source_type": "content_read",
+                "status": "not_classified",
+                "tier": 4
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -2708,6 +2988,25 @@
               {
                 "reason": "no caller line: no command line, ##source or tool version line",
                 "rule_id": "vcf_source_caller_kind",
+                "source_type": "content_read",
+                "status": "not_classified",
+                "tier": 4
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "variant_origin": {
+            "credited_to": "not_classified",
+            "evidence": [
+              {
+                "reason": "no caller line: no command line, ##source or tool version line",
+                "rule_id": "vcf_source_caller_origin",
                 "source_type": "content_read",
                 "status": "not_classified",
                 "tier": 4

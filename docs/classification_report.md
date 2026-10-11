@@ -2,11 +2,11 @@
 
 ## Executive Summary
 
-This report documents the rule-based metadata classification system for biological data files from the AnVIL (Analysis, Visualization, and Informatics Lab-space) platform. The system infers seven classification dimensions from file metadata without requiring full file downloads.
+This report documents the rule-based metadata classification system for biological data files from the AnVIL (Analysis, Visualization, and Informatics Lab-space) platform. The system infers eight classification dimensions from file metadata without requiring full file downloads.
 
 ### Classification Dimensions
 
-The classifier populates seven metadata fields:
+The classifier populates eight metadata fields:
 
 | Field | Question Answered | Example Values |
 | ----- | ----------------- | -------------- |
@@ -17,6 +17,7 @@ The classifier populates seven metadata fields:
 | `assay_type` | What method class? | WGS, WES, RNA-seq, snRNA-seq |
 | `instrument_model` | Which instrument model, within the platform? | Illumina NovaSeq 6000, Revio, PromethION |
 | `variant_kind` | What kinds of variant does a callset hold, by its caller (#654)? A list. | small, structural |
+| `variant_origin` | Did a callset's variants arise in the germline or somatically, by its caller (#658)? | germline, somatic |
 
 #### data_modality
 
@@ -174,7 +175,7 @@ Each JSON file contains:
 Each record carries the file's identity and a `classifications` object with one
 `{value, status, evidence}` entry per dimension; `value` is null unless `status` is
 `classified`. An abridged record from the output-shape golden fixture
-(`tests/fixtures/golden/expected_output.json`), with two of the seven entries shown
+(`tests/fixtures/golden/expected_output.json`), with two of the eight entries shown
 in full:
 
 ```json

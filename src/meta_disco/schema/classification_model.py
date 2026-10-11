@@ -68,7 +68,7 @@ class LinkMLMeta(RootModel):
 
 linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
      'default_range': 'string',
-     'description': 'Full classification data model for meta-disco: the seven '
+     'description': 'Full classification data model for meta-disco: the eight '
                     'metadata dimensions, per-field evidence, classification '
                     'status, and typed derivation edges. Supersedes the retired '
                     'anvil_file.yaml stub (issue #33) and realizes the data-model '
@@ -99,6 +99,8 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
                             'prefix_reference': 'https://datamodel.terra.bio/BioCoreTerms#'},
                   'OBI': {'prefix_prefix': 'OBI',
                           'prefix_reference': 'http://purl.obolibrary.org/obo/OBI_'},
+                  'SO': {'prefix_prefix': 'SO',
+                         'prefix_reference': 'http://purl.obolibrary.org/obo/SO_'},
                   'TerraCore': {'prefix_prefix': 'TerraCore',
                                 'prefix_reference': 'https://datamodel.terra.bio/TerraCore#'},
                   'anvil': {'prefix_prefix': 'anvil',
@@ -161,7 +163,7 @@ class DataTypeEnum(str, Enum):
     """
     variantsFULL_STOPgermline = "variants.germline"
     """
-    Origin axis: calls of germline variants, inherited or present from conception. Assigned by the `##source` rule for GATK HaplotypeCaller, a germline caller (`vcf_gatk_haplotypecaller`). Origin is an axis of its own under ADR-0003, and this term moves to its own dimension when one is built.
+    Origin axis: calls of germline variants, inherited or present from conception. Assigned by the `##source` rule for GATK HaplotypeCaller, a germline caller (`vcf_gatk_haplotypecaller`). The same fact is `variant_origin`'s `germline` (#658), read from the caller; this term is kept until its consumers move (#657).
     """
     variantsFULL_STOPgermlineFULL_STOPgvcf = "variants.germline.gvcf"
     """
@@ -169,7 +171,7 @@ class DataTypeEnum(str, Enum):
     """
     variantsFULL_STOPsomatic = "variants.somatic"
     """
-    Origin axis: calls of variants acquired in some cells only, typically a tumor's. No rule assigns it.
+    Origin axis: calls of variants acquired in some cells only, typically a tumor's. No rule assigns it; the same fact is `variant_origin`'s `somatic` (#658).
     """
     variantsFULL_STOPstructural = "variants.structural"
     """
@@ -376,6 +378,20 @@ class VariantKindEnum(str, Enum):
     """
 
 
+class VariantOriginEnum(str, Enum):
+    """
+    Where a callset's variants arose (ADR-0003, #658), read from the caller that made it: Sequence Ontology's two children of variant_origin (SO:0001762).
+    """
+    germline = "germline"
+    """
+    Variants present from the embryo on, in every cell, as a germline caller (GATK HaplotypeCaller and joint genotyping, DeepVariant, Sniffles in its default mode) calls them.
+    """
+    somatic = "somatic"
+    """
+    Variants arisen after the embryo split, in some cells only, as a somatic caller (GATK Mutect2) calls them against a matched normal.
+    """
+
+
 class ClassificationStatusEnum(str, Enum):
     """
     Why a field has (or lacks) a value. Replaces sentinel values that were previously smuggled into each dimension enum (not_applicable / not_classified). See issues #56, #88.
@@ -561,7 +577,7 @@ class ActivityFormEnum(str, Enum):
 
 class PassedDimensionEnum(str, Enum):
     """
-    The dimensions an activity's output can take from an input (#580): the seven classification dimensions but `data_type`, which names a file's own kind and never passes (ADR-0002 decision 8: a VCF is not an alignment).
+    The dimensions an activity's output can take from an input (#580): the eight classification dimensions but `data_type`, which names a file's own kind and never passes (ADR-0002 decision 8: a VCF is not an alignment).
     """
     data_modality = "data_modality"
     platform = "platform"
@@ -569,6 +585,7 @@ class PassedDimensionEnum(str, Enum):
     assay_type = "assay_type"
     instrument_model = "instrument_model"
     variant_kind = "variant_kind"
+    variant_origin = "variant_origin"
 
 
 class ParentKindEnum(str, Enum):
@@ -746,7 +763,7 @@ class EvidenceMarkerEnum(str, Enum):
 
 class ClassificationRecord(ConfiguredBaseModel):
     """
-    One classified file. `classifications` carries the file's identity (the seven dimension fields — what it is); generated_by names the step that made it and the files it used (where it came from; ADR-0002). Matches the pipeline output shape.
+    One classified file. `classifications` carries the file's identity (the eight dimension fields — what it is); generated_by names the step that made it and the files it used (where it came from; ADR-0002). Matches the pipeline output shape.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
          'tree_root': True})
@@ -759,13 +776,13 @@ class ClassificationRecord(ConfiguredBaseModel):
     file_id: Optional[str] = Field(default=None, description="""The repository's own file identifier, and the durable one: it survives a catalog re-index, which `entry_id` does not (#433). It is the join key, not the handle a resolver takes — that is `drs_uri`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     drs_uri: Optional[str] = Field(default=None, description="""The file's DRS URI: what a resolver dereferences to reach the bytes. Carried, never derived from `file_id` — thousands of records wrap a different object id, so a reconstructed URI resolves to the wrong file or to nothing (#433).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     dataset_title: Optional[str] = Field(default=None, description="""Title of the dataset the file belongs to.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
-    classifications: Classifications = Field(default=..., description="""The seven classified dimensions for this file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
+    classifications: Classifications = Field(default=..., description="""The eight classified dimensions for this file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     generated_by: Optional[GeneratedBy] = Field(default=None, description="""The step that made the file and the inputs it used, by role (ADR-0002 decisions 3, 6, #580); null where no step is recorded.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
 
 
 class Classifications(ConfiguredBaseModel):
     """
-    The seven metadata dimensions for one file, each a Classification entry. The pipeline also emits some file-type-specific scalar hints here (e.g. fastq's is_paired_end / instrument_hint); those are not modeled yet and pass under the gate's closed=False mode (see #134 follow-up).
+    The eight metadata dimensions for one file, each a Classification entry. The pipeline also emits some file-type-specific scalar hints here (e.g. fastq's is_paired_end / instrument_hint); those are not modeled yet and pass under the gate's closed=False mode (see #134 follow-up).
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
          'slot_usage': {'assay_type': {'name': 'assay_type',
@@ -788,7 +805,10 @@ class Classifications(ConfiguredBaseModel):
                                                'required': True},
                         'variant_kind': {'name': 'variant_kind',
                                          'range': 'VariantKindClassification',
-                                         'required': True}}})
+                                         'required': True},
+                        'variant_origin': {'name': 'variant_origin',
+                                           'range': 'VariantOriginClassification',
+                                           'required': True}}})
 
     data_modality: DataModalityClassification = Field(default=..., description="""The biological signal the file carries.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
     data_type: DataTypeClassification = Field(default=..., description="""The content type of the file (biological or descriptive class).""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classifications']} })
@@ -802,6 +822,10 @@ class Classifications(ConfiguredBaseModel):
                       '#603.'],
          'domain_of': ['Classifications']} })
     variant_kind: VariantKindClassification = Field(default=..., description="""The kinds of variant a callset holds, small variants or structural ones, from the caller that made it. A list, since one callset can hold both. Not applicable to a file that holds no variants.""", json_schema_extra = { "linkml_meta": {'comments': ['Its own dimension under ADR-0003 (one slot per axis), #654.'],
+         'domain_of': ['Classifications']} })
+    variant_origin: VariantOriginClassification = Field(default=..., description="""Whether a callset's variants are germline (carried from conception, in every cell) or somatic (arisen later, in some cells), from the caller that made it. Not applicable to a file that holds no variants.""", json_schema_extra = { "linkml_meta": {'comments': ['Its own dimension under ADR-0003 (one slot per axis), #658; '
+                      "named for Sequence Ontology's variant_origin (SO:0001762), "
+                      'whose two children are its values.'],
          'domain_of': ['Classifications']} })
 
 
@@ -886,6 +910,14 @@ class VariantKindInferred(InferredConclusion):
                                   'range': 'variant_kind_enum'}}})
 
     value: Optional[list[VariantKindEnum]] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+
+
+class VariantOriginInferred(InferredConclusion):
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'value': {'name': 'value', 'range': 'variant_origin_enum'}}})
+
+    value: Optional[VariantOriginEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
 
 
@@ -987,6 +1019,20 @@ class VariantKindClassification(Classification):
     evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     inferred: Optional[VariantKindInferred] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+
+
+class VariantOriginClassification(Classification):
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'inferred': {'name': 'inferred',
+                                     'range': 'VariantOriginInferred'},
+                        'value': {'name': 'value', 'range': 'variant_origin_enum'}}})
+
+    value: Optional[VariantOriginEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    inferred: Optional[VariantOriginInferred] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
 
 
@@ -1240,14 +1286,14 @@ class EvidenceRow(ConfiguredBaseModel):
 
     raw_value: str = Field(default=..., description="""What the source wrote, verbatim (contract 1.4) — not casefolded, trimmed, corrected or suppressed. The same slot an `Evidence` claim carries beside its mapped value; on a row it is the whole content, because a row maps nothing.
 No pattern and no enum, deliberately: a source's spellings are its own, a value our vocabulary has no word for is the review queue's input rather than an error (contract 3.7), and an empty cell is something the source published, whose meaning is a rule's to decide.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'Evidence']} })
-    field: str = Field(default=..., description="""The slot this row speaks to, spelled `field` on the wire and in the code (contract 2.1). One of the seven classification dimensions.
+    field: str = Field(default=..., description="""The slot this row speaks to, spelled `field` on the wire and in the code (contract 2.1). One of the eight classification dimensions.
 Pinned by pattern rather than by an enum because the dimension names are slot *names* in this schema and not a vocabulary it declares; `test_the_row_field_pattern_lists_every_dimension` holds it to `CLASSIFICATION_FIELDS`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow']} })
     target_key_value: str = Field(default=..., description="""The value to match against the envelope's `target_key`, already in the target's value space — the importer owns the mapping between its own key and the target's. Empty is refused: a row with nothing to match on can attach to no file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'LineageRow']} })
     column: Optional[str] = Field(default=None, description="""The column the raw value was read from. The one member of the source that varies within a file — repository, dataset, table and url are on the envelope — and absent for a source whose table has no columns to name.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceRow']} })
 
     @field_validator('field')
     def pattern_field(cls, v):
-        pattern=re.compile(r"^(data_modality|data_type|platform|reference_assembly|assay_type|instrument_model|variant_kind)\Z")
+        pattern=re.compile(r"^(data_modality|data_type|platform|reference_assembly|assay_type|instrument_model|variant_kind|variant_origin)\Z")
         if isinstance(v, list):
             for element in v:
                 if isinstance(element, str) and not pattern.match(element):
@@ -1637,6 +1683,7 @@ AssayTypeInferred.model_rebuild()
 PlatformInferred.model_rebuild()
 InstrumentModelInferred.model_rebuild()
 VariantKindInferred.model_rebuild()
+VariantOriginInferred.model_rebuild()
 DataModalityClassification.model_rebuild()
 DataTypeClassification.model_rebuild()
 ReferenceAssemblyClassification.model_rebuild()
@@ -1644,6 +1691,7 @@ AssayTypeClassification.model_rebuild()
 PlatformClassification.model_rebuild()
 InstrumentModelClassification.model_rebuild()
 VariantKindClassification.model_rebuild()
+VariantOriginClassification.model_rebuild()
 ReferenceBuild.model_rebuild()
 ClaimSource.model_rebuild()
 EvidenceFileSource.model_rebuild()

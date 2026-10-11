@@ -164,7 +164,7 @@ JOIN_KEYS = frozenset(
 # matters: make_claim runs a few million times per corpus, and schema_vocab was
 # test- and validation-only before this.
 
-# The seven classification dimension fields, in canonical output order. Single
+# The eight classification dimension fields, in canonical output order. Single
 # source of truth for the field set — the rule engine, rule_loader's 'then' key
 # validation, and schema_vocab's dimensions all derive from this.
 CLASSIFICATION_FIELDS = (
@@ -175,6 +175,7 @@ CLASSIFICATION_FIELDS = (
     "assay_type",
     "instrument_model",
     "variant_kind",
+    "variant_origin",
 )
 
 # The dimensions a record stores as a list (ADR-0003, #654): the schema's slots whose

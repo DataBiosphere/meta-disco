@@ -8,9 +8,9 @@
 
 ## 1. What this document decides
 
-Meta-disco classifies files into seven dimensions: `data_modality`, `data_type`,
+Meta-disco classifies files into eight dimensions: `data_modality`, `data_type`,
 `reference_assembly`, `assay_type`, `platform`, `instrument_model` (added in #532),
-`variant_kind` (added in #654). Most of our thinking has been about *primary* data files — a BAM, a VCF, a FASTQ — where the question "what is
+`variant_kind` (added in #654), `variant_origin` (added in #658). Most of our thinking has been about *primary* data files — a BAM, a VCF, a FASTQ — where the question "what is
 this file?" has a direct answer.
 
 This document is about a particular class of files: indexes (`.bai`, `.tbi`,

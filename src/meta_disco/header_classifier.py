@@ -14,6 +14,7 @@ from functools import cache
 from typing import TYPE_CHECKING, NamedTuple
 
 from . import code_rules
+from .callers import BY_MERGE, BY_SOURCE, Reading, find_caller
 from .evidence import BedSignals, IdatHeader, SegmentTag, VcfRecord
 from .file_name import FileName
 from .models import (
@@ -36,7 +37,8 @@ from .validators.read_name_parsers import (
     parse_ont_read_name,  # noqa: F401  re-exported for backward compat
     parse_pacbio_read_name,
 )
-from .variant_kinds import BY_MERGE, BY_SOURCE, KindReading, read_kind
+from .variant_kinds import read_kind
+from .variant_origins import read_origin
 
 if TYPE_CHECKING:
     from .rule_engine import RuleEngine
@@ -223,7 +225,7 @@ def classify_from_header(
         Dict with per-field classifications:
             - {field}: {value, status, evidence[]} for each of
               data_modality, data_type, assay_type, reference_assembly, platform,
-              instrument_model, variant_kind
+              instrument_model, variant_kind, variant_origin
     """
     from .rule_engine import ExtendedFileInfo
 
@@ -306,7 +308,7 @@ def classify_from_vcf_header(
         Dict with per-field classifications:
             - {field}: {value, status, evidence[]} for each of
               data_modality, data_type, assay_type, reference_assembly, platform,
-              instrument_model, variant_kind
+              instrument_model, variant_kind, variant_origin
     """
     from .rule_engine import ExtendedFileInfo
 
@@ -363,18 +365,29 @@ def classify_from_vcf_header(
     if gvcf_reason is not None:
         _add_content_data_type(result, code_rules.VCF_GVCF.id, GVCF_DATA_TYPE, gvcf_reason)
 
-    reading = read_kind(parsed, name.raw)
-    if reading.by == BY_SOURCE:
-        _add_variant_kind(result, code_rules.VCF_SOURCE_CALLER_KIND.id, reading)
-    elif reading.by == BY_MERGE:
-        _add_variant_kind(result, code_rules.VCF_MERGE_SMALL_CALLERS.id, reading)
+    # One caller, found once, gives both dimensions read from it.
+    found = find_caller(parsed, name.raw)
+    kind = read_kind(parsed, found)
+    if kind.by == BY_SOURCE:
+        _add_variant_kind(result, code_rules.VCF_SOURCE_CALLER_KIND.id, kind)
+    elif kind.by == BY_MERGE:
+        _add_variant_kind(result, code_rules.VCF_MERGE_SMALL_CALLERS.id, kind)
     else:
-        _add_variant_kind(result, code_rules.VCF_STEP_CALLER_KIND.id, reading)
+        _add_variant_kind(result, code_rules.VCF_STEP_CALLER_KIND.id, kind)
+    origin = read_origin(parsed, found)
+    if origin.by == BY_SOURCE:
+        _add_variant_origin(result, code_rules.VCF_SOURCE_CALLER_ORIGIN.id, origin)
+    elif origin.by == BY_MERGE:
+        _add_variant_origin(result, code_rules.VCF_MERGE_GERMLINE_CALLERS.id, origin)
+    else:
+        _add_variant_origin(result, code_rules.VCF_STEP_CALLER_ORIGIN.id, origin)
 
     return result.to_output_dict()
 
 
-def _add_variant_kind(result, rule_id: str, reading: KindReading) -> None:
+# One helper per dimension, each claiming its field by name, so `test_code_rules` reads what
+# each rule claims.
+def _add_variant_kind(result, rule_id: str, reading: Reading) -> None:
     """Claim the kind a header's caller gives (#654), or ``not_classified`` with the reason where it gives none."""
     from .rule_engine import CONTENT_TIER
 
@@ -384,8 +397,23 @@ def _add_variant_kind(result, rule_id: str, reading: KindReading) -> None:
         tier=CONTENT_TIER,
         source_type=SOURCE_CONTENT_READ,
         reason=reading.reason,
-        value=reading.kind,
-        status=NOT_CLASSIFIED if reading.kind is None else None,
+        value=reading.value,
+        status=NOT_CLASSIFIED if reading.value is None else None,
+    )
+
+
+def _add_variant_origin(result, rule_id: str, reading: Reading) -> None:
+    """Claim the origin a header's caller gives (#658), or ``not_classified`` with the reason where it gives none."""
+    from .rule_engine import CONTENT_TIER
+
+    result.add_claim(
+        "variant_origin",
+        rule_id=rule_id,
+        tier=CONTENT_TIER,
+        source_type=SOURCE_CONTENT_READ,
+        reason=reading.reason,
+        value=reading.value,
+        status=NOT_CLASSIFIED if reading.value is None else None,
     )
 
 
@@ -537,14 +565,15 @@ def classify_from_fastq_header(
     # Handle empty input — no reads to classify. Statuses are known directly, so
     # pass them explicitly to build_field_entry (epic #116 Stage 3 shape).
     # data_type is the classified "reads"; reference_assembly is not_applicable
-    # (reads are unaligned), matching the non-empty path (#131), and so is variant_kind
-    # (reads hold no calls, as `reads_base` declares, #654); the remaining dimensions
-    # are not_classified.
+    # (reads are unaligned), matching the non-empty path (#131), and so are variant_kind
+    # and variant_origin (reads hold no calls, as `reads_base` declares, #654, #658); the
+    # remaining dimensions are not_classified.
     if not reads or not reads[0]:
         entries = {fld: build_field_entry(None, status=NOT_CLASSIFIED) for fld in CLASSIFICATION_FIELDS}
         entries["data_type"] = build_field_entry("reads", status=CLASSIFIED)
         entries["reference_assembly"] = build_field_entry(None, status=NOT_APPLICABLE)
         entries["variant_kind"] = build_field_entry(None, status=NOT_APPLICABLE)
+        entries["variant_origin"] = build_field_entry(None, status=NOT_APPLICABLE)
         FastqReadMetadata().merge_into(entries)
         return entries
 
@@ -982,8 +1011,9 @@ def classify_sample_map(
     """Classify a GATK sample-name map: from its name, and where its content is a map, as a ``sample_map``.
 
     Where ``rows`` (``cohort_steps.parse_sample_map``) is a map, it is a list of files, not
-    their data: ``data_type`` is ``sample_map`` and the other six dimensions are
-    ``not_applicable``, at ``CONTENT_TIER`` (#621; ``variant_kind`` since #654). Where it is
+    their data: ``data_type`` is ``sample_map`` and the other seven dimensions are
+    ``not_applicable``, at ``CONTENT_TIER`` (#621; ``variant_kind`` since #654, ``variant_origin``
+    since #658). Where it is
     None, the file is classified from its name alone. ``file_format`` is accepted to match the uniform
     ``_fetch_and_classify`` call.
     """
@@ -1044,6 +1074,14 @@ def classify_sample_map(
         )
         result.add_claim(
             "variant_kind",
+            rule_id=code_rules.SAMPLE_MAP_CONTENT.id,
+            tier=CONTENT_TIER,
+            source_type=SOURCE_CONTENT_READ,
+            reason=why,
+            status=NOT_APPLICABLE,
+        )
+        result.add_claim(
+            "variant_origin",
             rule_id=code_rules.SAMPLE_MAP_CONTENT.id,
             tier=CONTENT_TIER,
             source_type=SOURCE_CONTENT_READ,
