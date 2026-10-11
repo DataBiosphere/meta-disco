@@ -31,6 +31,12 @@ dependencies, so `uv run` installs them in an isolated environment and the proje
 environment is untouched. Inputs and outputs go to `data/prototypes/variant_store/`
 (ignored by git), or to `$VARIANT_STORE_DIR`.
 
+`samples.py` and `report.py` also read the prod input,
+`data/anvil/prod/anvil_files_metadata.ndjson`, which a clean checkout does not have:
+`samples.py` matches sample ids in its file names, and `report.py` takes every panel
+VCF's size from it for the genome-wide extrapolation. Create it with `make download`
+(the repository's own input step) before running them.
+
 ```bash
 scripts/prototypes/variant_store/fetch.sh
 uv run scripts/prototypes/variant_store/build_parquet.py
