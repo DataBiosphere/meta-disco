@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-10-09 23:09:11**
+Classification run: **2026-10-10 16:12:15**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,088** files.
@@ -29,6 +29,7 @@ Processed **708,088** files.
 | **Assay Type** | 28,145 (4.0%) | 679,943 (96.0%) | 0 (0.0%) |
 | **Instrument Model** | 23,202 (3.3%) | 684,886 (96.7%) | 0 (0.0%) |
 | **Variant Kind** | 325,529 (46.0%) | 382,559 (54.0%) | 0 (0.0%) |
+| **Variant Origin** | 325,541 (46.0%) | 382,547 (54.0%) | 0 (0.0%) |
 
 ---
 
@@ -471,5 +472,63 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | `not_applicable` | 123,120 | 17.4% | .txt (37,550)<br>.fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,509)<br>.cram (10,623)<br>.bed (8,752)<br>.bam (6,774)<br>.log (3,637)<br>.png (3,074)<br>.bw (2,536)<br>.fa (940)<br>.sf (634)<br>.h5ad (350)<br>.idat (160)<br>.fasta (38)<br>.tsv (24)<br>.pod5 (11)<br>.csv (3)<br>.fna (2) |
 | `structural` | 153 | 0.0% | .vcf (153) |
 
-**Note**: Read from the caller that made a VCF: its header's producing step, walked back through steps that keep the kind, or a `##source` naming one tool, looked up in `rules/caller_kinds.yaml` (#654). Not applicable to a file whose rule says it holds no variants. An index or a GenomicsDB workspace takes its parent's kind only at reconcile, which this report does not read.
+**Note**: Read from the caller that made a VCF: its header's producing step, walked back through steps that keep the kind, or a `##source` naming one tool, looked up in `rules/callers.yaml` (#654). Not applicable to a file whose rule says it holds no variants. An index or a GenomicsDB workspace takes its parent's kind only at reconcile, which this report does not read.
+
+---
+
+## Variant Origin
+
+| | count | % |
+|---|---:|---:|
+| **Classified** | 325,541 | 46.0% |
+| **Not classified** | 382,547 | 54.0% |
+| **Conflict** | 0 | 0.0% |
+
+### What's not classified?
+
+| extension | count | reason (from evidence) |
+|---|---:|---|
+| .tbi | 169,531 | `No reason recorded` |
+| (none) | 134,605 | `No rule determined a value for variant_origin` |
+| .csi | 41,186 | `No reason recorded` |
+| .crai | 10,317 | `No reason recorded` |
+| .txt | 4,929 | `No rule determined a value for variant_origin` |
+| .pvar | 2,854 | `not a VCF: a PLINK 2 .pvar records no step of its own` |
+| .psam | 2,854 | `No rule determined a value for variant_origin` |
+| .pgen | 2,854 | `No rule determined a value for variant_origin` |
+| .bed | 2,771 | `No rule determined a value for variant_origin` |
+| .bai | 2,742 | `No reason recorded` |
+| .vcf | 1,751 | `no caller on the step chain: no one step made this file (no_single_end); the header records 0 other tools` |
+| .gff3 | 1,565 | `No rule determined a value for variant_origin` |
+| .chain | 926 | `No rule determined a value for variant_origin` |
+| .tsv | 899 | `No rule determined a value for variant_origin` |
+| .fai | 477 | `No reason recorded` |
+| .gzi | 466 | `No reason recorded` |
+| .bigwig | 462 | `No rule determined a value for variant_origin` |
+| .sizes | 458 | `No rule determined a value for variant_origin` |
+| .gfa | 326 | `No rule determined a value for variant_origin` |
+| .paf | 297 | `No rule determined a value for variant_origin` |
+| .sam | 192 | `No rule determined a value for variant_origin` |
+| .csv | 18 | `No rule determined a value for variant_origin` |
+| .dict | 9 | `No rule determined a value for variant_origin` |
+| .xg | 8 | `No rule determined a value for variant_origin` |
+| .pbi | 7 | `No reason recorded` |
+| .snarls | 6 | `No rule determined a value for variant_origin` |
+| .gg | 6 | `No rule determined a value for variant_origin` |
+| .min | 6 | `No rule determined a value for variant_origin` |
+| .dist | 6 | `No rule determined a value for variant_origin` |
+| .trans | 6 | `No rule determined a value for variant_origin` |
+| .gbwt | 6 | `No rule determined a value for variant_origin` |
+| .hal | 2 | `No rule determined a value for variant_origin` |
+| .gbz | 2 | `No rule determined a value for variant_origin` |
+| .hapl | 2 | `No rule determined a value for variant_origin` |
+| .delta | 1 | `No rule determined a value for variant_origin` |
+
+| Variant Origin | count | % | extensions |
+|---|---:|---:|---|
+| `not_classified` | 382,547 | 54.0% | .tbi (169,531)<br>(none) (134,605)<br>.csi (41,186)<br>.crai (10,317)<br>.txt (4,929)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bed (2,771)<br>.bai (2,742)<br>.vcf (1,751)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.gfa (326)<br>.paf (297)<br>.sam (192)<br>.csv (18)<br>.dict (9)<br>.xg (8)<br>.pbi (7)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.gbwt (6)<br>.hal (2)<br>.gbz (2)<br>.hapl (2)<br>.delta (1) |
+| `germline` | 202,421 | 28.6% | .vcf (199,917)<br>.g.vcf (2,504) |
+| `not_applicable` | 123,120 | 17.4% | .txt (37,550)<br>.fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,509)<br>.cram (10,623)<br>.bed (8,752)<br>.bam (6,774)<br>.log (3,637)<br>.png (3,074)<br>.bw (2,536)<br>.fa (940)<br>.sf (634)<br>.h5ad (350)<br>.idat (160)<br>.fasta (38)<br>.tsv (24)<br>.pod5 (11)<br>.csv (3)<br>.fna (2) |
+
+**Note**: Germline or somatic, read from the caller that made a VCF, found as for the kind and looked up in `rules/callers.yaml` (#658). A caller with a somatic mode (Sniffles2) gives its origin only where its command line shows the mode was off. Not applicable to a file whose rule says it holds no variants. An index or a GenomicsDB workspace takes its parent's origin only at reconcile, which this report does not read.
 

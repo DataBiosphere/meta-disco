@@ -244,7 +244,7 @@ VCF_RECORDS_SMALL_VARIANTS = CodeRule(
 )
 _CALLER_KINDS = (
     "The caller calls one kind of variant, so its kind is the file's, looked up in "
-    "rules/caller_kinds.yaml; a tool the table does not list gives no kind (#654). The records "
+    "rules/callers.yaml; a tool the table does not list gives no kind (#654). The records "
     "cannot settle it: a mixed callset shows a structural variant in its first records only by "
     "chance (#630). "
 )
@@ -297,6 +297,59 @@ VCF_MERGE_SMALL_CALLERS = CodeRule(
         "calls small variants and the header declares no structural-variant field: a merged header can "
         "lose an input's ##source line, but the VCF spec requires a structural variant to be declared, "
         "so an input's structural variants leave their declarations behind (#654)."
+    ),
+)
+_CALLER_ORIGINS = (
+    "Each caller the table lists calls variants of one origin, germline or somatic (a caller that "
+    "mixes them, as Mutect2 can, is not listed), so its origin is the file's, "
+    "looked up in rules/callers.yaml; a tool the table does not list gives no origin (#658). A "
+    "caller with a somatic mode (Sniffles2's --non-germline, --mosaic) gives its origin only where "
+    "the header records its command line without the mode's flags, or names it by a ##source "
+    "spelling of a version without the mode (Sniffles 1). A germline reading is refused where the "
+    "header declares the SOMATIC INFO flag or ##tumor_sample / ##normal_sample. "
+)
+VCF_STEP_CALLER_ORIGIN = CodeRule(
+    id="vcf_step_caller_origin",
+    module=HEADER_CLASSIFIER,
+    basis=BASIS_CONTENT,
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "VCF header: its command lines, as steps; the caller vcf_step_caller_kind finds behind the "
+        "producing step, and that caller's own command line for a somatic mode's flags"
+    ),
+    sets=("variant_origin",),
+    rationale=(
+        _CALLER_ORIGINS + "The caller is found as for the kind; the header's one other step, taken "
+        "where the chain names none, is refused where the header names itself a tool of another origin."
+    ),
+)
+VCF_SOURCE_CALLER_ORIGIN = CodeRule(
+    id="vcf_source_caller_origin",
+    module=HEADER_CLASSIFIER,
+    basis=BASIS_CONTENT,
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "VCF header whose command lines name no caller (or that has none): its ##source lines and a "
+        "##DeepVariant_version line"
+    ),
+    sets=("variant_origin",),
+    rationale=(_CALLER_ORIGINS + "Taken only where they name exactly one tool, as for vcf_source_caller_kind."),
+)
+VCF_MERGE_GERMLINE_CALLERS = CodeRule(
+    id="vcf_merge_germline_callers",
+    module=HEADER_CLASSIFIER,
+    basis=BASIS_CONTENT,
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "VCF header whose caller is a merge (bcftools concat, merge): every caller its command lines "
+        "and ##source lines name, and its declarations of somatic calls"
+    ),
+    sets=("variant_origin",),
+    rationale=(
+        "A merge holds what its inputs held. It is germline where every caller the header names "
+        "calls germline variants, none in a somatic mode, and the header declares neither the "
+        "SOMATIC INFO flag nor a tumour or normal sample: a merged header can lose an input's "
+        "##source line, so a somatic input is also looked for in what the header declares (#658)."
     ),
 )
 BED_COORDINATE_REFERENCE = CodeRule(
@@ -416,10 +469,11 @@ SAMPLE_MAP_CONTENT = CodeRule(
         "platform",
         "instrument_model",
         "variant_kind",
+        "variant_origin",
     ),
     rationale=(
         "A file whose rows are a sample name and a VCF path is a list of files, not their "
-        "data (#621): its data_type is sample_map, and the six dimensions of the data do "
+        "data (#621): its data_type is sample_map, and the seven dimensions of the data do "
         "not apply to it, as for a checksum (#596). Read from the content, so a file that "
         "is only named like a map keeps what its name says."
     ),
@@ -494,6 +548,9 @@ CODE_RULES = (
     VCF_STEP_CALLER_KIND,
     VCF_SOURCE_CALLER_KIND,
     VCF_MERGE_SMALL_CALLERS,
+    VCF_STEP_CALLER_ORIGIN,
+    VCF_SOURCE_CALLER_ORIGIN,
+    VCF_MERGE_GERMLINE_CALLERS,
     BED_COORDINATE_REFERENCE,
     BED_NONSTANDARD_CONTIGS,
     FASTA_TRANSCRIPT_CONTIGS,

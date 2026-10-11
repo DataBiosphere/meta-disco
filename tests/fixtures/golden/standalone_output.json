@@ -83,6 +83,17 @@
             ],
             "status": "not_classified",
             "value": null
+          },
+          "variant_origin": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for variant_origin",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -209,6 +220,19 @@
             ],
             "status": "not_applicable",
             "value": null
+          },
+          "variant_origin": {
+            "evidence": [
+              {
+                "reason": "SVS files are Aperio whole-slide histology images used for pathology analysis",
+                "rule_id": "image_svs_histology",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -283,6 +307,11 @@
             "value": null
           },
           "variant_kind": {
+            "evidence": [],
+            "status": "not_classified",
+            "value": null
+          },
+          "variant_origin": {
             "evidence": [],
             "status": "not_classified",
             "value": null
@@ -389,6 +418,16 @@
             "evidence": [
               {
                 "reason": "No parent to inherit variant_kind from: no file in this dataset carries a candidate parent name, matched case-insensitively",
+                "rule_id": "no_matching_parent_in_dataset"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
+          },
+          "variant_origin": {
+            "evidence": [
+              {
+                "reason": "No parent to inherit variant_origin from: no file in this dataset carries a candidate parent name, matched case-insensitively",
                 "rule_id": "no_matching_parent_in_dataset"
               }
             ],
@@ -522,6 +561,17 @@
             ],
             "status": "not_classified",
             "value": null
+          },
+          "variant_origin": {
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for variant_origin",
+                "status": "not_classified"
+              }
+            ],
+            "status": "not_classified",
+            "value": null
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",
@@ -615,6 +665,19 @@
             "value": null
           },
           "variant_kind": {
+            "evidence": [
+              {
+                "reason": "Checksum file \u2014 a checksum, and no data of its own",
+                "rule_id": "checksum_file",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
+          "variant_origin": {
             "evidence": [
               {
                 "reason": "Checksum file \u2014 a checksum, and no data of its own",

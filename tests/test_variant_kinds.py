@@ -3,7 +3,7 @@ the kind rules over real-shaped headers, the caller table, and the claim the cla
 
 import pytest
 
-from meta_disco import header_classifier
+from meta_disco import callers, header_classifier
 from meta_disco import producer_steps as ps
 from meta_disco import variant_kinds as vk
 from meta_disco.file_name import FileName
@@ -29,8 +29,9 @@ SVTYPE = '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural
 ALT_DEL = '##ALT=<ID=DEL,Description="Deletion">'
 
 
-def kind(*lines: str, name: str = "x.vcf.gz") -> vk.KindReading:
-    return vk.read_kind(header(*lines), name)
+def kind(*lines: str, name: str = "x.vcf.gz") -> callers.Reading:
+    parsed = header(*lines)
+    return vk.read_kind(parsed, callers.find_caller(parsed, name))
 
 
 # --- the reader's new tools ---------------------------------------------------------------
@@ -120,19 +121,19 @@ def test_every_source_line_is_kept_in_order():
 
 def test_a_producing_caller_gives_its_kind():
     reading = kind(HC, name="HG00096.chr10.hc.vcf.gz")
-    assert (reading.by, reading.kind) == (vk.BY_STEP, "small")
+    assert (reading.by, reading.value) == (callers.BY_STEP, "small")
 
 
 def test_the_walk_back_passes_steps_that_keep_the_kind_to_the_caller_that_wrote_their_input():
     reading = kind(GENOTYPE, SELECT, name="chr1.100000001_100100000.genotyped.vcf.gz")
-    assert reading.kind == "small"
+    assert reading.value == "small"
     assert "SelectVariants <- GenotypeGVCFs" in reading.reason
 
 
 def test_a_kept_step_whose_input_no_step_wrote_takes_the_headers_one_other_step():
     # T2T's region files: GenomicsDBImport and SelectVariants, and no GenotypeGVCFs line between them.
     reading = kind(IMPORT, SELECT, name="chr1.100000001_100100000.genotyped.vcf.gz")
-    assert reading.kind == "small"
+    assert reading.value == "small"
     assert "the header's one other step" in reading.reason
 
 
@@ -142,46 +143,46 @@ def test_a_kept_step_whose_input_no_step_wrote_takes_the_headers_one_other_step(
 )
 def test_the_headers_one_other_step_is_not_taken_where_the_rest_of_the_header_doubts_it(extra, doubt):
     reading = kind(IMPORT, SELECT, extra, name="chr1.100000001_100100000.genotyped.vcf.gz")
-    assert reading.kind is None and reading.reason.startswith(vk.FALLBACK_DISAGREES) and doubt in reading.reason
+    assert reading.value is None and reading.reason.startswith(callers.FALLBACK_DISAGREES) and doubt in reading.reason
 
 
 def test_a_kept_step_with_no_caller_in_the_header_gives_no_kind():
     reading = kind(PASS, name="1kgp.chr1.recalibrated.snp_indel.pass.vcf.gz")
-    assert reading.kind is None and reading.reason.startswith(vk.NO_CALLER_ON_CHAIN)
+    assert reading.value is None and reading.reason.startswith(callers.NO_CALLER_ON_CHAIN)
 
 
 def test_a_caller_the_table_does_not_list_gives_no_kind():
     line = '##DRAGENCommandLine=<ID=dragen,CommandLineOptions="--output-directory d --output-file-prefix p">'
     reading = kind(line)
-    assert reading.kind is None and reading.reason.startswith(vk.NOT_IN_TABLE)
+    assert reading.value is None and reading.reason.startswith(callers.NOT_IN_TABLE)
 
 
 def test_an_unread_command_line_gives_no_kind():
     reading = kind("##bcftools_pluginCommand=plugin fill-tags -- -t AF; Date=x")
-    assert reading.kind is None and reading.reason.startswith(vk.UNREAD_STEP)
+    assert reading.value is None and reading.reason.startswith(callers.UNREAD_STEP)
 
 
 def test_a_pvar_gives_no_kind():
-    assert kind(HC, name="EUR.10.pvar").reason.startswith(vk.PVAR)
+    assert kind(HC, name="EUR.10.pvar").reason.startswith(callers.PVAR)
 
 
 def test_a_renamed_callers_output_takes_the_headers_one_step():
     # Sniffles wrote `sniffles.vcf`; the file was published as `sniffles_sv.vcf`.
     reading = kind(SNIFFLES_COMMAND, name="sniffles_sv.vcf")
-    assert reading.kind == "structural"
+    assert reading.value == "structural"
 
 
 def test_with_no_one_producing_step_two_other_tools_give_no_kind():
     # Neither step wrote this file, and the header's other steps are two callers of two kinds.
     reading = kind(HC, SNIFFLES_COMMAND, name="x.vcf.gz")
-    assert reading.kind is None and reading.reason.startswith(vk.NO_CALLER_ON_CHAIN)
+    assert reading.value is None and reading.reason.startswith(callers.NO_CALLER_ON_CHAIN)
     assert "2 other tools" in reading.reason
 
 
 def test_a_kept_steps_input_written_by_two_steps_is_not_walked_to_either():
     combine = gatk4("CombineGVCFs", "-V a.g.vcf -O chr1.100000001_100100000.margined.genotyped.vcf.gz")
     reading = kind(GENOTYPE, combine, SELECT, name="chr1.100000001_100100000.genotyped.vcf.gz")
-    assert reading.kind is None and "several steps" in reading.reason
+    assert reading.value is None and "several steps" in reading.reason
 
 
 def test_an_empty_fastq_holds_no_variants():
@@ -203,33 +204,45 @@ def test_an_empty_fastq_holds_no_variants():
 )
 def test_the_one_tool_a_header_names_gives_its_kind(lines, expected):
     reading = kind(*lines)
-    assert (reading.by, reading.kind) == (vk.BY_SOURCE, expected)
+    assert (reading.by, reading.value) == (callers.BY_SOURCE, expected)
 
 
 def test_where_the_command_lines_name_no_caller_the_tool_the_header_names_gives_the_kind():
     # PEPPER-Margin-DeepVariant's rejected calls: a DeepVariant version line and bcftools filters.
     reading = kind("##DeepVariant_version=1.1.0", PASS, name="1kgp.chr1.recalibrated.snp_indel.pass.vcf.gz")
-    assert (reading.by, reading.kind) == (vk.BY_SOURCE, "small")
+    assert (reading.by, reading.value) == (callers.BY_SOURCE, "small")
 
 
 def test_two_tools_naming_themselves_give_no_kind():
     # NIA CARD's concatenation of PEPPER-Margin-DeepVariant calls and SVIM-asm calls.
     reading = kind("##source=SVIM-asm-v1.0.2", "##DeepVariant_version=1.4.0")
-    assert reading.kind is None and reading.reason.startswith(vk.SEVERAL_TOOLS)
+    assert reading.value is None and reading.reason.startswith(callers.SEVERAL_TOOLS)
 
 
 def test_a_caller_beside_a_tool_the_table_does_not_list_is_two_tools():
     reading = kind("##source=Sniffles2_2.0.7", "##source=dbSNP")
-    assert reading.kind is None and reading.reason.startswith(vk.SEVERAL_TOOLS)
+    assert reading.value is None and reading.reason.startswith(callers.SEVERAL_TOOLS)
+
+
+def test_steps_that_keep_or_merge_calls_are_not_counted_among_the_tools_a_header_names():
+    # GATK writes a ##source for every tool it runs, the filters too (#658).
+    reading = kind("##source=SelectVariants", "##source=HaplotypeCaller")
+    assert (reading.by, reading.value) == (callers.BY_SOURCE, "small")
+
+
+def test_a_header_naming_only_steps_that_keep_calls_names_no_caller():
+    reading = kind("##source=SelectVariants")
+    assert reading.value is None and reading.reason.startswith(callers.NO_CALLER_LINE)
+    assert "SelectVariants" in reading.reason
 
 
 def test_a_header_naming_no_tool_gives_no_kind():
-    assert kind().reason.startswith(vk.NO_CALLER_LINE)
+    assert kind().reason.startswith(callers.NO_CALLER_LINE)
 
 
 def test_a_reference_resource_names_a_tool_the_table_does_not_list():
     reading = kind("##source=dbSNP")
-    assert reading.kind is None and reading.reason == f"{vk.NOT_IN_TABLE}: dbSNP"
+    assert reading.value is None and reading.reason == f"{callers.NOT_IN_TABLE}: dbSNP"
 
 
 # --- rule 5: a merge ----------------------------------------------------------------------
@@ -237,24 +250,24 @@ def test_a_reference_resource_names_a_tool_the_table_does_not_list():
 
 def test_a_merge_of_small_variant_callers_declaring_no_sv_field_is_small():
     reading = kind(IMPORT, SELECT, CONCAT, name="chr1.genotyped.vcf.gz")
-    assert (reading.by, reading.kind) == (vk.BY_MERGE, "small")
+    assert (reading.by, reading.value) == (callers.BY_MERGE, "small")
 
 
 @pytest.mark.parametrize("declaration", [SVTYPE, ALT_DEL])
 def test_a_merge_whose_header_declares_an_sv_field_gives_no_kind(declaration):
     reading = kind(IMPORT, SELECT, CONCAT, declaration, name="chr1.genotyped.vcf.gz")
-    assert reading.kind is None and reading.reason.startswith(vk.SV_DECLARED)
+    assert reading.value is None and reading.reason.startswith(vk.SV_DECLARED)
 
 
 def test_a_merge_of_callers_of_two_kinds_gives_no_kind():
     concat = "##bcftools_concatCommand=concat -a -o merged.vcf pmdv.vcf hapdiff.vcf; Date=x"
     reading = kind(concat, "##source=SVIM-asm-v1.0.2", "##DeepVariant_version=1.4.0", name="merged.vcf")
-    assert reading.kind is None and reading.reason.startswith(vk.MIXED_MERGE)
+    assert reading.value is None and reading.reason.startswith(vk.MIXED_MERGE)
 
 
 def test_a_merge_naming_no_caller_gives_no_kind():
     reading = kind("##bcftools_concatCommand=concat -o m.vcf a.vcf b.vcf; Date=x", name="m.vcf")
-    assert reading.kind is None and reading.reason.startswith(vk.NO_CALLER_LINE)
+    assert reading.value is None and reading.reason.startswith(callers.NO_CALLER_LINE)
 
 
 def test_with_no_one_producing_step_a_merge_in_the_header_settles_the_kind():
@@ -263,7 +276,7 @@ def test_with_no_one_producing_step_a_merge_in_the_header_settles_the_kind():
         "##bcftools_viewCommand=view -s HG00096 /cromwell_root/z/1kgp.chr1.recalibrated.snp_indel.pass.vcf.gz; Date=x"
     )
     reading = kind(IMPORT, SELECT, CONCAT, VQSR_SNP, VQSR_INDEL, PASS, other_view, name="1kgp.chr1.pass.EUR.vcf.gz")
-    assert (reading.by, reading.kind) == (vk.BY_MERGE, "small")
+    assert (reading.by, reading.value) == (callers.BY_MERGE, "small")
 
 
 # --- the caller table ---------------------------------------------------------------------
@@ -272,12 +285,12 @@ def test_with_no_one_producing_step_a_merge_in_the_header_settles_the_kind():
 def test_every_callers_kind_is_a_variant_kind_term():
     from meta_disco.schema_vocab import dimension_values
 
-    table = vk.load_caller_kinds()
+    table = callers.load_callers()
     assert {c.kind for c in table.callers} <= dimension_values("variant_kind")
 
 
 def test_a_caller_name_matches_whole_and_case_insensitively():
-    table = vk.load_caller_kinds()
+    table = callers.load_callers()
     assert [getattr(table.caller(n), "name", None) for n in ("sniffles", "Sniffles2_2.0.7")] == ["Sniffles"] * 2
     assert table.caller("SnifflesX") is None
 
@@ -298,4 +311,4 @@ def test_the_classifier_claims_not_classified_with_the_reason_where_no_kind_is_r
     entry = out["variant_kind"]
     assert (entry["value"], entry["status"]) == (None, NOT_CLASSIFIED)
     (claim,) = [e for e in entry["evidence"] if e.get("rule_id") == "vcf_source_caller_kind"]
-    assert claim["status"] == NOT_CLASSIFIED and claim["reason"] == f"{vk.NOT_IN_TABLE}: dbSNP"
+    assert claim["status"] == NOT_CLASSIFIED and claim["reason"] == f"{callers.NOT_IN_TABLE}: dbSNP"

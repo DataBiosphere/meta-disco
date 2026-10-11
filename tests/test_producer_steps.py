@@ -121,7 +121,7 @@ def test_identical_lines_are_one_step_and_other_lines_are_not_steps():
 
 
 def test_an_undeclared_tool_is_no_reading_at_all():
-    assert ps.steps_of(header(HC, gatk4("Mutect2", "-I a.bam -O b.vcf"))) is None
+    assert ps.steps_of(header(HC, gatk4("LeftAlignAndTrimVariants", "-V a.vcf -O b.vcf"))) is None
     assert ps.steps_of(header("##bcftools_pluginCommand=plugin fill-tags -- -t AF; Date=x")) is None
 
 
@@ -215,7 +215,7 @@ def test_a_bgz_compares_as_its_vcf():
 
 def test_a_header_with_no_command_line_or_an_undeclared_tool_declines():
     assert ps.producing_step(header("##source=Sniffles2"), "x.vcf.gz")[1] == ps.NO_COMMAND_LINE
-    assert ps.producing_step(header(gatk4("Mutect2", "-O x.vcf")), "x.vcf.gz")[1] == ps.UNKNOWN_TOOL
+    assert ps.producing_step(header(gatk4("LeftAlignAndTrimVariants", "-O x.vcf")), "x.vcf.gz")[1] == ps.UNKNOWN_TOOL
 
 
 # --- the step a producing HaplotypeCaller gives ------------------------------------------

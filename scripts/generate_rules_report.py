@@ -40,7 +40,9 @@ rules (``code_rules.EDGE_RULES``, #356) and the authored rows of ``rules/activit
 (#584, applied at reconcile by #577), which state a derivation step rather than claim a
 field, counted by the inputs a record's ``generated_by`` carries under their ``rule_id``. An id or marker
 the run carries and nothing declares (a rule retired since the run, say) is listed rather
-than dropped.
+than dropped. The rows of ``rules/callers.yaml`` that the caller rules look up (#658) are
+listed too, each counted by the files a caller rule's classified kind or origin claim names
+it in (``callers.callers_in_reason``).
 
 Writes ``docs/rules-report.md`` and ``docs/rules-dashboard.html`` (from
 ``docs/rules-dashboard-template.html``).
@@ -64,6 +66,7 @@ import yaml
 
 from meta_disco import code_rules
 from meta_disco.activity_map import default_activity_map_resource, describe_match, load_activity_map
+from meta_disco.callers import callers_in_reason, load_callers
 from meta_disco.models import MIXED, SOURCE_DERIVATION_INHERITANCE
 from meta_disco.output_utils import find_latest_run, iter_reconciled_records
 from meta_disco.reconcile import declaration
@@ -165,6 +168,25 @@ UNDECLARED_NOTE = (
     "the current rules, this list is empty."
 )
 NONE_NOTE = "None: every rule the counts name is in the rule files."
+CALLERS_NOTE = (
+    "The rows of `rules/callers.yaml` (#654, #658): each variant caller, the kind of variant it calls and their "
+    "origin, which the caller rules look up once they have found the caller in a VCF's header. A caller with a "
+    "somatic mode gives its origin only where its command line shows none of the mode's flags, or a `##source` "
+    "spelling predates the mode. Counted by the files whose kind or origin a caller rule took from the row: a "
+    "merge counts each of its callers."
+)
+# The rules that read a dimension from a VCF's caller (`callers.find_caller`), by the dimension they set.
+CALLER_RULES = {
+    rule.id: rule.sets[0]
+    for rule in (
+        code_rules.VCF_STEP_CALLER_KIND,
+        code_rules.VCF_SOURCE_CALLER_KIND,
+        code_rules.VCF_MERGE_SMALL_CALLERS,
+        code_rules.VCF_STEP_CALLER_ORIGIN,
+        code_rules.VCF_SOURCE_CALLER_ORIGIN,
+        code_rules.VCF_MERGE_GERMLINE_CALLERS,
+    )
+}
 # The engine's two placeholders, worded for the reader. Held to the schema's marker enum
 # (`schema_vocab.marker_values`) when the report is built, so a marker added there fails
 # the report until it is worded here.
@@ -356,8 +378,11 @@ class Tally:
     source_types: Counter = field(default_factory=Counter)
 
 
-def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict[str, Tally]]:
-    """One pass over the reconciled records: the record count, and per rule id, marker and edge rule, what fired where.
+def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict[str, Tally], Counter]:
+    """One pass over the reconciled records: the record count; per rule id, marker and edge rule, what fired where; and per caller.
+
+    The last counts, per ``(caller, dimension)``, the files whose claim by a :data:`CALLER_RULES`
+    rule gave that dimension a value read from the caller's row (``callers.callers_in_reason``).
 
     For a rule or a translation row, only a claim that declares something counts: a value,
     or ``not_applicable`` (``reconcile.declaration``). One that declares ``not_classified``
@@ -370,6 +395,7 @@ def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict
     rule is counted by the inputs records' ``generated_by`` carries under its ``rule_id``.
     """
     stats: defaultdict[str, Tally] = defaultdict(Tally)
+    by_caller: Counter = Counter()
     n = 0
     for record in records:
         n += 1
@@ -382,6 +408,9 @@ def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict
                 key = claim.get("rule_id") or claim.get("marker")
                 if not key:
                     continue
+                if CALLER_RULES.get(key) == field_name and claim.get("value") is not None:
+                    for name in callers_in_reason(claim.get("reason") or ""):
+                        by_caller[(name, field_name)] += 1
                 judged = key in mapping_ids or key in rule_ids
                 claimed = declaration(claim) if judged else None
                 inherited = claim.get("source_type") == SOURCE_DERIVATION_INHERITANCE and "parent_keys" in claim
@@ -414,7 +443,33 @@ def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict
             stats[key].datasets[dataset] += 1
         for key in won:
             stats[key].won += 1
-    return n, stats
+    return n, stats, by_caller
+
+
+def caller_rows(counts: Counter) -> list[dict]:
+    """The rows of ``rules/callers.yaml``, each with the files whose kind and whose origin it gave (:func:`tally`)."""
+    rows = []
+    for caller in load_callers().callers:
+        mode = caller.somatic_mode
+        rows.append(
+            {
+                "name": caller.name,
+                "pattern": caller.pattern.pattern,
+                "kind": caller.kind,
+                "origin": caller.origin,
+                "somatic_mode": (
+                    ""
+                    if mode is None
+                    else f"flags {', '.join(sorted(mode.flags))}"
+                    + (f"; predated by {', '.join(sorted(mode.predates))}" if mode.predates else "")
+                    + f". {mode.reason}"
+                ),
+                "reason": caller.reason,
+                "kind_files": counts[(caller.name, "variant_kind")],
+                "origin_files": counts[(caller.name, "variant_origin")],
+            }
+        )
+    return rows
 
 
 def _counted(entry: Tally | None) -> dict:
@@ -478,7 +533,7 @@ def build(
     duplicates = sorted(i for i, c in Counter([*ids, *others]).items() if c > 1)
     if duplicates:
         raise ReportError(f"ids declared twice: {duplicates}")
-    n, stats = tally(
+    n, stats, by_caller = tally(
         records,
         rule_ids={r["id"] for r in rules if r["kind"] != KIND_MAPPING},
         mapping_ids={r["id"] for r in rules if r["kind"] == KIND_MAPPING},
@@ -496,6 +551,7 @@ def build(
         "rules": rules,
         "markers": markers,
         "edge_rules": edge_rules,
+        "callers": caller_rows(by_caller),
         "undeclared": [{"id": k, **_counted(v)} for k, v in sorted(stats.items()) if k not in known],
         "labels": LABELS,
         "text": {
@@ -503,6 +559,7 @@ def build(
             "key": DASHBOARD_KEY,
             "markers_note": MARKERS_NOTE,
             "edge_rules_note": EDGE_RULES_NOTE,
+            "callers_note": CALLERS_NOTE,
             "undeclared_head": UNDECLARED_HEAD,
             "undeclared_note": UNDECLARED_NOTE,
             "none_note": NONE_NOTE,
@@ -605,6 +662,23 @@ def render_markdown(data: dict) -> str:
                 md_code(e["defined_in"]),
             ]
             for e in data["edge_rules"]
+        ],
+    )
+    lines += ["", "## Caller table", "", CALLERS_NOTE, ""]
+    lines += md_table(
+        ["caller", "kind", "origin", "reason", "somatic mode", "kind files", "origin files", "pattern"],
+        [
+            [
+                c["name"],
+                c["kind"],
+                c["origin"],
+                c["reason"],
+                c["somatic_mode"],
+                _n(c["kind_files"]),
+                _n(c["origin_files"]),
+                md_code(c["pattern"]),
+            ]
+            for c in data["callers"]
         ],
     )
     lines += ["", f"## {UNDECLARED_HEAD}", "", UNDECLARED_NOTE, ""]

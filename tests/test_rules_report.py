@@ -383,3 +383,31 @@ def test_a_rule_named_like_a_marker_is_refused(tmp_path):
     rules.write_text(RULES.replace("id: never_fires", f"id: {code_rules.FETCH_FAILED.id}"))
     with pytest.raises(grr.ReportError, match="declared twice"):
         grr.build(rules, value_map, [], Path("run"))
+
+
+def test_the_caller_table_counts_the_files_each_caller_gave_a_kind_or_an_origin(tmp_path):
+    """Each row of ``rules/callers.yaml``, counted by the caller rules' claims that name it (#658)."""
+    step_kind, merge_origin = code_rules.VCF_STEP_CALLER_KIND.id, code_rules.VCF_MERGE_GERMLINE_CALLERS.id
+    called = dict(claim(step_kind, "small"), reason="called by HaplotypeCaller (the producing step)")
+    merged = dict(
+        claim(merge_origin, "germline"), reason="concat of calls by SVIM, DeepVariant; no somatic field declared"
+    )
+    declined = dict(claim(step_kind, status="not_classified"), reason="caller not in the caller table: dbSNP")
+    run_dir = reconciled_run(
+        tmp_path,
+        [
+            {"dataset_title": "A", "classifications": {"variant_kind": slot(["small"], evidence=[called])}},
+            {"dataset_title": "A", "classifications": {"variant_origin": slot("germline", evidence=[merged])}},
+            {
+                "dataset_title": "A",
+                "classifications": {"variant_kind": slot(evidence=[declined], status="not_classified")},
+            },
+        ],
+    )
+    data = grr.build(*rule_files(tmp_path), iter_reconciled_records(run_dir), run_dir)
+    rows = {c["name"]: (c["kind_files"], c["origin_files"]) for c in data["callers"]}
+    assert rows["HaplotypeCaller"] == (1, 0)
+    assert rows["SVIM"] == rows["DeepVariant"] == (0, 1)
+    assert rows["Sniffles"] == (0, 0)
+    text = grr.render_markdown(data)
+    assert "## Caller table" in text and "| Sniffles | structural | germline |" in text

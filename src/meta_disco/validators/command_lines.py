@@ -64,13 +64,15 @@ _GATK_VARIANTS = ToolArguments(inputs=("-V", "--variant"), outputs=("-O", "--out
 # (measured 2026-10-03 over the cached headers): GATK 4 and 3, and the bcftools
 # subcommands the T2T joint-calling files carry; and since #654 the callers a variant
 # kind is read from (Sniffles, DRAGEN) and the steps between a caller and its file
-# (GATK 3's ApplyRecalibration, bcftools norm, annotate and merge), measured 2026-10-09.
-# Anything else is an unread step.
+# (GATK 3's ApplyRecalibration, bcftools norm, annotate and merge), measured 2026-10-09;
+# and Mutect2 with its filter (#658, in no corpus header). Anything else is an unread step.
 TOOL_ARGUMENTS: dict[tuple[str, str], ToolArguments] = {
     (GATK, "HaplotypeCaller"): ToolArguments(
         inputs=("-I", "--input"), outputs=("-O", "--output"), mode=("-ERC", "--emit-ref-confidence")
     ),
     (GATK, "SelectVariants"): _GATK_VARIANTS,
+    (GATK, "Mutect2"): ToolArguments(inputs=("-I", "--input"), outputs=("-O", "--output")),
+    (GATK, "FilterMutectCalls"): _GATK_VARIANTS,
     (GATK, "ApplyVQSR"): _GATK_VARIANTS,
     (GATK, "GenotypeGVCFs"): _GATK_VARIANTS,
     (GATK, "CombineGVCFs"): _GATK_VARIANTS,
