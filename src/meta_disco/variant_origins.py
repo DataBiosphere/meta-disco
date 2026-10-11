@@ -1,4 +1,4 @@
-"""A VCF's variant origin, the row's in ``rules/callers.yaml`` for the caller :func:`.callers.find_caller` finds (#658).
+"""A VCF's variant origin: the origin on the ``rules/callers.yaml`` row of the caller :func:`.callers.find_caller` finds (#658).
 
 - **A somatic mode** (a row's ``somatic_mode``) leaves the origin open unless the caller's command
   line shows none of its flags, or a ``##source`` spelling predates the mode (:func:`_mode_doubt`).

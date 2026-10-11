@@ -1,4 +1,4 @@
-"""A VCF's variant kind, the row's in ``rules/callers.yaml`` for the caller :func:`.callers.find_caller` finds (#654).
+"""A VCF's variant kind: the kind on the ``rules/callers.yaml`` row of the caller :func:`.callers.find_caller` finds (#654).
 
 Rule 2's fallback is refused where the rest of the header doubts it; a merge is ``small`` only
 where every named caller is and no structural-variant field is declared: a merged header can
