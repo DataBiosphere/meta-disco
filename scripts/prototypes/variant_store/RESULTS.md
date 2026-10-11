@@ -62,12 +62,12 @@ Genotypes in the VCF, tallied by bcftools: `0|0` 3,207,591,550, `0|1` 69,137,480
 
 ## Carriers joined to the sample table
 
-Stand-in sample table: 3,202 panel samples with pedigree population, and the AnVIL datasets whose file names carry the sample's id in the prod input (ANVIL_1000G_high_coverage_2019 3,202, ANVIL_T2T 3,202, ANVIL_T2T_CHRY 3,202, AnVIL_MAGE 477, ANVIL_HPRC 249, AnVIL_HPRC_R2 224, ANVIL_NIA_CARD_Coriell_Cell_Lines_Open 2); 9.8 KB. RNA-seq = named in AnVIL_MAGE; long reads = named in ANVIL_HPRC or AnVIL_HPRC_R2.
+Stand-in sample table: 3,202 panel samples with pedigree population, and the AnVIL datasets whose file names carry the sample's id in the prod input (ANVIL_1000G_high_coverage_2019 3,202, ANVIL_T2T 3,202, ANVIL_T2T_CHRY 3,202, AnVIL_MAGE 477, ANVIL_HPRC 249, AnVIL_HPRC_R2 224, ANVIL_NIA_CARD_Coriell_Cell_Lines_Open 2); 9.6 KB. RNA-seq = named in AnVIL_MAGE; long reads = named in ANVIL_HPRC or AnVIL_HPRC_R2.
 
 | Question | Carriers → answer | Local fresh | Local warm | Sim. S3 20 ms | Sim. S3 80 ms |
 |---|---|---|---|---|---|
-| carriers of chr22:42705184:A:<DEL> with RNA-seq | 1,583 → 235 | 18 ms | 17 ms | 323 ms (11 req, 1.4 MB) | 1,012 ms (11 req, 1.4 MB) |
-| carriers of all of '50 consecutive common (AF>0.3) variants' with long reads | 277 → 26 | 20 ms | 18 ms | 276 ms (13 req, 1.5 MB) | 831 ms (13 req, 1.5 MB) |
+| carriers of chr22:42705184:A:<DEL> with RNA-seq | 1,583 → 235 | 18 ms | 17 ms | 339 ms (11 req, 1.4 MB) | 1,006 ms (11 req, 1.4 MB) |
+| carriers of all of '50 consecutive common (AF>0.3) variants' with long reads | 277 → 26 | 19 ms | 19 ms | 275 ms (13 req, 1.5 MB) | 836 ms (13 req, 1.5 MB) |
 
 ## What Bloom filters cost over HTTP
 
@@ -105,7 +105,7 @@ Projected rows: 15.1 billion. Projected build time on this machine, one chromoso
 
 **Layout: Parquet sorted by (chrom, pos), one file per chromosome, written without Bloom filters, queried with DuckDB.**
 - It is the explorer's engine, it reads over HTTP, and it joins to the sample table in the same SQL.
-- Asked by the issue's own key (chrom, pos, ref, alt), one variant's carriers took 18–20 ms locally, 237–246 ms at 20 ms per request and 719–756 ms at 80 ms, in 8 requests. Carriers of all of 50 took 131–248 ms and 387–770 ms (6–52 requests). The joins took 276–323 ms and 831 ms–1.0 s.
+- Asked by the issue's own key (chrom, pos, ref, alt), one variant's carriers took 18–20 ms locally, 237–246 ms at 20 ms per request and 719–756 ms at 80 ms, in 8 requests. Carriers of all of 50 took 131–248 ms and 387–770 ms (6–52 requests). The joins took 275–339 ms and 836 ms–1.0 s.
 - Write with `WRITE_BLOOM_FILTER false`. With DuckDB's default Bloom filters the same one-variant question took 10,146 requests and 30 s at 20 ms.
 - Key symbolic SVs by their VCF ID.
 

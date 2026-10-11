@@ -21,7 +21,7 @@ from typing import Any
 
 import duckdb
 import truth
-from common import GENOTYPES, PEDIGREE, PROD_INPUT, SAMPLES, Checker, machine, save, size
+from common import GENOTYPES, PARQUET_OPTIONS, PEDIGREE, PROD_INPUT, SAMPLES, Checker, machine, save, size
 from duck import measure, modes
 
 RNA_SEQ = ["AnVIL_MAGE"]
@@ -53,7 +53,7 @@ def build() -> dict[str, list[str]]:
         "CREATE TABLE samples (sample VARCHAR, sex INTEGER, population VARCHAR, superpopulation VARCHAR, datasets VARCHAR[])"
     )
     con.executemany("INSERT INTO samples VALUES (?, ?, ?, ?, ?)", rows)
-    con.execute(f"COPY samples TO '{SAMPLES}' (FORMAT parquet, COMPRESSION zstd)")
+    con.execute(f"COPY samples TO '{SAMPLES}' ({PARQUET_OPTIONS})")
     return {sample: ds for sample, _, _, _, ds in rows}
 
 
