@@ -233,7 +233,7 @@ rules:
   # `data_type_enum`, and stamping the dimension `not_applicable` asserted the file
   # has no kind when the vocabulary has a word for its kind.
   #
-  # The other six are `not_applicable`: a checksum is a hash of a file's bytes. An
+  # The other seven are `not_applicable`: a checksum is a hash of a file's bytes. An
   # `.md5` whose step is `ChecksumActivity` inherits nothing to meet this, since that
   # activity passes nothing (ADR-0002 decision 8, amended by #596).
   # ---------------------------------------------------------------------------

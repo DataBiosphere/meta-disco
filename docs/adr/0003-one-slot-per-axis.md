@@ -131,7 +131,7 @@ is shown as "Not determined".
   read depth, assembly QC), never derived from `data_type`. Other annotations, genotypes and pangenomes,
   which can hold variants, stay `not_classified`.
 - **The kind is the caller's,** read from the header by three content rules and looked up in
-  `rules/caller_kinds.yaml`. Reconcile carries it across index, merge and cohort-merge steps only: a
+  `rules/caller_kinds.yaml` (now `rules/callers.yaml`, #658). Reconcile carries it across index, merge and cohort-merge steps only: a
   filter can narrow a kind, and a call creates one.
 - **Reference resources** (dbSNP, ClinVar, known-indels) name no caller and stay `not_classified`; a
   curator knowledge base keyed on md5 is a later option.
