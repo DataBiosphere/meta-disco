@@ -123,7 +123,7 @@ Projected rows: 15.1 billion. Projected build time on this machine, one chromoso
 **Precompute sample similarity (KING), not MinHash.** KING over all 3,202 samples took 8 s on chr22, a projected 10 minutes genome-wide. The output is one 41 MB matrix whatever the number of chromosomes. At 3,202 samples an exact kinship matrix is cheap, so an approximation buys nothing.
 
 **What these numbers do not cover:**
-- **Real S3.** The two delays were chosen to bracket a short and a long round trip, and the server models latency per request (over kept-alive connections), not S3's throughput or variance.
+- **Real S3.** Remote latency here is simulated, not measured on S3: a local server delays every request by 20 or 80 ms (chosen to bracket a short and a long round trip) over kept-alive connections. It does not model S3's throughput, TLS or variance. It is enough to choose a layout because what separates the layouts is the number of requests, which is exact, and the gaps are large: 8 requests against 10,146 for one variant with and without Bloom filters, and 6–9 against about 5,050 for a sample's variants on the two sort orders. Real S3 would make each request slower and less predictable; it would not change which layout needs fewer of them.
 - **Cold-disk timings.** Local timings after the first run are from the OS file cache.
 - **Request pricing.** Cost is storage only.
 - **chrX.** Its haploid male calls make the per-byte scaling least sure there.
