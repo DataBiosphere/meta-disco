@@ -348,7 +348,7 @@ def build_output(tmp_path: Path) -> dict:
             f"No records classified for {ftype!r}: a GOLDEN_INPUTS record was filtered "
             "out (check its file_format/file_name against the config's extensions)."
         )
-        out[ftype] = json.loads((tmp_path / f"{ftype}_out.json").read_text())
+        out[ftype] = _pin_provenance(json.loads((tmp_path / f"{ftype}_out.json").read_text()))
     return out
 
 
@@ -397,11 +397,11 @@ def build_standalone_output(tmp_path: Path) -> dict:
             )
             assert companion["file_md5sum"] not in SEEDS_TAKEN
             records.append(companion)
-        out[name] = run_producer_envelope(producer, work, records)
+        out[name] = _pin_provenance(run_producer_envelope(producer, work, records))
 
     index_work = tmp_path / "index"
     index_work.mkdir()
-    out["index"] = run_index_producer(index_work, INDEX_INPUTS)
+    out["index"] = _pin_provenance(run_index_producer(index_work, INDEX_INPUTS))
     # `build_output` asserts the same thing for the same reason: a producer that wrote no
     # rows would regenerate as an empty `classifications` list and reach no schema
     # validation, with every test still green — the coverage test compares only keys, and
@@ -414,6 +414,26 @@ def build_standalone_output(tmp_path: Path) -> dict:
             "check its input's file_name/file_format against what the producer routes on"
         )
     return out
+
+
+# What a producer's provenance holds that changes from run to run (#404): when it started,
+# the code's version, commit and dirty flag, and the input's temporary path. The fixtures
+# hold these stand-ins, so they do not change with every commit; the shape around them is
+# pinned by `_pin_provenance`, and the values by `test_provenance`.
+PROVENANCE_STAND_INS = {
+    "started_at": "<started_at>",
+    "code": {"version": "<version>", "commit": "<commit>", "dirty": "<dirty>"},
+}
+
+
+def _pin_provenance(envelope: dict) -> dict:
+    """``envelope`` with its provenance's per-run values replaced by :data:`PROVENANCE_STAND_INS`, after checking its keys."""
+    provenance = envelope["metadata"]["provenance"]
+    assert set(provenance) == {"input", "started_at", "code"}, set(provenance)
+    assert set(provenance["input"]) == {"path", "repository", "catalog", "downloaded_at"}, set(provenance["input"])
+    assert set(provenance["code"]) == set(PROVENANCE_STAND_INS["code"]), set(provenance["code"])
+    provenance.update(PROVENANCE_STAND_INS, input={**provenance["input"], "path": "<path>"})
+    return envelope
 
 
 def _all_records(output: dict):

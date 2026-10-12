@@ -16,7 +16,7 @@ from meta_disco.file_types import BAM_CONFIG, VCF_CONFIG
 from meta_disco.models import SOURCE_CONTENT_READ
 from meta_disco.output_utils import run_file_metadata
 from meta_disco.pipeline import ClassifyPipeline
-from meta_disco.reconcile import content_step_counts
+from meta_disco.reconcile import content_step_counts, run_metadata
 from meta_disco.record_keys import RecordKey
 from meta_disco.validators import header_extractors, reference_builds
 from meta_disco.validators.command_lines import GATK, GATK3, Step
@@ -534,7 +534,7 @@ def test_a_runs_step_outcomes_are_kept_per_producer_and_dataset(tmp_path):
     write("vcf_classifications.json", {"T": {"stepped": 2, "no_activity": 1}, "U": {"stepped": 1}})
     write("tar_classifications.json", {"T": {"stepped": 4, "no_vcf_header": 1}})
     write("bam_classifications.json", None)
-    assert content_step_counts(tmp_path) == {
+    assert content_step_counts(run_metadata(tmp_path)) == {
         "tar": {"T": {"stepped": 4, "no_vcf_header": 1}},
         "vcf": {"T": {"stepped": 2, "no_activity": 1}, "U": {"stepped": 1}},
     }

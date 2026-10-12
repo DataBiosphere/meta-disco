@@ -16,6 +16,7 @@ from meta_disco.deployments import PROD
 from meta_disco.models import FileInfo, field_label
 from meta_disco.pipeline import load_classifiable_records
 from meta_disco.producers import PRODUCERS
+from meta_disco.provenance import run_provenance
 from meta_disco.records import OutputRecord, RunMetadata
 from meta_disco.rule_engine import RuleEngine
 
@@ -25,6 +26,7 @@ IMAGES = PRODUCERS["images"]
 
 def classify_images(metadata_path: Path, output_path: Path):
     """Classify image files using RuleEngine."""
+    provenance = run_provenance(metadata_path)
 
     # Records with no usable file_md5sum are excluded here, at the shared load path,
     # so no classification output can name a file the run could never fetch (#376).
@@ -92,6 +94,7 @@ def classify_images(metadata_path: Path, output_path: Path):
                     successful=len(results),
                     from_cache=0,
                     content_unreadable=0,
+                    provenance=provenance,
                     details={"by_extension": {ext: stats[ext]["total"] for ext in stats if stats[ext]["total"] > 0}},
                 ).to_dict(),
                 "classifications": results,

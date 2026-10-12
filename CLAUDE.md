@@ -248,8 +248,16 @@ evidence}` entry — plus the controlled vocabulary:
     `make review-queue` lists its unauthored rows; reconcile applies it (#577), and no classification run reads it.
   - `run_all_classifications` calls `report_evidence_files` and never `iter_evidence`,
     so no evidence reaches inference and a run with evidence files present writes the
-    same inference output as one without. Recording which catalog a run enhances is
-    #404, and is not built.
+    same inference output as one without.
+  - **Every classification file records its own provenance** (#404), in
+    `metadata.provenance` (`provenance.run_provenance`, required by
+    `RunMetadata.from_counts`): its input (path, `repository`, `catalog`,
+    `downloaded_at`), when it started, and the code's `version`, `commit` and `dirty`
+    flag (tracked files only), `null` where unknown. Per file, not per run, because
+    `make classify-bam RUN_DIR=…` rewrites one file of a stored run. Reconcile refuses an
+    input whose `repository` or `catalog` differs from what a run file records, and
+    writes `classified_by` (each distinct code identity with its files) and
+    `reconciled_by` into its envelope and report.
   - **The reconcile stage** is `reconcile.py` (`make reconcile`, #432): it reads a stored
     run plus the evidence and writes `<run>/reconciled/` — one gzip-compressed NDJSON
     file (`.ndjson.gz`, #554) per inference file, envelope on line 1, plus

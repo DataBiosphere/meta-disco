@@ -24,6 +24,7 @@ from .metadata_schema import (
     validation_failed_classifications,
 )
 from .producers import producer_for
+from .provenance import run_provenance
 from .record_keys import record_key
 from .records import (
     STEP_OUTCOMES_KEY,
@@ -243,6 +244,7 @@ class ClassifyPipeline:
         # names: refused here, before any work, where the envelope names none (an `.ndjson`
         # input), as the index producer and the catch-all refuse it.
         key = record_key(load_envelope(self.input_path), self.input_path) if self.config.step is not None else None
+        provenance = run_provenance(self.input_path)
         loaded = self._load_input()
         records = self._filter_records(loaded)
 
@@ -297,7 +299,7 @@ class ClassifyPipeline:
         del loaded
 
         self.evidence_dir.mkdir(parents=True, exist_ok=True)
-        classifications = self._run_parallel(work)
+        classifications = self._run_parallel(work, provenance)
 
         if self.config.summary_printer:
             self.config.summary_printer(classifications)
@@ -548,8 +550,8 @@ class ClassifyPipeline:
             step_outcome=step_outcome,
         )
 
-    def _run_parallel(self, work: list[ClassifierRecord | InvalidRecord]) -> list[dict]:
-        """ThreadPoolExecutor with progress tracking, returns classifications."""
+    def _run_parallel(self, work: list[ClassifierRecord | InvalidRecord], provenance: dict) -> list[dict]:
+        """ThreadPoolExecutor with progress tracking, returns classifications; ``provenance`` is written in ``metadata``."""
         successful = 0
         errored = 0  # worker raised: a cause was printed
         invalid = 0  # failed input validation: written, classified as nothing (#161)
@@ -625,6 +627,7 @@ class ClassifyPipeline:
             unreadable=unreadable,
             errored=errored,
             validation_failed=invalid,
+            provenance=provenance,
             details=details,
         )
 
@@ -639,6 +642,7 @@ class ClassifyPipeline:
         successful: int,
         from_cache: int,
         unreadable: int,
+        provenance: dict,
         errored: int = 0,
         validation_failed: int = 0,
         details: dict | None = None,
@@ -673,6 +677,7 @@ class ClassifyPipeline:
                         content_unreadable=unreadable,
                         errored=errored,
                         validation_failed=validation_failed,
+                        provenance=provenance,
                         details=details,
                     ).to_dict(),
                     "classifications": classifications,

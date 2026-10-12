@@ -122,6 +122,20 @@
       "failed": 0,
       "from_cache": 0,
       "processed": 1,
+      "provenance": {
+        "code": {
+          "commit": "<commit>",
+          "dirty": "<dirty>",
+          "version": "<version>"
+        },
+        "input": {
+          "catalog": null,
+          "downloaded_at": null,
+          "path": "<path>",
+          "repository": "anvil"
+        },
+        "started_at": "<started_at>"
+      },
       "successful": 1,
       "total_to_process": 1,
       "validation_failed": 0
@@ -248,6 +262,20 @@
       "failed": 0,
       "from_cache": 0,
       "processed": 1,
+      "provenance": {
+        "code": {
+          "commit": "<commit>",
+          "dirty": "<dirty>",
+          "version": "<version>"
+        },
+        "input": {
+          "catalog": null,
+          "downloaded_at": null,
+          "path": "<path>",
+          "repository": "anvil"
+        },
+        "started_at": "<started_at>"
+      },
       "successful": 1,
       "total_to_process": 1,
       "validation_failed": 0
@@ -438,6 +466,20 @@
       "failed": 0,
       "from_cache": 0,
       "processed": 1,
+      "provenance": {
+        "code": {
+          "commit": "<commit>",
+          "dirty": "<dirty>",
+          "version": "<version>"
+        },
+        "input": {
+          "catalog": null,
+          "downloaded_at": null,
+          "path": "<path>",
+          "repository": "anvil"
+        },
+        "started_at": "<started_at>"
+      },
       "successful": 1,
       "total_to_process": 1,
       "validation_failed": 0
@@ -570,6 +612,20 @@
       "failed": 0,
       "from_cache": 0,
       "processed": 1,
+      "provenance": {
+        "code": {
+          "commit": "<commit>",
+          "dirty": "<dirty>",
+          "version": "<version>"
+        },
+        "input": {
+          "catalog": null,
+          "downloaded_at": null,
+          "path": "<path>",
+          "repository": "anvil"
+        },
+        "started_at": "<started_at>"
+      },
       "successful": 1,
       "total_to_process": 1,
       "validation_failed": 0
@@ -707,6 +763,20 @@
       "failed": 0,
       "from_cache": 0,
       "processed": 1,
+      "provenance": {
+        "code": {
+          "commit": "<commit>",
+          "dirty": "<dirty>",
+          "version": "<version>"
+        },
+        "input": {
+          "catalog": null,
+          "downloaded_at": null,
+          "path": "<path>",
+          "repository": "anvil"
+        },
+        "started_at": "<started_at>"
+      },
       "successful": 1,
       "total_to_process": 1,
       "validation_failed": 0
@@ -841,6 +911,20 @@
       "failed": 0,
       "from_cache": 0,
       "processed": 1,
+      "provenance": {
+        "code": {
+          "commit": "<commit>",
+          "dirty": "<dirty>",
+          "version": "<version>"
+        },
+        "input": {
+          "catalog": null,
+          "downloaded_at": null,
+          "path": "<path>",
+          "repository": "anvil"
+        },
+        "started_at": "<started_at>"
+      },
       "successful": 1,
       "total_to_process": 1,
       "validation_failed": 0
@@ -1003,6 +1087,20 @@
       "failed": 0,
       "from_cache": 0,
       "processed": 1,
+      "provenance": {
+        "code": {
+          "commit": "<commit>",
+          "dirty": "<dirty>",
+          "version": "<version>"
+        },
+        "input": {
+          "catalog": null,
+          "downloaded_at": null,
+          "path": "<path>",
+          "repository": "anvil"
+        },
+        "started_at": "<started_at>"
+      },
       "successful": 1,
       "total_to_process": 1,
       "validation_failed": 0
@@ -1153,6 +1251,20 @@
       "failed": 0,
       "from_cache": 0,
       "processed": 1,
+      "provenance": {
+        "code": {
+          "commit": "<commit>",
+          "dirty": "<dirty>",
+          "version": "<version>"
+        },
+        "input": {
+          "catalog": null,
+          "downloaded_at": null,
+          "path": "<path>",
+          "repository": "anvil"
+        },
+        "started_at": "<started_at>"
+      },
       "successful": 1,
       "total_to_process": 1,
       "validation_failed": 0
@@ -1412,6 +1524,20 @@
       "failed": 0,
       "from_cache": 0,
       "processed": 2,
+      "provenance": {
+        "code": {
+          "commit": "<commit>",
+          "dirty": "<dirty>",
+          "version": "<version>"
+        },
+        "input": {
+          "catalog": null,
+          "downloaded_at": null,
+          "path": "<path>",
+          "repository": "anvil"
+        },
+        "started_at": "<started_at>"
+      },
       "successful": 2,
       "total_to_process": 2,
       "validation_failed": 0

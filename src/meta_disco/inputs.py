@@ -76,8 +76,8 @@ def load_envelope(input_path: Path) -> dict:
     and gives the same answer at the cost of the full parse. Worth having because one
     caller is the run's preflight, whose process lives for the whole run: a full parse
     there leaves the corpus's heap resident beside the producers for its duration, for
-    two keys' worth of information. The other is the catch-all producer, which refuses
-    an input on this before it loads the records.
+    two keys' worth of information. Others are the producers that refuse an input on this
+    before they load the records, and each producer's provenance (#404).
 
     ``{}`` for an ``.ndjson`` input, which carries no envelope, decided by suffix rather
     than by parsing every line to find that out.

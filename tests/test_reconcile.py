@@ -30,6 +30,7 @@ from meta_disco.models import (
     ClaimSource,
 )
 from meta_disco.output_utils import RECONCILED_DIR, iter_reconciled_records
+from meta_disco.provenance import code_identity
 from meta_disco.reconcile import (
     FILLED_GROUPS,
     REPORT_FILE,
@@ -40,6 +41,7 @@ from meta_disco.reconcile import (
     ReconcileError,
     Report,
     SlotEvidence,
+    classified_by,
     is_harmonized,
     reconcile_run,
     resolve_slot,
@@ -56,7 +58,7 @@ from meta_disco.schema.classification_model import (
 from meta_disco.schema_vocab import dimension_values
 from meta_disco.source_evidence import EvidenceEntry, EvidenceFileSource, EvidenceTarget, claim_source_for
 from tests.metadata_fixtures import write_metadata
-from tests.run_fixtures import output_record, write_run
+from tests.run_fixtures import output_record, provenance, write_run
 from tests.test_source_evidence import evidence_file_envelope, published_envelope
 from tests.test_value_map import load, write_generation
 
@@ -969,6 +971,126 @@ def test_the_artifact_names_the_translation_table_it_was_built_from(tmp_path, ru
     write_run(run, [record(1)])
     result = go(run, tmp_path, None, table)
     assert result["value_map_sha256"] == table.digest and len(table.digest) == 64
+
+
+# --- the run's provenance (#404) ---------------------------------------------------
+
+
+def first_envelope(run_dir: Path) -> dict:
+    with gzip.open(run_dir / RECONCILED_DIR / "bam_classifications.ndjson.gz", "rt") as f:
+        return json.loads(f.readline())["reconcile"]
+
+
+@pytest.mark.parametrize(
+    ("recorded", "named"),
+    [
+        (provenance(catalog="anvil14"), "anvil14"),
+        (provenance(repository="hprc", catalog=None), "hprc"),
+    ],
+    ids=["catalog", "repository"],
+)
+def test_an_input_other_than_the_one_a_run_file_records_is_refused(tmp_path, run, table, recorded, named):
+    write_run(run, [record(1)], metadata={"provenance": recorded})
+    with pytest.raises(ReconcileError, match=rf"bam_classifications\.json from .*{named}"):
+        go(run, tmp_path, None, table)
+    assert not (run / RECONCILED_DIR).exists()
+
+
+def test_an_input_differing_only_in_its_repository_is_refused(tmp_path, run, table):
+    write_run(run, [record(1)], metadata={"provenance": provenance(repository="hprc", catalog=None)})
+    with pytest.raises(ReconcileError, match="hprc"):
+        go(run, tmp_path, None, table, catalog=None)
+
+
+def test_any_run_file_recording_another_input_refuses_the_run(tmp_path, run, table):
+    write_run(run, [record(1)], metadata={"provenance": provenance()})
+    write_run(run, [record(2)], "vcf_classifications.json", metadata={"provenance": provenance(catalog="anvil14")})
+    write_run(run, [record(3)], "fastq_classifications.json", metadata={"provenance": provenance()})
+    with pytest.raises(ReconcileError, match=r"classified from another: vcf_classifications\.json from"):
+        go(run, tmp_path, None, table)
+
+
+def test_the_refusal_comes_before_any_evidence_is_read_and_leaves_an_earlier_artifact(
+    tmp_path, run, evidence, table, monkeypatch
+):
+    write_run(run, [record(1)], metadata={"provenance": provenance()})
+    go(run, tmp_path, None, table)
+    earlier = {p.name: p.read_bytes() for p in (run / RECONCILED_DIR).iterdir()}
+
+    def read(*_args, **_kwargs):
+        raise AssertionError("evidence read before the input was checked")
+
+    monkeypatch.setattr("meta_disco.reconcile.report_evidence_files", read)
+    with pytest.raises(ReconcileError):
+        go(run, tmp_path, evidence, table, catalog="anvil16")
+    assert {p.name: p.read_bytes() for p in (run / RECONCILED_DIR).iterdir()} == earlier
+    assert not (run.parent / f"{run.name}.partial").exists() and not (run / f"{RECONCILED_DIR}.partial").exists()
+
+
+def test_a_second_download_of_the_same_catalog_is_not_refused(tmp_path, run, table):
+    # `downloaded_at` is recorded, not compared: one catalog's snapshots are fixed.
+    write_run(run, [record(1)], metadata={"provenance": provenance(downloaded_at="2026-09-17T22:27:26")})
+    assert go(run, tmp_path, None, table)["classified_by"][0]["recorded"] is True
+
+
+def test_the_input_a_run_file_records_is_reconciled_and_its_code_is_classified_by(tmp_path, run, table):
+    write_run(run, [record(1)], metadata={"provenance": provenance()})
+    result = go(run, tmp_path, None, table)
+    assert result["classified_by"] == [
+        {
+            "recorded": True,
+            "version": "0.1.0",
+            "commit": "c" * 40,
+            "dirty": False,
+            "files": ["bam_classifications.json"],
+        }
+    ]
+
+
+def test_a_run_file_recording_no_provenance_is_not_checked_and_is_classified_by_nothing_recorded(tmp_path, run, table):
+    write_run(run, [record(1)])
+    result = go(run, tmp_path, None, table, catalog="anvil99")
+    assert result["classified_by"] == [
+        {"recorded": False, "version": None, "commit": None, "dirty": None, "files": ["bam_classifications.json"]}
+    ]
+
+
+def test_a_run_whose_files_were_classified_by_different_code_names_each_with_its_files(tmp_path, run, table):
+    write_run(run, [record(1)], metadata={"provenance": provenance(commit="a" * 40)})
+    write_run(run, [record(2)], "vcf_classifications.json", metadata={"provenance": provenance(dirty=True)})
+    write_run(run, [record(3)], "fastq_classifications.json", metadata={"provenance": provenance(commit="a" * 40)})
+    by = go(run, tmp_path, None, table)["classified_by"]
+    assert [(e["commit"], e["dirty"], e["files"]) for e in by] == [
+        ("a" * 40, False, ["bam_classifications.json", "fastq_classifications.json"]),
+        ("c" * 40, True, ["vcf_classifications.json"]),
+    ]
+
+
+def test_classified_by_keeps_a_file_recording_unknown_code_apart_from_one_recording_none():
+    unknown = provenance(commit=None, dirty=None)
+    unknown["code"]["version"] = None
+    by = classified_by({"a.json": None, "b.json": unknown, "c.json": provenance(), "d.json": unknown})
+    assert [(e["recorded"], e["commit"], e["files"]) for e in by] == [
+        (False, None, ["a.json"]),
+        (True, None, ["b.json", "d.json"]),
+        (True, "c" * 40, ["c.json"]),
+    ]
+
+
+def test_classified_by_tells_apart_code_differing_only_in_its_dirty_flag_or_its_version():
+    other_version = provenance()
+    other_version["code"]["version"] = "0.2.0"
+    by = classified_by({"a.json": provenance(), "b.json": provenance(dirty=True), "c.json": other_version})
+    assert [e["files"] for e in by] == [["a.json"], ["b.json"], ["c.json"]]
+
+
+def test_the_envelope_and_the_report_name_the_code_that_reconciled_and_classified(tmp_path, run, table):
+    write_run(run, [record(1)], metadata={"provenance": provenance()})
+    result = go(run, tmp_path, None, table)
+    envelope = first_envelope(run)
+    assert result["reconciled_by"] == envelope["reconciled_by"] == code_identity()
+    assert result["classified_by"] == envelope["classified_by"]
+    assert json.loads((run / RECONCILED_DIR / REPORT_FILE).read_text())["reconciled_by"] == code_identity()
 
 
 def test_every_slot_evidence_source_type_has_a_place_in_the_precedence():
