@@ -1,0 +1,56 @@
+# How a source's string becomes a sample identifier (#357, ADR-0002 decision 1). Shape:
+# the schema's `IdentifierRules`, read by `meta_disco.sample_identity`. A string no rule
+# matches is not a sample: it is counted, never guessed (`Sample`, `BioSample_3`, a BAM
+# path). A `dataset_local` rule applies in its one dataset only, and is added only once
+# its names are shown to be per-sample there.
+rules:
+  # Coriell sells a cell line (`GM12878`, "LCL from B-Lymphocyte") and DNA extracted from
+  # it (`NA12878`, "DNA from LCL"), under the same number:
+  # https://catalog.coriell.org/0/Sections/Search/Sample_Detail.aspx?Ref=NA12878 and ?Ref=GM12878.
+  # AnVIL_MAGE's `sequencing_library` writes both for one sample on all 278 rows that carry
+  # a `GM` (`coriell_id: GM19908`, `kgp_sample_id: NA19908`); MAGE bought cell lines to
+  # extract RNA (its Supplementary Methods, section 1). Measured on anvil15, 2026-10-12.
+  - id: coriell_cell_line_or_dna
+    namespace: coriell
+    match: '^(?:GM|NA)(\d{5})$'
+    write: 'NA\1'
+    rationale: >-
+      A Coriell repository number names one person's cell line (GM) or the DNA extracted
+      from it (NA); both prefixes with the same number are one sample, written NA as 1000
+      Genomes writes it.
+  - id: coriell_hg
+    namespace: coriell
+    match: '^HG\d{5}$'
+    rationale: >-
+      The NHGRI repository's HG numbers at Coriell, as 1000 Genomes, HPRC and T2T name their
+      samples: one number, one person.
+  # GIAB's names: HG001 = NA12878, HG002 = NA24385, HG003 = NA24149, HG004 = NA24143,
+  # HG005 = NA24631 (https://github.com/genome-in-a-bottle/about_GIAB); HG006 = NA24694 and
+  # HG007 = NA24695, the Han Chinese father and mother
+  # (https://www.nature.com/articles/s41597-019-0098-2). ANVIL_HPRC names HG005's mother
+  # `HG007` while her files are named `NA24695_…`.
+  - id: giab_name
+    namespace: giab
+    match: '^HG00[1-7]$'
+    rationale: >-
+      Genome in a Bottle names its seven reference samples HG001 to HG007. They are the same
+      people as some Coriell numbers, but joining two namespaces is a crosswalk's (#361), so
+      they stay apart.
+  - id: sra_sample_accession
+    namespace: sra_sample
+    match: '^[SED]RS\d+$'
+    rationale: An INSDC sample accession (SRA, ENA, DDBJ) names one sample.
+  - id: biosample_accession
+    namespace: biosample
+    match: '^SAM(?:N|EA|D)\d+$'
+    rationale: An INSDC BioSample accession (NCBI, EBI, DDBJ) names one sample.
+  # The Simons Genome Diversity Project's samples in T2T_CHRY: each name is one row of
+  # `SGDP_CHM13v2_sample` and of `SGDP_GRCh38_sample` (279 each), and its VCFs' and BAMs'
+  # headers carry the same names.
+  - id: sgdp_sample_name
+    namespace: dataset_local
+    dataset: ANVIL_T2T_CHRY
+    match: '^simons_data_sample_\d+$'
+    rationale: >-
+      ANVIL_T2T_CHRY's SGDP sample tables have one row per name, so a name is one sample in
+      that dataset; it is not an identifier anywhere else.

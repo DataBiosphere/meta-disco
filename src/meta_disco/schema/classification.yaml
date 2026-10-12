@@ -58,6 +58,7 @@ classes:
       - dataset_title
       - classifications
       - generated_by
+      - samples
 
   Classifications:
     description: >-
@@ -530,15 +531,17 @@ classes:
     attributes:
       field:
         required: true
-        pattern: "^(data_modality|data_type|platform|reference_assembly|assay_type|instrument_model|variant_kind|variant_origin)\\Z"
+        pattern: "^(data_modality|data_type|platform|reference_assembly|assay_type|instrument_model|variant_kind|variant_origin|samples)\\Z"
         description: >-
           The slot this row speaks to, spelled `field` on the wire and in the code
-          (contract 2.1). One of the eight classification dimensions.
+          (contract 2.1). One of the eight classification dimensions, or `samples`
+          (#357): which sample a submitter table says the file's data comes from, read
+          through `rules/sample_namespaces.yaml` and never the value map.
 
           Pinned by pattern rather than by an enum because the dimension names are
           slot *names* in this schema and not a vocabulary it declares;
           `test_the_row_field_pattern_lists_every_dimension` holds it to
-          `CLASSIFICATION_FIELDS`.
+          `models.EVIDENCE_FIELDS`.
       target_key_value:
         required: true
         pattern: "^[^\\r\\n]+\\Z"
@@ -895,8 +898,8 @@ classes:
 
   Attribution:
     description: >-
-      One source that named a step or an input (ADR-0002 decision 6): sources that agree
-      are each listed.
+      One source that named a step, an input (ADR-0002 decision 6) or a file's samples
+      (#357): sources that agree are each listed.
     slots:
       - source_type
       - rule_id
@@ -908,8 +911,142 @@ classes:
       rule_id:
         required: true
         description: >-
-          The rule or translation row that turned what the source says into this step or
-          input (`code_rules.EDGE_RULES` for inference's).
+          The rule or translation row that turned what the source says into this step,
+          input or sample list: for inference's, a `code_rules.EDGE_RULES` id for a step or
+          input and a `code_rules.SAMPLE_RULES` id for samples; for a submitter table's
+          samples, the identifier rule (`rules/sample_namespaces.yaml`) that read the cell.
+
+  SampleReference:
+    description: >-
+      Which samples a file's data comes from (#357): the run's sample list it points to,
+      how many members that list has, and every source that named it. A sample is an
+      identifier, not a record (ADR-0002 decision 1), and a joint VCF names thousands, so
+      the members are written as a `SampleList` and each file points to one: once in each
+      producer file that points to it (`sample_lists`), and once across the run in the
+      reconciled `sample_lists.ndjson.gz`.
+    attributes:
+      list_id:
+        required: true
+        pattern: "^[0-9a-f]{16}\\Z"
+        description: >-
+          The `SampleList` this file points to: a digest of its sorted members, so two files
+          naming the same samples point to the same list.
+      count:
+        range: integer
+        required: true
+        minimum_value: 1
+        description: How many members the list has.
+      named_by:
+        range: Attribution
+        multivalued: true
+        inlined_as_list: true
+        required: true
+        description: >-
+          Every source that named these samples: the file's header (`code_rules.SAMPLE_RULES`),
+          a submitter-table column, or both where they agree.
+
+  SampleList:
+    description: >-
+      One distinct set of samples files point to (#357): written once in each producer file
+      that points to it, so two producer files may each hold the same list, and once across
+      the whole run in the reconciled `sample_lists.ndjson.gz`.
+    attributes:
+      list_id:
+        required: true
+        pattern: "^[0-9a-f]{16}\\Z"
+        description: A digest of the sorted members; `SampleReference.list_id` points here.
+      members:
+        range: EntityIdentifier
+        multivalued: true
+        inlined_as_list: true
+        required: true
+
+  EntityIdentifier:
+    description: >-
+      A sample or donor, named by the authority that issued its identifier (ADR-0002
+      decision 1). Two identifiers name the same sample only when namespace and id match,
+      and, for `dataset_local`, the dataset too.
+    attributes:
+      id:
+        required: true
+        pattern: "^[^\\r\\n]+\\Z"
+        description: >-
+          The identifier, as its namespace writes it: a source's string as written, except
+          where an identifier rule declares a rewrite (`GM19908` is written `NA19908`,
+          #357).
+      namespace:
+        range: identifier_namespace_enum
+        required: true
+      dataset:
+        pattern: "^[^\\r\\n]+\\Z"
+        description: >-
+          The dataset the identifier is local to: set exactly when the namespace is
+          `dataset_local`, and then part of its identity.
+    rules:
+      - description: >-
+          A `dataset_local` identifier names its dataset: without it, a name like
+          `simons_data_sample_12` would match the same name in any dataset.
+          gen-pydantic does not emit class rules; `sample_identity` builds identifiers only
+          from rules its loader holds to the same pairing.
+        preconditions:
+          slot_conditions:
+            namespace:
+              equals_string: dataset_local
+        postconditions:
+          slot_conditions:
+            dataset:
+              required: true
+      - description: >-
+          Only a `dataset_local` identifier names a dataset: a `coriell` identifier with
+          one would not equal the same sample named elsewhere.
+        preconditions:
+          slot_conditions:
+            dataset:
+              required: true
+        postconditions:
+          slot_conditions:
+            namespace:
+              equals_string: dataset_local
+
+  IdentifierRules:
+    description: >-
+      The shape of `rules/sample_namespaces.yaml` (#357): how a source's string becomes an
+      `EntityIdentifier`. Read through the generated model by `meta_disco.sample_identity`.
+    attributes:
+      rules:
+        range: IdentifierRule
+        multivalued: true
+        inlined_as_list: true
+        required: true
+
+  IdentifierRule:
+    description: >-
+      One way a string is recognised as an identifier: a pattern matched against the whole
+      string, the namespace it is in, and, for a `dataset_local` rule, the one dataset it
+      applies in.
+    attributes:
+      id:
+        required: true
+        pattern: "^[a-z][a-z0-9_]*\\Z"
+        description: The rule's id, cited as `rule_id` by a source the rule recognised.
+      namespace:
+        range: identifier_namespace_enum
+        required: true
+      match:
+        required: true
+        description: A regular expression the whole string must match.
+      write:
+        description: >-
+          A replacement template giving the identifier from the match, where it is not the
+          string as written: literal text and numbered group references (a backslash and a digit
+          1 to 9), nothing else.
+          Absent: the string as written.
+      dataset:
+        pattern: "^[^\\r\\n]+\\Z"
+        description: The one dataset a `dataset_local` rule applies in; set exactly on those.
+      rationale:
+        required: true
+        description: Why a string matching the pattern names one sample in this namespace.
 
   ActivityDeclarations:
     description: >-
@@ -1074,6 +1211,13 @@ slots:
       The step that made the file and the inputs it used, by role (ADR-0002 decisions 3,
       6, #580); null where no step is recorded.
     range: GeneratedBy
+    inlined: true
+
+  samples:
+    description: >-
+      The samples the file's data comes from (#357), as a pointer to the run's sample list;
+      null where no source names a sample, or where its sources name different ones.
+    range: SampleReference
     inlined: true
 
   # --- Classification sub-fields ---
@@ -2120,6 +2264,29 @@ enums:
         description: >-
           A sample's identifier, as `anvil_activity`'s `used_biosample_id` holds it. A
           sample is not a file; reconcile builds no input from one (#577, #582).
+
+  identifier_namespace_enum:
+    description: >-
+      The authority that issued a sample or donor identifier (ADR-0002 decision 1, settled
+      by #357). Which strings each recognises is `rules/sample_namespaces.yaml`'s.
+    permissible_values:
+      coriell:
+        description: >-
+          The Coriell Institute's repository numbers (`HG`/`NA`/`GM` and five digits), as
+          1000 Genomes, HPRC and T2T name their samples. `GM` (a cell line) and `NA` (DNA
+          extracted from it) with the same number are one sample.
+      giab:
+        description: >-
+          Genome in a Bottle's names for its reference samples, `HG001` to `HG007`; the same
+          people under other names in `coriell` are not joined to them here (#361).
+      sra_sample:
+        description: An SRA, ENA or DDBJ sample accession (`SRS`/`ERS`/`DRS`).
+      biosample:
+        description: An NCBI, EBI or DDBJ BioSample accession (`SAMN`/`SAMEA`/`SAMD`).
+      dataset_local:
+        description: >-
+          A name one dataset gives its samples, unique only within it; recognised only by a
+          rule declared for that dataset.
 
   evidence_marker_enum:
     description: >-

@@ -230,8 +230,10 @@ STUB_HEADER = "stub-header-no-network"
 # honors each type's contract so the golden exercises realistic classifier input
 # and stays robust if a classifier later type-guards its argument.
 STUB_PAYLOADS = {
-    "bam": STUB_HEADER,
-    "vcf": VcfHead(STUB_HEADER, []),
+    # A read group naming its sample, and a VCF's one sample column, so the golden carries a
+    # `samples` and its sample list (#357); `GM12878` is written `NA12878`.
+    "bam": f"{STUB_HEADER}\n@RG\tID:rg1\tSM:GM12878\n",
+    "vcf": VcfHead(f"{STUB_HEADER}\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tNA12878\n", []),
     "fastq": [STUB_HEADER],
     "fasta": [STUB_HEADER],
     "gfa": [SegmentTag(sn="chr1", sr="0")],

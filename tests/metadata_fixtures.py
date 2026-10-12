@@ -69,6 +69,9 @@ RECORD_KEYS = {
     # the catch-all (for a checksum file) where a parent resolves, null elsewhere; emitted
     # rather than omitted so the envelope keeps one shape across all thirteen files.
     "generated_by",
+    # The samples the file's data comes from (#357): written by the BAM and VCF producers
+    # where the header names them, null elsewhere, emitted for the same reason.
+    "samples",
 }
 
 

@@ -43,7 +43,7 @@ from meta_disco import models, source_evidence
 from meta_disco.azul_manifest import REPOSITORY, VERBATIM_FILE
 from meta_disco.deployments import PROD
 from meta_disco.models import (
-    CLASSIFICATION_FIELDS,
+    EVIDENCE_FIELDS,
     JOIN_KEY_DRS_URI,
     JOIN_KEY_FILE_MD5SUM,
     JOIN_KEY_FILE_NAME,
@@ -559,14 +559,14 @@ class TestMalformedFiles:
     def test_a_row_for_an_unknown_dimension_is_refused_both_ways(self, tmp_path):
         path = tmp_path / "evidence.ndjson"
         entry = _entry()
-        with pytest.raises(ValueError, match="unknown dimension"):
+        with pytest.raises(ValueError, match="unknown field"):
             # `replace` rather than a valid constructor call: an importer that is not
             # type-checked is exactly what this refusal exists for.
             write_evidence_file(path, evidence_file_envelope(), [replace(entry, field="data_moddality")])
 
         write_evidence_file(path, evidence_file_envelope(), [entry])
         path.write_text(path.read_text().replace('"platform"', '"data_moddality"', 1))
-        with pytest.raises(ValueError, match="line 2: unknown dimension"):
+        with pytest.raises(ValueError, match="line 2: unknown field"):
             list(iter_evidence(path))
 
     def test_a_line_with_nothing_to_match_on_is_refused(self, tmp_path):
@@ -977,7 +977,7 @@ class TestALineIsAnObservationNotAClaim:
         """
         path = self._write_raw(tmp_path, field=[])
 
-        with pytest.raises(ValueError, match=r"c\.ndjson line 2: unknown dimension"):
+        with pytest.raises(ValueError, match=r"c\.ndjson line 2: unknown field"):
             list(iter_evidence(path))
 
 
@@ -1227,7 +1227,7 @@ def test_a_retired_member_is_never_also_a_line_member():
 
 
 def test_the_row_field_pattern_lists_every_dimension(schema):
-    """The schema's `EvidenceRow.field` pattern and `CLASSIFICATION_FIELDS` are one set.
+    """The schema's `EvidenceRow.field` pattern and `EVIDENCE_FIELDS` are one set: the dimensions and `samples`.
 
     The pattern spells the names out rather than pointing at an enum, because
     they are slot *names* in that schema and not a vocabulary it declares. That only
@@ -1236,7 +1236,7 @@ def test_the_row_field_pattern_lists_every_dimension(schema):
     """
     pattern = schema["classes"]["EvidenceRow"]["attributes"]["field"]["pattern"]
 
-    assert set(pattern.removeprefix("^(").removesuffix(r")\Z").split("|")) == set(CLASSIFICATION_FIELDS)
+    assert set(pattern.removeprefix("^(").removesuffix(r")\Z").split("|")) == set(EVIDENCE_FIELDS)
 
 
 def test_no_claim_is_constructed_on_either_path():
@@ -1361,3 +1361,16 @@ class TestOnePublishedSourcePerRepository:
         (tmp_path / "c").mkdir()
         (tmp_path / "c" / "broken.ndjson").write_text("{not json\n")
         require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
+
+
+def test_a_samples_row_is_read_only_by_a_reader_that_asks_for_it(tmp_path):
+    """#357: value-map seeding and the review queue read the dimensions; reconcile's join asks for samples too."""
+    envelope = evidence_file_envelope()
+    entries = [
+        EvidenceEntry(field=f, target_key_value="k1", raw_value=v, source=claim_source_for(envelope.source, "c"))
+        for f, v in [("platform", "ILLUMINA"), ("samples", "HG00096")]
+    ]
+    path = tmp_path / "t.ndjson"
+    write_evidence_file(path, envelope, entries)
+    assert [e.field for e in iter_evidence(path)] == ["platform"]
+    assert [e.field for e in iter_evidence(path, EVIDENCE_FIELDS)] == ["platform", "samples"]

@@ -605,3 +605,43 @@ def test_evidence_file_envelope_refuses_a_date_only_fetched_at(envelope_validato
     # which would accept one, so the schema and the reader refuse the same strings.
     report = envelope_validator.validate(_envelope(fetched_at="2026-09-01"), target_class="EvidenceFileEnvelope")
     assert report.results, "a date-only fetched_at should have failed"
+
+
+# --- sample lists (#357) -----------------------------------------------------------
+
+_LIST_ID = "0123456789abcdef"
+
+
+@pytest.mark.parametrize(
+    "member",
+    [
+        {"id": "NA12878", "namespace": "coriell"},
+        {"id": "simons_data_sample_12", "namespace": "dataset_local", "dataset": "ANVIL_T2T_CHRY"},
+    ],
+)
+def test_a_sample_list_member_validates(envelope_validator, member):
+    report = envelope_validator.validate({"list_id": _LIST_ID, "members": [member]}, target_class="SampleList")
+    assert not report.results, [r.message for r in report.results]
+
+
+@pytest.mark.parametrize(
+    "member",
+    [
+        # A dataset's own name, without the dataset that scopes it, would match it in any dataset.
+        {"id": "simons_data_sample_12", "namespace": "dataset_local"},
+        # A Coriell sample with a dataset would not equal the same sample named elsewhere.
+        {"id": "NA12878", "namespace": "coriell", "dataset": "ANVIL_T2T"},
+    ],
+)
+def test_a_dataset_is_set_exactly_on_a_dataset_local_member(envelope_validator, member):
+    report = envelope_validator.validate({"list_id": _LIST_ID, "members": [member]}, target_class="SampleList")
+    assert report.results
+
+
+def test_the_golden_sample_lists_validate(envelope_validator):
+    golden = json.loads(_GOLDEN.read_text())
+    lists = [entry for output in golden.values() for entry in output.get("sample_lists", [])]
+    assert lists, f"no sample list in the golden; regenerate with `{_REGEN}`"
+    for entry in lists:
+        report = envelope_validator.validate(entry, target_class="SampleList")
+        assert not report.results, [r.message for r in report.results]

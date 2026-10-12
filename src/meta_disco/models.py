@@ -178,6 +178,13 @@ CLASSIFICATION_FIELDS = (
     "variant_origin",
 )
 
+# The record field naming the samples a file's data comes from (#357). Not a dimension: it
+# has no status and no tier. A submitter table states it as slot evidence does, so it is the
+# one field an evidence line may name besides the dimensions (`EVIDENCE_FIELDS`); its raw
+# value is read through `rules/sample_namespaces.yaml`, never the value map.
+SAMPLES_FIELD = "samples"
+EVIDENCE_FIELDS = (*CLASSIFICATION_FIELDS, SAMPLES_FIELD)
+
 # The dimensions a record stores as a list (ADR-0003, #654): the schema's slots whose
 # ``value`` is ``multivalued``, held to it by test_output_shape. A claim still declares
 # one value, a string, and resolution runs over strings as for any other dimension;

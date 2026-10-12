@@ -431,3 +431,19 @@ def test_the_caller_table_counts_the_files_each_caller_gave_a_kind_or_an_origin(
     assert rows["Sniffles"] == (1, 0)
     text = grr.render_markdown(data)
     assert "## Caller table" in text and "| Sniffles | structural | germline |" in text
+
+
+def test_a_sample_rule_is_counted_by_the_sources_a_records_samples_lists(tmp_path):
+    """#357: the header reader and the identifier rule a table's sample was read through, each per file."""
+    named_by = [
+        {"source_type": "content_read", "rule_id": code_rules.BAM_READ_GROUP_SAMPLES.id},
+        {"source_type": "repository_metadata", "rule_id": "coriell_hg", "source": {"name": "anvil"}},
+    ]
+    record = {**RECORDS[0], "samples": {"list_id": "0" * 16, "count": 1, "named_by": named_by}}
+    run_dir = reconciled_run(tmp_path, [record, {**RECORDS[1], "samples": None}])
+    data = grr.build(*rule_files(tmp_path), iter_reconciled_records(run_dir), run_dir)
+    rows = {r["id"]: r for r in data["sample_rules"]}
+    assert rows[code_rules.BAM_READ_GROUP_SAMPLES.id]["files"] == 1
+    assert rows["coriell_hg"]["files"] == 1
+    assert rows[code_rules.VCF_SAMPLE_COLUMNS.id]["files"] == 0
+    assert not {u["id"] for u in data["undeclared"]} & set(rows)

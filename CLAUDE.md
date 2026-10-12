@@ -123,6 +123,9 @@ evidence}` entry — plus the controlled vocabulary:
 - **variant_origin_enum**: `germline` and `somatic`, Sequence Ontology's two children of
   `variant_origin` (#658); read from the same caller (`variant_origins`, found by `callers`),
   a caller with a somatic mode (Sniffles2) only where its command line shows the mode off
+- **identifier_namespace_enum**: who issued a sample identifier (#357): `coriell`, `giab`,
+  `sra_sample`, `biosample`, `dataset_local`; which strings each recognises is
+  `rules/sample_namespaces.yaml`'s
 - also **platform_enum**
 
 `status` is required on every dimension; `value` is null unless status is `classified`.
@@ -380,6 +383,20 @@ evidence}` entry — plus the controlled vocabulary:
     `parent_kind`, and `named_by`, every source that named it (the step has its own). A parent no file or
     two files of the dataset carry gives none. Steps the source tables state are built at
     reconcile (#577), and reconcile inherits across every step (#571).
+  - **`samples` names whose data a file holds, as a pointer to one of the run's sample
+    lists** (#357, ADR-0002 decision 1): `{list_id, count, named_by}`, the list a digest of
+    its sorted members, each an `EntityIdentifier`. A string is a sample only through
+    `rules/sample_namespaces.yaml` (`sample_identity`), which also declares the one rewrite
+    (`GM` → `NA`, same number); a string no rule recognises is counted, never guessed.
+    Inference reads it from a header (`FileTypeConfig.samples`, `code_rules.SAMPLE_RULES`),
+    all of a header's strings or none, and each producer file holds its lists under
+    `sample_lists`. A submitter table states it through the slot map, one cell per column
+    (`samples` is the one non-dimension in `models.EVIDENCE_FIELDS`, never translated by the
+    value map), and `make check-slot-map` refuses a column whose files' names mostly name
+    another sample. Reconcile (`reconcile_samples`) settles the two by the step rule:
+    agreeing sources are each listed, different samples give none, counted as a conflict or
+    as incomparable; a file name is a check, never a source. It writes
+    `reconciled/sample_lists.ndjson.gz`. A derived file does not take its parent's samples yet (#668).
   - **A producer is declared once**, in `producers.PRODUCERS` — the thirteen writers of a
     run's `*_classifications.json` files. Add one there, never to a second list:
     `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,

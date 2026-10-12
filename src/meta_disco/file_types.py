@@ -41,6 +41,7 @@ from .header_classifier import (
     workspace_header_member,
 )
 from .producer_steps import HeaderSteps
+from .sample_identity import BAM_SAMPLES, VCF_SAMPLES, SampleReader
 from .summaries import print_bam_summary, print_fastq_summary, print_vcf_summary
 from .validators.header_extractors import parse_vcf_head
 
@@ -81,6 +82,9 @@ class FileTypeConfig:
     # so the reader stays ignorant of which archives have a member worth reading. None
     # keeps none.
     kept_member: Callable | None = None
+    # The samples a file's header names (#357), read from the parse (or the payload, for a
+    # type without a ``parser``). None means the type reads no samples.
+    samples: SampleReader | None = None
 
     def __post_init__(self):
         if self.step is not None and self.parser is None:
@@ -95,6 +99,7 @@ BAM_CONFIG = FileTypeConfig(
     summary_printer=print_bam_summary,
     # samtools reads BAM/CRAM headers — fail fast if it is not installed.
     preflight=require_samtools,
+    samples=BAM_SAMPLES,
 )
 
 VCF_CONFIG = FileTypeConfig(
@@ -117,6 +122,7 @@ VCF_CONFIG = FileTypeConfig(
     # checks for samtools first, its own headers cached or not.
     step=partial(HeaderSteps.for_run, alignments=BAM_CONFIG.name),
     preflight=require_samtools,
+    samples=VCF_SAMPLES,
 )
 
 FASTQ_CONFIG = FileTypeConfig(

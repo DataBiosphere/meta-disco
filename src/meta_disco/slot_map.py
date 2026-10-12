@@ -89,8 +89,9 @@ import yaml
 
 from .manifest_survey import name_tokens
 from .models import (
-    CLASSIFICATION_FIELDS,
+    EVIDENCE_FIELDS,
     LINEAGE_ONLY_SOURCE_TYPES,
+    SAMPLES_FIELD,
     SOURCE_REPOSITORY_METADATA,
     require_importer_source_type,
 )
@@ -125,7 +126,7 @@ NO_NOTES = (
 )
 _WHERE = "slot map"
 
-_FIELDS = frozenset(CLASSIFICATION_FIELDS)
+_FIELDS = frozenset(EVIDENCE_FIELDS)
 DATA_TYPE = "data_type"
 
 
@@ -320,11 +321,20 @@ def _entries(datasets: dict) -> Iterator[ColumnEntry]:
                 )
 
 
+def _is_cell(item: object) -> bool:
+    return isinstance(item, dict) and list(item) == [SOURCE_CELL]
+
+
 def _sources(slot: str, sources: object, table: str, column: str, at: str) -> tuple[SlotSource, ...]:
     """Check one slot's source list, returning it typed."""
     if slot not in _FIELDS:
         raise ValueError(f"{at}: {slot!r} is not a slot (expected one of {sorted(_FIELDS)})")
     at = f"{at} {slot}"
+    # A sample is read from one cell of the row (#357): a table's or a column's name says what
+    # the files are, never which sample they are of, and a second cell would be a second
+    # source for the same fact from the same row.
+    if slot == SAMPLES_FIELD and isinstance(sources, list) and (len(sources) != 1 or not _is_cell(sources[0])):
+        raise ValueError(f"{at}: a sample is read from exactly one {SOURCE_CELL}, never from a name")
     if isinstance(sources, str):
         raise ValueError(
             f"{at}: is the bare term {sources!r} — a slot names where its raw value comes from "

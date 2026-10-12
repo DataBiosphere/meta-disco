@@ -32,6 +32,7 @@ from meta_disco.cohort_steps import OUTCOMES as COHORT_STEP_OUTCOMES
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
     NOT_APPLICABLE,
+    SAMPLES_FIELD,
     SOURCE_EXTERNAL_GROUND_TRUTH,
     SOURCE_PUBLISHED_VALUE,
     SOURCE_REPOSITORY_METADATA,
@@ -53,6 +54,9 @@ from meta_disco.reconcile import (
 )
 from meta_disco.reconcile_inherit import OUTCOMES as INHERITANCE_COLUMNS
 from meta_disco.reconcile_lineage import OUTCOMES
+from meta_disco.reconcile_samples import NONE as SAMPLE_NONE
+from meta_disco.reconcile_samples import OUTCOMES as SAMPLE_OUTCOMES
+from meta_disco.sample_identity import NAMED, NO_SAMPLE, UNREAD, UNRECOGNISED
 from meta_disco.schema_vocab import top_term
 from meta_disco.summaries import embed_json, md_code, md_table
 
@@ -464,6 +468,38 @@ def lineage_rows(report: dict) -> dict | None:
     }
 
 
+SAMPLE_COLUMNS = (*SAMPLE_OUTCOMES, SAMPLE_NONE)
+HEADER_COLUMNS = (NAMED, UNRECOGNISED, NO_SAMPLE, UNREAD)
+
+
+def samples_rows(report: dict) -> list[dict] | None:
+    """Per dataset, what its headers said about samples and how each file's samples settled (#357); None before #357.
+
+    Each row: ``headers``, the files per header outcome (``sample_identity``) with the most
+    frequent strings no identifier rule recognised; ``settled``, the files per outcome
+    (``reconcile_samples.OUTCOMES`` and ``none``); every table value no rule recognised, with
+    its table, column and files; the files whose name names another sample; and the first few
+    examples of each.
+    """
+    samples = report.get(SAMPLES_FIELD)
+    if samples is None:
+        return None
+    return [
+        {
+            "dataset": dataset,
+            "headers": {k: (block["headers"].get("outcomes") or {}).get(k, 0) for k in HEADER_COLUMNS},
+            "header_unrecognised": block["headers"].get("unrecognised") or {},
+            "settled": {k: block["settled"].get(k, 0) for k in SAMPLE_COLUMNS},
+            "conflict_examples": block["conflict_examples"],
+            "incomparable_examples": block["incomparable_examples"],
+            "table_unrecognised": block["table_unrecognised"],
+            "name_disagreements": block["name_disagreements"],
+            "name_disagreement_examples": block["name_disagreement_examples"],
+        }
+        for dataset, block in sorted(samples["by_dataset"].items())
+    ]
+
+
 def inheritance_rows(report: dict) -> list[dict] | None:
     """What each role's parents gave a child, per dataset, role and dimension (#571, #621); None for a report written before it.
 
@@ -556,6 +592,7 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
         "content_step_columns": list(CONTENT_STEP_COLUMNS),
         "inheritance": inheritance_rows(report),
         "inheritance_columns": list(INHERITANCE_COLUMNS),
+        "samples": samples_rows(report),
     }
 
 
@@ -908,6 +945,7 @@ def render_markdown(data: dict) -> str:
         ]
     lines += ["", *_lineage_section(data["lineage"])]
     lines += ["", *_inheritance_section(data["inheritance"])]
+    lines += ["", *_samples_section(data["samples"])]
     lines += ["", "## Per dataset", ""]
     for scope in data["datasets"]:
         name = scope["name"]
@@ -1060,6 +1098,126 @@ def _lineage_section(lineage: dict | None) -> list[str]:
                         _n(m["files"]),
                     ]
                     for m in lineage["misfits"]
+                ],
+            ),
+        ]
+    return lines
+
+
+def _strings(counts: dict[str, int], limit: int = 5) -> str:
+    """The ``limit`` most frequent strings of ``counts`` (ties by the string), with how often each was seen, as code spans.
+
+    Ranked here: ``reconcile_report.json`` is written with sorted keys, so its order is the strings', not their counts'.
+    """
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]
+    return ", ".join(f"{md_code(k)} ({_n(v)})" for k, v in ranked)
+
+
+def _by_value(entries: list[dict]) -> dict[str, int]:
+    """Each unrecognised table value with the files holding it, summed over the tables and columns it came from."""
+    out: dict[str, int] = {}
+    for u in entries:
+        out[u["raw_value"]] = out.get(u["raw_value"], 0) + u["files"]
+    return out
+
+
+def _samples_section(rows: list[dict] | None) -> list[str]:
+    """Which samples each file's data comes from (#357): what headers said, and how header and table settled."""
+    lines = [
+        "## Samples: whose data each file holds",
+        "",
+        "A file's header names its samples (a BAM's `@RG SM`, a VCF's sample columns) and a submitter table may "
+        "name them in a column the slot map reads; each string becomes an identifier only through "
+        "`rules/sample_namespaces.yaml` (#357). *named*: every string the header holds is recognised; "
+        "*unrecognised*: it holds one no rule recognises (or a read group with no `SM`), so it names no samples; "
+        "*no_sample*: it names none; *unread*: the head read ended before the samples (a VCF's `#CHROM` line). "
+        "Settled: *agreed*, header and table named the same samples; *header_only* / *table_only*: only the "
+        "header, or only tables (one or several, agreeing), did; *conflict*: they named different samples in one namespace; *incomparable*: different samples in "
+        "no shared namespace, which only a crosswalk could join (#361); *none*: no source named any. A conflict "
+        "or an incomparable file gets no `samples`. A file whose name names one other sample than its settled "
+        "ones is counted under *name disagrees*; a name is a check, never a source.",
+        "",
+    ]
+    if rows is None:
+        return [*lines, "This run's report predates samples at reconcile (#357): run `make reconcile` again."]
+    lines += md_table(
+        ["dataset", *(f"header {k}" for k in HEADER_COLUMNS), *SAMPLE_COLUMNS, "name disagrees"],
+        [
+            [
+                md_code(shown(r["dataset"])),
+                *(_n(r["headers"][k]) for k in HEADER_COLUMNS),
+                *(_n(r["settled"][k]) for k in SAMPLE_COLUMNS),
+                _n(r["name_disagreements"]),
+            ]
+            for r in rows
+        ],
+    )
+    unread = [r for r in rows if r["header_unrecognised"] or r["table_unrecognised"]]
+    if unread:
+        lines += [
+            "",
+            "### Strings no identifier rule recognises",
+            "",
+            "The most frequent per dataset, with the files holding each. No current identifier rule recognises "
+            "them; they include placeholders, paths, decorated accessions and a dataset's own names. Every "
+            "table value is listed below (contract 5.2).",
+            "",
+            *md_table(
+                ["dataset", "in headers", "in tables"],
+                [
+                    [
+                        md_code(shown(r["dataset"])),
+                        _strings(r["header_unrecognised"]),
+                        _strings(_by_value(r["table_unrecognised"])),
+                    ]
+                    for r in unread
+                ],
+            ),
+        ]
+    table_values = [(r["dataset"], u) for r in rows for u in r["table_unrecognised"]]
+    if table_values:
+        lines += [
+            "",
+            "<details>",
+            f"<summary>Every table value no identifier rule recognises ({len(table_values)})</summary>",
+            "",
+            *md_table(
+                ["dataset", "table", "column", "value", "files"],
+                [
+                    [
+                        md_code(shown(d)),
+                        md_code(u["table"]),
+                        md_code(u["column"]),
+                        md_code(u["raw_value"]),
+                        _n(u["files"]),
+                    ]
+                    for d, u in table_values
+                ],
+            ),
+            "",
+            "</details>",
+        ]
+    examples = [
+        r for r in rows if r["conflict_examples"] or r["incomparable_examples"] or r["name_disagreement_examples"]
+    ]
+    if examples:
+        lines += [
+            "",
+            "### Examples",
+            "",
+            *md_table(
+                ["dataset", "conflict", "incomparable", "name disagrees"],
+                [
+                    [
+                        md_code(shown(r["dataset"])),
+                        "<br>".join(md_code(f) for f in r["conflict_examples"][:3]),
+                        "<br>".join(md_code(f) for f in r["incomparable_examples"][:3]),
+                        "<br>".join(
+                            f"{md_code(e['file_name'])}: {md_code(e['name_names']['id'])}"
+                            for e in r["name_disagreement_examples"][:3]
+                        ),
+                    ]
+                    for r in examples
                 ],
             ),
         ]

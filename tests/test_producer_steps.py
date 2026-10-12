@@ -510,7 +510,7 @@ def test_the_vcf_producer_writes_the_step_and_counts_every_outcome(tmp_path, mon
     assert rows["v1"]["generated_by"]["inputs"][0]["parent_key"] == "c1"
     assert rows["v2"]["generated_by"] is None
     written = json.loads((tmp_path / "vcf.json").read_text())
-    assert written["metadata"]["details"] == {"producer_steps": {"T": {ps.STEPPED: 1, ps.PARENT_AMBIGUOUS: 1}}}
+    assert written["metadata"]["details"]["producer_steps"] == {"T": {ps.STEPPED: 1, ps.PARENT_AMBIGUOUS: 1}}
 
 
 def test_a_files_metadata_block_is_read_from_its_head_and_otherwise_from_the_whole_file(tmp_path):

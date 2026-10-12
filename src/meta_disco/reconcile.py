@@ -63,7 +63,7 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import activities
+from . import activities, reconcile_samples
 from .activity_map import ActivityMap, load_activity_map
 from .azul_manifest import REPOSITORY as ANVIL_REPOSITORY
 from .deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS
@@ -74,9 +74,11 @@ from .models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
     CONFLICT,
+    EVIDENCE_FIELDS,
     MIXED,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
+    SAMPLES_FIELD,
     SOURCE_DERIVATION_INHERITANCE,
     SOURCE_PRECEDENCE,
     SOURCE_PUBLISHED_VALUE,
@@ -90,8 +92,10 @@ from .output_utils import (
     CLASSIFICATION_FILES,
     RECONCILED_DIR,
     REPORT_FILE,
+    SAMPLE_LISTS_FILE,
     find_latest_run,
     iter_records,
+    iter_run_file_contents,
     iter_run_files,
     reconciled_name,
     relative_to,
@@ -113,10 +117,12 @@ from .reconcile_inherit import (
     reference_build,
 )
 from .reconcile_lineage import Carrier, Locator, PendingLineage, applies, resolve_lineage, translate_lineage
+from .reconcile_samples import Named, from_line
 from .record_keys import PUBLISHED_TABLES, RecordKey, is_key_value, record_key
-from .records import JOIN_KEY_OUTPUT_FIELDS, STEP_OUTCOMES_KEY
+from .records import JOIN_KEY_OUTPUT_FIELDS, SAMPLE_OUTCOMES_KEY, STEP_OUTCOMES_KEY, UNRECOGNISED_SAMPLES_KEY
 from .rule_engine import CONFLICT_MARKER, make_claim
 from .run_lineage_map import RunLineageMap, load_run_lineage_map
+from .sample_identity import identifier_rules, most_frequent
 from .schema.classification_model import EvidenceFileEnvelope
 from .schema_vocab import most_specific
 from .slot_map import load_slot_map, published_slot_map_resource
@@ -488,6 +494,13 @@ class Joined:
     # and every slot a row it selected declares (3.10). Dataset None for a file scoped to
     # no dataset, which speaks to that slot in every dataset.
     coverage: dict[str, set[tuple[str | None, str]]]
+    # Per record identity, the samples each matched ``samples`` line names (#357), read
+    # through the identifier rules rather than the value map.
+    samples: dict[str, list[Named]] = field(default_factory=dict)
+    # Per dataset, each ``samples`` raw value no identifier rule recognises, by the table and
+    # column it came from, with the files whose line held it: no sample, never a guess, and
+    # every one listable (contract 5.2).
+    unrecognised_samples: dict[str, dict[tuple[str, str, str], set[str]]] = field(default_factory=dict)
 
 
 # A key a line is matched by: the output-row field, the dataset the envelope scopes the
@@ -554,6 +567,26 @@ def require_run_input(provenance: dict[str, dict | None], metadata: Path, envelo
         )
 
 
+def header_samples(metadata: dict[str, dict]) -> dict[str, dict]:
+    """Per dataset, what the run's headers said about their samples (#357), summed over its files.
+
+    Each producer that reads samples writes, under ``details``, each header outcome's files
+    per dataset (``SAMPLE_OUTCOMES_KEY``) and its most frequent unrecognised strings
+    (``UNRECOGNISED_SAMPLES_KEY``); a file written before #357 has neither and adds nothing.
+    """
+    out: dict[str, dict] = defaultdict(lambda: {"outcomes": Counter(), "unrecognised": Counter()})
+    for meta in metadata.values():
+        details = (meta or {}).get("details") or {}
+        for dataset, counts in (details.get(SAMPLE_OUTCOMES_KEY) or {}).items():
+            out[dataset]["outcomes"].update(counts)
+        for dataset, counts in (details.get(UNRECOGNISED_SAMPLES_KEY) or {}).items():
+            out[dataset]["unrecognised"].update(counts)
+    return {
+        dataset: {"outcomes": dict(v["outcomes"]), "unrecognised": most_frequent(v["unrecognised"])}
+        for dataset, v in sorted(out.items())
+    }
+
+
 def content_step_counts(metadata: dict[str, dict]) -> dict[str, dict[str, dict[str, int]]]:
     """Per producer and dataset, the outcomes of the producer's step reader (#609, #621).
 
@@ -576,9 +609,16 @@ def content_step_counts(metadata: dict[str, dict]) -> dict[str, dict[str, dict[s
 
 
 def join(
-    evidence: list[EvidenceFile], run_dir: Path, key: RecordKey, table: ValueMap, extra: set[_Key] | None = None
+    evidence: list[EvidenceFile],
+    run_dir: Path,
+    key: RecordKey,
+    table: ValueMap,
+    extra: set[_Key] | None = None,
 ) -> Joined:
     """Attach each evidence line whose key value exactly one record carries to that record, and translate it.
+
+    A ``samples`` line (#357) is translated by the identifier rules
+    (``sample_identity.identifier_rules``) instead of ``table``, into ``Joined.samples``.
 
     The join runs within the envelope's target dataset when it names one — the scope
     ``EvidenceTarget.dataset`` declares — matched against the record's ``dataset_title``.
@@ -594,18 +634,22 @@ def join(
     name, and an evidence file none of whose lines matched, an empty one included
     (contract 5.3).
     """
+    rules = identifier_rules()
     wanted: dict[_Key, list[tuple[int, EvidenceEntry]]] = defaultdict(list)
     coverage: dict[str, set[tuple[str | None, str]]] = defaultdict(set)
     for n, ev in enumerate(evidence):
-        for entry in iter_evidence(ev.path):
+        for entry in iter_evidence(ev.path, EVIDENCE_FIELDS):
             ev.offered += 1
             wanted[(ev.record_field, ev.dataset, entry.target_key_value)].append((n, entry))
-            coverage[ev.source_type].add((ev.dataset, entry.field))
+            if entry.field != SAMPLES_FIELD:
+                coverage[ev.source_type].add((ev.dataset, entry.field))
     extra = extra or set()
     found_by_key = _carriers(run_dir, key, set(wanted) | extra)
     carriers = {k: [c.key for c in found] for k, found in found_by_key.items() if k in wanted}
 
     slots: dict[str, dict[str, SlotEvidence]] = defaultdict(lambda: defaultdict(SlotEvidence))
+    samples: dict[str, list[Named]] = defaultdict(list)
+    unrecognised: dict[str, dict[tuple[str, str, str], set[str]]] = defaultdict(lambda: defaultdict(set))
     for wanted_key, lines in wanted.items():
         record_field, _, value = wanted_key
         found = carriers.get(wanted_key, [])
@@ -622,6 +666,14 @@ def join(
                     ev.ambiguous_examples.append(example)
             else:
                 ev.matched += 1
+                if entry.field == SAMPLES_FIELD:
+                    got = from_line(entry.raw_value, ev.dataset, ev.source_type, entry.source, rules)
+                    if got is None:
+                        where = (str(entry.source.table), str(entry.source.column), entry.raw_value)
+                        unrecognised[ev.dataset or ""][where].add(found[0])
+                    else:
+                        samples[found[0]].append(got)
+                    continue
                 for slot in _translate(slots[found[0]], entry, ev, table):
                     coverage[ev.source_type].add((ev.dataset, slot))
 
@@ -633,7 +685,13 @@ def join(
                 f"silence is not success (contract 5.3), and an evidence file with no lines is silent too"
             )
 
-    return Joined(slots=slots, carriers={k: v for k, v in found_by_key.items() if k in extra}, coverage=dict(coverage))
+    return Joined(
+        slots=slots,
+        carriers={k: v for k, v in found_by_key.items() if k in extra},
+        coverage=dict(coverage),
+        samples=dict(samples),
+        unrecognised_samples={d: dict(v) for d, v in unrecognised.items()},
+    )
 
 
 def _carriers(run_dir: Path, key: RecordKey, wanted: set[_Key]) -> dict[_Key, list[Carrier]]:
@@ -1339,10 +1397,13 @@ def reconcile_run(
             return merge_steps(record.get("generated_by"), lineage.steps[identity])
         return record.get("generated_by"), None
 
-    # The first pass: each record's own settled answers, and each child's step.
+    # The first pass: each record's own settled answers, and each child's step; and the
+    # sample lists inference's records point to (#357).
     graph = _Graph()
     seen: set[str] = set()
-    for _, records in iter_run_files(run_dir, strict=True):
+    inference_lists: dict[str, dict] = {}
+    for _, records, lists in iter_run_file_contents(run_dir):
+        inference_lists.update((entry["list_id"], entry) for entry in lists)
         for record in records:
             identity = identity_of(record, seen)
             step, _ = step_of(record, identity)
@@ -1353,12 +1414,15 @@ def reconcile_run(
         raise ReconcileError(str(exc)) from None
     del graph
 
+    samples = reconcile_samples.SampleReport(identifier_rules())
+
     def reconciled_rows(records: list[dict]):
         for record in records:
             identity = str(record[key.output_field])
             record_slots = joined.slots.get(identity, {})
             reconciled = reconcile_record(record, record_slots, inheritance.declarations.get(identity))
             reconciled["generated_by"], conflict = step_of(record, identity)
+            reconciled["samples"] = samples.settle(record, inference_lists, joined.samples.get(identity, []))
             report.add(reconciled, record_slots)
             report.add_step(reconciled, conflict, lineage.steps.get(identity, []))
             report.add_inheritance(reconciled, inheritance.outcomes.get(identity, ()))
@@ -1369,12 +1433,14 @@ def reconcile_run(
     staging.mkdir()
     for fname, records in iter_run_files(run_dir, strict=True):
         write_reconciled_file(staging / reconciled_name(fname), header, reconciled_rows(records))
+    write_reconciled_file(staging / SAMPLE_LISTS_FILE, header, samples.sorted_lists())
 
     full_report = {
         **header,
         "evidence": [ev.summary(root) for ev in applicable],
         "skipped_evidence": [{**s, "path": relative_to(s["path"], root)} for s in skipped],
         **report.to_dict(),
+        SAMPLES_FIELD: samples.to_dict(header_samples(files_metadata), joined.unrecognised_samples),
     }
     (staging / REPORT_FILE).write_text(json.dumps(full_report, indent=2, sort_keys=True) + "\n")
     # Swap by renames: the earlier artifact is moved aside, the new one moved in, and only

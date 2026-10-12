@@ -8,10 +8,16 @@ datasets:
   ANVIL_1000G_high_coverage_2019:
     participant:
       gvcf: &g1000_participant
+        samples:
+          - {cell: sample_name}
         platform:
           - {cell: instrument_model}
           - {cell: instrument_platform}
       gvcf_tbi: *g1000_participant
+    qc_result_sample:
+      cram:
+        samples:
+          - {cell: qc_result_sample_id}
     sample:
       cram: &g1000_sample
         platform:
@@ -65,17 +71,25 @@ datasets:
       pat_repeat_masker: *hprc_annotation_repeat_masker
     assembly_sample:
       mat_chm13_aln_bam: &hprc_sample_chm13
+        samples:
+          - {cell: assembly_sample_id}
         reference_assembly:
           - {column_name: chm13}
       mat_chm13_aln_bai: *hprc_sample_chm13
       pat_chm13_aln_bam: *hprc_sample_chm13
       pat_chm13_aln_bai: *hprc_sample_chm13
       mat_grch38_aln_bam: &hprc_sample_grch38
+        samples:
+          - {cell: assembly_sample_id}
         reference_assembly:
           - {column_name: grch38}
       mat_grch38_aln_bai: *hprc_sample_grch38
       pat_grch38_aln_bam: *hprc_sample_grch38
       pat_grch38_aln_bai: *hprc_sample_grch38
+      mat_fasta: &anvil_hprc_assembly_sample_samples
+        samples:
+          - {cell: assembly_sample_id}
+      pat_fasta: *anvil_hprc_assembly_sample_samples
     minigraph_cactus:
       grch38_vcf: &hprc_mc_grch38
         reference_assembly:
@@ -84,14 +98,32 @@ datasets:
       grch38_xg: *hprc_mc_grch38
     sample:
       hifi:
+        samples:
+          - {cell: sample_id}
         platform:
           - {column_name: hifi}
       hic:
+        samples:
+          - {cell: sample_id}
         assay_type:
           - {column_name: hic}
       nanopore:
+        samples:
+          - {cell: sample_id}
         platform:
           - {column_name: nanopore}
+      bionano_bnx: &anvil_hprc_sample_samples
+        samples:
+          - {cell: sample_id}
+      bionano_cmap: *anvil_hprc_sample_samples
+      child_ilmn: *anvil_hprc_sample_samples
+      mat_ilmn:
+        samples:
+          - {cell: maternal_id}
+      pat_ilmn:
+        samples:
+          - {cell: paternal_id}
+      strandseq: *anvil_hprc_sample_samples
   ANVIL_NIA_CARD_Coriell_Cell_Lines_Open:
     sequencing:
       sequencing_id_fileref:
@@ -113,6 +145,19 @@ datasets:
         reference_assembly:
           - {column_name: grch38}
       grch38_recalibrated_vcf_gz: *t2t_chromosome_grch38
+    participant:
+      cram: &anvil_t2t_participant_samples
+        samples:
+          - {cell: participant_id}
+      cram_index: *anvil_t2t_participant_samples
+      mosdepth_global_dist: *anvil_t2t_participant_samples
+      mosdepth_regions_bed: *anvil_t2t_participant_samples
+      mosdepth_regions_bed_idx: *anvil_t2t_participant_samples
+      mosdepth_regions_dist: *anvil_t2t_participant_samples
+      mosdepth_summary: *anvil_t2t_participant_samples
+      read_1_fastq: *anvil_t2t_participant_samples
+      read_2_fastq: *anvil_t2t_participant_samples
+      samtools_stats: *anvil_t2t_participant_samples
   ANVIL_T2T_CHRY:
     1KGP_CHM13v2_chromosome:
       chm13v2_pass_index: &t2t_chry_1kgp_chm13v2_chromosome
@@ -129,6 +174,8 @@ datasets:
       chm13v2_recalibrated_vcf_gz: *t2t_chry_1kgp_chm13v2_chromosome
     1KGP_CHM13v2_sample:
       chr10_hcvcf_gz: &t2t_chry_1kgp_chm13v2_sample
+        samples:
+          - {cell: t_1kgp_chm13v2_sample_id}
         reference_assembly:
           - {table_name: CHM13v2}
       chr10_hcvcf_index: *t2t_chry_1kgp_chm13v2_sample
@@ -213,6 +260,8 @@ datasets:
       chm13v2_recalibrated_vcf_gz: *t2t_chry_sgdp_chm13v2_chromosome
     SGDP_CHM13v2_sample:
       chr10_hcvcf_gz: &t2t_chry_sgdp_chm13v2_sample
+        samples:
+          - {cell: sgdp_chm13v2_sample_id}
         reference_assembly:
           - {table_name: CHM13v2}
       chr10_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
@@ -274,6 +323,10 @@ datasets:
       xy_x_par_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
       xy_y_nonpar_hcvcf_gz: *t2t_chry_sgdp_chm13v2_sample
       xy_y_nonpar_hcvcf_index: *t2t_chry_sgdp_chm13v2_sample
+      read_1_fastq: &anvil_t2t_chry_sgdp_chm13v2_sample_samples
+        samples:
+          - {cell: sgdp_chm13v2_sample_id}
+      read_2_fastq: *anvil_t2t_chry_sgdp_chm13v2_sample_samples
     SGDP_GRCh38_chromosome:
       grch38_pass_index: &t2t_chry_sgdp_grch38_chromosome
         reference_assembly:
@@ -286,6 +339,8 @@ datasets:
       grch38_recalibrated_vcf_gz: *t2t_chry_sgdp_grch38_chromosome
     SGDP_GRCh38_sample:
       chr10_hcvcf_gz: &t2t_chry_sgdp_grch38_sample
+        samples:
+          - {cell: sgdp_grch38_sample_id}
         reference_assembly:
           - {table_name: GRCh38}
       chr10_hcvcf_index: *t2t_chry_sgdp_grch38_sample
@@ -347,6 +402,10 @@ datasets:
       xy_x_par_hcvcf_index: *t2t_chry_sgdp_grch38_sample
       xy_y_nonpar_hcvcf_gz: *t2t_chry_sgdp_grch38_sample
       xy_y_nonpar_hcvcf_index: *t2t_chry_sgdp_grch38_sample
+      read_1_fastq: &anvil_t2t_chry_sgdp_grch38_sample_samples
+        samples:
+          - {cell: sgdp_grch38_sample_id}
+      read_2_fastq: *anvil_t2t_chry_sgdp_grch38_sample_samples
   AnVIL_ENCORE_293T:
     file:
       file_ref:
@@ -366,30 +425,48 @@ datasets:
           - {cell: reference_coordinates}
     alignments_winnowmap:
       location:
+        samples:
+          - {cell: sample_id}
         data_type:
           - {table_name: alignments}
     assembly:
       assembly:
+        samples:
+          - {cell: sample_id}
         data_type:
           - {table_name: assembly}
+      assembly_fai: &anvil_hprc_r2_assembly_samples
+        samples:
+          - {cell: sample_id}
+      assembly_gzi: *anvil_hprc_r2_assembly_samples
     censat:
       location:
+        samples:
+          - {cell: sample_id}
         data_type:
           - {table_name: censat}
     censat_centromeres:
       location:
+        samples:
+          - {cell: sample_id}
         data_type:
           - {table_name: censat_centromeres}
     chains_to_chm13_mc:
       location:
+        samples:
+          - {cell: sample_id}
         data_type:
           - {table_name: chains}
     chains_to_grch38_mc:
       location:
+        samples:
+          - {cell: sample_id}
         data_type:
           - {table_name: chains}
     deepconsensus:
       path:
+        samples:
+          - {cell: sample_id}
         platform:
           - {cell: platform}
           - {cell: instrument_model}
@@ -402,10 +479,14 @@ datasets:
           - {cell: data_type}
     gaps:
       location:
+        samples:
+          - {cell: sample_id}
         data_type:
           - {table_name: gaps}
     hic:
       path:
+        samples:
+          - {cell: sample_id}
         platform:
           - {cell: platform}
           - {cell: instrument_model}
@@ -420,6 +501,8 @@ datasets:
           - {cell: assembly}
     hifi:
       path:
+        samples:
+          - {cell: sample_id}
         platform:
           - {cell: platform}
           - {cell: instrument_model}
@@ -430,8 +513,13 @@ datasets:
           - {cell: library_source}
         data_type:
           - {cell: data_type}
+      deepconsensus_path:
+        samples:
+          - {cell: sample_id}
     illumina:
       path:
+        samples:
+          - {cell: sample_id}
         platform:
           - {cell: platform}
           - {cell: instrument_model}
@@ -440,6 +528,8 @@ datasets:
           - {cell: library_strategy}
     kinnex:
       path:
+        samples:
+          - {cell: sample_id}
         platform:
           - {cell: platform}
           - {cell: instrument_model}
@@ -452,10 +542,14 @@ datasets:
           - {cell: data_type}
     liftoff_genes:
       location:
+        samples:
+          - {cell: sample_id}
         data_type:
           - {table_name: liftoff}
     ont:
       path:
+        samples:
+          - {cell: sample_id}
         platform:
           - {cell: platform}
           - {cell: instrument_model}
@@ -468,36 +562,52 @@ datasets:
           - {cell: data_type}
     ont_methylation:
       location:
+        samples:
+          - {cell: sample_id}
         platform:
           - {table_name: ont}
         data_modality:
           - {table_name: methylation}
     repeat_masker_bed:
       location:
+        samples:
+          - {cell: sample_id}
         data_type:
           - {table_name: repeat_masker}
     repeat_masker_out:
       location:
+        samples:
+          - {cell: sample_id}
         data_type:
           - {table_name: repeat_masker}
     segdups:
       location:
+        samples:
+          - {cell: sample_id}
         data_type:
           - {table_name: segdups}
     t2t_sequences:
       location:
+        samples:
+          - {cell: sample_id}
         data_type:
           - {table_name: sequences}
     to_ref_chm13_winnowmap:
       location:
+        samples:
+          - {cell: sample_id}
         reference_assembly:
           - {table_name: chm13}
     to_ref_grch38_winnowmap:
       location:
+        samples:
+          - {cell: sample_id}
         reference_assembly:
           - {table_name: grch38}
     to_ref_grch38_winnowmap_bai:
       location:
+        samples:
+          - {cell: sample_id}
         reference_assembly:
           - {table_name: grch38}
   AnVIL_IGVF_Mouse_R1:
@@ -511,3 +621,18 @@ datasets:
           - {cell: sequencing_platform}
         reference_assembly:
           - {cell: reference_assembly}
+  AnVIL_MAGE:
+    kgp_sample:
+      bam: &anvil_mage_kgp_sample_samples
+        samples:
+          - {cell: kgp_sample_id}
+      bam_index: *anvil_mage_kgp_sample_samples
+      read_1_fastq: *anvil_mage_kgp_sample_samples
+      read_2_fastq: *anvil_mage_kgp_sample_samples
+    sequencing_library:
+      bam: &anvil_mage_sequencing_library_samples
+        samples:
+          - {cell: kgp_sample_id}
+      bam_index: *anvil_mage_sequencing_library_samples
+      read_1_fastq: *anvil_mage_sequencing_library_samples
+      read_2_fastq: *anvil_mage_sequencing_library_samples

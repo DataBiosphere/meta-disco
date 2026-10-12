@@ -24,6 +24,10 @@ An **edge rule** states a derivation edge (ADR-0002) rather than a claim, so it 
 dimension. It is declared here, in ``EDGE_RULES``, for the same reason the rules are: its id
 is what an edge's ``rule_id`` carries, and nothing else lists it.
 
+A **sample rule** (#357) reads which samples a file's data comes from out of its header, so
+it sets no dimension either. It is declared in ``SAMPLE_RULES``; its id is what a file's
+``samples.named_by`` carries for the header.
+
 ``basis`` says what a rule reads to reach its answer, in the report's terms
 (``BASES``). A YAML rule's basis is worked out from its ``when`` by the report. A code
 rule's is declared, because a code rule has no ``when`` to work it out from.
@@ -67,6 +71,7 @@ EDGES = "src/meta_disco/edges.py"
 PRODUCER_STEPS = "src/meta_disco/producer_steps.py"
 COHORT_STEPS = "src/meta_disco/cohort_steps.py"
 METADATA_SCHEMA = "src/meta_disco/metadata_schema.py"
+SAMPLE_IDENTITY = "src/meta_disco/sample_identity.py"
 
 
 @dataclass(frozen=True)
@@ -111,6 +116,21 @@ class EdgeRule:
     module: str
     activity: str
     role: str
+    source_type: str
+    reads: str
+    rationale: str
+
+
+@dataclass(frozen=True)
+class SampleRule:
+    """A rule that reads which samples a file's data comes from out of the file's header (#357).
+
+    ``reads`` says where in the header; ``rationale`` says why that names the samples. Each
+    string it reads becomes a sample only through ``rules/sample_namespaces.yaml``.
+    """
+
+    id: str
+    module: str
     source_type: str
     reads: str
     rationale: str
@@ -697,6 +717,33 @@ EDGE_RULES = (
     MERGE_BY_WORKSPACE_HEADER,
     COHORT_BY_SAMPLE_MAP,
 )
+
+BAM_READ_GROUP_SAMPLES = SampleRule(
+    id="bam_read_group_samples",
+    module=SAMPLE_IDENTITY,
+    source_type=SOURCE_CONTENT_READ,
+    reads="a BAM/CRAM header's @RG lines: each distinct SM, every read group having one",
+    rationale=(
+        "SM is the SAM specification's field for the sample a read group's reads come from. A "
+        "header whose every read group has an SM, each recognised, names the file's samples; one "
+        "with a read group without SM, or an SM no identifier rule recognises (`Sample`, "
+        "`BioSample_3`), names none."
+    ),
+)
+VCF_SAMPLE_COLUMNS = SampleRule(
+    id="vcf_sample_columns",
+    module=SAMPLE_IDENTITY,
+    source_type=SOURCE_CONTENT_READ,
+    reads="a VCF header's #CHROM line: each column after FORMAT",
+    rationale=(
+        "The VCF specification gives each sample whose genotypes a file holds a column after "
+        "FORMAT, named for the sample. A header whose every column is recognised names the "
+        "file's samples; one with a column no identifier rule recognises (a BAM path, "
+        "`syndip`) names none, and a sites-only file has no sample columns."
+    ),
+)
+
+SAMPLE_RULES = (BAM_READ_GROUP_SAMPLES, VCF_SAMPLE_COLUMNS)
 
 FETCH_FAILED = CodeMarker(
     id="fetch_failed",

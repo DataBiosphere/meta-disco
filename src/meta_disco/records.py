@@ -119,6 +119,13 @@ UNKNOWN_DATASET = "unknown"
 # Where a producer whose type states a step (`FileTypeConfig.step`, #609) records, in its
 # metadata `details`, the outcome of each file per dataset; reconcile reads it back.
 STEP_OUTCOMES_KEY = "producer_steps"
+# Where a type that reads samples from a header (#357) writes, under its file's metadata
+# `details`, each header outcome's files per dataset, and the strings no identifier rule
+# recognised, the most frequent first.
+SAMPLE_OUTCOMES_KEY = "sample_outcomes"
+UNRECOGNISED_SAMPLES_KEY = "unrecognised_samples"
+# The top-level key of a producer's file holding the sample lists its records point to (#357).
+SAMPLE_LISTS_KEY = "sample_lists"
 
 
 def dataset_of(record: dict) -> Any:
@@ -305,6 +312,10 @@ class OutputRecord:
     # only where the parent resolves); emitted
     # rather than omitted so every row has one shape.
     generated_by: dict | None = None
+    # The samples the file's data comes from, as a pointer to the run's sample list (#357);
+    # null where nothing names them. Inference fills it from a header only
+    # (``FileTypeConfig.samples``); reconcile settles it with the submitter tables.
+    samples: dict | None = None
 
     @classmethod
     def from_work_item(
@@ -313,13 +324,15 @@ class OutputRecord:
         classifications: dict,
         *,
         generated_by: dict | None = None,
+        samples: dict | None = None,
     ) -> OutputRecord:
         """Build from a parsed work item and its classifications payload.
 
         Reads the identity attributes both streams expose (see the module docstring),
         so it is agnostic to which stream produced ``item``. ``generated_by`` is the step
-        a type reads from the file's content (``FileTypeConfig.step``, #609); null for
-        every other type.
+        a type reads from the file's content (``FileTypeConfig.step``, #609), and
+        ``samples`` the samples its header names (``FileTypeConfig.samples``, #357); each
+        null for every other type.
         """
         return cls(
             file_name=item.file_name,
@@ -332,6 +345,7 @@ class OutputRecord:
             drs_uri=item.drs_uri,
             classifications=classifications,
             generated_by=generated_by,
+            samples=samples,
         )
 
     @classmethod

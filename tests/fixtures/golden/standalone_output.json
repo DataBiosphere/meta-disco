@@ -104,7 +104,8 @@
         "file_name": "cohort.pgen",
         "file_size": 1000,
         "generated_by": null,
-        "md5sum": "44444444444444444444444444444444"
+        "md5sum": "44444444444444444444444444444444",
+        "samples": null
       }
     ],
     "metadata": {
@@ -257,7 +258,8 @@
         "file_name": "slide.svs",
         "file_size": 1000,
         "generated_by": null,
-        "md5sum": "33333333333333333333333333333333"
+        "md5sum": "33333333333333333333333333333333",
+        "samples": null
       }
     ],
     "metadata": {
@@ -375,7 +377,8 @@
             }
           ]
         },
-        "md5sum": "11111111111111111111111111111111"
+        "md5sum": "11111111111111111111111111111111",
+        "samples": null
       },
       {
         "classifications": {
@@ -471,7 +474,8 @@
         "file_name": "orphan.bai",
         "file_size": 9001,
         "generated_by": null,
-        "md5sum": "22222222222222222222222222222222"
+        "md5sum": "22222222222222222222222222222222",
+        "samples": null
       }
     ],
     "metadata": {
@@ -624,7 +628,8 @@
         "file_name": "mystery.xyz",
         "file_size": 1000,
         "generated_by": null,
-        "md5sum": "55555555555555555555555555555555"
+        "md5sum": "55555555555555555555555555555555",
+        "samples": null
       },
       {
         "classifications": {
@@ -763,7 +768,8 @@
             }
           ]
         },
-        "md5sum": "99999999999999999999999999999999"
+        "md5sum": "99999999999999999999999999999999",
+        "samples": null
       }
     ],
     "metadata": {
