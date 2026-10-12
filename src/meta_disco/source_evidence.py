@@ -631,9 +631,10 @@ def read_envelope(path: Path) -> EvidenceFileEnvelope:
 def iter_evidence(path: Path, fields: Collection[str] = CLASSIFICATION_FIELDS) -> Iterator[EvidenceEntry]:
     """Every evidence row in one file on disk naming one of ``fields``, in file order, streamed.
 
-    ``fields`` defaults to the dimensions: a ``samples`` row (#357) is read only by a reader
-    that asks for it (``EVIDENCE_FIELDS``), reconcile's join, and never reaches one that
-    translates a line through the value map. Every row is still checked, whichever it names.
+    ``fields`` defaults to the dimensions: a ``samples`` row (#357) is yielded only to a reader
+    that asks for it (``EVIDENCE_FIELDS``), which today is reconcile's join, and that reads it
+    through the identifier rules rather than the value map. Every row is still checked,
+    whichever field it names.
 
     Line 1 is consumed as the envelope before any row is yielded, because the
     source it carries is what each row's ``source`` is rehydrated from — so a file

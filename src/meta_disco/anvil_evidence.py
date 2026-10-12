@@ -272,7 +272,8 @@ def _check_sample_names(slot_map: SlotMap, dataset: str, path: Path) -> list[str
     ``HG01106`` disagrees. A column where more of these files disagree than agree holds
     another row's files under the cell it is mapped to — a parent's reads in its child's row
     (`mat_ilmn` read as `sample_id`) — and is a problem. A few disagreeing files are not
-    (a submitter's slip), and reconcile counts each again where it settles a file's samples.
+    (a submitter's slip); reconcile reports a file whose name contradicts the samples it
+    settles to.
     """
     sampled = {
         (entry.table, entry.column): entry.slots[SAMPLES_FIELD][0].value

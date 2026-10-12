@@ -724,10 +724,9 @@ BAM_READ_GROUP_SAMPLES = SampleRule(
     source_type=SOURCE_CONTENT_READ,
     reads="a BAM/CRAM header's @RG lines: each distinct SM",
     rationale=(
-        "SM is the SAM specification's field for the sample a read group's reads come from, and "
-        "an aligner copies it from the read group the sequencer's reads were given. A header "
-        "whose every SM is recognised names the file's samples; one with an SM no identifier "
-        "rule recognises (`Sample`, `BioSample_3`) names none."
+        "SM is the SAM specification's field for the sample a read group's reads come from. A "
+        "header whose every SM is recognised names the file's samples; one with an SM no "
+        "identifier rule recognises (`Sample`, `BioSample_3`) names none."
     ),
 )
 VCF_SAMPLE_COLUMNS = SampleRule(

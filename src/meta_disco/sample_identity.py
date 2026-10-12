@@ -9,7 +9,8 @@ rule applies only in the dataset it names, and its identifiers carry that datase
 A file points to a **sample list** rather than listing members: a joint VCF names 3,202
 samples, and 31,000 T2T windows name the same 3,202. A list is identified by a digest of
 its sorted members (:func:`list_id`), so every producer and reconcile name the same list
-the same way without sharing state, and a run writes each distinct list once.
+the same way without sharing state. Each producer file holds each list its records point
+to once, and so does the reconciled artifact.
 """
 
 from __future__ import annotations
@@ -194,9 +195,10 @@ def identifier_rules() -> IdentifierRuleSet:
 def _sorted(members: Iterable[Identifier]) -> list[dict]:
     """The distinct members as ``EntityIdentifier`` dicts, in one canonical order.
 
-    Sorted by a plain tuple key rather than the dataclass's own ordering, which compares in
-    Python and took 10 ms for a 3,202-member list. The order is the same: a namespace's
-    identifiers all carry a dataset (``dataset_local``) or none.
+    Sorted by a plain tuple key rather than the dataclass's own ordering, whose comparisons
+    run in Python: building a 3,202-member list that way, sorted twice, measured about 10 ms.
+    The order is the same: a namespace's identifiers all carry a dataset
+    (``dataset_local``) or none.
     """
     return [m.to_dict() for m in sorted(set(members), key=lambda m: (m.namespace, m.id, m.dataset or ""))]
 
@@ -295,8 +297,8 @@ class SampleReader:
 
 # A joint VCF's 3,202 sample columns repeat across 31,000 T2T windows: each distinct reading is
 # made once, and its list (sorted, digested) with it, rather than once per file (#357). A
-# 3,202-member reading holds about 1 MB (measured), so the cache is bounded at 128 readings;
-# the one the 31,000 windows share is read every few files and is not the one evicted.
+# 3,202-member reading holds about 1 MB (measured), so the cache is bounded at 128 readings.
+# A reading is evicted only once 128 others have been used since its own last use.
 @lru_cache(maxsize=128)
 def _read(
     rule: code_rules.SampleRule, raws: tuple[str, ...], dataset: str | None, rules: IdentifierRuleSet
