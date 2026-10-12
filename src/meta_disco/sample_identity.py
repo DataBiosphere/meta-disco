@@ -19,7 +19,7 @@ import json
 import re
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
-from functools import cache
+from functools import cache, cached_property, lru_cache
 from importlib.resources import files
 from typing import Any
 
@@ -218,11 +218,17 @@ class HeaderSamples:
     members: frozenset[Identifier] = frozenset()
     unrecognised: tuple[str, ...] = ()
 
+    @cached_property
+    def sample_list(self) -> dict | None:
+        """The ``SampleList`` the members make, built once per reading; None where the header names none."""
+        return sample_list(self.members) if self.outcome == NAMED else None
+
     def reference(self) -> dict | None:
         """The file's ``samples`` where the header names them all; None otherwise."""
-        if self.outcome != NAMED:
+        if self.sample_list is None:
             return None
-        return reference(self.members, [{"source_type": self.rule.source_type, "rule_id": self.rule.id}])
+        named_by = [{"source_type": self.rule.source_type, "rule_id": self.rule.id}]
+        return {"list_id": self.sample_list["list_id"], "count": len(self.members), "named_by": named_by}
 
 
 @dataclass(frozen=True)
@@ -239,19 +245,27 @@ class SampleReader:
         member would say the file holds fewer samples than it does.
         """
         rules = rules if rules is not None else identifier_rules()
-        raws = list(dict.fromkeys(self.strings(content)))
-        if not raws:
-            return HeaderSamples(NO_SAMPLE, self.rule)
-        members, unknown = set(), []
-        for raw in raws:
-            got = rules.recognise(raw, dataset)
-            if got is None:
-                unknown.append(raw)
-            else:
-                members.add(got.identifier)
-        if unknown:
-            return HeaderSamples(UNRECOGNISED, self.rule, unrecognised=tuple(unknown))
-        return HeaderSamples(NAMED, self.rule, frozenset(members))
+        return _read(self.rule, tuple(dict.fromkeys(self.strings(content))), dataset, rules)
+
+
+# A joint VCF's 3,202 sample columns repeat across 31,000 T2T windows: each distinct reading is
+# made once, and its list (sorted, digested) with it, rather than once per file (#357).
+@lru_cache(maxsize=1024)
+def _read(
+    rule: code_rules.SampleRule, raws: tuple[str, ...], dataset: str | None, rules: IdentifierRuleSet
+) -> HeaderSamples:
+    if not raws:
+        return HeaderSamples(NO_SAMPLE, rule)
+    members, unknown = set(), []
+    for raw in raws:
+        got = rules.recognise(raw, dataset)
+        if got is None:
+            unknown.append(raw)
+        else:
+            members.add(got.identifier)
+    if unknown:
+        return HeaderSamples(UNRECOGNISED, rule, unrecognised=tuple(unknown))
+    return HeaderSamples(NAMED, rule, frozenset(members))
 
 
 def _read_group_strings(header_text: str) -> list[str]:

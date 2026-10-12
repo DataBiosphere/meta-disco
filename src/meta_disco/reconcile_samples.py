@@ -48,6 +48,9 @@ class Named:
     members: frozenset[Identifier]
     named_by: tuple[dict, ...]
     from_header: bool = False
+    # The list the members make, where the source already named it (inference's record), so
+    # it is not digested again for every file pointing to it.
+    list_id: str | None = None
 
 
 def from_line(
@@ -73,22 +76,32 @@ def from_line(
     return Named(frozenset(members), named_by)
 
 
-def from_record(record: dict, lists: dict[str, dict]) -> Named | None:
+def from_record(
+    record: dict, lists: dict[str, dict], members: dict[str, frozenset[Identifier]] | None = None
+) -> Named | None:
     """The samples inference wrote on ``record``, its members read from the run's ``lists``.
 
-    Raises ``ValueError`` where the record points to a list its run does not hold: the
-    producer file is damaged, or was written before its lists were.
+    ``members``, where given, keeps each list's members once read, by list id: 31,000 T2T
+    windows point to one 3,202-sample list. Raises ``ValueError`` where the record points to
+    a list its run does not hold: the producer file is damaged, or was written before its
+    lists were.
     """
     samples = record.get("samples")
     if not samples:
         return None
-    entry = lists.get(samples["list_id"])
-    if entry is None:
-        raise ValueError(
-            f"record {record.get('file_name')!r} points to sample list {samples['list_id']!r}, which no "
-            "producer file of the run holds"
-        )
-    return Named(members_of(entry), tuple(samples["named_by"]), from_header=True)
+    key = samples["list_id"]
+    found = members.get(key) if members is not None else None
+    if found is None:
+        entry = lists.get(key)
+        if entry is None:
+            raise ValueError(
+                f"record {record.get('file_name')!r} points to sample list {key!r}, which no "
+                "producer file of the run holds"
+            )
+        found = members_of(entry)
+        if members is not None:
+            members[key] = found
+    return Named(found, tuple(samples["named_by"]), from_header=True, list_id=key)
 
 
 def settle(named: Iterable[Named]) -> tuple[str | None, dict | None, frozenset[Identifier]]:
@@ -117,7 +130,9 @@ def settle(named: Iterable[Named]) -> tuple[str | None, dict | None, frozenset[I
     header = any(n.from_header for n in named)
     table = any(not n.from_header for n in named)
     outcome = AGREED if header and table else (HEADER_ONLY if header else TABLE_ONLY)
-    return outcome, reference(members, named_by), members
+    known = next((n.list_id for n in named if n.list_id is not None), None)
+    samples = {"list_id": known, "count": len(members), "named_by": named_by} if known else reference(members, named_by)
+    return outcome, samples, members
 
 
 def name_disagrees(file_name: str, members: frozenset[Identifier], rules: IdentifierRuleSet) -> Identifier | None:
@@ -156,10 +171,12 @@ class SampleReport:
     name_examples: dict[str, list[dict]] = field(default_factory=lambda: defaultdict(list))
     # Each distinct list a reconciled record points to, by id.
     lists: dict[str, dict] = field(default_factory=dict)
+    # Each inference list's members once read, by id (:func:`from_record`).
+    members: dict[str, frozenset[Identifier]] = field(default_factory=dict)
 
     def settle(self, record: dict, inference_lists: dict[str, dict], table: list[Named]) -> dict | None:
         """The reconciled ``samples`` for ``record``, counted; None where no source names them, or sources differ."""
-        header = from_record(record, inference_lists)
+        header = from_record(record, inference_lists, self.members)
         outcome, samples, members = settle(([header] if header is not None else []) + table)
         dataset = str(record.get("dataset_title") or "")
         file_name = str(record.get("file_name") or "")
@@ -167,7 +184,8 @@ class SampleReport:
         if outcome in (CONFLICT, INCOMPARABLE) and len(self.examples[(dataset, outcome)]) < MAX_EXAMPLES:
             self.examples[(dataset, outcome)].append(file_name)
         if samples is not None:
-            self.lists.setdefault(samples["list_id"], sample_list(members))
+            if samples["list_id"] not in self.lists:
+                self.lists[samples["list_id"]] = sample_list(members)
             named = name_disagrees(file_name, members, self.rules)
             if named is not None:
                 self.name_disagreements[dataset] += 1

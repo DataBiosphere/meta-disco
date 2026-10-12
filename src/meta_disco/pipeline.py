@@ -36,7 +36,7 @@ from .records import (
     OutputRecord,
     RunMetadata,
 )
-from .sample_identity import HeaderSamples, sample_list
+from .sample_identity import HeaderSamples
 
 
 def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> list[dict]:
@@ -605,8 +605,8 @@ class ClassifyPipeline:
                     if outcome.samples is not None:
                         sample_counts[dataset][outcome.samples.outcome] += 1
                         unrecognised_samples[dataset].update(outcome.samples.unrecognised)
-                        if outcome.samples.members:
-                            entry = sample_list(outcome.samples.members)
+                        entry = outcome.samples.sample_list
+                        if entry is not None:
                             lists.setdefault(entry["list_id"], entry)
                     if outcome.validation_failed:
                         invalid += 1
