@@ -5,7 +5,7 @@
 - **Extends, and supersedes in part:** `docs/derived-file-data-model.md` (#109), which settled the edge for companion files only; see [What this supersedes](#what-this-supersedes)
 - **Contract:** adds 4.9 to `docs/claims-contract.md` (inheritance) and its entry under "What is not true yet"; amends 2.8, 3.1, 4.1, 4.2 and 6.6 to match
 - **Related:** #356 (companion edges), #357 (sample identity), #358 (alignment ← reads), #359 (variants ← alignments), #360 (assemblies), #361 (sample ← donor), #362 (consistency and coverage), #371 (the edge carries the parent's record key), #413 (index inheritance and contract 1.1), #438 (ambiguous index parents)
-- **Amended by:** [#580](https://github.com/DataBiosphere/meta-disco/issues/580) (2026-09-29): a step is an activity from AnVIL FSS's vocabulary, not a verb between two files (decision 5); [#609](https://github.com/DataBiosphere/meta-disco/issues/609) (2026-10-03): which of a header's command lines made the file (decision 6); [#620](https://github.com/DataBiosphere/meta-disco/issues/620) (2026-10-05): a header-named alignment several files carry is settled by contigs (decision 6)
+- **Amended by:** [#580](https://github.com/DataBiosphere/meta-disco/issues/580) (2026-09-29): a step is an activity from AnVIL FSS's vocabulary, not a verb between two files (decision 5); [#609](https://github.com/DataBiosphere/meta-disco/issues/609) (2026-10-03): which of a header's command lines made the file (decision 6); [#620](https://github.com/DataBiosphere/meta-disco/issues/620) (2026-10-05): a header-named alignment several files carry is settled by contigs (decision 6); [#357](https://github.com/DataBiosphere/meta-disco/issues/357) (2026-10-12): the namespaces, a declared rewrite, and a file's samples as a field (decision 1, Open)
 
 ## Context
 
@@ -44,14 +44,22 @@ and a parent not found there is `external` (decision 2). Only sample and donor i
 A sample or donor is `{id, namespace, source_type}`, plus its dataset where the namespace is
 `dataset_local`, not an entity record of its own.
 
-- `id` is the string as written: `HG03016`, `SRS006902`.
-- `namespace` is the authority that issued it — for example `coriell` (1000G/HPRC `HG…`/`NA…`),
-  `sra_sample` (`SRS…`/`ERS…`), `biosample` (`SAMN…`/`SAMEA…`), `dataset_local`. The list is #357's to
-  settle against the corpus.
+- `id` is the string as written: `HG03016`, `SRS006902`. *Amended by #357:* except where an
+  identifier rule declares a rewrite. Coriell's `GM19908` (a cell line) and `NA19908` (the DNA
+  extracted from it) are one sample, written `NA19908`; the string as written stays in the source
+  that holds it (an evidence line's `raw_value`, the header in the evidence cache).
+- `namespace` is the authority that issued it. *Settled by #357*, in `rules/sample_namespaces.yaml`:
+  `coriell` (`HG`/`NA`/`GM` and five digits), `giab` (`HG001` to `HG007`, kept apart from the
+  `coriell` numbers of the same people until #361), `sra_sample` (`SRS…`/`ERS…`/`DRS…`), `biosample`
+  (`SAMN…`/`SAMEA…`/`SAMD…`), and `dataset_local` only where a rule declared for that dataset says
+  its names are per-sample. A string no rule matches (`Sample`, `BioSample_3`, a BAM path) is no
+  sample.
 - `source_type` is where we read it, from `source_type_enum`, with the exact place (`@RG SM`, a VCF
   sample column, a table and column) as provenance beside it, the way a claim records it (`source`
-  and `rule_id` for evidence, `rule_id` alone for inference, schema changes below);
-  which constant each place is, is #357's.
+  and `rule_id` for evidence, `rule_id` alone for inference, schema changes below).
+  *Settled by #357:* a header is `content_read`, citing `bam_read_group_samples` or
+  `vcf_sample_columns` (`code_rules.SAMPLE_RULES`); a submitter table is `repository_metadata`,
+  citing the identifier rule that read its cell and the cell's column.
 
 **Two identifiers name the same sample or donor only when namespace and id both match** — and, for
 `dataset_local`, the dataset too. That is what makes the search across datasets work: `coriell:HG03016`
@@ -489,7 +497,9 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
 - `parent_md5sum` is retired: #356 writes `parent_key` in its place.
 - New class `EntityIdentifier`: `id`, `namespace` (`identifier_namespace_enum`), `dataset` (set exactly
   when the namespace is `dataset_local`, and part of its identity), and the same provenance as
-  an `ActivityInput`, a `named_by` list of `Attribution` (decision 1).
+  an `ActivityInput`, a `named_by` list of `Attribution` (decision 1). **Done (#357), without
+  `named_by`:** a sample list's members are shared by every file that points to the list, so the
+  provenance is on each file's `samples` (`SampleReference.named_by`), not on a member.
 - **Done (#580):** the verb (`relation`, `relation_enum`) is replaced by `GeneratedBy.activity` (range
   `activity_type_enum`, decision 5), and a source's run id is its `named_by` entry's `activity_id` (decision 7).
 - Evidence cannot state an edge yet: an `EvidenceRow` carries one classification slot and a `raw_value`,
@@ -550,9 +560,10 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   paths; tying one to a released `*_hprc_r2_v1.0.1.fa.gz` by sample and haplotype assumes the release came
   from that run. Until that is established, an `AssemblyActivity` edge's child is only an output that resolves
   to a held file, and the released assemblies have no such edge.
-- **A sample a file's own header names.** `@RG SM` on 80% of BAM headers and VCF sample columns on 99.9%
-  of VCF headers (Context) say which sample the data is about. That is not a step, so it is not a
-  `SequenceActivity` edge on the BAM or the VCF; whether it is an edge of its own or a field of the record
-  is #357's.
+- ~~**A sample a file's own header names.**~~ *Settled by #357:* a field of the record, `samples`, not
+  an edge. It points to one of the run's sample lists (a joint VCF names 3,202 samples, and 31,000 T2T
+  windows the same 3,202), with every source that named it. Its header and a submitter table settle
+  as a step's sources do (decision 6): agreeing sources are each listed, and sources naming different
+  samples give none, counted in the reconcile report.
 - **`external` covers two cases** — never deposited, and ambiguous by name. If a consumer needs them apart,
   a reason field on the edge would do it.
