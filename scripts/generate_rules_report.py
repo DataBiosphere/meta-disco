@@ -67,11 +67,12 @@ import yaml
 from meta_disco import code_rules
 from meta_disco.activity_map import default_activity_map_resource, describe_match, load_activity_map
 from meta_disco.callers import callers_in_reason, load_callers
-from meta_disco.models import MIXED, SOURCE_DERIVATION_INHERITANCE
+from meta_disco.models import MIXED, SAMPLES_FIELD, SOURCE_DERIVATION_INHERITANCE
 from meta_disco.output_utils import find_latest_run, iter_reconciled_records
 from meta_disco.reconcile import declaration
 from meta_disco.rule_engine import CONFLICT_MARKER, CONTENT_TIER, NOT_CLASSIFIED_MARKER
 from meta_disco.rule_loader import RuleLoader, default_rules_resource
+from meta_disco.sample_identity import identifier_rule_declarations
 from meta_disco.schema_vocab import marker_values, value_ancestors, value_in_vocabulary
 from meta_disco.summaries import embed_json, md_code, md_table
 from meta_disco.value_map import default_value_map_resource, load_value_map
@@ -160,7 +161,14 @@ EDGE_RULES_NOTE = (
     "activity-map rows (#584) translate what a source table says about a step, and reconcile resolves the "
     "parent that table names (#577). Counted by the inputs of the reconciled `generated_by` that cite them."
 )
+SAMPLE_RULES_NOTE = (
+    "Rules that say which samples a file's data comes from, rather than giving a field an answer (#357). The code "
+    "rules read the file's header; the identifier rules (`rules/sample_namespaces.yaml`) say which strings are "
+    "samples and in which namespace, and are what a submitter table's sample is cited by. Counted by the sources "
+    "a reconciled record's `samples` lists."
+)
 UNDECLARED_HEAD = "Rule names with no rule behind them"
+SAMPLE_NAMESPACES = "src/meta_disco/rules/sample_namespaces.yaml"
 UNDECLARED_NOTE = (
     "The counts name these rules, but the rule files in this version of meta-disco do not contain them. That "
     "happens when a rule was renamed or removed after the files were classified, or when a change still under "
@@ -392,7 +400,8 @@ def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict
     fired, since it takes part in resolution, and never wins. A marker is counted wherever it
     appears, since recording no answer is what a marker does. An id in neither set (one
     nothing declares) is counted like a marker and never judged as having won. An edge
-    rule is counted by the inputs records' ``generated_by`` carries under its ``rule_id``.
+    rule is counted by the inputs records' ``generated_by`` carries under its ``rule_id``, and a
+    sample rule by each source a record's ``samples`` lists under it (#357).
     """
     stats: defaultdict[str, Tally] = defaultdict(Tally)
     by_caller: Counter = Counter()
@@ -438,12 +447,35 @@ def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict
             for source in used.get("named_by") or []:
                 stats[source["rule_id"]].claims += 1
                 fired.add(source["rule_id"])
+        # A sample rule names the file's samples (#357): counted per source that named them.
+        samples = record.get(SAMPLES_FIELD)
+        for source in samples.get("named_by") or [] if isinstance(samples, dict) else []:
+            stats[source["rule_id"]].claims += 1
+            fired.add(source["rule_id"])
         for key in fired:
             stats[key].files += 1
             stats[key].datasets[dataset] += 1
         for key in won:
             stats[key].won += 1
     return n, stats, by_caller
+
+
+def sample_rule_rows() -> list[dict]:
+    """The sample rules (#357): the header readers in ``code_rules.SAMPLE_RULES``, then each identifier rule."""
+    rows = [
+        {"id": r.id, "reads": r.reads, "rationale": r.rationale, "defined_in": r.module}
+        for r in code_rules.SAMPLE_RULES
+    ]
+    rows += [
+        {
+            "id": rule.id,
+            "reads": f"a string matching {rule.match}" + (f" in {rule.dataset}" if rule.dataset else ""),
+            "rationale": rule.rationale,
+            "defined_in": SAMPLE_NAMESPACES,
+        }
+        for rule in identifier_rule_declarations()
+    ]
+    return rows
 
 
 def caller_rows(counts: Counter) -> list[dict]:
@@ -527,9 +559,10 @@ def build(
         for e in code_rules.EDGE_RULES
     ]
     edge_rules += activity_map_rows(activity_map_path)
+    sample_rules = sample_rule_rows()
     # A marker's or edge rule's id among them too: a rule named `fetch_failed` would take the marker's counts.
     ids = [r["id"] for r in rules]
-    others = [*(m["id"] for m in markers), *(e["id"] for e in edge_rules)]
+    others = [*(m["id"] for m in markers), *(e["id"] for e in edge_rules), *(r["id"] for r in sample_rules)]
     duplicates = sorted(i for i, c in Counter([*ids, *others]).items() if c > 1)
     if duplicates:
         raise ReportError(f"ids declared twice: {duplicates}")
@@ -538,7 +571,7 @@ def build(
         rule_ids={r["id"] for r in rules if r["kind"] != KIND_MAPPING},
         mapping_ids={r["id"] for r in rules if r["kind"] == KIND_MAPPING},
     )
-    for r in [*rules, *markers, *edge_rules]:
+    for r in [*rules, *markers, *edge_rules, *sample_rules]:
         r.update(_counted(stats.get(r["id"])))
     known = set(ids) | set(others)
     date = run_date(run_dir.name)
@@ -551,6 +584,7 @@ def build(
         "rules": rules,
         "markers": markers,
         "edge_rules": edge_rules,
+        "sample_rules": sample_rules,
         "callers": caller_rows(by_caller),
         "undeclared": [{"id": k, **_counted(v)} for k, v in sorted(stats.items()) if k not in known],
         "labels": LABELS,
@@ -662,6 +696,14 @@ def render_markdown(data: dict) -> str:
                 md_code(e["defined_in"]),
             ]
             for e in data["edge_rules"]
+        ],
+    )
+    lines += ["", "## Sample rules", "", SAMPLE_RULES_NOTE, ""]
+    lines += md_table(
+        ["id", "reads", "files", "rationale", "in"],
+        [
+            [md_code(r["id"]), r["reads"], _n(r["files"]), r["rationale"], md_code(r["defined_in"])]
+            for r in data["sample_rules"]
         ],
     )
     lines += ["", "## Caller table", "", CALLERS_NOTE, ""]

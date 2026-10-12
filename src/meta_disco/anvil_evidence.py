@@ -53,7 +53,8 @@ from .azul_manifest import (
     sidecar_datasets,
     sidecar_requested_at,
 )
-from .models import JOIN_KEY_DRS_URI, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA, ClaimSource
+from .models import JOIN_KEY_DRS_URI, SAMPLES_FIELD, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA, ClaimSource
+from .sample_identity import Identifier, identifier_rules
 from .schema.classification_model import ImporterSourceTypeEnum, JoinKeyEnum
 from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource
 from .source_evidence import (
@@ -239,7 +240,7 @@ def _check_dataset(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
             handles = link_handles(row.get(cell))
             if handles is not None and cell_is_link[(table, cell)] is not False:
                 cell_is_link[(table, cell)] = handles != []
-    problems = []
+    problems = _check_sample_names(slot_map, dataset, path)
     for table in tables:
         if not rows[table]:
             problems.append(f"{dataset}/{table}: no row of this type in the manifest")
@@ -260,6 +261,62 @@ def _check_dataset(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
                     f"{dataset}/{table}: cell {cell!r} holds DRS URIs — a file-link column, not a metadata value"
                 )
     return problems
+
+
+def _check_sample_names(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
+    """A ``samples`` column whose cell most of its files' names contradict, one line each (#357).
+
+    For each file-link column the map reads ``samples`` for, each file whose name carries
+    exactly one identifier is compared with the identifier the row's cell is, where the two
+    are in one namespace (``sample_identity``): ``HG01105.final.cram`` in a row whose cell is
+    ``HG01106`` disagrees. A column where more of these files disagree than agree holds
+    another row's files under the cell it is mapped to — a parent's reads in its child's row
+    (`mat_ilmn` read as `sample_id`) — and is a problem. A few disagreeing files are not
+    (a submitter's slip), and reconcile counts each again where it settles a file's samples.
+    """
+    sampled = {
+        (entry.table, entry.column): entry.slots[SAMPLES_FIELD][0].value
+        for entry in slot_map.entries
+        if entry.dataset == dataset and SAMPLES_FIELD in entry.slots
+    }
+    if not sampled:
+        return []
+    rules = identifier_rules()
+    names: dict[str, str] = {}
+    compared: list[tuple[str, str, Identifier, list[str]]] = []
+    tables = {table for table, _ in sampled}
+    for table, row in iter_verbatim_entities(path, tables | {VERBATIM_FILE}):
+        if table == VERBATIM_FILE:
+            for column in ANVIL_FILE_HANDLE_COLUMNS:
+                for handle in link_handles(row.get(column)) or []:
+                    names[handle] = str(row.get("file_name") or "")
+            continue
+        for (mapped_table, column), cell in sampled.items():
+            value = row.get(cell) if mapped_table == table else None
+            got = rules.recognise(value, dataset) if isinstance(value, str) else None
+            if got is not None:
+                compared.append((table, column, got.identifier, link_handles(row.get(column)) or []))
+    agree: Counter = Counter()
+    disagree: Counter = Counter()
+    example: dict[tuple[str, str], str] = {}
+    for table, column, identifier, handles in compared:
+        for handle in handles:
+            in_name = rules.in_name(names.get(handle, ""))
+            if len(in_name) != 1:
+                continue
+            (named,) = in_name
+            if named == identifier:
+                agree[(table, column)] += 1
+            elif named.namespace == identifier.namespace:
+                disagree[(table, column)] += 1
+                example.setdefault((table, column), f"{names[handle]!r} in the row whose cell is {identifier.id!r}")
+    return [
+        f"{dataset}/{table}/{column}: samples read from {sampled[(table, column)]!r}, but {n:,} of "
+        f"{n + agree[(table, column)]:,} files whose name names one sample name another (e.g. "
+        f"{example[(table, column)]}) — the column holds files of another row's sample"
+        for (table, column), n in sorted(disagree.items())
+        if n > agree[(table, column)]
+    ]
 
 
 # --- importing -----------------------------------------------------------------

@@ -26,7 +26,7 @@ from typing import Any
 import yaml
 
 from . import code_rules
-from .schema.classification_model import IdentifierRules
+from .schema.classification_model import IdentifierRule, IdentifierRules
 from .slot_map import unique_key_loader
 from .validators.header_extractors import VCFHeader, parse_sam_header, read_group_samples
 
@@ -129,9 +129,7 @@ def load_identifier_rules(text: str | None = None) -> IdentifierRuleSet:
     ``dataset`` exactly on the ``dataset_local`` rules, each pattern a regular expression
     and each ``write`` template valid for it.
     """
-    if text is None:
-        text = default_rules_resource().read_text(encoding="utf-8")
-    document = IdentifierRules.model_validate(yaml.load(text, Loader=_UniqueKeyLoader))
+    document = _document(text)
     rules: list[_Rule] = []
     seen: set[str] = set()
     for rule in document.rules:
@@ -153,6 +151,18 @@ def load_identifier_rules(text: str | None = None) -> IdentifierRuleSet:
                 raise ValueError(f"identifier rule {rule.id!r}: write {rule.write!r} names a group match lacks")
         rules.append(_Rule(rule.id, namespace, pattern, rule.write, rule.dataset))
     return IdentifierRuleSet(rules)
+
+
+def _document(text: str | None) -> IdentifierRules:
+    if text is None:
+        text = default_rules_resource().read_text(encoding="utf-8")
+    return IdentifierRules.model_validate(yaml.load(text, Loader=_UniqueKeyLoader))
+
+
+def identifier_rule_declarations(text: str | None = None) -> list[IdentifierRule]:
+    """The rules as declared, with their rationale, for a reader that lists them; checked as :func:`load_identifier_rules` checks them."""
+    load_identifier_rules(text)
+    return list(_document(text).rules)
 
 
 @cache

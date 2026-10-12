@@ -10,6 +10,7 @@ from meta_disco.azul_manifest import PUBLISHED_TABLE
 from meta_disco.manifest_survey import NAME_TOKENS, name_tokens
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
+    EVIDENCE_FIELDS,
     SOURCE_CONTENT_READ,
     SOURCE_PUBLISHED_VALUE,
     SOURCE_REPOSITORY_METADATA,
@@ -304,9 +305,9 @@ class TestTheBundledMap:
                 spans = [s.value.casefold() for s in sources if s.is_name]
                 assert len(spans) == len(set(spans)), (entry.dataset, entry.table, entry.column, slot)
 
-    def test_every_slot_in_the_map_is_a_classification_field(self):
+    def test_every_slot_in_the_map_is_a_classification_field_or_samples(self):
         for entry in load_slot_map().entries:
-            assert set(entry.slots) <= set(CLASSIFICATION_FIELDS)
+            assert set(entry.slots) <= set(EVIDENCE_FIELDS)
 
 
 class TestTheBundledPublishedMap:
@@ -343,4 +344,19 @@ def test_a_slot_map_may_not_declare_a_lineage_only_kind(tmp_path):
         "catalog: anvil15\nsource_type: repository_activity\ndatasets:\n  D:\n    t:\n      c:\n        platform:\n          - {cell: p}\n"
     )
     with pytest.raises(ValueError, match="written only as lineage evidence"):
+        load_slot_map(path)
+
+
+@pytest.mark.parametrize(
+    "sources",
+    [
+        "[{table_name: hifi}]",
+        "[{column_name: path}]",
+        "[{cell: sample_id}, {cell: coriell_id}]",
+    ],
+)
+def test_a_sample_is_read_from_exactly_one_cell(tmp_path, sources):
+    path = tmp_path / "map.yaml"
+    path.write_text(f"catalog: anvil15\ndatasets:\n  D:\n    hifi:\n      path:\n        samples: {sources}\n")
+    with pytest.raises(ValueError, match="exactly one cell"):
         load_slot_map(path)

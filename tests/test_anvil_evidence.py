@@ -634,3 +634,73 @@ def test_the_published_map_yields_what_anvil_publishes(tmp_path):
         "reference_assembly": 4696,
     }
     assert two_valued == 12
+
+
+# --- samples (#357) ------------------------------------------------------------------
+
+TRIO_MAP = """
+catalog: anvil15
+datasets:
+  D:
+    sample:
+      child:
+        samples:
+          - {cell: sample_id}
+      mat:
+        samples:
+          - {cell: MOTHER_CELL}
+"""
+
+
+def named_file(n: int, name: str) -> tuple[str, dict]:
+    return "anvil_file", {"file_id": f"f{n}", "file_name": name, "drs_uri": drs(n), "file_ref": drs(n)}
+
+
+TRIO_ROWS = [
+    named_file(1, "HG01106.final.cram"),
+    named_file(2, "HG01105.final.cram"),
+    named_file(3, "HG01109.final.cram"),
+    named_file(4, "HG01107.final.cram"),
+    ("sample", {"sample_id": "HG01106", "maternal_id": "HG01105", "child": drs(1), "mat": drs(2)}),
+    ("sample", {"sample_id": "HG01109", "maternal_id": "HG01107", "child": drs(3), "mat": drs(4)}),
+]
+
+
+class TestSamples:
+    def test_a_samples_column_is_imported_as_its_cell_verbatim(self, tmp_path):
+        write_dataset(tmp_path, "D", TRIO_ROWS)
+        result = ae.import_dataset(
+            slot_map(tmp_path, TRIO_MAP.replace("MOTHER_CELL", "maternal_id")),
+            tmp_path,
+            CATALOG,
+            SERVICE,
+            "D",
+            tmp_path / "ev",
+            "20261012T000000Z",
+        )
+        rows = rows_of(result.tables[0].path)
+        assert ("samples", drs(2), "HG01105", "maternal_id") in rows
+        assert ("samples", drs(1), "HG01106", "sample_id") in rows
+
+    def test_the_check_passes_a_column_whose_files_names_agree_with_its_cell(self, tmp_path):
+        write_dataset(tmp_path, "D", TRIO_ROWS)
+        assert ae.check(slot_map(tmp_path, TRIO_MAP.replace("MOTHER_CELL", "maternal_id")), tmp_path, CATALOG) == []
+
+    def test_the_check_refuses_a_column_whose_files_are_another_rows_sample(self, tmp_path):
+        """A parent's reads in its child's row, read as the child: the trap #357 found in HPRC's `mat_ilmn`."""
+        write_dataset(tmp_path, "D", TRIO_ROWS)
+        problems = ae.check(slot_map(tmp_path, TRIO_MAP.replace("MOTHER_CELL", "sample_id")), tmp_path, CATALOG)
+        assert len(problems) == 1
+        assert problems[0].startswith("D/sample/mat: samples read from 'sample_id', but 2 of 2 files")
+
+    def test_a_few_disagreeing_files_are_not_a_problem(self, tmp_path):
+        rows = [*TRIO_ROWS[:4], named_file(5, "HG01110.final.cram"), named_file(6, "HG01111.final.cram")]
+        rows += [
+            ("sample", {"sample_id": "HG01106", "child": drs(1)}),
+            ("sample", {"sample_id": "HG01109", "child": drs(3)}),
+            ("sample", {"sample_id": "HG01110", "child": drs(5)}),
+            ("sample", {"sample_id": "HG01112", "child": drs(6)}),
+        ]
+        write_dataset(tmp_path, "D", rows)
+        text = "catalog: anvil15\ndatasets:\n  D:\n    sample:\n      child:\n        samples:\n          - {cell: sample_id}\n"
+        assert ae.check(slot_map(tmp_path, text), tmp_path, CATALOG) == []

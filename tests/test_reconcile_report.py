@@ -595,3 +595,28 @@ def test_the_report_and_the_dashboard_name_the_code_that_classified_and_reconcil
     assert f"- **Reconciled by:** {reconciled_by}" in md
     assert '"classified_by": "commit cccccccccccc, version 0.1.0"' in html
     assert f'"reconciled_by": "{reconciled_by}"' in html
+
+
+# --- samples (#357) ------------------------------------------------------------------
+
+
+def test_the_samples_section_counts_how_each_dataset_settled(tmp_path, evidence, table):
+    write_evidence(
+        evidence,
+        [("samples", drs(1), "HG00096"), ("samples", drs(2), "Sample")],
+        table="participant",
+        column="participant_id",
+    )
+    run_dir = reconcile(tmp_path, "20261012_000000", evidence, table, [record(1), record(2)])
+    code, md, _ = render(tmp_path, "--run-dir", str(run_dir), "--no-previous")
+    assert code == 0
+    assert "## Samples: whose data each file holds" in md
+    header = "| dataset | header named | header unrecognised | header no_sample | agreed | header_only | table_only |"
+    assert header in md
+    assert f"| `{DATASET}` | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 1 | 0 |" in md
+    assert "`Sample` (1)" in md
+
+
+def test_a_report_written_before_samples_says_so():
+    assert rr.samples_rows({}) is None
+    assert "predates samples at reconcile" in "\n".join(rr._samples_section(None))

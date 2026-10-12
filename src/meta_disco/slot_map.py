@@ -330,10 +330,11 @@ def _sources(slot: str, sources: object, table: str, column: str, at: str) -> tu
     if slot not in _FIELDS:
         raise ValueError(f"{at}: {slot!r} is not a slot (expected one of {sorted(_FIELDS)})")
     at = f"{at} {slot}"
-    # A sample is read from the row's own cell (#357): a table's or a column's name says what
-    # the files are, never which sample they are of.
-    if slot == SAMPLES_FIELD and isinstance(sources, list) and any(not _is_cell(item) for item in sources):
-        raise ValueError(f"{at}: a sample is read from a {SOURCE_CELL}, not from a name")
+    # A sample is read from one cell of the row (#357): a table's or a column's name says what
+    # the files are, never which sample they are of, and a second cell would be a second
+    # source for the same fact from the same row.
+    if slot == SAMPLES_FIELD and isinstance(sources, list) and (len(sources) != 1 or not _is_cell(sources[0])):
+        raise ValueError(f"{at}: a sample is read from exactly one {SOURCE_CELL}, never from a name")
     if isinstance(sources, str):
         raise ValueError(
             f"{at}: is the bare term {sources!r} — a slot names where its raw value comes from "
