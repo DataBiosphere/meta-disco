@@ -572,6 +572,7 @@ def test_the_code_that_classified_and_reconciled_a_run_is_named_in_words():
     code = {"recorded": True, "version": "0.1.0", "commit": "a" * 40, "dirty": False}
     assert rr.describe_code(code) == "commit aaaaaaaaaaaa, version 0.1.0"
     assert rr.describe_code({**code, "dirty": True}) == "commit aaaaaaaaaaaa (dirty tree), version 0.1.0"
+    assert rr.describe_code({**code, "dirty": None}) == "commit aaaaaaaaaaaa (tree state unknown), version 0.1.0"
     assert rr.describe_code({**code, "commit": None, "version": None}) == "commit unknown, version unknown"
     assert rr.describe_code({**code, "recorded": False}) == "not recorded"
     assert rr.describe_classified_by(None) == "not recorded"

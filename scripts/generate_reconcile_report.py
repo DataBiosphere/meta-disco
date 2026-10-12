@@ -376,13 +376,15 @@ def values_change(new: dict, old: dict) -> list[dict] | None:
 
 
 def describe_code(code: dict) -> str:
-    """One code identity (#404) in words: its commit, whether the tree was dirty, its version."""
+    """One code identity (#404) in words: its commit, whether the tree was dirty (or unknown), its version."""
     if not code.get("recorded", True):
         return "not recorded"
     commit = code.get("commit")
     words = f"commit {commit[:12]}" if commit else "commit unknown"
     if code.get("dirty"):
         words += " (dirty tree)"
+    elif commit and code.get("dirty") is None:
+        words += " (tree state unknown)"
     return f"{words}, version {code.get('version') or 'unknown'}"
 
 
