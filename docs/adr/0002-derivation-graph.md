@@ -42,7 +42,9 @@ and a parent not found there is `external` (decision 2). Only sample and donor i
 ### 1. Samples and donors are identifiers, not records
 
 A sample or donor is `{id, namespace, source_type}`, plus its dataset where the namespace is
-`dataset_local`, not an entity record of its own.
+`dataset_local`, not an entity record of its own. *Amended by #357:* the identifier itself is
+`{id, namespace}` plus that dataset (`EntityIdentifier`); where it was read is not part of it but of the
+reference to it, a file's `samples.named_by` (below), since one identifier is named by many sources.
 
 - `id` is the string as written: `HG03016`, `SRS006902`. *Amended by #357:* except where an
   identifier rule declares a rewrite. Coriell's `GM19908` (a cell line) and `NA19908` (the DNA

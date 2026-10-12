@@ -31,8 +31,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 ## 2. Source evidence
 
 2.1 Evidence imported from a source is `(slot, raw_value)` plus provenance: source, dataset, table, column.
-    A **slot** is one of the eight classification dimensions; it is spelled `field` on the wire and in the code.
-    One slot is not a dimension: `samples` (#357), which sample a file's data comes from. Its raw value is
+    A **slot** is one of the eight classification dimensions, or `samples`; it is spelled `field` on the wire
+    and in the code. `samples` (#357) is not a dimension: it says which sample a file's data comes from. Its raw value is
     read through the identifier rules (`rules/sample_namespaces.yaml`), never translated by a row (3.4–3.12):
     a sample identifier is recognised by its namespace's pattern, one rule for a family of thousands of
     values, rather than authored value by value. Reconcile settles it with a header's samples as a file's
