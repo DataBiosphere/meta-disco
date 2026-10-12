@@ -19,7 +19,7 @@ import hashlib
 import json
 import re
 from collections import Counter
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Sequence
 from dataclasses import dataclass
 from functools import cache, cached_property, lru_cache
 from importlib.resources import files
@@ -30,7 +30,7 @@ import yaml
 from . import code_rules
 from .schema.classification_model import IdentifierRule, IdentifierRules
 from .slot_map import unique_key_loader
-from .validators.header_extractors import VCFHeader, parse_sam_header, read_group_samples
+from .validators.header_extractors import VCFHeader, parse_sam_header
 
 DATASET_LOCAL = "dataset_local"
 
@@ -120,14 +120,13 @@ class IdentifierRuleSet:
         return next(iter(found)) if len(found) == 1 else None
 
 
-def name_contradicts(named: Identifier, members: Iterable[Identifier]) -> bool:
+def name_contradicts(named: Identifier, members: Collection[Identifier]) -> bool:
     """Whether a file name's one identifier contradicts the file's samples: another sample in a namespace they share.
 
     One in another namespace cannot be compared (`giab:HG007` against `coriell:NA24695` may be one
     person, #361), so it contradicts nothing. Shared by ``make check-slot-map`` and reconcile, so
     both count a disagreement the same way.
     """
-    members = list(members)
     return named not in members and any(m.namespace == named.namespace for m in members)
 
 
@@ -254,7 +253,8 @@ def members_of(sample_list_entry: dict) -> frozenset[Identifier]:
 # What a header said about its samples, per file; a producer counts each per dataset.
 NAMED = "named"  # every string it holds is recognised: the file's samples
 UNRECOGNISED = "unrecognised"  # it holds a string no rule recognises: no samples
-NO_SAMPLE = "no_sample"  # it names no sample (no @RG SM; a sites-only VCF)
+NO_SAMPLE = "no_sample"  # it names no sample (no @RG line; a sites-only VCF)
+UNREAD = "unread"  # the head read did not reach where the samples are (a VCF's #CHROM line)
 
 
 @dataclass(frozen=True)
@@ -284,7 +284,8 @@ class SampleReader:
     """A file type's sample reader: the strings its parsed header names samples with, and the rule that reads them."""
 
     rule: code_rules.SampleRule
-    strings: Callable[[Any], Sequence[str]]
+    # The strings the parse names samples with, or None where the head read did not reach them.
+    strings: Callable[[Any], Sequence[str] | None]
 
     def read(self, content: Any, dataset: str | None) -> HeaderSamples:
         """The samples ``content`` names in ``dataset``: all of them recognised, or none.
@@ -292,7 +293,10 @@ class SampleReader:
         A header with one string no rule recognises names no samples: a list missing a
         member would say the file holds fewer samples than it does.
         """
-        return _read(self.rule, tuple(dict.fromkeys(self.strings(content))), dataset, identifier_rules())
+        strings = self.strings(content)
+        if strings is None:
+            return HeaderSamples(UNREAD, self.rule)
+        return _read(self.rule, tuple(dict.fromkeys(strings)), dataset, identifier_rules())
 
 
 # A joint VCF's 3,202 sample columns repeat across 31,000 T2T windows: each distinct reading is
@@ -317,12 +321,17 @@ def _read(
     return HeaderSamples(NAMED, rule, frozenset(members))
 
 
+# What a read group with no SM contributes: a string no rule recognises, so the header names no
+# samples rather than a list missing whoever that read group's reads came from.
+NO_SM = "(a read group without SM)"
+
+
 def _read_group_strings(header_text: str) -> list[str]:
-    return read_group_samples(parse_sam_header(header_text))
+    return [rg.get("SM") or NO_SM for rg in parse_sam_header(header_text).rg or []]
 
 
-def _sample_column_strings(header: VCFHeader) -> tuple[str, ...]:
-    return header.sample_columns or ()
+def _sample_column_strings(header: VCFHeader) -> tuple[str, ...] | None:
+    return header.sample_columns
 
 
 BAM_SAMPLES = SampleReader(code_rules.BAM_READ_GROUP_SAMPLES, _read_group_strings)

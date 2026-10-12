@@ -722,11 +722,12 @@ BAM_READ_GROUP_SAMPLES = SampleRule(
     id="bam_read_group_samples",
     module=SAMPLE_IDENTITY,
     source_type=SOURCE_CONTENT_READ,
-    reads="a BAM/CRAM header's @RG lines: each distinct SM",
+    reads="a BAM/CRAM header's @RG lines: each distinct SM, every read group having one",
     rationale=(
         "SM is the SAM specification's field for the sample a read group's reads come from. A "
-        "header whose every SM is recognised names the file's samples; one with an SM no "
-        "identifier rule recognises (`Sample`, `BioSample_3`) names none."
+        "header whose every read group has an SM, each recognised, names the file's samples; one "
+        "with a read group without SM, or an SM no identifier rule recognises (`Sample`, "
+        "`BioSample_3`), names none."
     ),
 )
 VCF_SAMPLE_COLUMNS = SampleRule(

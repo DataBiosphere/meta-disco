@@ -611,9 +611,12 @@ def test_the_samples_section_counts_how_each_dataset_settled(tmp_path, evidence,
     code, md, _ = render(tmp_path, "--run-dir", str(run_dir), "--no-previous")
     assert code == 0
     assert "## Samples: whose data each file holds" in md
-    header = "| dataset | header named | header unrecognised | header no_sample | agreed | header_only | table_only |"
+    header = (
+        "| dataset | header named | header unrecognised | header no_sample | header unread | agreed | header_only "
+        "| table_only |"
+    )
     assert header in md
-    assert f"| `{DATASET}` | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 1 | 0 |" in md
+    assert f"| `{DATASET}` | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 1 | 0 |" in md
     assert "`Sample` (1)" in md
 
 

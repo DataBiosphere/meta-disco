@@ -81,8 +81,6 @@ def from_line(
         members.add(got.identifier)
         if got.rule_id not in rule_ids:
             rule_ids.append(got.rule_id)
-    if not members:
-        return None
     return Named(frozenset(members), _attributions(source_type, tuple(rule_ids), source))
 
 
@@ -197,7 +195,7 @@ class SampleReport:
         """The report's ``samples`` block: per dataset, what the headers said, how files settled, and what was not read.
 
         ``headers`` is per dataset what inference's headers said (``reconcile.header_samples``):
-        each outcome's files (``sample_identity``'s ``NAMED``, ``UNRECOGNISED``, ``NO_SAMPLE``)
+        each outcome's files (``sample_identity``'s ``NAMED``, ``UNRECOGNISED``, ``NO_SAMPLE``, ``UNREAD``)
         and its most frequent unrecognised strings. ``unrecognised`` is the table values no
         rule recognised, with the lines that held each.
         """

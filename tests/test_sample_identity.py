@@ -14,6 +14,7 @@ from meta_disco.sample_identity import (
     BAM_SAMPLES,
     NAMED,
     NO_SAMPLE,
+    UNREAD,
     UNRECOGNISED,
     VCF_SAMPLES,
     Identifier,
@@ -186,8 +187,15 @@ def test_one_unrecognised_string_names_no_samples():
     assert got.members == frozenset() and got.reference() is None
 
 
-def test_a_header_with_no_read_group_sample_names_none():
-    got = BAM_SAMPLES.read("@HD\tVN:1.6\n@RG\tID:1\tPL:ILLUMINA\n", None)
+def test_a_read_group_without_sm_makes_the_header_name_no_samples():
+    """lane2's reads are someone's: a list of NA12878 alone could be missing a member."""
+    got = BAM_SAMPLES.read("@RG\tID:lane1\tSM:NA12878\n@RG\tID:lane2\tPL:ILLUMINA\n", None)
+    assert got.outcome == UNRECOGNISED and got.reference() is None
+    assert BAM_SAMPLES.read("@RG\tID:1\tPL:ILLUMINA\n", None).outcome == UNRECOGNISED
+
+
+def test_a_header_with_no_read_group_names_none():
+    got = BAM_SAMPLES.read("@HD\tVN:1.6\n", None)
     assert got.outcome == NO_SAMPLE and got.reference() is None
 
 
@@ -207,14 +215,19 @@ def test_a_vcf_names_its_sample_columns():
         (f"##fileformat=VCFv4.2\n{CHROM}\n", ()),
         # A PLINK .pvar's #CHROM line has no FORMAT column either.
         ("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tCM\n", ()),
-        # No #CHROM line read at all.
-        ("##fileformat=VCFv4.2\n", None),
     ],
 )
 def test_a_vcf_without_sample_columns_names_none(text, columns):
     header = parse_vcf_header(text)
     assert header.sample_columns == columns
     assert VCF_SAMPLES.read(header, None).outcome == NO_SAMPLE
+
+
+def test_a_vcf_head_that_ends_before_its_chrom_line_is_unread_not_sampleless():
+    header = parse_vcf_header("##fileformat=VCFv4.2\n##contig=<ID=chr1,length=1>\n")
+    assert header.sample_columns is None
+    got = VCF_SAMPLES.read(header, None)
+    assert got.outcome == UNREAD and got.reference() is None
 
 
 def test_a_dataset_local_name_is_read_only_in_its_dataset():

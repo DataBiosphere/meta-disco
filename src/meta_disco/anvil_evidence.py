@@ -305,7 +305,7 @@ def _check_sample_names(slot_map: SlotMap, dataset: str, path: Path) -> list[str
             named = rules.in_name_one(names.get(handle, ""))
             if named == identifier:
                 agree[(table, column)] += 1
-            elif named is not None and name_contradicts(named, [identifier]):
+            elif named is not None and name_contradicts(named, {identifier}):
                 disagree[(table, column)] += 1
                 example.setdefault((table, column), f"{names[handle]!r} in the row whose cell is {identifier.id!r}")
     return [

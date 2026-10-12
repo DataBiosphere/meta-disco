@@ -562,22 +562,22 @@ Across a file's `generated_by`, each input role passes the dimensions its activi
 
 ## Samples: whose data each file holds
 
-A file's header names its samples (a BAM's `@RG SM`, a VCF's sample columns) and a submitter table may name them in a column the slot map reads; each string becomes an identifier only through `rules/sample_namespaces.yaml` (#357). *named*: every string the header holds is recognised; *unrecognised*: it holds one no rule recognises, so it names no samples; *no_sample*: it names none. Settled: *agreed*, header and table named the same samples; *header_only* / *table_only*: one source did; *conflict*: they named different samples in one namespace; *incomparable*: different samples in no shared namespace, which only a crosswalk could join (#361); *none*: no source named any. A conflict or an incomparable file gets no `samples`. A file whose name names one other sample than its settled ones is counted under *name disagrees*; a name is a check, never a source.
+A file's header names its samples (a BAM's `@RG SM`, a VCF's sample columns) and a submitter table may name them in a column the slot map reads; each string becomes an identifier only through `rules/sample_namespaces.yaml` (#357). *named*: every string the header holds is recognised; *unrecognised*: it holds one no rule recognises (or a read group with no `SM`), so it names no samples; *no_sample*: it names none; *unread*: the head read ended before the samples (a VCF's `#CHROM` line). Settled: *agreed*, header and table named the same samples; *header_only* / *table_only*: one source did; *conflict*: they named different samples in one namespace; *incomparable*: different samples in no shared namespace, which only a crosswalk could join (#361); *none*: no source named any. A conflict or an incomparable file gets no `samples`. A file whose name names one other sample than its settled ones is counted under *name disagrees*; a name is a check, never a source.
 
-| dataset | header named | header unrecognised | header no_sample | agreed | header_only | table_only | conflict | incomparable | none | name disagrees |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `ANVIL_1000G_PRIMED_data_model` | 46 | 0 | 2,854 | 0 | 46 | 0 | 0 | 0 | 11,447 | 0 |
-| `ANVIL_1000G_high_coverage_2019` | 6,426 | 3 | 25 | 6,383 | 43 | 3,199 | 0 | 0 | 16,391 | 0 |
-| `ANVIL_HPRC` | 356 | 459 | 1,119 | 141 | 215 | 4,731 | 0 | 1 | 18,097 | 0 |
-| `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` | 4 | 55 | 6 | 0 | 4 | 0 | 0 | 0 | 12,530 | 0 |
-| `ANVIL_T2T` | 112,715 | 129 | 318 | 3,202 | 109,513 | 28,818 | 0 | 0 | 147,671 | 0 |
-| `ANVIL_T2T_CHRY` | 94,378 | 0 | 0 | 94,138 | 240 | 122,057 | 0 | 0 | 93,544 | 0 |
-| `ANVIL_nhp_dGTEx_V1` | 0 | 756 | 0 | 0 | 0 | 0 | 0 | 0 | 3,591 | 0 |
-| `AnVIL_ENCORE_293T` | 0 | 0 | 224 | 0 | 0 | 0 | 0 | 0 | 1,992 | 0 |
-| `AnVIL_ENCORE_RS293` | 0 | 0 | 410 | 0 | 0 | 0 | 0 | 0 | 3,752 | 0 |
-| `AnVIL_HPRC_R2` | 737 | 802 | 1,794 | 735 | 0 | 13,634 | 2 | 0 | 1,900 | 0 |
-| `AnVIL_IGVF_Mouse_R1` | 0 | 0 | 2 | 0 | 0 | 0 | 0 | 0 | 6,786 | 0 |
-| `AnVIL_MAGE` | 734 | 48 | 0 | 731 | 3 | 2,385 | 0 | 0 | 166 | 0 |
+| dataset | header named | header unrecognised | header no_sample | header unread | agreed | header_only | table_only | conflict | incomparable | none | name disagrees |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `ANVIL_1000G_PRIMED_data_model` | 46 | 0 | 2,854 | 0 | 0 | 46 | 0 | 0 | 0 | 11,447 | 0 |
+| `ANVIL_1000G_high_coverage_2019` | 6,426 | 3 | 25 | 0 | 6,383 | 43 | 3,199 | 0 | 0 | 16,391 | 0 |
+| `ANVIL_HPRC` | 356 | 459 | 1,119 | 0 | 141 | 215 | 4,731 | 0 | 1 | 18,097 | 0 |
+| `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` | 4 | 55 | 6 | 0 | 0 | 4 | 0 | 0 | 0 | 12,530 | 0 |
+| `ANVIL_T2T` | 112,715 | 129 | 318 | 0 | 3,202 | 109,513 | 28,818 | 0 | 0 | 147,671 | 0 |
+| `ANVIL_T2T_CHRY` | 94,378 | 0 | 0 | 0 | 94,138 | 240 | 122,057 | 0 | 0 | 93,544 | 0 |
+| `ANVIL_nhp_dGTEx_V1` | 0 | 756 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 3,591 | 0 |
+| `AnVIL_ENCORE_293T` | 0 | 0 | 224 | 0 | 0 | 0 | 0 | 0 | 0 | 1,992 | 0 |
+| `AnVIL_ENCORE_RS293` | 0 | 0 | 410 | 0 | 0 | 0 | 0 | 0 | 0 | 3,752 | 0 |
+| `AnVIL_HPRC_R2` | 737 | 802 | 1,794 | 0 | 735 | 0 | 13,634 | 2 | 0 | 1,900 | 0 |
+| `AnVIL_IGVF_Mouse_R1` | 0 | 0 | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 6,786 | 0 |
+| `AnVIL_MAGE` | 734 | 48 | 0 | 0 | 731 | 3 | 2,385 | 0 | 0 | 166 | 0 |
 
 ### Strings no identifier rule recognises
 

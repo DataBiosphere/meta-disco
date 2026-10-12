@@ -898,8 +898,8 @@ classes:
 
   Attribution:
     description: >-
-      One source that named a step or an input (ADR-0002 decision 6): sources that agree
-      are each listed.
+      One source that named a step, an input (ADR-0002 decision 6) or a file's samples
+      (#357): sources that agree are each listed.
     slots:
       - source_type
       - rule_id
@@ -911,8 +911,10 @@ classes:
       rule_id:
         required: true
         description: >-
-          The rule or translation row that turned what the source says into this step or
-          input (`code_rules.EDGE_RULES` for inference's).
+          The rule or translation row that turned what the source says into this step,
+          input or sample list: for inference's, a `code_rules.EDGE_RULES` id for a step or
+          input and a `code_rules.SAMPLE_RULES` id for samples; for a submitter table's
+          samples, the identifier rule (`rules/sample_namespaces.yaml`) that read the cell.
 
   SampleReference:
     description: >-

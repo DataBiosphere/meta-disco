@@ -56,7 +56,7 @@ from meta_disco.reconcile_inherit import OUTCOMES as INHERITANCE_COLUMNS
 from meta_disco.reconcile_lineage import OUTCOMES
 from meta_disco.reconcile_samples import NONE as SAMPLE_NONE
 from meta_disco.reconcile_samples import OUTCOMES as SAMPLE_OUTCOMES
-from meta_disco.sample_identity import NAMED, NO_SAMPLE, UNRECOGNISED
+from meta_disco.sample_identity import NAMED, NO_SAMPLE, UNREAD, UNRECOGNISED
 from meta_disco.schema_vocab import top_term
 from meta_disco.summaries import embed_json, md_code, md_table
 
@@ -469,7 +469,7 @@ def lineage_rows(report: dict) -> dict | None:
 
 
 SAMPLE_COLUMNS = (*SAMPLE_OUTCOMES, SAMPLE_NONE)
-HEADER_COLUMNS = (NAMED, UNRECOGNISED, NO_SAMPLE)
+HEADER_COLUMNS = (NAMED, UNRECOGNISED, NO_SAMPLE, UNREAD)
 
 
 def samples_rows(report: dict) -> list[dict] | None:
@@ -1117,7 +1117,8 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
         "A file's header names its samples (a BAM's `@RG SM`, a VCF's sample columns) and a submitter table may "
         "name them in a column the slot map reads; each string becomes an identifier only through "
         "`rules/sample_namespaces.yaml` (#357). *named*: every string the header holds is recognised; "
-        "*unrecognised*: it holds one no rule recognises, so it names no samples; *no_sample*: it names none. "
+        "*unrecognised*: it holds one no rule recognises (or a read group with no `SM`), so it names no samples; "
+        "*no_sample*: it names none; *unread*: the head read ended before the samples (a VCF's `#CHROM` line). "
         "Settled: *agreed*, header and table named the same samples; *header_only* / *table_only*: one source "
         "did; *conflict*: they named different samples in one namespace; *incomparable*: different samples in "
         "no shared namespace, which only a crosswalk could join (#361); *none*: no source named any. A conflict "
