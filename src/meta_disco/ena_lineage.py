@@ -71,7 +71,7 @@ from .models import JOIN_KEY_FILE_ID
 from .run_lineage_map import PARENT_COLUMN, RUN_TABLE, Entry, RunLineageMap
 from .schema.classification_model import LineageParentKeyEnum, LineageRow
 from .source_evidence import evidence_file_path, generation_dir, new_generation, staged_generation
-from .validators.header_extractors import parse_sam_header, sam_command_words
+from .validators.header_extractors import parse_sam_header, read_group_samples, sam_command_words
 
 # ENA's per-accession report of its runs, every run of a study in one response.
 PORTAL_FILEREPORT = "https://www.ebi.ac.uk/ena/portal/api/filereport"
@@ -360,7 +360,7 @@ def read_steps(header_text: str) -> list[str]:
 
 def read_samples(header_text: str) -> list[str]:
     """The ``SM`` of each ``@RG`` line, distinct and sorted."""
-    return sorted({rg["SM"] for rg in parse_sam_header(header_text).rg or [] if rg.get("SM")})
+    return read_group_samples(parse_sam_header(header_text))
 
 
 def run_sample(run: dict) -> str | None:

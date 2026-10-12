@@ -83,6 +83,10 @@ class VCFHeader:
     # Each record the read head held (``VcfHead.record_lines``, #630); None where the records
     # were not read, as for a header given as text.
     records: tuple[VcfRecord, ...] | None = None
+    # The sample columns of the ``#CHROM`` line, after ``FORMAT``, in column order (#357):
+    # empty for a sites-only file (no ``FORMAT`` column, a PLINK ``.pvar`` included), None
+    # where the text holds no ``#CHROM`` line.
+    sample_columns: tuple[str, ...] | None = None
 
     @cached_property
     def commands(self) -> list[VcfCommand]:
@@ -293,7 +297,7 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
     Parse VCF header lines into a structured object.
 
     Args:
-        header_text: VCF header text (lines starting with ##)
+        header_text: VCF header text: its ``##`` lines and, where present, its ``#CHROM`` line
 
     Returns:
         VCFHeader object with parsed fields
@@ -310,6 +314,9 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
 
     for line in header_text.splitlines():
         if not line.startswith("##"):
+            if line.startswith("#CHROM"):
+                columns = line.split("\t")
+                header.sample_columns = tuple(columns[9:]) if len(columns) > 8 and columns[8] == "FORMAT" else ()
             continue
 
         parsed = parse_vcf_header_line(line)
@@ -373,6 +380,11 @@ def parse_vcf_head(head: VcfHead) -> VCFHeader:
 LIFTOVER_INFO_IDS = frozenset(
     {"SwappedAlleles", "ReverseComplementedAlleles", "OriginalContig", "OriginalStart", "OriginalAlleles"}
 )
+
+
+def read_group_samples(header: SAMHeader) -> list[str]:
+    """The ``SM`` of each ``@RG`` line, distinct and sorted; empty when none carry one."""
+    return sorted({rg["SM"] for rg in header.rg or [] if rg.get("SM")})
 
 
 def sam_command_words(header: SAMHeader) -> list[list[str]]:

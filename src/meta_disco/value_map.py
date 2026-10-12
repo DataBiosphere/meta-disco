@@ -62,6 +62,7 @@ from .manifest_survey import name_tokens
 from .models import (
     AUTHORABLE_STATUSES,
     CLASSIFICATION_FIELDS,
+    SAMPLES_FIELD,
     SOURCE_EXTERNAL_GROUND_TRUTH,
     SOURCE_PRECEDENCE,
     SOURCE_PUBLISHED_VALUE,
@@ -465,6 +466,9 @@ def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None =
         where = generation_name(evidence_root, path)
         for entry in iter_evidence(path):
             lines_scanned += 1
+            # A sample is read through the identifier rules, never a row of this table (#357).
+            if entry.field == SAMPLES_FIELD:
+                continue
             if table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset) is not None:
                 continue
             elements = list_cell(entry.raw_value)
@@ -585,6 +589,8 @@ def review(evidence_root: Path, table: ValueMap, datasets: Iterable[str] | None 
         # file_md5sum or file_name can repeat), so a file's identity carries both.
         scope = (envelope.target.system, envelope.target.dataset)
         for entry in iter_evidence(path):
+            if entry.field == SAMPLES_FIELD:
+                continue
             target = (*scope, entry.target_key_value)
             row = table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset)
             if row is not None and row.authored:

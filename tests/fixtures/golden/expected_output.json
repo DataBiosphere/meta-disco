@@ -110,13 +110,30 @@
         "file_name": "sample.flnc.bam",
         "file_size": 12345678,
         "generated_by": null,
-        "md5sum": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        "md5sum": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "samples": {
+          "count": 1,
+          "list_id": "c07c82cdb7ba8282",
+          "named_by": [
+            {
+              "rule_id": "bam_read_group_samples",
+              "source_type": "content_read"
+            }
+          ]
+        }
       }
     ],
     "metadata": {
       "complete": true,
       "content_unreadable": 0,
-      "details": null,
+      "details": {
+        "sample_outcomes": {
+          "GOLDEN_FIXTURE": {
+            "named": 1
+          }
+        },
+        "unrecognised_samples": {}
+      },
       "dropped": 0,
       "errored": 0,
       "failed": 0,
@@ -139,7 +156,18 @@
       "successful": 1,
       "total_to_process": 1,
       "validation_failed": 0
-    }
+    },
+    "sample_lists": [
+      {
+        "list_id": "c07c82cdb7ba8282",
+        "members": [
+          {
+            "id": "NA12878",
+            "namespace": "coriell"
+          }
+        ]
+      }
+    ]
   },
   "bed": {
     "classifications": [
@@ -250,7 +278,8 @@
         "file_name": "sample.regions.bed.gz",
         "file_size": 45000,
         "generated_by": null,
-        "md5sum": "77777777777777777777777777777777"
+        "md5sum": "77777777777777777777777777777777",
+        "samples": null
       }
     ],
     "metadata": {
@@ -454,7 +483,8 @@
         "file_name": "hapdup_contigs.hap1.fasta",
         "file_size": 2974881710,
         "generated_by": null,
-        "md5sum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "md5sum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "samples": null
       }
     ],
     "metadata": {
@@ -600,7 +630,8 @@
         "file_name": "sample.fastq.gz",
         "file_size": 8000,
         "generated_by": null,
-        "md5sum": "dddddddddddddddddddddddddddddddd"
+        "md5sum": "dddddddddddddddddddddddddddddddd",
+        "samples": null
       }
     ],
     "metadata": {
@@ -751,7 +782,8 @@
         "file_name": "hprc-v1.0-minigraph-grch38.gfa.gz",
         "file_size": 848467761,
         "generated_by": null,
-        "md5sum": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        "md5sum": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "samples": null
       }
     ],
     "metadata": {
@@ -899,7 +931,8 @@
         "file_name": "201868530174_R03C01_Red.idat",
         "file_size": 32792621,
         "generated_by": null,
-        "md5sum": "abababababababababababababababab"
+        "md5sum": "abababababababababababababababab",
+        "samples": null
       }
     ],
     "metadata": {
@@ -1069,7 +1102,8 @@
             }
           ]
         },
-        "md5sum": "00000000000000000000000000000000"
+        "md5sum": "00000000000000000000000000000000",
+        "samples": null
       }
     ],
     "metadata": {
@@ -1233,7 +1267,8 @@
             }
           ]
         },
-        "md5sum": "ffffffffffffffffffffffffffffffff"
+        "md5sum": "ffffffffffffffffffffffffffffffff",
+        "samples": null
       }
     ],
     "metadata": {
@@ -1379,7 +1414,17 @@
         "file_name": "sample.vcf.gz",
         "file_size": 5000,
         "generated_by": null,
-        "md5sum": "cccccccccccccccccccccccccccccccc"
+        "md5sum": "cccccccccccccccccccccccccccccccc",
+        "samples": {
+          "count": 1,
+          "list_id": "c07c82cdb7ba8282",
+          "named_by": [
+            {
+              "rule_id": "vcf_sample_columns",
+              "source_type": "content_read"
+            }
+          ]
+        }
       },
       {
         "classifications": {
@@ -1506,7 +1551,17 @@
         "file_name": "sample.chm13.hg38.vcf.gz",
         "file_size": 5001,
         "generated_by": null,
-        "md5sum": "88888888888888888888888888888888"
+        "md5sum": "88888888888888888888888888888888",
+        "samples": {
+          "count": 1,
+          "list_id": "c07c82cdb7ba8282",
+          "named_by": [
+            {
+              "rule_id": "vcf_sample_columns",
+              "source_type": "content_read"
+            }
+          ]
+        }
       }
     ],
     "metadata": {
@@ -1517,7 +1572,13 @@
           "GOLDEN_FIXTURE": {
             "no_command_line": 2
           }
-        }
+        },
+        "sample_outcomes": {
+          "GOLDEN_FIXTURE": {
+            "named": 2
+          }
+        },
+        "unrecognised_samples": {}
       },
       "dropped": 0,
       "errored": 0,
@@ -1541,6 +1602,17 @@
       "successful": 2,
       "total_to_process": 2,
       "validation_failed": 0
-    }
+    },
+    "sample_lists": [
+      {
+        "list_id": "c07c82cdb7ba8282",
+        "members": [
+          {
+            "id": "NA12878",
+            "namespace": "coriell"
+          }
+        ]
+      }
+    ]
   }
 }

@@ -27,12 +27,16 @@ from .producers import producer_for
 from .provenance import run_provenance
 from .record_keys import record_key
 from .records import (
+    SAMPLE_LISTS_KEY,
+    SAMPLE_OUTCOMES_KEY,
     STEP_OUTCOMES_KEY,
+    UNRECOGNISED_SAMPLES_KEY,
     ClassifierRecord,
     InvalidRecord,
     OutputRecord,
     RunMetadata,
 )
+from .sample_identity import HeaderSamples, sample_list
 
 
 def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> list[dict]:
@@ -78,6 +82,10 @@ def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> 
     return records
 
 
+# How many of a dataset's unrecognised sample strings a producer's metadata names, the
+# most frequent first (#357): enough to decide which to declare, not every one.
+UNRECOGNISED_EXAMPLES = 20
+
 # The name suffixes of a gzip-compressed file the header readers decompress: a `.bgz` is
 # bgzip's BGZF, as 1000 Genomes phase 3 names its VCFs (#561).
 GZIP_SUFFIXES = (".gz", ".bgz")
@@ -103,6 +111,9 @@ class RecordOutcome(NamedTuple):
     # (``FileTypeConfig.step``, #609); None for every other type, for a file not read, and
     # for a file its type's step reader does not apply to.
     step_outcome: str | None = None
+    # What the file's header says about its samples, where its type reads them
+    # (``FileTypeConfig.samples``, #357); None for every other type and for a file not read.
+    samples: HeaderSamples | None = None
 
 
 def _fetch_and_classify(
@@ -542,12 +553,22 @@ class ClassifyPipeline:
         generated_by, step_outcome = None, None
         if self._step is not None and not content_unreadable:
             generated_by, step_outcome = self._step(payload, item.file_name, item.dataset_id)
+        samples = None
+        if self.config.samples is not None and not content_unreadable:
+            dataset = item.dataset_title if isinstance(item.dataset_title, str) else None
+            samples = self.config.samples.read(payload, dataset)
         return RecordOutcome(
-            OutputRecord.from_work_item(item, classifications, generated_by=generated_by),
+            OutputRecord.from_work_item(
+                item,
+                classifications,
+                generated_by=generated_by,
+                samples=samples.reference() if samples is not None else None,
+            ),
             was_cached,
             content_unreadable,
             validation_failed=False,
             step_outcome=step_outcome,
+            samples=samples,
         )
 
     def _run_parallel(self, work: list[ClassifierRecord | InvalidRecord], provenance: dict) -> list[dict]:
@@ -562,6 +583,11 @@ class ClassifyPipeline:
         total = len(work)
         # Per dataset, each outcome's files, for a type that states a step (#609).
         step_counts: dict[str, Counter] = defaultdict(Counter)
+        # For a type that reads samples (#357): per dataset, each header outcome's files and
+        # the strings no rule recognised; and each distinct list the records point to.
+        sample_counts: dict[str, Counter] = defaultdict(Counter)
+        unrecognised_samples: dict[str, Counter] = defaultdict(Counter)
+        lists: dict[str, dict] = {}
 
         print(f"Using {self.workers} parallel workers")
 
@@ -572,9 +598,16 @@ class ClassifyPipeline:
                 with lock:
                     processed += 1
                     writer.write(outcome.result.to_dict())
+                    # As reconcile names a record with no title: "" (HPRC has none).
+                    dataset = str(outcome.result.dataset_title or "")
                     if outcome.step_outcome is not None:
-                        # As reconcile names a record with no title: "" (HPRC has none).
-                        step_counts[str(outcome.result.dataset_title or "")][outcome.step_outcome] += 1
+                        step_counts[dataset][outcome.step_outcome] += 1
+                    if outcome.samples is not None:
+                        sample_counts[dataset][outcome.samples.outcome] += 1
+                        unrecognised_samples[dataset].update(outcome.samples.unrecognised)
+                        if outcome.samples.members:
+                            entry = sample_list(outcome.samples.members)
+                            lists.setdefault(entry["list_id"], entry)
                     if outcome.validation_failed:
                         invalid += 1
                     else:
@@ -620,6 +653,20 @@ class ClassifyPipeline:
             details = {STEP_OUTCOMES_KEY: {dataset: dict(counts) for dataset, counts in sorted(step_counts.items())}}
             for dataset, counts in details[STEP_OUTCOMES_KEY].items():
                 print(f"  Producer steps, {dataset}: {', '.join(f'{k} {v:,}' for k, v in counts.items())}")
+        sample_lists = None
+        if self.config.samples is not None:
+            details = {
+                **(details or {}),
+                SAMPLE_OUTCOMES_KEY: {dataset: dict(counts) for dataset, counts in sorted(sample_counts.items())},
+                UNRECOGNISED_SAMPLES_KEY: {
+                    dataset: dict(counts.most_common(UNRECOGNISED_EXAMPLES))
+                    for dataset, counts in sorted(unrecognised_samples.items())
+                    if counts
+                },
+            }
+            sample_lists = [lists[key] for key in sorted(lists)]
+            for dataset, counts in details[SAMPLE_OUTCOMES_KEY].items():
+                print(f"  Header samples, {dataset}: {', '.join(f'{k} {v:,}' for k, v in counts.items())}")
         classifications = self._save_final(
             total,
             successful,
@@ -629,6 +676,7 @@ class ClassifyPipeline:
             validation_failed=invalid,
             provenance=provenance,
             details=details,
+            sample_lists=sample_lists,
         )
 
         print(f"\nSaved to {self.output_path}")
@@ -646,8 +694,13 @@ class ClassifyPipeline:
         errored: int = 0,
         validation_failed: int = 0,
         details: dict | None = None,
+        sample_lists: list[dict] | None = None,
     ) -> list[dict]:
         """Write final JSON output from NDJSON progress file.
+
+        ``sample_lists``, for a type that reads samples (#357), is written after the
+        records under ``SAMPLE_LISTS_KEY``: every list a record's ``samples`` points to,
+        once. None writes no such key.
 
         ``unreadable`` is persisted alongside ``from_cache``: an all-not_classified
         record from a failed fetch is otherwise indistinguishable from one whose
@@ -681,6 +734,7 @@ class ClassifyPipeline:
                         details=details,
                     ).to_dict(),
                     "classifications": classifications,
+                    **({SAMPLE_LISTS_KEY: sample_lists} if sample_lists is not None else {}),
                 },
                 f,
                 indent=2,

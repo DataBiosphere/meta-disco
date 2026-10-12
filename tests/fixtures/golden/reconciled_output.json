@@ -166,7 +166,8 @@
         "file_name": "cohort.pgen",
         "file_size": 1000,
         "generated_by": null,
-        "md5sum": "44444444444444444444444444444444"
+        "md5sum": "44444444444444444444444444444444",
+        "samples": null
       }
     ]
   },
@@ -343,7 +344,17 @@
         "file_name": "sample.flnc.bam",
         "file_size": 12345678,
         "generated_by": null,
-        "md5sum": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        "md5sum": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "samples": {
+          "count": 1,
+          "list_id": "c07c82cdb7ba8282",
+          "named_by": [
+            {
+              "rule_id": "bam_read_group_samples",
+              "source_type": "content_read"
+            }
+          ]
+        }
       }
     ]
   },
@@ -518,7 +529,8 @@
         "file_name": "sample.regions.bed.gz",
         "file_size": 45000,
         "generated_by": null,
-        "md5sum": "77777777777777777777777777777777"
+        "md5sum": "77777777777777777777777777777777",
+        "samples": null
       }
     ]
   },
@@ -757,7 +769,8 @@
         "file_name": "hapdup_contigs.hap1.fasta",
         "file_size": 2974881710,
         "generated_by": null,
-        "md5sum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        "md5sum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "samples": null
       }
     ]
   },
@@ -938,7 +951,8 @@
         "file_name": "sample.fastq.gz",
         "file_size": 8000,
         "generated_by": null,
-        "md5sum": "dddddddddddddddddddddddddddddddd"
+        "md5sum": "dddddddddddddddddddddddddddddddd",
+        "samples": null
       }
     ]
   },
@@ -1124,7 +1138,8 @@
         "file_name": "hprc-v1.0-minigraph-grch38.gfa.gz",
         "file_size": 848467761,
         "generated_by": null,
-        "md5sum": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        "md5sum": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "samples": null
       }
     ]
   },
@@ -1307,7 +1322,8 @@
         "file_name": "201868530174_R03C01_Red.idat",
         "file_size": 32792621,
         "generated_by": null,
-        "md5sum": "abababababababababababababababab"
+        "md5sum": "abababababababababababababababab",
+        "samples": null
       }
     ]
   },
@@ -1490,7 +1506,8 @@
         "file_name": "slide.svs",
         "file_size": 1000,
         "generated_by": null,
-        "md5sum": "33333333333333333333333333333333"
+        "md5sum": "33333333333333333333333333333333",
+        "samples": null
       }
     ]
   },
@@ -1694,7 +1711,8 @@
             }
           ]
         },
-        "md5sum": "11111111111111111111111111111111"
+        "md5sum": "11111111111111111111111111111111",
+        "samples": null
       },
       {
         "classifications": {
@@ -1851,7 +1869,8 @@
         "file_name": "orphan.bai",
         "file_size": 9001,
         "generated_by": null,
-        "md5sum": "22222222222222222222222222222222"
+        "md5sum": "22222222222222222222222222222222",
+        "samples": null
       }
     ]
   },
@@ -2018,7 +2037,8 @@
         "file_name": "mystery.xyz",
         "file_size": 1000,
         "generated_by": null,
-        "md5sum": "55555555555555555555555555555555"
+        "md5sum": "55555555555555555555555555555555",
+        "samples": null
       },
       {
         "classifications": {
@@ -2218,7 +2238,8 @@
             }
           ]
         },
-        "md5sum": "99999999999999999999999999999999"
+        "md5sum": "99999999999999999999999999999999",
+        "samples": null
       }
     ]
   },
@@ -2423,7 +2444,8 @@
             }
           ]
         },
-        "md5sum": "00000000000000000000000000000000"
+        "md5sum": "00000000000000000000000000000000",
+        "samples": null
       }
     ]
   },
@@ -2666,7 +2688,8 @@
             }
           ]
         },
-        "md5sum": "ffffffffffffffffffffffffffffffff"
+        "md5sum": "ffffffffffffffffffffffffffffffff",
+        "samples": null
       }
     ]
   },
@@ -2841,7 +2864,17 @@
         "file_name": "sample.vcf.gz",
         "file_size": 5000,
         "generated_by": null,
-        "md5sum": "cccccccccccccccccccccccccccccccc"
+        "md5sum": "cccccccccccccccccccccccccccccccc",
+        "samples": {
+          "count": 1,
+          "list_id": "c07c82cdb7ba8282",
+          "named_by": [
+            {
+              "rule_id": "vcf_sample_columns",
+              "source_type": "content_read"
+            }
+          ]
+        }
       },
       {
         "classifications": {
@@ -3029,7 +3062,17 @@
         "file_name": "sample.chm13.hg38.vcf.gz",
         "file_size": 5001,
         "generated_by": null,
-        "md5sum": "88888888888888888888888888888888"
+        "md5sum": "88888888888888888888888888888888",
+        "samples": {
+          "count": 1,
+          "list_id": "c07c82cdb7ba8282",
+          "named_by": [
+            {
+              "rule_id": "vcf_sample_columns",
+              "source_type": "content_read"
+            }
+          ]
+        }
       }
     ]
   }

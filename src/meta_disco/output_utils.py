@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .producers import classification_files
+from .records import SAMPLE_LISTS_KEY
 
 # Every file a Phase 1/2/3 producer writes, derived from the producer registry so it
 # cannot drift from what a run actually produces (#449). The coverage and validation
@@ -125,7 +126,7 @@ def run_file_metadata(path: Path) -> dict | None:
     return block if isinstance(block, dict) else None
 
 
-def iter_run_files(run_dir: Path, strict: bool = False):
+def iter_run_files(run_dir: Path, strict: bool = False, sample_lists: dict[str, dict] | None = None):
     """Yield ``(classification file name, records)`` per inference file the run holds, one file loaded at a time.
 
     For a reader that must keep a file's records together — the reconcile stage writes one
@@ -134,7 +135,14 @@ def iter_run_files(run_dir: Path, strict: bool = False):
     raises ``ValueError`` naming the file where that reader would drop something — a
     record list that is not a list, or an element that is not a record — for a reader
     that must account for every row it was given rather than tolerate a damaged file.
+
+    ``sample_lists``, given with ``strict``, is filled by list id with each sample list a
+    file holds under ``SAMPLE_LISTS_KEY`` (#357), read from the parse the records come
+    from; a file's ``sample_lists`` that is not a list of lists with an id raises
+    ``ValueError``.
     """
+    if sample_lists is not None and not strict:
+        raise ValueError("sample lists are read only by a strict reader")
     for fname in CLASSIFICATION_FILES:
         path = run_dir / fname
         if not path.exists():
@@ -151,6 +159,12 @@ def iter_run_files(run_dir: Path, strict: bool = False):
                 f"{path}: its record list is not a list of records, so some of its rows could not be read; "
                 "it is damaged or not a run's output"
             )
+        if sample_lists is not None:
+            lists = data.get(SAMPLE_LISTS_KEY, []) if isinstance(data, dict) else []
+            if not isinstance(lists, list) or not all(isinstance(e, dict) and "list_id" in e for e in lists):
+                raise ValueError(f"{path}: its {SAMPLE_LISTS_KEY} is not a list of sample lists; it is damaged")
+            for entry in lists:
+                sample_lists.setdefault(entry["list_id"], entry)
         yield fname, rows
 
 
@@ -161,8 +175,11 @@ def iter_run_files(run_dir: Path, strict: bool = False):
 # compresses about 25 times, and is still written and read a line at a time (#374).
 RECONCILED_DIR = "reconciled"
 RECONCILED_ENVELOPE_KEY = "reconcile"
-# The reconcile report, written beside the records: the one other file the reader expects.
+# The reconcile report, written beside the records.
 REPORT_FILE = "reconcile_report.json"
+# The run's sample lists (#357), written beside the records in their line format: each
+# distinct list a reconciled record's ``samples`` points to, once.
+SAMPLE_LISTS_FILE = "sample_lists.ndjson.gz"
 # The gzip level. On a run's BAM file, 6 measured nearly as small as 9 (25x vs 26x), and 9
 # took 1.6-1.7 times as long to write; 1 was faster still but compressed only 14x.
 RECONCILED_GZIP_LEVEL = 6
@@ -200,15 +217,15 @@ def iter_reconciled_records(run_dir: Path):
     :func:`iter_records` skips one a run did not write.
     Raises FileNotFoundError when the run has no reconciled artifact at all — reading
     nothing would pass for a run with no coverage. Raises ValueError, before any record is
-    yielded, when the artifact holds a name other than the reconciled names and
-    ``REPORT_FILE`` (dot-files aside), such as an uncompressed ``.ndjson`` written before
+    yielded, when the artifact holds a name other than the reconciled names, ``REPORT_FILE``
+    and ``SAMPLE_LISTS_FILE`` (dot-files aside), such as an uncompressed ``.ndjson`` written before
     #554, whose records this reader would otherwise skip as unwritten; and, when it is
     reached, on a file that is not gzip or is cut short.
     """
     directory = run_dir / RECONCILED_DIR
     if not directory.is_dir():
         raise FileNotFoundError(f"No reconciled artifact in {run_dir}. Run 'make reconcile' first.")
-    expected = {reconciled_name(fname) for fname in CLASSIFICATION_FILES} | {REPORT_FILE}
+    expected = {reconciled_name(fname) for fname in CLASSIFICATION_FILES} | {REPORT_FILE, SAMPLE_LISTS_FILE}
     unexpected = sorted(p.name for p in directory.iterdir() if not p.name.startswith(".") and p.name not in expected)
     if unexpected:
         raise ValueError(
@@ -217,20 +234,38 @@ def iter_reconciled_records(run_dir: Path):
         )
     for fname in CLASSIFICATION_FILES:
         path = directory / reconciled_name(fname)
-        if not path.exists():
-            continue
-        try:
-            with gzip.open(path, "rt", encoding="utf-8") as f:
-                first = next(f, None)
-                envelope = json.loads(first) if first is not None else None
-                if not isinstance(envelope, dict) or RECONCILED_ENVELOPE_KEY not in envelope:
-                    raise ValueError(f"{path}: line 1 is not the reconcile envelope; it is not reconcile's output")
-                for line in f:
-                    yield json.loads(line)
-        except (EOFError, gzip.BadGzipFile) as exc:
-            raise ValueError(
-                f"{path}: not a whole gzip file ({exc}); it is damaged or cut short. Run 'make reconcile' on the run."
-            ) from exc
+        if path.exists():
+            yield from _artifact_lines(path)
+
+
+def iter_reconciled_sample_lists(run_dir: Path):
+    """Yield each sample list (a ``SampleList`` dict) in ``run_dir/reconciled/``'s ``SAMPLE_LISTS_FILE`` (#357).
+
+    Read as :func:`iter_reconciled_records` reads a records file: line 1 the envelope,
+    checked and skipped. Raises FileNotFoundError when the file is absent: a run
+    reconciled before #357 has none, and reading nothing would pass for one whose files
+    name no sample.
+    """
+    path = run_dir / RECONCILED_DIR / SAMPLE_LISTS_FILE
+    if not path.exists():
+        raise FileNotFoundError(f"No {SAMPLE_LISTS_FILE} in {run_dir / RECONCILED_DIR}. Run 'make reconcile' first.")
+    yield from _artifact_lines(path)
+
+
+def _artifact_lines(path: Path):
+    """The lines after the envelope of one reconciled artifact file, decoded; ValueError where it is not one."""
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as f:
+            first = next(f, None)
+            envelope = json.loads(first) if first is not None else None
+            if not isinstance(envelope, dict) or RECONCILED_ENVELOPE_KEY not in envelope:
+                raise ValueError(f"{path}: line 1 is not the reconcile envelope; it is not reconcile's output")
+            for line in f:
+                yield json.loads(line)
+    except (EOFError, gzip.BadGzipFile) as exc:
+        raise ValueError(
+            f"{path}: not a whole gzip file ({exc}); it is damaged or cut short. Run 'make reconcile' on the run."
+        ) from exc
 
 
 # The two artifacts a run can hold (contract 6.9, #432) and the reader of each: what

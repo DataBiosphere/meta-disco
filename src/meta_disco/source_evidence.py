@@ -129,7 +129,7 @@ from uuid import uuid4
 from pydantic import TypeAdapter, ValidationError
 
 from .models import (
-    CLASSIFICATION_FIELDS,
+    EVIDENCE_FIELDS,
     JOIN_KEY_FILE_NAME,
     LINEAGE_ONLY_SOURCE_TYPES,
     SOURCE_PUBLISHED_VALUE,
@@ -176,10 +176,9 @@ _GENERATION = re.compile(r"\d{8}T\d{6}Z")
 # `report_evidence_files` names as an unfinished import.
 PARTIAL_SUFFIX = ".partial"
 
-# The dimension names as a set, for the membership check every row pays twice — on
-# the way in and on the way out. `CLASSIFICATION_FIELDS` stays the tuple it is
-# because its order is the canonical output order; this is the same names.
-_FIELDS = frozenset(CLASSIFICATION_FIELDS)
+# The fields a line may name, as a set, for the membership check every row pays twice —
+# on the way in and on the way out: the dimensions, and `samples` (#357).
+_FIELDS = frozenset(EVIDENCE_FIELDS)
 
 # One encoder for the write loop, built once. Compact separators drop ~7% of the
 # bytes across millions of lines, and `json.dumps(..., separators=...)` cannot be
@@ -405,7 +404,8 @@ class EvidenceEntry:
     wrote* ``raw_value``.
 
     ``field`` is one of ``CLASSIFICATION_FIELDS`` — the slot, spelled ``field`` on the
-    wire and in the code (contract 2.1). ``target_key_value`` is the value to match
+    wire and in the code (contract 2.1) — or ``samples`` (#357), which a submitter table
+    states the same way. ``target_key_value`` is the value to match
     on, already in the target's value space: the importer owns the mapping between
     its own key and the target's, and any transform needed to get there, so the run
     performs equality lookup only. The key *names* are on the envelope, because they
@@ -1156,7 +1156,7 @@ def _check_entry(where: str, field: Any, target_key_value: Any, raw_value: Any) 
     # frozenset lookup, which escapes as a traceback instead of the ValueError naming
     # the file and the line that this module promises.
     if not isinstance(field, str) or field not in _FIELDS:
-        raise ValueError(f"{where}: unknown dimension {field!r} (expected one of {sorted(CLASSIFICATION_FIELDS)})")
+        raise ValueError(f"{where}: unknown field {field!r} (expected one of {sorted(EVIDENCE_FIELDS)})")
     if not isinstance(target_key_value, str) or not target_key_value:
         raise ValueError(
             f"{where}: target_key_value is {target_key_value!r} — a row with nothing to match on can attach to no file"
