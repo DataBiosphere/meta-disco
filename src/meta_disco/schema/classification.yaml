@@ -978,6 +978,31 @@ classes:
         description: >-
           The dataset the identifier is local to: set exactly when the namespace is
           `dataset_local`, and then part of its identity.
+    rules:
+      - description: >-
+          A `dataset_local` identifier names its dataset: without it, a name like
+          `simons_data_sample_12` would match the same name in any dataset.
+          gen-pydantic does not emit class rules; `sample_identity` builds identifiers only
+          from rules its loader holds to the same pairing.
+        preconditions:
+          slot_conditions:
+            namespace:
+              equals_string: dataset_local
+        postconditions:
+          slot_conditions:
+            dataset:
+              required: true
+      - description: >-
+          Only a `dataset_local` identifier names a dataset: a `coriell` identifier with
+          one would not equal the same sample named elsewhere.
+        preconditions:
+          slot_conditions:
+            dataset:
+              required: true
+        postconditions:
+          slot_conditions:
+            namespace:
+              equals_string: dataset_local
 
   IdentifierRules:
     description: >-
@@ -1008,8 +1033,10 @@ classes:
         description: A regular expression the whole string must match.
       write:
         description: >-
-          A replacement template (Python's `re` syntax) giving the identifier from the
-          match, where it is not the string as written. Absent: the string as written.
+          A replacement template giving the identifier from the match, where it is not the
+          string as written: literal text and numbered group references (a backslash and a digit
+          1 to 9), nothing else.
+          Absent: the string as written.
       dataset:
         pattern: "^[^\\r\\n]+\\Z"
         description: The one dataset a `dataset_local` rule applies in; set exactly on those.

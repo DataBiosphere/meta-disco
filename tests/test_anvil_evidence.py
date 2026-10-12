@@ -704,3 +704,22 @@ class TestSamples:
         write_dataset(tmp_path, "D", rows)
         text = "catalog: anvil15\ndatasets:\n  D:\n    sample:\n      child:\n        samples:\n          - {cell: sample_id}\n"
         assert ae.check(slot_map(tmp_path, text), tmp_path, CATALOG) == []
+
+
+def test_a_list_cell_is_checked_element_by_element(tmp_path):
+    """A list of the row's samples, mapped to files of another row's sample, is refused like a single cell."""
+    rows = [
+        named_file(1, "HG01105.final.cram"),
+        named_file(2, "HG01107.final.cram"),
+        ("sample", {"members": ["HG01106", "HG01109"], "child": drs(1)}),
+        ("sample", {"members": ["HG01108"], "child": drs(2)}),
+    ]
+    write_dataset(tmp_path, "D", rows)
+    text = (
+        "catalog: anvil15\ndatasets:\n  D:\n    sample:\n      child:\n        samples:\n          - {cell: members}\n"
+    )
+    problems = ae.check(slot_map(tmp_path, text), tmp_path, CATALOG)
+    assert len(problems) == 1 and "2 of 2 files" in problems[0]
+    agreeing = [named_file(1, "HG01109.final.cram"), ("sample", {"members": ["HG01106", "HG01109"], "child": drs(1)})]
+    write_dataset(tmp_path, "D", agreeing)
+    assert ae.check(slot_map(tmp_path, text), tmp_path, CATALOG) == []

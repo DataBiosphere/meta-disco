@@ -118,6 +118,8 @@ def rules_text(*rules: dict) -> str:
         (({"id": "a", "ns": "dataset_local", "match": "^A$"},), "exactly on a dataset_local"),
         (({"id": "a", "match": "^(A$"},), "not a regular expression"),
         (({"id": "a", "match": "^(A)$", "extra": r", write: 'X\2'"},), "names a group"),
+        (({"id": "a", "match": "^(A)$", "extra": r", write: 'X\g<missing>'"},), "not literal text"),
+        (({"id": "a", "match": "^(A)$", "extra": r", write: 'X\n'"},), "not literal text"),
         (({"id": "a.b", "match": "^A$"},), "a.b"),
     ],
 )

@@ -54,7 +54,7 @@ from .azul_manifest import (
     sidecar_requested_at,
 )
 from .models import JOIN_KEY_DRS_URI, SAMPLES_FIELD, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA, ClaimSource
-from .sample_identity import Identifier, identifier_rules, name_contradicts
+from .sample_identity import Identifier, IdentifierRuleSet, identifier_rules, name_contradicts
 from .schema.classification_model import ImporterSourceTypeEnum, JoinKeyEnum
 from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource
 from .source_evidence import (
@@ -267,9 +267,10 @@ def _check_sample_names(slot_map: SlotMap, dataset: str, path: Path) -> list[str
     """A ``samples`` column whose cell most of its files' names contradict, one line each (#357).
 
     For each file-link column the map reads ``samples`` for, each file whose name carries
-    exactly one identifier is compared with the identifier the row's cell is, where the two
-    are in one namespace (``sample_identity``): ``HG01105.final.cram`` in a row whose cell is
-    ``HG01106`` disagrees. A column where more of these files disagree than agree holds
+    exactly one identifier is compared with the samples the row's cell names (each element of
+    a list cell, all recognised, as reconcile reads it), where a sample shares the name's
+    namespace (``sample_identity``): ``HG01105.final.cram`` in a row whose cell is ``HG01106``
+    disagrees. A row whose cell holds a string no rule recognises is not compared. A column where more of these files disagree than agree holds
     another row's files under the cell it is mapped to — a parent's reads in its child's row
     (`mat_ilmn` read as `sample_id`) — and is a problem. A few disagreeing files are not
     (a submitter's slip); reconcile reports a file whose name contradicts the samples it
@@ -284,7 +285,7 @@ def _check_sample_names(slot_map: SlotMap, dataset: str, path: Path) -> list[str
         return []
     rules = identifier_rules()
     names: dict[str, str] = {}
-    compared: list[tuple[str, str, Identifier, list[str]]] = []
+    compared: list[tuple[str, str, frozenset[Identifier], list[str]]] = []
     tables = {table for table, _ in sampled}
     for table, row in iter_verbatim_entities(path, tables | {VERBATIM_FILE}):
         if table == VERBATIM_FILE:
@@ -293,21 +294,21 @@ def _check_sample_names(slot_map: SlotMap, dataset: str, path: Path) -> list[str
                     names[handle] = str(row.get("file_name") or "")
             continue
         for (mapped_table, column), cell in sampled.items():
-            value = row.get(cell) if mapped_table == table else None
-            got = rules.recognise(value, dataset) if isinstance(value, str) else None
-            if got is not None:
-                compared.append((table, column, got.identifier, link_handles(row.get(column)) or []))
+            members = _cell_samples(row.get(cell), dataset, rules) if mapped_table == table else None
+            if members:
+                compared.append((table, column, members, link_handles(row.get(column)) or []))
     agree: Counter = Counter()
     disagree: Counter = Counter()
     example: dict[tuple[str, str], str] = {}
-    for table, column, identifier, handles in compared:
+    for table, column, members, handles in compared:
         for handle in handles:
             named = rules.in_name_one(names.get(handle, ""))
-            if named == identifier:
+            if named is not None and named in members:
                 agree[(table, column)] += 1
-            elif named is not None and name_contradicts(named, {identifier}):
+            elif named is not None and name_contradicts(named, members):
                 disagree[(table, column)] += 1
-                example.setdefault((table, column), f"{names[handle]!r} in the row whose cell is {identifier.id!r}")
+                cell = ", ".join(sorted(m.id for m in members))
+                example.setdefault((table, column), f"{names[handle]!r} in the row whose cell is {cell!r}")
     return [
         f"{dataset}/{table}/{column}: samples read from {sampled[(table, column)]!r}, but {n:,} of "
         f"{n + agree[(table, column)]:,} files whose name names one sample name another (e.g. "
@@ -315,6 +316,18 @@ def _check_sample_names(slot_map: SlotMap, dataset: str, path: Path) -> list[str
         for (table, column), n in sorted(disagree.items())
         if n > agree[(table, column)]
     ]
+
+
+def _cell_samples(value: object, dataset: str, rules: IdentifierRuleSet) -> frozenset[Identifier] | None:
+    """The samples a cell names, each element of a list cell, as reconcile reads them; None where any is unrecognised."""
+    elements = value if isinstance(value, list) else [value]
+    members = set()
+    for element in elements:
+        got = rules.recognise(element, dataset) if isinstance(element, str) else None
+        if got is None:
+            return None
+        members.add(got.identifier)
+    return frozenset(members) or None
 
 
 # --- importing -----------------------------------------------------------------

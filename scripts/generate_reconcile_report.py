@@ -1146,8 +1146,9 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
             "",
             "### Strings no identifier rule recognises",
             "",
-            "The most frequent per dataset, with the files (headers) or lines (tables) holding each: each is "
-            "a placeholder, a path, or a dataset's own name that a rule would have to be declared for.",
+            "The most frequent per dataset, with the files (headers) or lines (tables) holding each. No current "
+            "identifier rule recognises them; they include placeholders, paths, decorated accessions and a "
+            "dataset's own names.",
             "",
             *md_table(
                 ["dataset", "in headers", "in tables"],

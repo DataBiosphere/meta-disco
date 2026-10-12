@@ -40,6 +40,11 @@ _NAME_TOKEN = re.compile(r"[^A-Za-z0-9]+")
 
 _UniqueKeyLoader = unique_key_loader("sample namespaces file")
 
+# A rule's ``write`` template: literal text and numbered groups ``\1`` to ``\9``, nothing else, so
+# every template is checked whole at load (a named ``\g<...>`` or another escape would otherwise
+# fail only at the first string it rewrites).
+_TEMPLATE = re.compile(r"(?:[^\\]|\\[1-9])*")
+
 
 @dataclass(frozen=True, order=True, slots=True)
 class Identifier:
@@ -162,7 +167,11 @@ def _rule_set(document: IdentifierRules) -> IdentifierRuleSet:
                 f"identifier rule {rule.id!r}: match {rule.match!r} is not a regular expression: {exc}"
             ) from None
         if rule.write is not None:
-            groups = {int(g) for g in re.findall(r"\\(\d+)", rule.write)}
+            if _TEMPLATE.fullmatch(rule.write) is None:
+                raise ValueError(
+                    f"identifier rule {rule.id!r}: write {rule.write!r} is not literal text and \\1 to \\9"
+                )
+            groups = {int(g) for g in re.findall(r"\\(\d)", rule.write)}
             if any(g > pattern.groups for g in groups):
                 raise ValueError(f"identifier rule {rule.id!r}: write {rule.write!r} names a group match lacks")
         rules.append(_Rule(rule.id, namespace, pattern, rule.write, rule.dataset))

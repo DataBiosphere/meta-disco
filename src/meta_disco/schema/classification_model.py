@@ -1719,7 +1719,24 @@ class EntityIdentifier(ConfiguredBaseModel):
     """
     A sample or donor, named by the authority that issued its identifier (ADR-0002 decision 1). Two identifiers name the same sample only when namespace and id match, and, for `dataset_local`, the dataset too.
     """
-    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'rules': [{'description': 'A `dataset_local` identifier names its dataset: '
+                                   'without it, a name like `simons_data_sample_12` '
+                                   'would match the same name in any dataset. '
+                                   'gen-pydantic does not emit class rules; '
+                                   '`sample_identity` builds identifiers only from '
+                                   'rules its loader holds to the same pairing.',
+                    'postconditions': {'slot_conditions': {'dataset': {'name': 'dataset',
+                                                                       'required': True}}},
+                    'preconditions': {'slot_conditions': {'namespace': {'equals_string': 'dataset_local',
+                                                                        'name': 'namespace'}}}},
+                   {'description': 'Only a `dataset_local` identifier names a dataset: '
+                                   'a `coriell` identifier with one would not equal '
+                                   'the same sample named elsewhere.',
+                    'postconditions': {'slot_conditions': {'namespace': {'equals_string': 'dataset_local',
+                                                                         'name': 'namespace'}}},
+                    'preconditions': {'slot_conditions': {'dataset': {'name': 'dataset',
+                                                                      'required': True}}}}]})
 
     id: str = Field(default=..., description="""The identifier, as its namespace writes it: a source's string as written, except where an identifier rule declares a rewrite (`GM19908` is written `NA19908`, #357).""", json_schema_extra = { "linkml_meta": {'domain_of': ['EntityIdentifier', 'IdentifierRule']} })
     namespace: IdentifierNamespaceEnum = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['EntityIdentifier', 'IdentifierRule']} })
@@ -1774,7 +1791,7 @@ class IdentifierRule(ConfiguredBaseModel):
     id: str = Field(default=..., description="""The rule's id, cited as `rule_id` by a source the rule recognised.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EntityIdentifier', 'IdentifierRule']} })
     namespace: IdentifierNamespaceEnum = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['EntityIdentifier', 'IdentifierRule']} })
     match: str = Field(default=..., description="""A regular expression the whole string must match.""", json_schema_extra = { "linkml_meta": {'domain_of': ['IdentifierRule']} })
-    write: Optional[str] = Field(default=None, description="""A replacement template (Python's `re` syntax) giving the identifier from the match, where it is not the string as written. Absent: the string as written.""", json_schema_extra = { "linkml_meta": {'domain_of': ['IdentifierRule']} })
+    write: Optional[str] = Field(default=None, description="""A replacement template giving the identifier from the match, where it is not the string as written: literal text and numbered group references (a backslash and a digit 1 to 9), nothing else. Absent: the string as written.""", json_schema_extra = { "linkml_meta": {'domain_of': ['IdentifierRule']} })
     dataset: Optional[str] = Field(default=None, description="""The one dataset a `dataset_local` rule applies in; set exactly on those.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource',
                        'EvidenceFileSource',
                        'EvidenceTarget',
