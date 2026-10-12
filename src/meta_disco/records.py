@@ -418,7 +418,7 @@ class OutputRecord:
 
 @dataclass(frozen=True)
 class RunMetadata:
-    """The per-run tally block written under ``"metadata"`` in the final JSON output.
+    """The block written under ``"metadata"`` in a producer's output: its tallies and its ``provenance`` (#404).
 
     Every producer's block, not only the pipeline's (#450). The four standalone
     producers each wrote an ad-hoc shape, so a reader could not take a count from a run
@@ -462,6 +462,10 @@ class RunMetadata:
     from_cache: int
     content_unreadable: int
     complete: bool
+    # What this producer classified and what classified it (#404): its input, when it
+    # started and the code's version, commit and dirty flag, from
+    # ``provenance.run_provenance``. Required, so no producer writes a block without it.
+    provenance: dict
     # Whatever this producer counts that the shared tally does not: the image and
     # auxiliary per-extension breakdowns, the index producer's matched/unmatched
     # split (#450). Kept out of the tally itself so every producer's `metadata` has
@@ -476,6 +480,7 @@ class RunMetadata:
         successful: int,
         from_cache: int,
         content_unreadable: int,
+        provenance: dict,
         errored: int = 0,
         validation_failed: int = 0,
         complete: bool = True,
@@ -499,6 +504,7 @@ class RunMetadata:
             from_cache=from_cache,
             content_unreadable=content_unreadable,
             complete=complete,
+            provenance=provenance,
             details=details,
         )
 

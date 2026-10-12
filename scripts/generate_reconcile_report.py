@@ -375,12 +375,36 @@ def values_change(new: dict, old: dict) -> list[dict] | None:
     return sorted(moved, key=lambda m: (-abs(m["delta"]), m["dataset"], m["dimension"], m["value"]))
 
 
+def describe_code(code: dict) -> str:
+    """One code identity (#404) in words: its commit, whether the tree was dirty, its version."""
+    if not code.get("recorded", True):
+        return "not recorded"
+    commit = code.get("commit")
+    words = f"commit {commit[:12]}" if commit else "commit unknown"
+    if code.get("dirty"):
+        words += " (dirty tree)"
+    return f"{words}, version {code.get('version') or 'unknown'}"
+
+
+def describe_classified_by(entries: list[dict] | None) -> str:
+    """The run's classifying code in words: one identity alone, several each with the files recording it."""
+    if not entries:
+        return "not recorded"
+    if len(entries) == 1:
+        return describe_code(entries[0])
+    return "; ".join(f"{describe_code(e)}: {', '.join(e['files'])}" for e in entries)
+
+
 def provenance(report: dict) -> dict:
+    reconciled_by = report.get("reconciled_by")
     return {
         "run": report["run"],
         "input": report["input"],
         "repository": report["repository"],
         "catalog": report["catalog"],
+        # Absent from a report written before #404.
+        "classified_by": describe_classified_by(report.get("classified_by")),
+        "reconciled_by": describe_code(reconciled_by) if reconciled_by else "not recorded",
         "value_map_sha256": report["value_map_sha256"],
         "evidence_excluded": report["evidence_excluded"],
         "files": sum(report["files"].values()),
@@ -732,6 +756,8 @@ def render_markdown(data: dict) -> str:
         "",
         f"- **Run:** `{p['run']}`, {p['files']:,} files",
         f"- **Input:** `{p['input']}` (repository `{p['repository']}`, catalog `{catalog}`)",
+        f"- **Classified by:** {p['classified_by']}",
+        f"- **Reconciled by:** {p['reconciled_by']}",
         f"- **Translation table sha256:** `{p['value_map_sha256']}`",
     ]
     if p["evidence_excluded"]:

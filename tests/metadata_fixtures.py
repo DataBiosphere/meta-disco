@@ -85,6 +85,7 @@ METADATA_KEYS = [
     "from_cache",
     "content_unreadable",
     "complete",
+    "provenance",
     # Whatever a producer counts beyond the shared tally (#450).
     "details",
 ]

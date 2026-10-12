@@ -32,8 +32,11 @@ a file applies when its ``target.system`` is the envelope's ``repository``. Wher
 envelope names a ``catalog``, only files whose ``target.version`` equals it are read; a
 file for another catalog is an older generation's history and is left unread. A
 repository with no catalog (HPRC, which will never have one) reads every file about its
-own files. That the stored run was actually made from this input is not provable
-here — recording it on the run is #404.
+own files. An input whose ``repository`` or ``catalog`` is not what a run file records is
+refused (:func:`require_run_input`, #404).
+
+**Provenance**: the envelope and the report name the code that classified the run
+(:func:`classified_by`) and the code that reconciled it (``reconciled_by``).
 
 **Translation**: a matched line's raw value selects a row of the translation table
 (``value_map``, #414). An authored row yields claims through ``value_map.claims_from``;
@@ -84,6 +87,7 @@ from .models import (
     stored_value,
 )
 from .output_utils import (
+    CLASSIFICATION_FILES,
     RECONCILED_DIR,
     REPORT_FILE,
     find_latest_run,
@@ -95,6 +99,7 @@ from .output_utils import (
     write_reconciled_file,
 )
 from .producers import PRODUCERS
+from .provenance import code_identity
 from .reconcile_inherit import (
     REFERENCE_ASSEMBLY,
     InheritanceCycle,
@@ -490,10 +495,70 @@ class Joined:
 _Key = Locator
 
 
-def content_step_counts(run_dir: Path) -> dict[str, dict[str, dict[str, int]]]:
+# What :func:`require_run_input` compares (#404). Not the path, named relatively or absolutely, nor
+# ``downloaded_at``: a deployment fixes a catalog's snapshots, so a second download reads the same data.
+INPUT_IDENTITY_FIELDS = ("repository", "catalog")
+
+
+def run_metadata(run_dir: Path) -> dict[str, dict]:
+    """Each classification file the run holds, by name, and its ``metadata`` block (``{}`` where it has none)."""
+    return {
+        fname: run_file_metadata(run_dir / fname) or {} for fname in CLASSIFICATION_FILES if (run_dir / fname).exists()
+    }
+
+
+def provenance_of(metadata: dict[str, dict]) -> dict[str, dict | None]:
+    """Each file's ``provenance`` (#404), as ``provenance.run_provenance`` wrote it; None for a file written before."""
+    return {fname: block.get("provenance") for fname, block in metadata.items()}
+
+
+def classified_by(provenance: dict[str, dict | None]) -> list[dict]:
+    """The distinct code identities ``provenance`` records, each with the files recording it, in file order.
+
+    A file recording none (written before #404) is ``recorded`` False; one that recorded its
+    code as unknown is ``recorded`` True with the same Nones, so the two stay apart.
+    """
+    groups: dict[tuple, dict] = {}
+    for fname, recorded in provenance.items():
+        code = recorded["code"] if recorded is not None else {}
+        entry = {
+            "recorded": recorded is not None,
+            "version": code.get("version"),
+            "commit": code.get("commit"),
+            "dirty": code.get("dirty"),
+        }
+        group = groups.setdefault(tuple(entry.values()), {**entry, "files": []})
+        group["files"].append(fname)
+    return list(groups.values())
+
+
+def require_run_input(provenance: dict[str, dict | None], metadata: Path, envelope: dict) -> None:
+    """Refuse (``ReconcileError``) an input whose :data:`INPUT_IDENTITY_FIELDS` differ from what a run file records.
+
+    A file recording no provenance is not checked.
+    """
+    given = {name: envelope.get(name) for name in INPUT_IDENTITY_FIELDS}
+    # Grouped by the input recorded, so a run made from one other input is named once.
+    differs: dict[str, list[str]] = {}
+    for fname, recorded in provenance.items():
+        if recorded is None:
+            continue
+        was = {name: recorded["input"].get(name) for name in INPUT_IDENTITY_FIELDS}
+        if was != given:
+            differs.setdefault(str(was), []).append(fname)
+    if differs:
+        named = "; ".join(f"{', '.join(fnames)} from {was}" for was, fnames in differs.items())
+        raise ReconcileError(
+            f"the input {metadata} is {given}, but the run's files were classified from another: {named}. "
+            "Reconcile the run against the input it was classified from (--metadata)"
+        )
+
+
+def content_step_counts(metadata: dict[str, dict]) -> dict[str, dict[str, dict[str, int]]]:
     """Per producer and dataset, the outcomes of the producer's step reader (#609, #621).
 
-    Read from each classification file's ``metadata.details.producer_steps``, which a
+    Read from each classification file's ``metadata.details.producer_steps`` (``metadata``
+    as :func:`run_metadata` gives it), which a
     producer whose type states a step writes (``FileTypeConfig.step``): the VCF producer's
     outcomes are ``producer_steps.OUTCOMES``, the tar and sample-map producers'
     ``cohort_steps.OUTCOMES``, so each producer's are kept apart. Empty for a run written
@@ -501,10 +566,9 @@ def content_step_counts(run_dir: Path) -> dict[str, dict[str, dict[str, int]]]:
     """
     found: dict[str, dict[str, dict[str, int]]] = {}
     for producer in PRODUCERS.values():
-        path = run_dir / producer.output
-        if not path.exists():
+        if producer.output not in metadata:
             continue
-        details = (run_file_metadata(path) or {}).get("details") or {}
+        details = metadata[producer.output].get("details") or {}
         per_dataset = details.get(STEP_OUTCOMES_KEY) or {}
         if per_dataset:
             found[producer.name] = {dataset: dict(counts) for dataset, counts in sorted(per_dataset.items())}
@@ -1163,9 +1227,13 @@ def reconcile_run(
     the process dies between the two renames of the swap, and restored by the next run. No request is made and no written byte depends on the
     clock — the evidence report printed on the way in shows file ages, and nothing
     written does — so the same run, evidence, lineage, translation table, activity map and
-    input paths write the same bytes (criterion 16); both tables' sha256 are in the envelope
+    input paths, reconciled by the same code (``reconciled_by``: its version, commit and
+    dirty flag), write the same bytes (criterion 16); both tables' sha256 are in the envelope
     and the report. The report echoes the input path as given and evidence paths
     relative to ``evidence_root``.
+
+    Refuses, before reading evidence, an input whose ``repository`` or ``catalog`` is not
+    what a run file records (:func:`require_run_input`, #404).
 
     Lineage (#577, :mod:`reconcile_lineage`) is read from ``lineage_root``, by default the
     ``lineage_evidence`` directory beside ``evidence_root``, translated through
@@ -1198,6 +1266,11 @@ def reconcile_run(
     if replaced.exists() and not out_dir.exists():
         replaced.rename(out_dir)
     envelope = load_envelope(metadata)
+    files_metadata = run_metadata(run_dir)
+    provenance = provenance_of(files_metadata)
+    require_run_input(provenance, metadata, envelope)
+    # Before the join, while this process is small: it starts git subprocesses.
+    reconciled_by = code_identity()
     key = record_key(envelope, metadata)
     repository = envelope["repository"]
     catalog = envelope.get("catalog")
@@ -1225,7 +1298,7 @@ def reconcile_run(
         coverage=joined.coverage,
         published_slots=published_slots(repository),
         lineage_counts=lineage.counts,
-        content_steps=content_step_counts(run_dir),
+        content_steps=content_step_counts(files_metadata),
     )
 
     root = evidence_root or Path()
@@ -1239,6 +1312,8 @@ def reconcile_run(
         "value_map_sha256": table.digest,
         "activity_map_sha256": activity_table.digest,
         "lineage_files": lineage.files,
+        "classified_by": classified_by(provenance),
+        "reconciled_by": reconciled_by,
     }
 
     # Every row must carry its own record key: joined evidence is keyed by it, so a row
@@ -1359,7 +1434,8 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=None,
         help="The input file the run was classified from (default: the deployment's); its envelope "
-        "names the repository and catalog",
+        "names the repository and catalog, and is refused if either is not what the "
+        "run's files record",
     )
     parser.add_argument("--evidence-root", type=Path, default=DEFAULT_SOURCE_EVIDENCE_ROOT)
     parser.add_argument(

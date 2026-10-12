@@ -1,11 +1,14 @@
 """Tests for the typed record views the pipeline parses at its load boundary (#172)."""
 
+from functools import partial
+
 import pytest
 
 from meta_disco.records import ClassifierRecord, InvalidRecord, OutputRecord, RunMetadata
 from tests.metadata_fixtures import METADATA_KEYS as _METADATA_KEYS
 from tests.metadata_fixtures import RECORD_KEYS as _ENVELOPE_KEYS
 from tests.metadata_fixtures import valid_record
+from tests.run_fixtures import provenance
 
 
 class TestClassifierRecord:
@@ -125,40 +128,43 @@ class TestOutputRecord:
         assert set(batch) == set(single) == _ENVELOPE_KEYS
 
 
+# Every tally test passes a provenance (#404), which they only carry.
+from_counts = partial(RunMetadata.from_counts, provenance=provenance())
+
+
 class TestRunMetadata:
+    def test_provenance_is_required_and_carried_through(self):
+        # Required, so no producer can write a `metadata` block that does not say what it
+        # classified and what classified it (#404).
+        with pytest.raises(TypeError, match="provenance"):
+            RunMetadata.from_counts(total=1, successful=1, from_cache=0, content_unreadable=0)  # type: ignore[call-arg]
+        assert from_counts(total=1, successful=1, from_cache=0, content_unreadable=0).provenance == provenance()
+
     def test_dropped_is_always_zero(self):
         # A fetch failure is written as a content_unreadable row, never dropped (#155);
         # the key survives only for output-schema stability.
-        meta = RunMetadata.from_counts(
-            total=10, successful=6, from_cache=2, content_unreadable=1, errored=3, validation_failed=1
-        )
+        meta = from_counts(total=10, successful=6, from_cache=2, content_unreadable=1, errored=3, validation_failed=1)
         assert meta.dropped == 0
 
     def test_failed_equals_dropped_plus_errored(self):
         # Only a raising worker produces no row now, and dropped is 0, so failed == errored.
-        meta = RunMetadata.from_counts(
-            total=10, successful=6, from_cache=0, content_unreadable=0, errored=3, validation_failed=0
-        )
+        meta = from_counts(total=10, successful=6, from_cache=0, content_unreadable=0, errored=3, validation_failed=0)
         assert meta.failed == meta.dropped + meta.errored == 3
 
     def test_processed_counts_successful_errored_and_validation_failed(self):
         # A validation_failed row is neither successful nor failed, so it is added in here.
-        meta = RunMetadata.from_counts(
-            total=10, successful=6, from_cache=0, content_unreadable=0, errored=3, validation_failed=1
-        )
+        meta = from_counts(total=10, successful=6, from_cache=0, content_unreadable=0, errored=3, validation_failed=1)
         assert meta.processed == 6 + 3 + 1
 
     def test_errored_and_validation_failed_default_to_zero(self):
-        meta = RunMetadata.from_counts(total=4, successful=4, from_cache=1, content_unreadable=0)
+        meta = from_counts(total=4, successful=4, from_cache=1, content_unreadable=0)
         assert meta.errored == 0
         assert meta.validation_failed == 0
         assert meta.failed == 0
         assert meta.processed == 4
 
     def test_complete_defaults_true_and_counts_pass_through(self):
-        meta = RunMetadata.from_counts(
-            total=9, successful=5, from_cache=2, content_unreadable=1, errored=2, validation_failed=1
-        )
+        meta = from_counts(total=9, successful=5, from_cache=2, content_unreadable=1, errored=2, validation_failed=1)
         assert meta.complete is True
         assert meta.total_to_process == 9
         assert meta.successful == 5
@@ -166,7 +172,7 @@ class TestRunMetadata:
         assert meta.content_unreadable == 1
 
     def test_to_dict_has_the_tally_keys_in_emit_order(self):
-        d = RunMetadata.from_counts(
+        d = from_counts(
             total=3, successful=2, from_cache=1, content_unreadable=0, errored=1, validation_failed=0
         ).to_dict()
         assert list(d) == _METADATA_KEYS

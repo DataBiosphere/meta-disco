@@ -565,3 +565,19 @@ def test_the_dashboard_carries_the_lineage_section(tmp_path, conflicted):
     assert code == 0
     assert "## Lineage: how each file was made" in md and "No lineage was read." in md
     assert '"lineage": {"sources": []' in html or '"lineage":{"sources":[]' in html
+
+
+def test_the_code_that_classified_and_reconciled_a_run_is_named_in_words():
+    """`classified_by` and `reconciled_by` (#404), as the report and dashboard name them."""
+    code = {"recorded": True, "version": "0.1.0", "commit": "a" * 40, "dirty": False}
+    assert rr.describe_code(code) == "commit aaaaaaaaaaaa, version 0.1.0"
+    assert rr.describe_code({**code, "dirty": True}) == "commit aaaaaaaaaaaa (dirty tree), version 0.1.0"
+    assert rr.describe_code({**code, "commit": None, "version": None}) == "commit unknown, version unknown"
+    assert rr.describe_code({**code, "recorded": False}) == "not recorded"
+    assert rr.describe_classified_by(None) == "not recorded"
+    assert rr.describe_classified_by([{**code, "files": ["bam.json"]}]) == "commit aaaaaaaaaaaa, version 0.1.0"
+    mixed = [{**code, "files": ["bam.json", "vcf.json"]}, {**code, "recorded": False, "files": ["old.json"]}]
+    assert (
+        rr.describe_classified_by(mixed)
+        == "commit aaaaaaaaaaaa, version 0.1.0: bam.json, vcf.json; not recorded: old.json"
+    )

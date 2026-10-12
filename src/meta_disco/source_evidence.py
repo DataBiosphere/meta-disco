@@ -33,9 +33,9 @@ is what reads them, through :func:`iter_evidence`, into its own artifact.
 compare, and AnVIL deletes a superseded catalog rather than keeping it to be matched
 against. Reconcile reads only the files whose ``target.version`` is the catalog the
 input envelope names, where it names one, and leaves another catalog's unread; the importer compares its file's
-``target.version`` against the configured catalog when deciding to re-fetch. What
-neither can check is that a stored run was classified from that input: that needs the
-run's output to record the catalog it enhances, which is #404 and is not built.
+``target.version`` against the configured catalog when deciding to re-fetch. Reconcile
+also compares the input's ``repository`` and ``catalog`` with those a run file records,
+where it records them (#404, ``reconcile.require_run_input``).
 
 **The file.** One ``.ndjson`` file: line 1 is the envelope, every later line is one
 evidence row. NDJSON rather than a JSON array because 708,088 files by eight dimensions
@@ -449,9 +449,8 @@ class EvidenceFileStatus:
     check (:func:`require_one_published_source`, #497). The reconcile stage compares a
     file's ``target.version`` with the catalog its input envelope names
     (``reconcile.select_evidence``, #432), and the importer compares it with the
-    configured catalog when deciding to re-fetch. That a stored run was classified from
-    that input needs the run's output to record the catalog it enhances, which is #404
-    and is not built.
+    configured catalog when deciding to re-fetch. Reconcile also compares that input's
+    ``repository`` and ``catalog`` with those a run file records (#404).
     """
 
     path: Path
@@ -789,7 +788,7 @@ def report_evidence_files(root: Path, now: datetime | None = None) -> list[Evide
     AnVIL deletes a superseded catalog outright, so there is nothing offline to check
     against. That question is settled where it can be acted on — the importer decides
     whether to re-fetch, and reconcile checks a file's catalog against the input's
-    (#432); recording on the run which catalog it enhances is #404, not built.
+    (#432), and that input's repository and catalog against a run file's (#404).
 
     A file whose envelope cannot be read is reported as an error rather than raising:
     the point of the report is to name every file, and one unreadable file should not

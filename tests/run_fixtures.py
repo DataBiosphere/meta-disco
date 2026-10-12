@@ -1,8 +1,9 @@
 """A run directory and the output rows in it, for the tests that read a run.
 
 `metadata_fixtures` builds *input* records; this builds what a run *writes*: the
-`{"metadata", "classifications"}` file a producer publishes (`write_run`) and one row
-of it (`output_record`, its `classifications` block on its own). `write_run` is shared
+`{"metadata", "classifications"}` file a producer publishes (`write_run`), one row
+of it (`output_record`, its `classifications` block on its own), and the `provenance` its
+`metadata` records (`provenance`, #404). `write_run` is shared
 by every test that writes a run directory for a reader — the report tests
 `test_corpus_diff` and `test_unprocessable`, the
 post-run one-row-per-file gate in `test_row_uniqueness`, and the index producer's parent file in
@@ -27,15 +28,32 @@ from meta_disco.models import CLASSIFICATION_FIELDS, STATUS_LABELS, build_field_
 OUTPUT_FILE = "bam_classifications.json"
 
 
-def write_run(run_dir: Path, records, fname: str = OUTPUT_FILE) -> Path:
+def provenance(
+    repository: str = "anvil",
+    catalog: str | None = "anvil15",
+    downloaded_at: str | None = None,
+    commit: str | None = "c" * 40,
+    dirty: bool | None = False,
+) -> dict:
+    """A producer's ``metadata.provenance`` (#404), shaped as ``provenance.run_provenance`` writes it."""
+    return {
+        "input": {"path": "input.json", "repository": repository, "catalog": catalog, "downloaded_at": downloaded_at},
+        "started_at": "2026-10-11T00:00:00+00:00",
+        "code": {"version": "0.1.0", "commit": commit, "dirty": dirty},
+    }
+
+
+def write_run(run_dir: Path, records, fname: str = OUTPUT_FILE, metadata: dict | None = None) -> Path:
     """Write ``records`` as one classification output file under ``run_dir``.
 
     Creates the directory if it is absent and leaves other files in it alone, so a
     test can call this once per output file of a run. ``records`` is any iterable of
-    output rows; it is serialized, never kept. Returns ``run_dir`` for chaining.
+    output rows; it is serialized, never kept. ``metadata`` is the file's ``metadata``
+    block, ``{}`` by default: no tallies and no provenance, as a file written before
+    #404 carries none. Returns ``run_dir`` for chaining.
     """
     run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / fname).write_text(json.dumps({"metadata": {}, "classifications": list(records)}))
+    (run_dir / fname).write_text(json.dumps({"metadata": metadata or {}, "classifications": list(records)}))
     return run_dir
 
 

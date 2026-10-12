@@ -184,6 +184,8 @@
       ['Run', `${p.run} (${n(p.files)} files)`],
       ['Input', p.input],
       ['Repository / catalog', `${p.repository} / ${p.catalog || 'none'}`],
+      ['Classified by', p.classified_by],
+      ['Reconciled by', p.reconciled_by],
       ['Translation table sha256', p.value_map_sha256],
     ];
     if (p.evidence_excluded) prov.push(['Evidence', 'excluded: the reconciled artifact concludes what inference concluded (contract 6.6)']);

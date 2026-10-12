@@ -55,6 +55,7 @@ from meta_disco.models import (
 )
 from meta_disco.pipeline import load_classifiable_records
 from meta_disco.producers import INDEX_TO_PARENT, PRODUCERS
+from meta_disco.provenance import run_provenance
 from meta_disco.record_keys import record_key, repeated_key_values
 from meta_disco.records import OutputRecord, RunMetadata, coerce_identity, dataset_of, identity_from
 from meta_disco.rule_engine import make_claim
@@ -256,10 +257,10 @@ def propagate_to_index_files(metadata_path: Path, output_path: Path):
 
     The parent's answer is not read: reconcile carries it across the edge (#571).
     """
-
     # Before the load: an envelope naming no repository is refused without parsing the
     # corpus or writing anything into the run directory, as the catch-all producer does.
     key = record_key(load_envelope(metadata_path), metadata_path)
+    provenance = run_provenance(metadata_path)
 
     # Load source metadata
     # Records with no usable file_md5sum are excluded here, at the shared load path,
@@ -461,6 +462,7 @@ def propagate_to_index_files(metadata_path: Path, output_path: Path):
                     successful=len(standard_results),
                     from_cache=0,
                     content_unreadable=0,
+                    provenance=provenance,
                     details={
                         "matched_to_parent": matched_all,
                         "unmatched": unmatched_all,
