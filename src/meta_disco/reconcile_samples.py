@@ -29,7 +29,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from .models import ClaimSource
-from .sample_identity import Identifier, IdentifierRuleSet, members_of, reference, sample_list
+from .sample_identity import Identifier, IdentifierRuleSet, members_of, most_frequent, reference, sample_list
 from .source_evidence import list_cell
 
 # How a file's samples settled; the report counts each per dataset.
@@ -216,7 +216,7 @@ class SampleReport:
                     "conflict_examples": self.examples.get((dataset, CONFLICT), []),
                     "incomparable_examples": self.examples.get((dataset, INCOMPARABLE), []),
                     "headers": headers.get(dataset, {}),
-                    "table_unrecognised": dict(Counter(unrecognised.get(dataset, {})).most_common(MAX_EXAMPLES * 4)),
+                    "table_unrecognised": most_frequent(Counter(unrecognised.get(dataset, {})), MAX_EXAMPLES * 4),
                     "table_unrecognised_lines": sum(unrecognised.get(dataset, Counter()).values()),
                     "name_disagreements": self.name_disagreements[dataset],
                     "name_disagreement_examples": self.name_examples.get(dataset, []),

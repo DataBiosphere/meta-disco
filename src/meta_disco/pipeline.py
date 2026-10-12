@@ -36,7 +36,7 @@ from .records import (
     OutputRecord,
     RunMetadata,
 )
-from .sample_identity import HeaderSamples
+from .sample_identity import HeaderSamples, most_frequent
 
 
 def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> list[dict]:
@@ -659,7 +659,7 @@ class ClassifyPipeline:
                 **(details or {}),
                 SAMPLE_OUTCOMES_KEY: {dataset: dict(counts) for dataset, counts in sorted(sample_counts.items())},
                 UNRECOGNISED_SAMPLES_KEY: {
-                    dataset: dict(counts.most_common(UNRECOGNISED_EXAMPLES))
+                    dataset: most_frequent(counts, UNRECOGNISED_EXAMPLES)
                     for dataset, counts in sorted(unrecognised_samples.items())
                     if counts
                 },

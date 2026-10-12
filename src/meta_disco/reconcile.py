@@ -120,7 +120,7 @@ from .record_keys import PUBLISHED_TABLES, RecordKey, is_key_value, record_key
 from .records import JOIN_KEY_OUTPUT_FIELDS, SAMPLE_OUTCOMES_KEY, STEP_OUTCOMES_KEY, UNRECOGNISED_SAMPLES_KEY
 from .rule_engine import CONFLICT_MARKER, make_claim
 from .run_lineage_map import RunLineageMap, load_run_lineage_map
-from .sample_identity import IdentifierRuleSet, identifier_rules
+from .sample_identity import IdentifierRuleSet, identifier_rules, most_frequent
 from .schema.classification_model import EvidenceFileEnvelope
 from .schema_vocab import most_specific
 from .slot_map import load_slot_map, published_slot_map_resource
@@ -579,7 +579,7 @@ def header_samples(metadata: dict[str, dict]) -> dict[str, dict]:
         for dataset, counts in (details.get(UNRECOGNISED_SAMPLES_KEY) or {}).items():
             out[dataset]["unrecognised"].update(counts)
     return {
-        dataset: {"outcomes": dict(v["outcomes"]), "unrecognised": dict(v["unrecognised"].most_common())}
+        dataset: {"outcomes": dict(v["outcomes"]), "unrecognised": most_frequent(v["unrecognised"])}
         for dataset, v in sorted(out.items())
     }
 

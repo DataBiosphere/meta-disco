@@ -2,6 +2,7 @@
 
 import dataclasses
 import json
+from collections import Counter
 
 import pytest
 
@@ -19,6 +20,7 @@ from meta_disco.sample_identity import (
     identifier_rules,
     list_id,
     load_identifier_rules,
+    most_frequent,
     reference,
     sample_list,
 )
@@ -260,3 +262,11 @@ def test_the_bam_producer_writes_each_files_samples_its_lists_and_counts_every_o
     details = written["metadata"]["details"]
     assert details[SAMPLE_OUTCOMES_KEY] == {"T": {NAMED: 2, UNRECOGNISED: 1, NO_SAMPLE: 1}}
     assert details[UNRECOGNISED_SAMPLES_KEY] == {"T": {"Sample": 1}}
+
+
+def test_the_most_frequent_strings_tie_by_the_string_whatever_order_they_were_counted_in():
+    """A producer counts from many threads; its metadata must not depend on which finished first."""
+    a = Counter({"b": 1, "a": 1, "c": 2})
+    b = Counter({"c": 2, "a": 1, "b": 1})
+    assert list(most_frequent(a)) == list(most_frequent(b)) == ["c", "a", "b"]
+    assert most_frequent(a, 2) == {"c": 2, "a": 1}

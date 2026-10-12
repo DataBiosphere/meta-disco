@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from functools import cache, cached_property, lru_cache
@@ -192,6 +193,12 @@ def reference(members: Iterable[Identifier], named_by: list[dict]) -> dict:
     if not distinct:
         raise ValueError("a sample reference names at least one sample")
     return {"list_id": list_id(distinct), "count": len(distinct), "named_by": named_by}
+
+
+def most_frequent(counts: Counter, limit: int | None = None) -> dict[str, int]:
+    """``counts`` most frequent first, ties by the string, so the same counts give the same order however they were made."""
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    return dict(ranked if limit is None else ranked[:limit])
 
 
 def members_of(sample_list_entry: dict) -> frozenset[Identifier]:
