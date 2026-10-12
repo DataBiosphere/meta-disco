@@ -1,10 +1,11 @@
 """What a producer classified and what classified it, written in its output's ``metadata`` (#404).
 
-Per file, not per run: ``make classify-bam RUN_DIR=…`` rewrites one file of a stored run at
-whatever commit is checked out then. A fact that cannot be determined is ``null`` under its
-key, never left out or guessed: HPRC's input names no catalog; a copy may have no git.
+Per file: ``make classify-bam RUN_DIR=…`` rewrites one file of a stored run at another commit.
+What cannot be determined is ``null``, never left out (HPRC's input names no catalog; a copy
+may have no git); the commit assumes an install from the checkout (:func:`code_identity`).
 """
 
+import os
 import subprocess
 from datetime import datetime, timezone
 from importlib.metadata import PackageNotFoundError, version
@@ -15,6 +16,8 @@ from .inputs import load_envelope
 DISTRIBUTION = "meta-disco"
 # The checkout the running code was imported from, not the shell's working directory.
 _PACKAGE_DIR = Path(__file__).resolve().parent
+# Variables that would point git at another repository than the one holding the package.
+_GIT_LOCATION = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY")
 
 
 def _git(directory: Path, *args: str) -> str | None:
@@ -26,6 +29,7 @@ def _git(directory: Path, *args: str) -> str | None:
             text=True,
             check=False,
             timeout=30,
+            env={name: value for name, value in os.environ.items() if name not in _GIT_LOCATION},
         )
     except (OSError, subprocess.SubprocessError):
         return None
@@ -37,7 +41,8 @@ def code_identity(directory: Path = _PACKAGE_DIR) -> dict:
 
     ``dirty`` counts changes to tracked files, staged or not, and not untracked files, so a
     scratch file in a clone does not mark its runs dirty. ``commit`` and ``dirty`` are
-    None when ``directory`` is in no git checkout or git cannot be run; ``version`` is
+    None when ``directory`` is in no git checkout or git cannot be run, and ``dirty`` alone
+    when ``status`` fails after the commit is read; ``version`` is
     None when the distribution is not installed. Assumes the package is installed from its
     checkout (``uv sync``'s editable install): a copy inside another checkout reads that one's.
     """

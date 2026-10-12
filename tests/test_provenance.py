@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -68,6 +69,42 @@ def test_without_git_the_commit_and_dirty_flag_are_unknown(checkout, monkeypatch
     monkeypatch.setattr(provenance.subprocess, "run", no_git)
     code = code_identity(checkout)
     assert code["commit"] is None and code["dirty"] is None
+
+
+def test_a_git_timeout_leaves_the_commit_and_dirty_flag_unknown(checkout, monkeypatch):
+    def slow(*_args, **_kwargs):
+        raise subprocess.TimeoutExpired("git", 30)
+
+    monkeypatch.setattr(provenance.subprocess, "run", slow)
+    code = code_identity(checkout)
+    assert code["commit"] is None and code["dirty"] is None
+
+
+def test_an_inherited_git_dir_does_not_point_at_another_repository(checkout, tmp_path, monkeypatch):
+    other = tmp_path / "other"
+    other.mkdir()
+    git(other, "init", "-q")
+    (other / "x").write_text("x\n")
+    git(other, "add", "x")
+    git(other, "commit", "-q", "-m", "other")
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(other / ".git" / "index"))
+    assert code_identity(checkout)["commit"] == git(checkout, "rev-parse", "HEAD")
+
+
+def test_the_commit_is_the_packages_checkouts_whatever_the_working_directory(checkout):
+    # A fresh process started inside another checkout, so the module's directory is resolved there.
+    expected = subprocess.run(
+        ["git", "-C", str(Path(provenance.__file__).parent), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        env=_ENV,
+    )
+    if expected.returncode:
+        pytest.skip("the package is not in a git checkout")
+    script = "from meta_disco.provenance import code_identity; print(code_identity()['commit'])"
+    ran = subprocess.run([sys.executable, "-c", script], cwd=checkout, capture_output=True, text=True, env=_ENV)
+    assert ran.stdout.strip() == expected.stdout.strip() != git(checkout, "rev-parse", "HEAD")
 
 
 def test_the_version_is_the_installed_distributions_and_unknown_when_it_is_not_installed(checkout, monkeypatch):

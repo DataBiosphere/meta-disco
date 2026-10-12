@@ -12,7 +12,7 @@ from meta_disco.output_utils import RECONCILED_DIR
 from meta_disco.reconcile import FILLED_GROUPS, REPORT_FILE, UNFILLED_CATEGORIES
 from meta_disco.record_keys import HPRC_REPOSITORY
 from meta_disco.summaries import md_code
-from tests.run_fixtures import write_run
+from tests.run_fixtures import provenance, write_run
 from tests.test_reconcile import DATASET, TABLE, drs, go, published, record, write_evidence
 from tests.test_value_map import load
 
@@ -582,3 +582,16 @@ def test_the_code_that_classified_and_reconciled_a_run_is_named_in_words():
         rr.describe_classified_by(mixed)
         == "commit aaaaaaaaaaaa, version 0.1.0: bam.json, vcf.json; not recorded: old.json"
     )
+
+
+def test_the_report_and_the_dashboard_name_the_code_that_classified_and_reconciled(tmp_path, table):
+    run_dir = tmp_path / "output" / "20260923_000000"
+    write_run(run_dir, [record(1)], metadata={"provenance": provenance()})
+    go(run_dir, tmp_path, None, table)
+    code, md, html = render(tmp_path, "--run-dir", str(run_dir), "--no-previous")
+    assert code == 0
+    reconciled_by = rr.describe_code(json.loads((run_dir / RECONCILED_DIR / REPORT_FILE).read_text())["reconciled_by"])
+    assert "- **Classified by:** commit cccccccccccc, version 0.1.0" in md
+    assert f"- **Reconciled by:** {reconciled_by}" in md
+    assert '"classified_by": "commit cccccccccccc, version 0.1.0"' in html
+    assert f'"reconciled_by": "{reconciled_by}"' in html

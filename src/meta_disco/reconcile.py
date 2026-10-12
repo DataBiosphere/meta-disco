@@ -496,7 +496,7 @@ _Key = Locator
 
 
 # What :func:`require_run_input` compares (#404). Not the path, named relatively or absolutely, nor
-# ``downloaded_at``: a deployment fixes a catalog's snapshots, so a second download reads the same data.
+# ``downloaded_at``: prod's catalog generation fixes its snapshots; dev's ``anvil`` does not (contract).
 INPUT_IDENTITY_FIELDS = ("repository", "catalog")
 
 
@@ -1227,8 +1227,8 @@ def reconcile_run(
     the process dies between the two renames of the swap, and restored by the next run. No request is made and no written byte depends on the
     clock — the evidence report printed on the way in shows file ages, and nothing
     written does — so the same run, evidence, lineage, translation table, activity map and
-    input paths, reconciled by the same code (``reconciled_by``: its version, commit and
-    dirty flag), write the same bytes (criterion 16); both tables' sha256 are in the envelope
+    input paths, reconciled by the same code, write the same bytes (criterion 16); line 1's
+    ``reconciled_by`` names the commit (not a dirty tree's edits). Both tables' sha256 are in the envelope
     and the report. The report echoes the input path as given and evidence paths
     relative to ``evidence_root``.
 
@@ -1266,12 +1266,12 @@ def reconcile_run(
     if replaced.exists() and not out_dir.exists():
         replaced.rename(out_dir)
     envelope = load_envelope(metadata)
+    key = record_key(envelope, metadata)
     files_metadata = run_metadata(run_dir)
     provenance = provenance_of(files_metadata)
     require_run_input(provenance, metadata, envelope)
     # Before the join, while this process is small: it starts git subprocesses.
     reconciled_by = code_identity()
-    key = record_key(envelope, metadata)
     repository = envelope["repository"]
     catalog = envelope.get("catalog")
     table = table if table is not None else load_value_map()

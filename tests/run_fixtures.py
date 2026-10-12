@@ -49,8 +49,8 @@ def write_run(run_dir: Path, records, fname: str = OUTPUT_FILE, metadata: dict |
     Creates the directory if it is absent and leaves other files in it alone, so a
     test can call this once per output file of a run. ``records`` is any iterable of
     output rows; it is serialized, never kept. ``metadata`` is the file's ``metadata``
-    block, ``{}`` by default: no tallies and no provenance, as a file written before
-    #404 carries none. Returns ``run_dir`` for chaining.
+    block, ``{}`` by default: no tallies, and no provenance, as a file written before #404
+    carries none. Returns ``run_dir`` for chaining.
     """
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / fname).write_text(json.dumps({"metadata": metadata or {}, "classifications": list(records)}))
