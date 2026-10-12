@@ -224,7 +224,7 @@ def test_a_dataset_local_name_is_read_only_in_its_dataset():
 
 
 def test_the_bam_producer_writes_each_files_samples_its_lists_and_counts_every_outcome(tmp_path):
-    records = [
+    records: list[dict] = [
         {"file_name": "a.bam", "dataset_title": "T"},
         {"file_name": "b.bam", "dataset_title": "T"},
         {"file_name": "c.bam", "dataset_title": "T"},
