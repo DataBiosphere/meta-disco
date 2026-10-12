@@ -40,7 +40,7 @@ _NAME_TOKEN = re.compile(r"[^A-Za-z0-9]+")
 _UniqueKeyLoader = unique_key_loader("sample namespaces file")
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(frozen=True, order=True, slots=True)
 class Identifier:
     """A sample as an identifier: equal exactly when namespace, id and dataset are."""
 
@@ -79,10 +79,6 @@ class IdentifierRuleSet:
     def __init__(self, rules: list[_Rule]):
         self._rules = rules
 
-    @property
-    def rule_ids(self) -> tuple[str, ...]:
-        return tuple(rule.id for rule in self._rules)
-
     def recognise(self, raw: str, dataset: str | None) -> Recognised | None:
         """The identifier ``raw`` is in ``dataset``, or None where no rule matches.
 
@@ -117,6 +113,22 @@ class IdentifierRuleSet:
                 out.add(got.identifier)
         return out
 
+    def in_name_one(self, file_name: str) -> Identifier | None:
+        """The one identifier ``file_name`` names, or None where it names none or several (a trio's file)."""
+        found = self.in_name(file_name)
+        return next(iter(found)) if len(found) == 1 else None
+
+
+def name_contradicts(named: Identifier, members: Iterable[Identifier]) -> bool:
+    """Whether a file name's one identifier contradicts the file's samples: another sample in a namespace they share.
+
+    One in another namespace cannot be compared (`giab:HG007` against `coriell:NA24695` may be one
+    person, #361), so it contradicts nothing. Shared by ``make check-slot-map`` and reconcile, so
+    both count a disagreement the same way.
+    """
+    members = list(members)
+    return named not in members and any(m.namespace == named.namespace for m in members)
+
 
 def default_rules_resource():
     """The bundled rules, as package data beside the rule set."""
@@ -130,7 +142,10 @@ def load_identifier_rules(text: str | None = None) -> IdentifierRuleSet:
     ``dataset`` exactly on the ``dataset_local`` rules, each pattern a regular expression
     and each ``write`` template valid for it.
     """
-    document = _document(text)
+    return _rule_set(_document(text))
+
+
+def _rule_set(document: IdentifierRules) -> IdentifierRuleSet:
     rules: list[_Rule] = []
     seen: set[str] = set()
     for rule in document.rules:
@@ -162,8 +177,9 @@ def _document(text: str | None) -> IdentifierRules:
 
 def identifier_rule_declarations(text: str | None = None) -> list[IdentifierRule]:
     """The rules as declared, with their rationale, for a reader that lists them; checked as :func:`load_identifier_rules` checks them."""
-    load_identifier_rules(text)
-    return list(_document(text).rules)
+    document = _document(text)
+    _rule_set(document)
+    return list(document.rules)
 
 
 @cache
@@ -175,24 +191,47 @@ def identifier_rules() -> IdentifierRuleSet:
 # --- lists and references -----------------------------------------------------
 
 
+def _sorted(members: Iterable[Identifier]) -> list[dict]:
+    """The distinct members as ``EntityIdentifier`` dicts, in one canonical order.
+
+    Sorted by a plain tuple key rather than the dataclass's own ordering, which compares in
+    Python and took 10 ms for a 3,202-member list. The order is the same: a namespace's
+    identifiers all carry a dataset (``dataset_local``) or none.
+    """
+    return [m.to_dict() for m in sorted(set(members), key=lambda m: (m.namespace, m.id, m.dataset or ""))]
+
+
+def _digest(entries: list[dict]) -> str:
+    canonical = json.dumps(entries, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+
+
 def list_id(members: Iterable[Identifier]) -> str:
     """The digest that names a set of members: the first 16 hex of the sha256 of their sorted form."""
-    canonical = json.dumps([m.to_dict() for m in sorted(set(members))], sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+    return _digest(_sorted(members))
 
 
 def sample_list(members: Iterable[Identifier]) -> dict:
     """A ``SampleList``: its id and its members, sorted."""
-    distinct = sorted(set(members))
-    return {"list_id": list_id(distinct), "members": [m.to_dict() for m in distinct]}
+    entries = _sorted(members)
+    return {"list_id": _digest(entries), "members": entries}
 
 
-def reference(members: Iterable[Identifier], named_by: list[dict]) -> dict:
-    """A ``SampleReference``: the list the members make, its size, and who named it."""
+def reference(members: Iterable[Identifier], named_by: list[dict], known: str | None = None) -> dict:
+    """A ``SampleReference``: the list the members make, its size, and who named it.
+
+    ``known`` is the list's id where the caller already holds it (a header's reading, an
+    inference record), so a 3,202-member list is not digested again for every file.
+    """
     distinct = set(members)
     if not distinct:
         raise ValueError("a sample reference names at least one sample")
-    return {"list_id": list_id(distinct), "count": len(distinct), "named_by": named_by}
+    return {"list_id": known if known is not None else list_id(distinct), "count": len(distinct), "named_by": named_by}
+
+
+def sorted_lists(lists: dict[str, dict]) -> list[dict]:
+    """A run's sample lists by id, in id order, as a producer file and the reconciled artifact write them."""
+    return [lists[key] for key in sorted(lists)]
 
 
 def most_frequent(counts: Counter, limit: int | None = None) -> dict[str, int]:
@@ -235,7 +274,7 @@ class HeaderSamples:
         if self.sample_list is None:
             return None
         named_by = [{"source_type": self.rule.source_type, "rule_id": self.rule.id}]
-        return {"list_id": self.sample_list["list_id"], "count": len(self.members), "named_by": named_by}
+        return reference(self.members, named_by, known=self.sample_list["list_id"])
 
 
 @dataclass(frozen=True)
@@ -245,19 +284,20 @@ class SampleReader:
     rule: code_rules.SampleRule
     strings: Callable[[Any], Sequence[str]]
 
-    def read(self, content: Any, dataset: str | None, rules: IdentifierRuleSet | None = None) -> HeaderSamples:
+    def read(self, content: Any, dataset: str | None) -> HeaderSamples:
         """The samples ``content`` names in ``dataset``: all of them recognised, or none.
 
         A header with one string no rule recognises names no samples: a list missing a
         member would say the file holds fewer samples than it does.
         """
-        rules = rules if rules is not None else identifier_rules()
-        return _read(self.rule, tuple(dict.fromkeys(self.strings(content))), dataset, rules)
+        return _read(self.rule, tuple(dict.fromkeys(self.strings(content))), dataset, identifier_rules())
 
 
 # A joint VCF's 3,202 sample columns repeat across 31,000 T2T windows: each distinct reading is
-# made once, and its list (sorted, digested) with it, rather than once per file (#357).
-@lru_cache(maxsize=1024)
+# made once, and its list (sorted, digested) with it, rather than once per file (#357). A
+# 3,202-member reading holds about 1 MB (measured), so the cache is bounded at 128 readings;
+# the one the 31,000 windows share is read every few files and is not the one evicted.
+@lru_cache(maxsize=128)
 def _read(
     rule: code_rules.SampleRule, raws: tuple[str, ...], dataset: str | None, rules: IdentifierRuleSet
 ) -> HeaderSamples:

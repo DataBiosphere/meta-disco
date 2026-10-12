@@ -74,6 +74,7 @@ from .models import (
     CLASSIFICATION_FIELDS,
     CLASSIFIED,
     CONFLICT,
+    EVIDENCE_FIELDS,
     MIXED,
     NOT_APPLICABLE,
     NOT_CLASSIFIED,
@@ -94,6 +95,7 @@ from .output_utils import (
     SAMPLE_LISTS_FILE,
     find_latest_run,
     iter_records,
+    iter_run_file_contents,
     iter_run_files,
     reconciled_name,
     relative_to,
@@ -120,7 +122,7 @@ from .record_keys import PUBLISHED_TABLES, RecordKey, is_key_value, record_key
 from .records import JOIN_KEY_OUTPUT_FIELDS, SAMPLE_OUTCOMES_KEY, STEP_OUTCOMES_KEY, UNRECOGNISED_SAMPLES_KEY
 from .rule_engine import CONFLICT_MARKER, make_claim
 from .run_lineage_map import RunLineageMap, load_run_lineage_map
-from .sample_identity import IdentifierRuleSet, identifier_rules, most_frequent
+from .sample_identity import identifier_rules, most_frequent
 from .schema.classification_model import EvidenceFileEnvelope
 from .schema_vocab import most_specific
 from .slot_map import load_slot_map, published_slot_map_resource
@@ -611,12 +613,11 @@ def join(
     key: RecordKey,
     table: ValueMap,
     extra: set[_Key] | None = None,
-    rules: IdentifierRuleSet | None = None,
 ) -> Joined:
     """Attach each evidence line whose key value exactly one record carries to that record, and translate it.
 
-    A ``samples`` line (#357) is translated by the identifier rules (``rules``, the bundled
-    ones by default) instead of ``table``, into ``Joined.samples``.
+    A ``samples`` line (#357) is translated by the identifier rules
+    (``sample_identity.identifier_rules``) instead of ``table``, into ``Joined.samples``.
 
     The join runs within the envelope's target dataset when it names one — the scope
     ``EvidenceTarget.dataset`` declares — matched against the record's ``dataset_title``.
@@ -632,14 +633,15 @@ def join(
     name, and an evidence file none of whose lines matched, an empty one included
     (contract 5.3).
     """
-    rules = rules if rules is not None else identifier_rules()
+    rules = identifier_rules()
     wanted: dict[_Key, list[tuple[int, EvidenceEntry]]] = defaultdict(list)
     coverage: dict[str, set[tuple[str | None, str]]] = defaultdict(set)
     for n, ev in enumerate(evidence):
-        for entry in iter_evidence(ev.path):
+        for entry in iter_evidence(ev.path, EVIDENCE_FIELDS):
             ev.offered += 1
             wanted[(ev.record_field, ev.dataset, entry.target_key_value)].append((n, entry))
-            coverage[ev.source_type].add((ev.dataset, entry.field))
+            if entry.field != SAMPLES_FIELD:
+                coverage[ev.source_type].add((ev.dataset, entry.field))
     extra = extra or set()
     found_by_key = _carriers(run_dir, key, set(wanted) | extra)
     carriers = {k: [c.key for c in found] for k, found in found_by_key.items() if k in wanted}
@@ -1398,7 +1400,8 @@ def reconcile_run(
     graph = _Graph()
     seen: set[str] = set()
     inference_lists: dict[str, dict] = {}
-    for _, records in iter_run_files(run_dir, strict=True, sample_lists=inference_lists):
+    for _, records, lists in iter_run_file_contents(run_dir):
+        inference_lists.update((entry["list_id"], entry) for entry in lists)
         for record in records:
             identity = identity_of(record, seen)
             step, _ = step_of(record, identity)

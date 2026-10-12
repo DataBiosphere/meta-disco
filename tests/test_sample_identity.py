@@ -17,6 +17,7 @@ from meta_disco.sample_identity import (
     UNRECOGNISED,
     VCF_SAMPLES,
     Identifier,
+    identifier_rule_declarations,
     identifier_rules,
     list_id,
     load_identifier_rules,
@@ -58,7 +59,7 @@ def test_a_recognised_string_is_an_identifier_in_its_namespace(raw, dataset, nam
     got = identifier_rules().recognise(raw, dataset)
     assert got is not None
     assert (got.identifier.namespace, got.identifier.id) == (namespace, ident)
-    assert got.rule_id in identifier_rules().rule_ids
+    assert got.rule_id in {r.id for r in identifier_rule_declarations()}
 
 
 @pytest.mark.parametrize(
@@ -136,7 +137,7 @@ def test_no_identifier_rule_id_is_a_code_rule_or_marker_id():
     declared = {
         d.id for d in (*code_rules.CODE_RULES, *code_rules.MARKERS, *code_rules.EDGE_RULES, *code_rules.SAMPLE_RULES)
     }
-    assert set(identifier_rules().rule_ids) & declared == set()
+    assert {r.id for r in identifier_rule_declarations()} & declared == set()
 
 
 # --- lists ---------------------------------------------------------------------------

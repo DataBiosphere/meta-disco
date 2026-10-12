@@ -118,7 +118,7 @@ import json
 import os
 import re
 import shutil
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Collection, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -129,6 +129,7 @@ from uuid import uuid4
 from pydantic import TypeAdapter, ValidationError
 
 from .models import (
+    CLASSIFICATION_FIELDS,
     EVIDENCE_FIELDS,
     JOIN_KEY_FILE_NAME,
     LINEAGE_ONLY_SOURCE_TYPES,
@@ -627,8 +628,12 @@ def read_envelope(path: Path) -> EvidenceFileEnvelope:
         return read_envelope_from(path, f)
 
 
-def iter_evidence(path: Path) -> Iterator[EvidenceEntry]:
-    """Every evidence row in one file on disk, in file order, streamed.
+def iter_evidence(path: Path, fields: Collection[str] = CLASSIFICATION_FIELDS) -> Iterator[EvidenceEntry]:
+    """Every evidence row in one file on disk naming one of ``fields``, in file order, streamed.
+
+    ``fields`` defaults to the dimensions: a ``samples`` row (#357) is read only by a reader
+    that asks for it (``EVIDENCE_FIELDS``), reconcile's join, and never reaches one that
+    translates a line through the value map. Every row is still checked, whichever it names.
 
     Line 1 is consumed as the envelope before any row is yielded, because the
     source it carries is what each row's ``source`` is rehydrated from — so a file
@@ -662,7 +667,9 @@ def iter_evidence(path: Path) -> Iterator[EvidenceEntry]:
             line = decode_line(raw, _where(name, _READING, n))
             if line.isspace():
                 continue
-            yield _entry_from_line(name, n, line, envelope_source, by_column)
+            entry = _entry_from_line(name, n, line, envelope_source, by_column)
+            if entry.field in fields:
+                yield entry
 
 
 def decode_line(raw: bytes, where: str) -> str:

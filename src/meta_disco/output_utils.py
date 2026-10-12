@@ -126,7 +126,7 @@ def run_file_metadata(path: Path) -> dict | None:
     return block if isinstance(block, dict) else None
 
 
-def iter_run_files(run_dir: Path, strict: bool = False, sample_lists: dict[str, dict] | None = None):
+def iter_run_files(run_dir: Path, strict: bool = False):
     """Yield ``(classification file name, records)`` per inference file the run holds, one file loaded at a time.
 
     For a reader that must keep a file's records together — the reconcile stage writes one
@@ -135,20 +135,28 @@ def iter_run_files(run_dir: Path, strict: bool = False, sample_lists: dict[str, 
     raises ``ValueError`` naming the file where that reader would drop something — a
     record list that is not a list, or an element that is not a record — for a reader
     that must account for every row it was given rather than tolerate a damaged file.
-
-    ``sample_lists``, given with ``strict``, is filled by list id with each sample list a
-    file holds under ``SAMPLE_LISTS_KEY`` (#357), read from the parse the records come
-    from; a file's ``sample_lists`` that is not a list of lists with an id raises
-    ``ValueError``.
     """
-    if sample_lists is not None and not strict:
-        raise ValueError("sample lists are read only by a strict reader")
+    if strict:
+        for fname, rows, _ in iter_run_file_contents(run_dir):
+            yield fname, rows
+        return
+    for fname in CLASSIFICATION_FILES:
+        path = run_dir / fname
+        if path.exists():
+            yield fname, list(_records_in(path))
+
+
+def iter_run_file_contents(run_dir: Path):
+    """Yield ``(classification file name, records, sample lists)`` per inference file the run holds, read strictly.
+
+    As :func:`iter_run_files` with ``strict``, plus the sample lists the file holds under
+    ``SAMPLE_LISTS_KEY`` (#357), empty for a producer that reads no samples, from the same
+    parse. Raises ``ValueError`` on a file whose ``sample_lists`` is not a list of lists with
+    an id.
+    """
     for fname in CLASSIFICATION_FILES:
         path = run_dir / fname
         if not path.exists():
-            continue
-        if not strict:
-            yield fname, list(_records_in(path))
             continue
         data = json.loads(path.read_text())
         rows = _record_list(data)
@@ -159,13 +167,10 @@ def iter_run_files(run_dir: Path, strict: bool = False, sample_lists: dict[str, 
                 f"{path}: its record list is not a list of records, so some of its rows could not be read; "
                 "it is damaged or not a run's output"
             )
-        if sample_lists is not None:
-            lists = data.get(SAMPLE_LISTS_KEY, []) if isinstance(data, dict) else []
-            if not isinstance(lists, list) or not all(isinstance(e, dict) and "list_id" in e for e in lists):
-                raise ValueError(f"{path}: its {SAMPLE_LISTS_KEY} is not a list of sample lists; it is damaged")
-            for entry in lists:
-                sample_lists.setdefault(entry["list_id"], entry)
-        yield fname, rows
+        lists = data.get(SAMPLE_LISTS_KEY, []) if isinstance(data, dict) else []
+        if not isinstance(lists, list) or not all(isinstance(e, dict) and "list_id" in e for e in lists):
+            raise ValueError(f"{path}: its {SAMPLE_LISTS_KEY} is not a list of sample lists; it is damaged")
+        yield fname, rows, lists
 
 
 # Where the reconcile stage writes its artifact inside a run directory (#432), and the

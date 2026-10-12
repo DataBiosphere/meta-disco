@@ -54,7 +54,7 @@ from .azul_manifest import (
     sidecar_requested_at,
 )
 from .models import JOIN_KEY_DRS_URI, SAMPLES_FIELD, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA, ClaimSource
-from .sample_identity import Identifier, identifier_rules
+from .sample_identity import Identifier, identifier_rules, name_contradicts
 from .schema.classification_model import ImporterSourceTypeEnum, JoinKeyEnum
 from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource
 from .source_evidence import (
@@ -301,13 +301,10 @@ def _check_sample_names(slot_map: SlotMap, dataset: str, path: Path) -> list[str
     example: dict[tuple[str, str], str] = {}
     for table, column, identifier, handles in compared:
         for handle in handles:
-            in_name = rules.in_name(names.get(handle, ""))
-            if len(in_name) != 1:
-                continue
-            (named,) = in_name
+            named = rules.in_name_one(names.get(handle, ""))
             if named == identifier:
                 agree[(table, column)] += 1
-            elif named.namespace == identifier.namespace:
+            elif named is not None and name_contradicts(named, [identifier]):
                 disagree[(table, column)] += 1
                 example.setdefault((table, column), f"{names[handle]!r} in the row whose cell is {identifier.id!r}")
     return [

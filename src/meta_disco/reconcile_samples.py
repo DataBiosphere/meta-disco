@@ -15,21 +15,31 @@ file is counted: a ``conflict`` where two of them name members in one namespace
 (``coriell:NA19770`` against ``sra_sample:SRS006871``, which may be one person, but only a
 crosswalk could say, #361). A wrong sample is worse than none.
 
-A file's name is never a source. Where it carries exactly one recognised identifier and
-the settled members include one in that namespace, a name naming another is counted as a
+A file's name is never a source. Where it carries exactly one recognised identifier that
+contradicts the settled members (``sample_identity.name_contradicts``), it is counted as a
 disagreement (:func:`name_disagrees`): the check that finds a column mapped to the wrong
 row's sample.
 """
 
 from __future__ import annotations
 
-import json
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from functools import lru_cache
 
+from .edges import distinct
 from .models import ClaimSource
-from .sample_identity import Identifier, IdentifierRuleSet, members_of, most_frequent, reference, sample_list
+from .sample_identity import (
+    Identifier,
+    IdentifierRuleSet,
+    members_of,
+    most_frequent,
+    name_contradicts,
+    reference,
+    sample_list,
+    sorted_lists,
+)
 from .source_evidence import list_cell
 
 # How a file's samples settled; the report counts each per dataset.
@@ -38,6 +48,7 @@ HEADER_ONLY = "header_only"
 TABLE_ONLY = "table_only"
 CONFLICT = "conflict"  # two sources named different members in one namespace
 INCOMPARABLE = "incomparable"  # sources named different members, sharing no namespace
+NONE = "none"  # no source named a sample
 OUTCOMES = (AGREED, HEADER_ONLY, TABLE_ONLY, CONFLICT, INCOMPARABLE)
 
 
@@ -72,89 +83,70 @@ def from_line(
             rule_ids.append(got.rule_id)
     if not members:
         return None
-    named_by = tuple({"source_type": source_type, "rule_id": r, "source": source.to_dict()} for r in rule_ids)
-    return Named(frozenset(members), named_by)
+    return Named(frozenset(members), _attributions(source_type, tuple(rule_ids), source))
 
 
-def from_record(
-    record: dict, lists: dict[str, dict], members: dict[str, frozenset[Identifier]] | None = None
-) -> Named | None:
+# A source's column is one `ClaimSource` for every line of its file, and the join keeps every
+# line's attributions for the whole run: built once per (rule, column), not once per line.
+@lru_cache(maxsize=4096)
+def _attributions(source_type: str, rule_ids: tuple[str, ...], source: ClaimSource) -> tuple[dict, ...]:
+    return tuple({"source_type": source_type, "rule_id": r, "source": source.to_dict()} for r in rule_ids)
+
+
+def from_record(record: dict, lists: dict[str, dict], members: dict[str, frozenset[Identifier]]) -> Named | None:
     """The samples inference wrote on ``record``, its members read from the run's ``lists``.
 
-    ``members``, where given, keeps each list's members once read, by list id: 31,000 T2T
-    windows point to one 3,202-sample list. Raises ``ValueError`` where the record points to
-    a list its run does not hold: the producer file is damaged, or was written before its
-    lists were.
+    ``members`` keeps each list's members once read, by list id: 31,000 T2T windows point
+    to one 3,202-sample list. Raises ``ValueError`` where the record points to a list its
+    run does not hold: the producer file is damaged, or was written before its lists were.
     """
     samples = record.get("samples")
     if not samples:
         return None
     key = samples["list_id"]
-    found = members.get(key) if members is not None else None
-    if found is None:
+    if key not in members:
         entry = lists.get(key)
         if entry is None:
             raise ValueError(
                 f"record {record.get('file_name')!r} points to sample list {key!r}, which no "
                 "producer file of the run holds"
             )
-        found = members_of(entry)
-        if members is not None:
-            members[key] = found
-    return Named(found, tuple(samples["named_by"]), from_header=True, list_id=key)
+        members[key] = members_of(entry)
+    return Named(members[key], tuple(samples["named_by"]), from_header=True, list_id=key)
 
 
-def settle(named: Iterable[Named]) -> tuple[str | None, dict | None, frozenset[Identifier]]:
+def settle(named: Iterable[Named]) -> tuple[str, dict | None, frozenset[Identifier]]:
     """``(outcome, samples, members)`` for one file from every source that named its samples.
 
-    ``outcome`` is None where no source did. ``samples`` is the record's ``samples`` where
-    the sources agree, else None; ``members`` are then the settled members, else empty.
+    ``samples`` is the record's ``samples`` where the sources agree, else None; ``members``
+    are then the settled members, else empty. Agreeing sources are listed header first, each
+    attribution once.
     """
     named = list(named)
     if not named:
-        return None, None, frozenset()
+        return NONE, None, frozenset()
     sets = {n.members for n in named}
     if len(sets) > 1:
         namespaces = [{m.namespace for m in s} for s in sets]
         overlapping = any(a & b for i, a in enumerate(namespaces) for b in namespaces[i + 1 :])
         return (CONFLICT if overlapping else INCOMPARABLE), None, frozenset()
     members = next(iter(sets))
-    named_by: list[dict] = []
-    seen: set[str] = set()
-    for n in sorted(named, key=lambda n: not n.from_header):
-        for attribution in n.named_by:
-            key = json.dumps(attribution, sort_keys=True)
-            if key not in seen:
-                seen.add(key)
-                named_by.append(attribution)
+    named_by = list(distinct(a for n in sorted(named, key=lambda n: not n.from_header) for a in n.named_by))
     header = any(n.from_header for n in named)
     table = any(not n.from_header for n in named)
     outcome = AGREED if header and table else (HEADER_ONLY if header else TABLE_ONLY)
     known = next((n.list_id for n in named if n.list_id is not None), None)
-    samples = {"list_id": known, "count": len(members), "named_by": named_by} if known else reference(members, named_by)
-    return outcome, samples, members
+    return outcome, reference(members, named_by, known=known), members
 
 
 def name_disagrees(file_name: str, members: frozenset[Identifier], rules: IdentifierRuleSet) -> Identifier | None:
-    """The identifier ``file_name`` names, where it names one the settled ``members`` contradict; else None.
-
-    Checked only where the name carries exactly one identifier and a member shares its
-    namespace: a name naming two (a trio's file) says nothing about which, and one in
-    another namespace cannot be compared.
-    """
-    in_name = rules.in_name(file_name)
-    if len(in_name) != 1:
-        return None
-    named = next(iter(in_name))
-    if named in members or not any(m.namespace == named.namespace for m in members):
-        return None
-    return named
+    """The one identifier ``file_name`` names, where it contradicts the settled ``members``; else None."""
+    named = rules.in_name_one(file_name)
+    return named if named is not None and name_contradicts(named, members) else None
 
 
 # --- the report -----------------------------------------------------------------
 
-# A file no source named a sample for; counted beside OUTCOMES.
-NONE = "none"
 MAX_EXAMPLES = 5
 
 
@@ -180,12 +172,14 @@ class SampleReport:
         outcome, samples, members = settle(([header] if header is not None else []) + table)
         dataset = str(record.get("dataset_title") or "")
         file_name = str(record.get("file_name") or "")
-        self.outcomes[dataset][outcome or NONE] += 1
+        self.outcomes[dataset][outcome] += 1
         if outcome in (CONFLICT, INCOMPARABLE) and len(self.examples[(dataset, outcome)]) < MAX_EXAMPLES:
             self.examples[(dataset, outcome)].append(file_name)
         if samples is not None:
-            if samples["list_id"] not in self.lists:
-                self.lists[samples["list_id"]] = sample_list(members)
+            key = samples["list_id"]
+            if key not in self.lists:
+                # A header's list is the inference list itself; only a table's is built here.
+                self.lists[key] = inference_lists.get(key) or sample_list(members)
             named = name_disagrees(file_name, members, self.rules)
             if named is not None:
                 self.name_disagreements[dataset] += 1
@@ -208,23 +202,21 @@ class SampleReport:
         rule recognised, with the lines that held each.
         """
         datasets = sorted(set(self.outcomes) | set(headers) | set(unrecognised))
-        return {
-            "lists": len(self.lists),
-            "by_dataset": {
-                dataset: {
-                    "settled": {o: self.outcomes[dataset][o] for o in (*OUTCOMES, NONE) if self.outcomes[dataset][o]},
-                    "conflict_examples": self.examples.get((dataset, CONFLICT), []),
-                    "incomparable_examples": self.examples.get((dataset, INCOMPARABLE), []),
-                    "headers": headers.get(dataset, {}),
-                    "table_unrecognised": most_frequent(Counter(unrecognised.get(dataset, {})), MAX_EXAMPLES * 4),
-                    "table_unrecognised_lines": sum(unrecognised.get(dataset, Counter()).values()),
-                    "name_disagreements": self.name_disagreements[dataset],
-                    "name_disagreement_examples": self.name_examples.get(dataset, []),
-                }
-                for dataset in datasets
-            },
-        }
+        by_dataset = {}
+        for dataset in datasets:
+            table_unrecognised = unrecognised.get(dataset, Counter())
+            by_dataset[dataset] = {
+                "settled": {o: self.outcomes[dataset][o] for o in (*OUTCOMES, NONE) if self.outcomes[dataset][o]},
+                "conflict_examples": self.examples.get((dataset, CONFLICT), []),
+                "incomparable_examples": self.examples.get((dataset, INCOMPARABLE), []),
+                "headers": headers.get(dataset, {}),
+                "table_unrecognised": most_frequent(table_unrecognised, MAX_EXAMPLES * 4),
+                "table_unrecognised_lines": sum(table_unrecognised.values()),
+                "name_disagreements": self.name_disagreements[dataset],
+                "name_disagreement_examples": self.name_examples.get(dataset, []),
+            }
+        return {"lists": len(self.lists), "by_dataset": by_dataset}
 
     def sorted_lists(self) -> list[dict]:
         """The run's lists in id order, as the artifact writes them."""
-        return [self.lists[key] for key in sorted(self.lists)]
+        return sorted_lists(self.lists)

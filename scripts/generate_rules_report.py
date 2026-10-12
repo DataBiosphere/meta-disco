@@ -440,16 +440,7 @@ def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict
                     continue
                 if claimed is not None and _won(field_name, claimed, answer):
                     won.add(key)
-        # An edge rule names a step's input, not a claim: counted per input and per file.
-        # A run written before #580 has `derived_from` instead, which is not counted.
-        step = record.get("generated_by")
-        for used in step.get("inputs") or [] if isinstance(step, dict) else []:
-            for source in used.get("named_by") or []:
-                stats[source["rule_id"]].claims += 1
-                fired.add(source["rule_id"])
-        # A sample rule names the file's samples (#357): counted per source that named them.
-        samples = record.get(SAMPLES_FIELD)
-        for source in samples.get("named_by") or [] if isinstance(samples, dict) else []:
+        for source in _attributions(record):
             stats[source["rule_id"]].claims += 1
             fired.add(source["rule_id"])
         for key in fired:
@@ -458,6 +449,20 @@ def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict
         for key in won:
             stats[key].won += 1
     return n, stats, by_caller
+
+
+def _attributions(record: dict):
+    """Every attribution an edge or sample rule is counted by: each input of the record's step, and its samples.
+
+    An edge rule names a step's input, not a claim; a run written before #580 has
+    `derived_from` instead, which is not counted. A sample rule names the file's samples
+    (#357), counted per source that named them.
+    """
+    step = record.get("generated_by")
+    for used in step.get("inputs") or [] if isinstance(step, dict) else []:
+        yield from used.get("named_by") or []
+    samples = record.get(SAMPLES_FIELD)
+    yield from samples.get("named_by") or [] if isinstance(samples, dict) else []
 
 
 def sample_rule_rows() -> list[dict]:

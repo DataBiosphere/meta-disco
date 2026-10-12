@@ -19,6 +19,7 @@ from meta_disco.reconcile_samples import (
     CONFLICT,
     HEADER_ONLY,
     INCOMPARABLE,
+    NONE,
     TABLE_ONLY,
     Named,
     from_line,
@@ -81,7 +82,7 @@ def test_different_members_sharing_no_namespace_are_incomparable_and_give_no_sam
 
 
 def test_no_source_gives_nothing():
-    assert settle([]) == (None, None, frozenset())
+    assert settle([]) == (NONE, None, frozenset())
 
 
 # --- an evidence line ----------------------------------------------------------------
@@ -109,7 +110,7 @@ def test_a_line_holding_an_unrecognised_string_names_nothing(raw):
 def test_a_record_pointing_to_a_list_its_run_lacks_is_refused():
     row = {"file_name": "x.bam", "samples": {"list_id": "0" * 16, "count": 1, "named_by": [HEADER]}}
     with pytest.raises(ValueError, match="no producer file of the run holds"):
-        from_record(row, {})
+        from_record(row, {}, {})
 
 
 # --- the name check ------------------------------------------------------------------

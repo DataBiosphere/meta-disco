@@ -13,7 +13,7 @@ import pytest
 from meta_disco import anvil_evidence as ae
 from meta_disco.azul_manifest import FORMAT_COMPACT, FORMAT_VERBATIM, manifest_path
 from meta_disco.deployments import PROD
-from meta_disco.models import JOIN_KEY_DRS_URI, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
+from meta_disco.models import EVIDENCE_FIELDS, JOIN_KEY_DRS_URI, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
 from meta_disco.slot_map import load_slot_map, published_slot_map_resource
 from meta_disco.source_evidence import (
     discover,
@@ -87,7 +87,7 @@ HIFI_ROWS = [
 
 
 def rows_of(path: Path) -> list[tuple[str, str, str, str | None]]:
-    return [(e.field, e.target_key_value, e.raw_value, e.source.column) for e in iter_evidence(path)]
+    return [(e.field, e.target_key_value, e.raw_value, e.source.column) for e in iter_evidence(path, EVIDENCE_FIELDS)]
 
 
 # --- the published map: the same importer, the map's own kind (#497) ----------------

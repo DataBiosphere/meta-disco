@@ -36,7 +36,7 @@ from .records import (
     OutputRecord,
     RunMetadata,
 )
-from .sample_identity import HeaderSamples, most_frequent
+from .sample_identity import HeaderSamples, most_frequent, sorted_lists
 
 
 def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> list[dict]:
@@ -664,7 +664,7 @@ class ClassifyPipeline:
                     if counts
                 },
             }
-            sample_lists = [lists[key] for key in sorted(lists)]
+            sample_lists = sorted_lists(lists)
             for dataset, counts in details[SAMPLE_OUTCOMES_KEY].items():
                 print(f"  Header samples, {dataset}: {', '.join(f'{k} {v:,}' for k, v in counts.items())}")
         classifications = self._save_final(

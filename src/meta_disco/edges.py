@@ -289,7 +289,7 @@ def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[
     if activity == activities.UNKNOWN:
         return None, None
     if activity is None:
-        return None, StepConflict(ACTIVITY_CONFLICT, None, _distinct((s.activity, s.attribution) for s in said))
+        return None, StepConflict(ACTIVITY_CONFLICT, None, distinct((s.activity, s.attribution) for s in said))
     # Beside a specific activity (the generic-only case returned above), a generic step must match a parent.
     specific = [s for s in said if s.activity != activities.UNKNOWN]
     named = {s.parent_key: s for s in specific}
@@ -300,7 +300,7 @@ def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[
             return None, StepConflict(
                 EDGE_CONFLICT,
                 s.role,
-                _distinct([(s.parent_file, s.attribution), *((o.parent_file, o.attribution) for o in specific)]),
+                distinct([(s.parent_file, s.attribution), *((o.parent_file, o.attribution) for o in specific)]),
             )
     # A generic step whose parent matches stands in that parent's input, as another of its sources.
     said = [
@@ -313,13 +313,13 @@ def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[
     for role in dict.fromkeys(s.role for s in said):
         in_role = [s for s in said if s.role == role]
         if len({s.parent_key for s in in_role}) > 1 and role in declared and not declared[role].many:
-            return None, StepConflict(EDGE_CONFLICT, role, _distinct((s.parent_file, s.attribution) for s in in_role))
+            return None, StepConflict(EDGE_CONFLICT, role, distinct((s.parent_file, s.attribution) for s in in_role))
         # Inference names every input of the step it read (a name rule its one parent, a
         # header command line all its inputs), so a source naming other parents in that
         # role contradicts it rather than adding to it, in a role that takes several too.
         from_sources = {s.parent_key for s in said[len(from_inference) :] if s.role == role}
         if role in inferred_parents and from_sources and from_sources != inferred_parents[role]:
-            return None, StepConflict(EDGE_CONFLICT, role, _distinct((s.parent_file, s.attribution) for s in in_role))
+            return None, StepConflict(EDGE_CONFLICT, role, distinct((s.parent_file, s.attribution) for s in in_role))
     inputs: dict[tuple[str, str], dict] = {}
     for s in said:
         used = inputs.setdefault(
@@ -333,8 +333,8 @@ def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[
                 "named_by": [],
             },
         )
-        used["named_by"] = list(_distinct([*used["named_by"], s.attribution]))
-    step_named_by = _distinct([*((inferred or {}).get("named_by") or []), *(s.attribution for s in lineage)])
+        used["named_by"] = list(distinct([*used["named_by"], s.attribution]))
+    step_named_by = distinct([*((inferred or {}).get("named_by") or []), *(s.attribution for s in lineage)])
     return {"activity": activity, "named_by": list(step_named_by), "inputs": list(inputs.values())}, None
 
 
@@ -344,7 +344,7 @@ def generic_only(inferred: dict | None, lineage: Iterable[LineageStep]) -> bool:
     return bool(activities_named) and all(a == activities.UNKNOWN for a in activities_named)
 
 
-def _distinct(items):
+def distinct(items):
     """``items`` in order, each once (dicts compare by value, so a list, not a set)."""
     out: list = []
     for item in items:

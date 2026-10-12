@@ -1361,3 +1361,16 @@ class TestOnePublishedSourcePerRepository:
         (tmp_path / "c").mkdir()
         (tmp_path / "c" / "broken.ndjson").write_text("{not json\n")
         require_one_published_source(report_evidence_files(tmp_path), PUBLISHED_TABLES)
+
+
+def test_a_samples_row_is_read_only_by_a_reader_that_asks_for_it(tmp_path):
+    """#357: value-map seeding and the review queue read the dimensions; reconcile's join asks for samples too."""
+    envelope = evidence_file_envelope()
+    entries = [
+        EvidenceEntry(field=f, target_key_value="k1", raw_value=v, source=claim_source_for(envelope.source, "c"))
+        for f, v in [("platform", "ILLUMINA"), ("samples", "HG00096")]
+    ]
+    path = tmp_path / "t.ndjson"
+    write_evidence_file(path, envelope, entries)
+    assert [e.field for e in iter_evidence(path)] == ["platform"]
+    assert [e.field for e in iter_evidence(path, EVIDENCE_FIELDS)] == ["platform", "samples"]
