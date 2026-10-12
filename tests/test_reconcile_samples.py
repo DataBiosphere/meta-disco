@@ -207,6 +207,8 @@ def test_a_run_settles_header_and_table_and_writes_each_list_once(tmp_path, run,
 
     block = report[SAMPLES_FIELD]["by_dataset"][DATASET]
     assert block["settled"] == {AGREED: 1, HEADER_ONLY: 1, TABLE_ONLY: 1, CONFLICT: 1, "none": 1}
+    # Coverage lists the dimensions each source speaks to; samples is not one.
+    assert all(SAMPLES_FIELD not in slots for per in report["coverage"].values() for slots in per.values())
     assert block["conflict_examples"] == ["f2.bam"]
     assert block["table_unrecognised"] == [
         {"table": "participant", "column": "participant_id", "raw_value": "Sample", "files": 1}

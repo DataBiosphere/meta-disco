@@ -40,11 +40,13 @@ _NAME_TOKEN = re.compile(r"[^A-Za-z0-9]+")
 
 _UniqueKeyLoader = unique_key_loader("sample namespaces file")
 
-# A rule's ``write`` template: literal text on one line and numbered groups ``\1`` to ``\9``, never
-# empty and nothing else, so
+# A rule's ``write`` template: literal text on one line and numbered groups ``\1`` to ``\9`` (none
+# followed by another digit), never empty and nothing else, so
 # every template is checked whole at load (a named ``\g<...>`` or another escape would otherwise
 # fail only at the first string it rewrites).
 _TEMPLATE = re.compile(r"(?:[^\\\r\n]|\\[1-9])*")
+# A group reference followed by a digit (``\10``) is read by ``re`` as group 10, not group 1 then "0".
+_AMBIGUOUS_GROUP = re.compile(r"\\[1-9][0-9]")
 
 
 @dataclass(frozen=True, order=True, slots=True)
@@ -168,7 +170,7 @@ def _rule_set(document: IdentifierRules) -> IdentifierRuleSet:
                 f"identifier rule {rule.id!r}: match {rule.match!r} is not a regular expression: {exc}"
             ) from None
         if rule.write is not None:
-            if not rule.write or _TEMPLATE.fullmatch(rule.write) is None:
+            if not rule.write or _TEMPLATE.fullmatch(rule.write) is None or _AMBIGUOUS_GROUP.search(rule.write):
                 raise ValueError(
                     f"identifier rule {rule.id!r}: write {rule.write!r} is not literal text and \\1 to \\9"
                 )

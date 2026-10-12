@@ -121,6 +121,8 @@ def rules_text(*rules: dict) -> str:
         (({"id": "a", "match": "^(A)$", "extra": r", write: 'X\g<missing>'"},), "not literal text"),
         (({"id": "a", "match": "^(A)$", "extra": r", write: 'X\n'"},), "not literal text"),
         (({"id": "a", "match": "^(A)$", "extra": ", write: ''"},), "not literal text"),
+        # Read by `re` as group 10, not group 1 then "0".
+        (({"id": "a", "match": "^(A)$", "extra": r", write: 'X\10'"},), "not literal text"),
         (({"id": "a", "match": "^(A)$", "extra": ', write: "X\\nY"'},), "not literal text"),
         (({"id": "a.b", "match": "^A$"},), "a.b"),
     ],
@@ -288,3 +290,35 @@ def test_the_most_frequent_strings_tie_by_the_string_whatever_order_they_were_co
     b = Counter({"c": 2, "a": 1, "b": 1})
     assert list(most_frequent(a)) == list(most_frequent(b)) == ["c", "a", "b"]
     assert most_frequent(a, 2) == {"c": 2, "a": 1}
+
+
+def test_a_name_is_never_read_by_a_dataset_local_rule():
+    rules = load_identifier_rules(
+        rules_text({"id": "s", "ns": "dataset_local", "match": "^S\\d$", "extra": ", dataset: D"})
+    )
+    assert rules.recognise("S1", "D") is not None
+    assert rules.in_name("S1.bam") == set()
+
+
+def test_the_producer_reads_a_header_in_its_files_dataset(tmp_path):
+    """A dataset's own names (T2T_CHRY's SGDP names) are samples only in that dataset."""
+    records: list[dict] = [
+        {"file_name": "a.bam", "dataset_title": T2T_CHRY},
+        {"file_name": "b.bam", "dataset_title": "X"},
+    ]
+    for n, record in enumerate(records):
+        record.update(file_id=f"f{n}", file_md5sum=f"{n:032x}", file_size=1, file_format=".bam")
+
+    def fetch(evidence_dir, md5, **kwargs):
+        return "@RG\tID:1\tSM:simons_data_sample_7\n"
+
+    config = dataclasses.replace(BAM_CONFIG, fetcher=fetch, preflight=None)
+    pipeline = ClassifyPipeline(
+        config,
+        write_metadata(tmp_path / "in.json", records),
+        tmp_path / "bam.json",
+        evidence_base=tmp_path / "ev",
+        workers=1,
+    )
+    rows = {r["file_id"]: r for r in pipeline.run()}
+    assert rows["f0"]["samples"] is not None and rows["f1"]["samples"] is None

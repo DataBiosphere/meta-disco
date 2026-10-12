@@ -340,7 +340,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     The listing is therefore driven by the evidence rather than by the rows, which cannot see a value that
     has none; table, column and file count come from the evidence too, a mapping row carrying none.
     A `samples` value (2.1) is unmatched where no identifier rule recognises it; it is listed in the reconcile
-    report's samples block, every one with its dataset, table, column and the files its lines reached,
+    report's samples block, every one with its dataset, table, column and the number of files its lines reached,
     rather than in the review queue, since no row could rule on it.
 
 5.3 A source that produces evidence matching no file is an error, not a silent zero.

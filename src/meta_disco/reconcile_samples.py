@@ -196,7 +196,7 @@ class SampleReport:
         ``headers`` is per dataset what inference's headers said (``reconcile.header_samples``):
         each outcome's files (``sample_identity``'s ``NAMED``, ``UNRECOGNISED``, ``NO_SAMPLE``, ``UNREAD``)
         and its most frequent unrecognised strings. ``unrecognised`` is every table value no rule
-        recognised, by table and column, with the files whose line held it; each is listed
+        recognised, by table and column, with the number of files whose line held it; each is listed
         (contract 5.2), the most files first.
         """
         datasets = sorted(set(self.outcomes) | set(headers) | set(unrecognised))

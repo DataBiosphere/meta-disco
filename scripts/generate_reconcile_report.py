@@ -1131,8 +1131,8 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
         "`rules/sample_namespaces.yaml` (#357). *named*: every string the header holds is recognised; "
         "*unrecognised*: it holds one no rule recognises (or a read group with no `SM`), so it names no samples; "
         "*no_sample*: it names none; *unread*: the head read ended before the samples (a VCF's `#CHROM` line). "
-        "Settled: *agreed*, header and table named the same samples; *header_only* / *table_only*: one source "
-        "did; *conflict*: they named different samples in one namespace; *incomparable*: different samples in "
+        "Settled: *agreed*, header and table named the same samples; *header_only* / *table_only*: only the "
+        "header, or only tables (one or several, agreeing), did; *conflict*: they named different samples in one namespace; *incomparable*: different samples in "
         "no shared namespace, which only a crosswalk could join (#361); *none*: no source named any. A conflict "
         "or an incomparable file gets no `samples`. A file whose name names one other sample than its settled "
         "ones is counted under *name disagrees*; a name is a check, never a source.",

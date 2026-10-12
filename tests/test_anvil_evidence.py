@@ -723,3 +723,27 @@ def test_a_list_cell_is_checked_element_by_element(tmp_path):
     agreeing = [named_file(1, "HG01109.final.cram"), ("sample", {"members": ["HG01106", "HG01109"], "child": drs(1)})]
     write_dataset(tmp_path, "D", agreeing)
     assert ae.check(slot_map(tmp_path, text), tmp_path, CATALOG) == []
+
+
+def test_as_many_agreeing_files_as_disagreeing_ones_are_not_a_problem(tmp_path):
+    """Only a column most of whose comparable files disagree is refused; a tie is not most."""
+    rows = [
+        named_file(1, "HG01106.final.cram"),
+        named_file(2, "HG01105.final.cram"),
+        ("sample", {"sample_id": "HG01106", "child": drs(1)}),
+        ("sample", {"sample_id": "HG01109", "child": drs(2)}),
+    ]
+    write_dataset(tmp_path, "D", rows)
+    text = "catalog: anvil15\ndatasets:\n  D:\n    sample:\n      child:\n        samples:\n          - {cell: sample_id}\n"
+    assert ae.check(slot_map(tmp_path, text), tmp_path, CATALOG) == []
+
+
+def test_the_name_check_reads_only_its_own_datasets_map_entries(tmp_path):
+    """Another dataset mapping the same table and column from another cell does not apply here."""
+    write_dataset(tmp_path, "D", TRIO_ROWS)
+    text = (
+        "catalog: anvil15\ndatasets:\n"
+        "  D:\n    sample:\n      mat:\n        samples:\n          - {cell: maternal_id}\n"
+        "  E:\n    sample:\n      mat:\n        samples:\n          - {cell: sample_id}\n"
+    )
+    assert ae.check(slot_map(tmp_path, text), tmp_path, CATALOG, ["D"]) == []
