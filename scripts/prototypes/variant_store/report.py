@@ -1,3 +1,7 @@
+# /// script
+# requires-python = ">=3.10"
+# dependencies = []
+# ///
 """Write the measurement tables of RESULTS.md from ``results/*.json`` (#663).
 
 Everything above the ``<!-- recommendation -->`` marker is regenerated; the
