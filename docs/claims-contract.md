@@ -32,6 +32,12 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 2.1 Evidence imported from a source is `(slot, raw_value)` plus provenance: source, dataset, table, column.
     A **slot** is one of the eight classification dimensions; it is spelled `field` on the wire and in the code.
+    One slot is not a dimension: `samples` (#357), which sample a file's data comes from. Its raw value is
+    read through the identifier rules (`rules/sample_namespaces.yaml`), never translated by a row (3.4–3.12):
+    a sample identifier is recognised by its namespace's pattern, one rule for a family of thousands of
+    values, rather than authored value by value. Reconcile settles it with a header's samples as a file's
+    step is settled (ADR-0002 decision 6), not by 4.x's resolution, and only a reader that asks for it is
+    given its lines (`source_evidence.iter_evidence`).
     The importer names **both ends of the key correspondence** — `source_key` as the source publishes it,
     `target_key` as one of ours — and writes the value already in our space (#401). Evidence is attached to a
     **file** only at the join (6.7), which is what makes an unmatched or ambiguous row representable rather
@@ -333,6 +339,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     row that deliberately declares nothing for the slot — the 3.10 case — has been ruled on, and leaves.
     The listing is therefore driven by the evidence rather than by the rows, which cannot see a value that
     has none; table, column and file count come from the evidence too, a mapping row carrying none.
+    A `samples` value (2.1) is unmatched where no identifier rule recognises it; it is listed in the reconcile
+    report's samples block, every one with its dataset, table, column and the files its lines reached,
+    rather than in the review queue, since no row could rule on it.
 
 5.3 A source that produces evidence matching no file is an error, not a silent zero.
 

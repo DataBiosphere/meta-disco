@@ -477,8 +477,9 @@ def samples_rows(report: dict) -> list[dict] | None:
 
     Each row: ``headers``, the files per header outcome (``sample_identity``) with the most
     frequent strings no identifier rule recognised; ``settled``, the files per outcome
-    (``reconcile_samples.OUTCOMES`` and ``none``); the table values no rule recognised, the
-    files whose name names another sample, and the first few examples of each.
+    (``reconcile_samples.OUTCOMES`` and ``none``); every table value no rule recognised, with
+    its table, column and files; the files whose name names another sample; and the first few
+    examples of each.
     """
     samples = report.get(SAMPLES_FIELD)
     if samples is None:
@@ -492,7 +493,6 @@ def samples_rows(report: dict) -> list[dict] | None:
             "conflict_examples": block["conflict_examples"],
             "incomparable_examples": block["incomparable_examples"],
             "table_unrecognised": block["table_unrecognised"],
-            "table_unrecognised_lines": block["table_unrecognised_lines"],
             "name_disagreements": block["name_disagreements"],
             "name_disagreement_examples": block["name_disagreement_examples"],
         }
@@ -1105,8 +1105,20 @@ def _lineage_section(lineage: dict | None) -> list[str]:
 
 
 def _strings(counts: dict[str, int], limit: int = 5) -> str:
-    """The first few strings of ``counts`` with how often each was seen, as code spans."""
-    return ", ".join(f"{md_code(k)} ({_n(v)})" for k, v in list(counts.items())[:limit])
+    """The ``limit`` most frequent strings of ``counts`` (ties by the string), with how often each was seen, as code spans.
+
+    Ranked here: ``reconcile_report.json`` is written with sorted keys, so its order is the strings', not their counts'.
+    """
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]
+    return ", ".join(f"{md_code(k)} ({_n(v)})" for k, v in ranked)
+
+
+def _by_value(entries: list[dict]) -> dict[str, int]:
+    """Each unrecognised table value with the files holding it, summed over the tables and columns it came from."""
+    out: dict[str, int] = {}
+    for u in entries:
+        out[u["raw_value"]] = out.get(u["raw_value"], 0) + u["files"]
+    return out
 
 
 def _samples_section(rows: list[dict] | None) -> list[str]:
@@ -1146,9 +1158,9 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
             "",
             "### Strings no identifier rule recognises",
             "",
-            "The most frequent per dataset, with the files (headers) or lines (tables) holding each. No current "
-            "identifier rule recognises them; they include placeholders, paths, decorated accessions and a "
-            "dataset's own names.",
+            "The most frequent per dataset, with the files holding each. No current identifier rule recognises "
+            "them; they include placeholders, paths, decorated accessions and a dataset's own names. Every "
+            "table value is listed below (contract 5.2).",
             "",
             *md_table(
                 ["dataset", "in headers", "in tables"],
@@ -1156,11 +1168,34 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
                     [
                         md_code(shown(r["dataset"])),
                         _strings(r["header_unrecognised"]),
-                        _strings(r["table_unrecognised"]),
+                        _strings(_by_value(r["table_unrecognised"])),
                     ]
                     for r in unread
                 ],
             ),
+        ]
+    table_values = [(r["dataset"], u) for r in rows for u in r["table_unrecognised"]]
+    if table_values:
+        lines += [
+            "",
+            "<details>",
+            f"<summary>Every table value no identifier rule recognises ({len(table_values)})</summary>",
+            "",
+            *md_table(
+                ["dataset", "table", "column", "value", "files"],
+                [
+                    [
+                        md_code(shown(d)),
+                        md_code(u["table"]),
+                        md_code(u["column"]),
+                        md_code(u["raw_value"]),
+                        _n(u["files"]),
+                    ]
+                    for d, u in table_values
+                ],
+            ),
+            "",
+            "</details>",
         ]
     examples = [
         r for r in rows if r["conflict_examples"] or r["incomparable_examples"] or r["name_disagreement_examples"]

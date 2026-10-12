@@ -120,6 +120,8 @@ def rules_text(*rules: dict) -> str:
         (({"id": "a", "match": "^(A)$", "extra": r", write: 'X\2'"},), "names a group"),
         (({"id": "a", "match": "^(A)$", "extra": r", write: 'X\g<missing>'"},), "not literal text"),
         (({"id": "a", "match": "^(A)$", "extra": r", write: 'X\n'"},), "not literal text"),
+        (({"id": "a", "match": "^(A)$", "extra": ", write: ''"},), "not literal text"),
+        (({"id": "a", "match": "^(A)$", "extra": ', write: "X\\nY"'},), "not literal text"),
         (({"id": "a.b", "match": "^A$"},), "a.b"),
     ],
 )

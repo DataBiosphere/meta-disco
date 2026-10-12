@@ -34,7 +34,6 @@ from .sample_identity import (
     Identifier,
     IdentifierRuleSet,
     members_of,
-    most_frequent,
     name_contradicts,
     reference,
     sample_list,
@@ -191,25 +190,29 @@ class SampleReport:
                     )
         return samples
 
-    def to_dict(self, headers: dict[str, dict], unrecognised: dict[str, Counter]) -> dict:
+    def to_dict(self, headers: dict[str, dict], unrecognised: dict[str, dict[tuple[str, str, str], set[str]]]) -> dict:
         """The report's ``samples`` block: per dataset, what the headers said, how files settled, and what was not read.
 
         ``headers`` is per dataset what inference's headers said (``reconcile.header_samples``):
         each outcome's files (``sample_identity``'s ``NAMED``, ``UNRECOGNISED``, ``NO_SAMPLE``, ``UNREAD``)
-        and its most frequent unrecognised strings. ``unrecognised`` is the table values no
-        rule recognised, with the lines that held each.
+        and its most frequent unrecognised strings. ``unrecognised`` is every table value no rule
+        recognised, by table and column, with the files whose line held it; each is listed
+        (contract 5.2), the most files first.
         """
         datasets = sorted(set(self.outcomes) | set(headers) | set(unrecognised))
         by_dataset = {}
         for dataset in datasets:
-            table_unrecognised = unrecognised.get(dataset, Counter())
+            table_unrecognised = [
+                {"table": table, "column": column, "raw_value": raw, "files": len(files)}
+                for (table, column, raw), files in unrecognised.get(dataset, {}).items()
+            ]
+            table_unrecognised.sort(key=lambda u: (-u["files"], u["table"], u["column"], u["raw_value"]))
             by_dataset[dataset] = {
                 "settled": {o: self.outcomes[dataset][o] for o in (*OUTCOMES, NONE) if self.outcomes[dataset][o]},
                 "conflict_examples": self.examples.get((dataset, CONFLICT), []),
                 "incomparable_examples": self.examples.get((dataset, INCOMPARABLE), []),
                 "headers": headers.get(dataset, {}),
-                "table_unrecognised": most_frequent(table_unrecognised, MAX_EXAMPLES * 4),
-                "table_unrecognised_lines": sum(table_unrecognised.values()),
+                "table_unrecognised": table_unrecognised,
                 "name_disagreements": self.name_disagreements[dataset],
                 "name_disagreement_examples": self.name_examples.get(dataset, []),
             }

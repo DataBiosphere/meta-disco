@@ -497,9 +497,10 @@ class Joined:
     # Per record identity, the samples each matched ``samples`` line names (#357), read
     # through the identifier rules rather than the value map.
     samples: dict[str, list[Named]] = field(default_factory=dict)
-    # Per dataset, the ``samples`` raw values no identifier rule recognises, with how many
-    # matched lines held each: no sample, never a guess.
-    unrecognised_samples: dict[str, Counter] = field(default_factory=dict)
+    # Per dataset, each ``samples`` raw value no identifier rule recognises, by the table and
+    # column it came from, with the files whose line held it: no sample, never a guess, and
+    # every one listable (contract 5.2).
+    unrecognised_samples: dict[str, dict[tuple[str, str, str], set[str]]] = field(default_factory=dict)
 
 
 # A key a line is matched by: the output-row field, the dataset the envelope scopes the
@@ -648,7 +649,7 @@ def join(
 
     slots: dict[str, dict[str, SlotEvidence]] = defaultdict(lambda: defaultdict(SlotEvidence))
     samples: dict[str, list[Named]] = defaultdict(list)
-    unrecognised: dict[str, Counter] = defaultdict(Counter)
+    unrecognised: dict[str, dict[tuple[str, str, str], set[str]]] = defaultdict(lambda: defaultdict(set))
     for wanted_key, lines in wanted.items():
         record_field, _, value = wanted_key
         found = carriers.get(wanted_key, [])
@@ -668,7 +669,8 @@ def join(
                 if entry.field == SAMPLES_FIELD:
                     got = from_line(entry.raw_value, ev.dataset, ev.source_type, entry.source, rules)
                     if got is None:
-                        unrecognised[ev.dataset or ""][entry.raw_value] += 1
+                        where = (str(entry.source.table), str(entry.source.column), entry.raw_value)
+                        unrecognised[ev.dataset or ""][where].add(found[0])
                     else:
                         samples[found[0]].append(got)
                     continue
@@ -688,7 +690,7 @@ def join(
         carriers={k: v for k, v in found_by_key.items() if k in extra},
         coverage=dict(coverage),
         samples=dict(samples),
-        unrecognised_samples=dict(unrecognised),
+        unrecognised_samples={d: dict(v) for d, v in unrecognised.items()},
     )
 
 

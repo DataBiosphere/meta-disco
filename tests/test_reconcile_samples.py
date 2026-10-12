@@ -208,7 +208,9 @@ def test_a_run_settles_header_and_table_and_writes_each_list_once(tmp_path, run,
     block = report[SAMPLES_FIELD]["by_dataset"][DATASET]
     assert block["settled"] == {AGREED: 1, HEADER_ONLY: 1, TABLE_ONLY: 1, CONFLICT: 1, "none": 1}
     assert block["conflict_examples"] == ["f2.bam"]
-    assert block["table_unrecognised"] == {"Sample": 1}
+    assert block["table_unrecognised"] == [
+        {"table": "participant", "column": "participant_id", "raw_value": "Sample", "files": 1}
+    ]
 
 
 def test_without_evidence_the_header_samples_stand(tmp_path, run, table):
