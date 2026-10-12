@@ -202,11 +202,11 @@ class SampleReport:
         datasets = sorted(set(self.outcomes) | set(headers) | set(unrecognised))
         by_dataset = {}
         for dataset in datasets:
+            ranked = sorted(unrecognised.get(dataset, {}).items(), key=lambda kv: (-len(kv[1]), kv[0]))
             table_unrecognised = [
                 {"table": table, "column": column, "raw_value": raw, "files": len(files)}
-                for (table, column, raw), files in unrecognised.get(dataset, {}).items()
+                for (table, column, raw), files in ranked
             ]
-            table_unrecognised.sort(key=lambda u: (-u["files"], u["table"], u["column"], u["raw_value"]))
             by_dataset[dataset] = {
                 "settled": {o: self.outcomes[dataset][o] for o in (*OUTCOMES, NONE) if self.outcomes[dataset][o]},
                 "conflict_examples": self.examples.get((dataset, CONFLICT), []),
