@@ -13,6 +13,7 @@ numbers and the recommendation are in [RESULTS.md](RESULTS.md).
 | `build_parquet.py` | Builds the long table of non-reference genotypes (`genotypes.parquet`, sorted by chrom and pos); checks its row count against every genotype in the VCF tallied by `bcftools` |
 | `query_parquet.py` | Times "carriers of V", "carriers of all of V1…V50" and "all variants of sample X" on the Parquet table, locally and through simulated S3; builds and times a sample-sorted copy |
 | `pgen.py` | Builds the PLINK 2 `.pgen` (2 bits per genotype) and a carrier bitmap file (one mask per variant), and times the same questions on both, "carriers of all of 50" three ways; times KING kinship |
+| `compact_copy.py` | Builds a sample-sorted copy with integer variant numbers and a lookup table, and times the sample-keyed question on it locally |
 | `samples.py` | Builds a stand-in sample table (pedigree + AnVIL datasets named in file names) and times carrier queries joined to it |
 | `report.py` | Writes the measurement tables of `RESULTS.md` from `results/*.json` |
 
@@ -43,6 +44,7 @@ uv run scripts/prototypes/variant_store/build_parquet.py
 uv run scripts/prototypes/variant_store/query_parquet.py
 uv run scripts/prototypes/variant_store/pgen.py
 uv run scripts/prototypes/variant_store/samples.py
+uv run scripts/prototypes/variant_store/compact_copy.py
 uv run scripts/prototypes/variant_store/report.py
 ```
 

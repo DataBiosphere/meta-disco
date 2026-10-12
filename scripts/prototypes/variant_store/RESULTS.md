@@ -96,7 +96,7 @@ Projected rows: 15.1 billion. Projected build time on this machine, one chromoso
 - **The panel has no singletons**: no site has an allele count below 2, so the questions' AC = 1 bin was empty.
 - **`chrom:pos:ref:alt` does not name a variant uniquely.** Two symbolic SVs (`22857056 T <DEL>`, `49951209 G <INS>`) each share pos, ref and alt with another record, which is why 1,066,557 records give 1,066,555 variant ids. A real key needs the VCF's ID (`HGSV_…`) or END for symbolic alleles. The scripts refuse a question about either site, and compare a sample's variants as a list so both records are kept.
 - **Bloom filters cost a request per row group over HTTP** (section above). DuckDB writes them by default; this prototype turns them off.
-- **Sorting by sample made the copy nearly 12 times larger** (1.91 GB against 164 MB). Sorted by position, a variant's id, ref and alt repeat on consecutive rows and compress away; sorted by sample they do not. I think storing an integer variant number in place of the strings would shrink it a lot, but that was not built or measured.
+- **Sorting by sample made the copy nearly 12 times larger** (1.91 GB against 164 MB). Sorted by position, a variant's id, ref and alt repeat on consecutive rows and compress away; sorted by sample they do not. An integer variant number in place of the strings (`compact_copy.py`: `sample`, `variant`, `genotype`, plus a lookup table from number to strings) brings it to 637 MB plus a 13 MB lookup, 3.9 times the main table, built in 16 s. It is still larger because, sorted by sample, the variant numbers rise on every row and the genotypes look random, so neither compresses into runs; a delta encoding for that column was not tried.
 - **Opening a `.pgen` costs about 2.6 ms; reading from an open one costs about 0.01 ms per variant.** The fresh pgen timings are almost all the open.
 
 ## Recommendation
@@ -117,8 +117,8 @@ Projected rows: 15.1 billion. Projected build time on this machine, one chromoso
 
 **Sample-keyed questions need a second copy if they must be interactive remotely.**
 - On the position-sorted table, "all variants of sample X" took 0.31–0.34 s locally but about 15 s at 20 ms and 46 s at 80 ms per request (single runs, as each took over 10 s): a full scan, about 5,050 requests and 151 MB.
-- The sample-sorted copy answered in 27–28 ms locally, about 0.2 s at 20 ms and about 0.57 s at 80 ms (6–9 requests). As built, though, it is nearly 12 times the size (projected 139 GB, about $3.20 a month).
-- Build it only if remote sample-keyed questions are wanted, and with an integer variant number in place of the strings (unmeasured). From an open `.pgen` the same question took 137–145 ms locally.
+- The sample-sorted copy answered in 27–28 ms locally, about 0.2 s at 20 ms and about 0.57 s at 80 ms (6–9 requests). As built, though, it is nearly 12 times the size (projected 139 GB, about $3.20 a month). The compact copy, with integer variant numbers, is 3.9 times (projected about 46 GB) and answered in 53–56 ms locally through its lookup table, with no mismatches; it was not timed over simulated S3.
+- Build it only if remote sample-keyed questions are wanted, and then as the compact copy. From an open `.pgen` the same question took 137–145 ms locally.
 
 **Precompute sample similarity (KING), not MinHash.** KING over all 3,202 samples took 8 s on chr22, a projected 10 minutes genome-wide. The output is one 41 MB matrix whatever the number of chromosomes. At 3,202 samples an exact kinship matrix is cheap, so an approximation buys nothing.
 
