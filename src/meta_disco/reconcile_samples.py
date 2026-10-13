@@ -1,8 +1,9 @@
 """Which samples each file's data comes from, settled at reconcile (#357).
 
-Two kinds of source name a file's samples. Inference reads the file's own header (a BAM's
-``@RG SM``, a VCF's sample columns, ``sample_identity.SampleReader``) and writes the
-record's ``samples``, a pointer into its producer file's sample lists. A submitter table
+Two kinds of source name a file's samples. Inference reads the file's own content, called its
+header here (a BAM's ``@RG SM``, a VCF's sample columns, a GATK sample map's rows,
+``sample_identity.SampleReader``), and writes the record's ``samples``, a pointer into its
+producer file's sample lists. A submitter table
 names them in a column the slot map routes to ``samples``, and the importer writes each
 cell as an evidence line; reconcile reads it here, through the same identifier rules
 (``rules/sample_namespaces.yaml``).
@@ -68,6 +69,7 @@ NONE = "none"  # no source named a sample
 OUTCOMES = (AGREED, HEADER_ONLY, TABLE_ONLY, INHERITED, CONFLICT, INCOMPARABLE)
 
 # Which kind of source named a file's samples, in the order ``named_by`` lists them.
+# ``header`` is whatever inference read from the file's own content, a sample map's rows included.
 HEADER, TABLE, PARENT = "header", "table", "parent"
 KINDS = (HEADER, TABLE, PARENT)
 

@@ -1132,7 +1132,8 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
     lines = [
         "## Samples: whose data each file holds",
         "",
-        "A file's header names its samples (a BAM's `@RG SM`, a VCF's sample columns) and a submitter table may "
+        "A file's own content names its samples, read by inference and labelled *header* below (a BAM's `@RG SM`, "
+        "a VCF's sample columns, a GATK sample map's rows, #668), and a submitter table may "
         "name them in a column the slot map reads; each string becomes an identifier only through "
         "`rules/sample_namespaces.yaml` (#357). *named*: every string the header holds is recognised; "
         "*unrecognised*: it holds one no rule recognises (or a read group with no `SM`), so it names no samples; "
