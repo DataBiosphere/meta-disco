@@ -254,10 +254,9 @@ class SampleReport:
         return ([header] if header is not None else []) + table
 
     def _hold(self, identity: str, outcome: str, samples: dict | None, members: frozenset[Identifier]) -> None:
+        # Adding a parent's source cannot settle a file's own conflict, so a key once in conflict stays.
         if outcome in (CONFLICT, INCOMPARABLE):
             self._conflicted.add(identity)
-        else:
-            self._conflicted.discard(identity)
         if samples is None:
             self.held.pop(identity, None)
             return

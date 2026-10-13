@@ -180,7 +180,7 @@ def passes(term: str) -> tuple[str, ...]:
 
 @cache
 def role_passes(term: str) -> dict[str, tuple[str, ...]]:
-    """Per input role of ``term`` that passes anything, the dimensions it passes, in ``CLASSIFICATION_FIELDS`` order.
+    """Per input role of ``term`` that passes a dimension, the dimensions it passes, in ``CLASSIFICATION_FIELDS`` order.
 
     Cached, since reconcile asks once per child; callers must not change the dict.
     """

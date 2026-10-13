@@ -1311,7 +1311,7 @@ def reconcile_run(
     first pass settles each record's own answer, samples and step and keeps, per record, only
     its settled answer for the carried slots and its settled sample list (and, for a child,
     what its own declarations and, where its step passes samples, its own sample sources
-    are), each distinct one held once. The second settles each record again, now with its
+    are), each distinct answer and list held once. The second settles each record again, now with its
     inherited declarations and samples, and writes it. Refuses (``ReconcileError``) a run whose steps
     form a cycle.
     """

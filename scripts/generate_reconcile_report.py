@@ -499,7 +499,8 @@ def samples_rows(report: dict) -> list[dict] | None:
             "name_disagreements": block["name_disagreements"],
             "name_disagreement_examples": block["name_disagreement_examples"],
             "inheritance": block.get("inheritance") or {},
-            "parent_disagreements": block.get("parent_disagreements") or {},
+            # None in a report written before #668, which never ran the check.
+            "parent_disagreements": block.get("parent_disagreements"),
             "parent_disagreement_examples": block.get("parent_disagreement_examples") or [],
         }
         for dataset, block in sorted(samples["by_dataset"].items())
@@ -1215,7 +1216,8 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
             "",
             "Per step that passes samples, what each file's parent gave it, counted once per file and role: "
             "*passed*: its parents named one list; *parents_differ*: its parents named different lists; "
-            "*parent_conflict*: a parent's own sources named different samples, a conflict listed on the parent; "
+            "*parent_conflict*: a parent's own sources named different samples, so it is counted as a conflict or "
+            "incomparable above, and listed there; "
             "*parent_none*: no source named a parent's samples. Nothing passes in the last three.",
             "",
             *md_table(
@@ -1223,7 +1225,8 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
                 [[md_code(shown(d)), md_code(a), *(_n(c.get(o, 0)) for o in PASSING_OUTCOMES)] for d, a, c in passing],
             ),
         ]
-    disagreeing = [(r, a, n) for r in rows for a, n in r["parent_disagreements"].items()]
+    disagreeing = [(r, a, n) for r in rows for a, n in (r["parent_disagreements"] or {}).items()]
+    checked = any(r["parent_disagreements"] is not None for r in rows)
     lines += [
         "",
         "### A file and its parent naming different samples",
@@ -1251,8 +1254,10 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
                 for r, a, n in disagreeing
             ],
         )
-    else:
+    elif checked:
         lines.append("None in this run.")
+    else:
+        lines.append("This run's report predates this check (#668): run `make reconcile` again.")
     examples = [
         r for r in rows if r["conflict_examples"] or r["incomparable_examples"] or r["name_disagreement_examples"]
     ]

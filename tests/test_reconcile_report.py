@@ -634,15 +634,31 @@ def test_the_samples_section_lists_what_passed_and_each_parent_disagreement():
         "name_disagreements": 0,
         "name_disagreement_examples": [],
         "inheritance": {"IndexActivity": {"passed": 2, "parent_none": 1}},
-        "parent_disagreements": {"AlignmentActivity": 1},
+        "parent_disagreements": {"AlignmentActivity": 1, "VariantCallActivity": 1},
         "parent_disagreement_examples": [
-            {"file_name": "a.cram", "activity": "AlignmentActivity", "parent_file": "a.fastq.gz"}
+            {"file_name": "a.cram", "activity": "AlignmentActivity", "parent_file": "a.fastq.gz"},
+            {"file_name": "a.vcf.gz", "activity": "VariantCallActivity", "parent_file": "a.cram"},
         ],
     }
     md = "\n".join(rr._samples_section(rr.samples_rows({"samples": {"by_dataset": {DATASET: block}}})))
     assert f"| `{DATASET}` | `IndexActivity` | 2 | 0 | 0 | 1 |" in md
     assert "| dataset | activity | pairs | examples |" in md
     assert f"| `{DATASET}` | `AlignmentActivity` | 1 | `a.cram` ← `a.fastq.gz` |" in md
+    assert f"| `{DATASET}` | `VariantCallActivity` | 1 | `a.vcf.gz` ← `a.cram` |" in md
+
+
+def test_a_report_written_before_the_parent_check_says_so_rather_than_none():
+    block = {
+        "settled": {},
+        "headers": {},
+        "conflict_examples": [],
+        "incomparable_examples": [],
+        "table_unrecognised": [],
+        "name_disagreements": 0,
+        "name_disagreement_examples": [],
+    }
+    md = "\n".join(rr._samples_section(rr.samples_rows({"samples": {"by_dataset": {DATASET: block}}})))
+    assert "predates this check" in md and "None in this run." not in md
 
 
 def test_a_report_written_before_samples_says_so():

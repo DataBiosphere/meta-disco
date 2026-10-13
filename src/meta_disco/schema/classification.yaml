@@ -921,7 +921,7 @@ classes:
           samples, the identifier rule (`rules/sample_namespaces.yaml`) that read the cell;
           for inherited samples, `code_rules.SAMPLES_INHERITED_FROM_PARENT`'s id.
       # On inherited samples only (#668): the step crossed, the role its parent plays in
-      # it, and the parent's record key. Required on a step, not here.
+      # it, and the parents' record keys. Required on a step, not here.
       activity:
         required: false
 

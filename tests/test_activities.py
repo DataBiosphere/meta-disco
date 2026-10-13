@@ -210,6 +210,13 @@ def test_samples_roles_are_the_roles_declaring_passes_samples():
     assert [i.role for i in loaded["IndexActivity"].inputs if i.passes_samples] == ["indexed"]
 
 
+def test_samples_pass_across_exactly_the_steps_whose_output_describes_its_parent():
+    """#668: an index, a checksum, a QC report, a coverage track, and a cohort merge from its list."""
+    passing = {term for term in activities.declarations() if activities.samples_roles(term)}
+    expected = {activities.INDEXING, activities.CHECKSUM, activities.COHORT_MERGE, "QualityControlActivity"}
+    assert passing == expected | {"CoverageActivity"}
+
+
 def test_samples_never_pass_across_a_step_that_makes_data_with_its_own_samples():
     """An alignment, a call, a merge or an assembly names its own samples in its header (#668)."""
     for term in ("AlignmentActivity", activities.VARIANT_CALL, activities.MERGE, "AssemblyActivity"):

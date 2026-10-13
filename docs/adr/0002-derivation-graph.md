@@ -395,11 +395,11 @@ describes exactly its parent: `IndexActivity`, `ChecksumActivity`, `QualityContr
 `CoverageActivity`, and `CohortMergeActivity` from the list itself (a GATK sample map names its samples in
 its own first column), each role declaring `passes_samples` in `rules/activities.yaml`. A
 `HG02078.chr6.hc.vcf.gz.tbi` takes its VCF's `[HG02078]`, and a T2T GenomicsDB tar its map's 3,202
-samples. A checksum passes no dimension (#596) but does pass samples: a hash names nothing, but it is
-about exactly one file, whose samples it is about. No step that makes data with its own header passes
-samples (`AlignmentActivity`, `VariantCallActivity`, `MergeActivity`, `AssemblyActivity` and the rest): a
-CRAM names its own `@RG SM`, and a child and parent naming different samples there are reported, not
-resolved. Contract 4.9 has the rule.
+samples (1,599 for chrY's map). A checksum passes no dimension (#596) but does pass samples: a hash names
+nothing, but it is about exactly one file, whose samples it is about. No other step passes samples
+(`AlignmentActivity`, `VariantCallActivity`, `MergeActivity`, `AssemblyActivity` and the rest): their
+outputs name their own, as a CRAM its `@RG SM` and a VCF its sample columns, and a child and parent naming
+different samples there are reported, not resolved. Contract 4.9 has the rule.
 
 - Carrying `reference_assembly` carries the build's identity — `ReferenceBuild.base` and `version` —
   so a child describes its reference as precisely as its parents agree on it. The build's observations

@@ -14,6 +14,7 @@ from meta_disco.output_utils import (
     iter_reconciled_records,
     iter_reconciled_sample_lists,
 )
+from meta_disco.reconcile_inherit import Step
 from meta_disco.reconcile_samples import (
     AGREED,
     CONFLICT,
@@ -25,6 +26,7 @@ from meta_disco.reconcile_samples import (
     PARENT,
     PARENT_CONFLICT,
     PARENT_NONE,
+    PARENTS_DIFFER,
     PASSED,
     TABLE_ONLY,
     Named,
@@ -138,9 +140,9 @@ def test_lists_naming_samples_in_namespaces_the_other_lacks_disagree_until_a_cro
     # An extra namespace disagrees even where the rest of one list holds the other.
     assert lists_disagree(frozenset({coriell("HG00096"), sra}), frozenset({coriell("HG00096")}))
     assert lists_disagree(frozenset({coriell("HG00096")}), frozenset({coriell("HG00096"), sra}))
-    # A dataset's own names in two datasets are two namespaces.
-    sgdp = Identifier("dataset_local", "simons_data_sample_7", "ANVIL_T2T_CHRY")
-    assert lists_disagree(frozenset({sgdp}), frozenset({Identifier("dataset_local", "simons_data_sample_7", "X")}))
+    # A dataset's own names in two datasets are two namespaces, even where one list holds the other.
+    in_a, in_b = Identifier("dataset_local", "s7", "A"), Identifier("dataset_local", "s8", "B")
+    assert lists_disagree(frozenset({in_a, in_b}), frozenset({in_a}))
 
 
 # --- an evidence line ----------------------------------------------------------------
@@ -354,6 +356,9 @@ def test_an_index_and_its_checksum_take_the_parents_samples_parents_first(tmp_pa
         assert samples["list_id"] == entry["list_id"] and samples["count"] == 1
         (attribution,) = samples["named_by"]
         assert attribution["rule_id"] == code_rules.SAMPLES_INHERITED_FROM_PARENT.id
+        assert (attribution["activity"], attribution["parent_role"]) == (
+            ("IndexActivity", "indexed") if key == "file-2" else ("ChecksumActivity", "checked")
+        )
         assert attribution["source_type"] == "derivation_inheritance"
         assert attribution["parent_keys"] == [parent]
         ClassificationRecord(**rows[key])
@@ -447,3 +452,24 @@ def test_each_activity_keeps_its_own_disagreement_examples():
     assert [e["file_name"] for e in report.parent_examples[DATASET] if e["activity"] == "AlignmentActivity"] == [
         "b.cram"
     ]
+
+
+def test_parents_in_one_role_naming_different_lists_pass_nothing():
+    report = SampleReport(identifier_rules())
+    report.members.update({"l1": frozenset({coriell("HG00096")}), "l2": frozenset({coriell("HG00097")})})
+    report.held.update({"p1": "l1", "p2": "l2"})
+    report._own["c"] = ([], DATASET)
+    report.inherit({"c": Step("IndexActivity", (("indexed", "p1"), ("indexed", "p2")))})
+    assert report.passing[DATASET]["IndexActivity"] == {PARENTS_DIFFER: 1}
+    assert "c" not in report.held and "c" not in report._inherited
+
+
+def test_a_parent_named_twice_in_a_step_is_one_disagreement():
+    report = SampleReport(identifier_rules())
+    report.members["p"] = frozenset({coriell("HG00096")})
+    report.held["parent"] = "p"
+    twice = [{"role": "calls_from", "parent_key": "parent", "parent_file": "p.cram"}] * 2
+    report._check_parents(
+        DATASET, "c.vcf.gz", frozenset({coriell("HG00097")}), {"activity": "VariantCallActivity", "inputs": twice}
+    )
+    assert report.parent_disagreements[DATASET] == {"VariantCallActivity": 1}
