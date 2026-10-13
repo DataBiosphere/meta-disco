@@ -1375,12 +1375,14 @@ slots:
     range: parent_kind_enum
   parent_role:
     description: >-
-      On an inherited claim (contract 4.9, #571): the input role of the step whose parents
-      gave the claim, a role its `activity` declares in `rules/activities.yaml`.
+      On an inherited claim (contract 4.9, #571), or an inherited sample attribution (#668):
+      the input role of the step whose parents gave the claim or the samples, a role its
+      `activity` declares in `rules/activities.yaml`.
   parent_keys:
     description: >-
-      On an inherited claim (contract 4.9, #571): the record keys of the parents, in that
-      role, whose settled answers gave the claim — each one's record in the same run.
+      On an inherited claim (contract 4.9, #571), or an inherited sample attribution (#668):
+      the record keys of the parents, in that role, whose settled answers or samples gave
+      it — each one's record in the same run.
     multivalued: true
 
 # =============================================================================
