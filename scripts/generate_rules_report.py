@@ -467,7 +467,7 @@ def _attributions(record: dict):
 
 
 def sample_rule_rows() -> list[dict]:
-    """The sample rules (#357): ``code_rules.SAMPLE_RULES`` (the header readers and the parent's, #668), then each identifier rule."""
+    """The sample rules (#357): ``code_rules.SAMPLE_RULES`` (the file-content readers and the parent's, #668), then each identifier rule."""
     rows = [
         {"id": r.id, "reads": r.reads, "rationale": r.rationale, "defined_in": r.module}
         for r in code_rules.SAMPLE_RULES

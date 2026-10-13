@@ -24,10 +24,10 @@ An **edge rule** states a derivation edge (ADR-0002) rather than a claim, so it 
 dimension. It is declared here, in ``EDGE_RULES``, for the same reason the rules are: its id
 is what an edge's ``rule_id`` carries, and nothing else lists it.
 
-A **sample rule** (#357) reads which samples a file's data comes from out of its header, so
-it sets no dimension either. It is declared in ``SAMPLE_RULES``; its id is what a file's
-``samples.named_by`` carries for the header, or, for samples taken from a parent at
-reconcile (#668), for the parent.
+A **sample rule** (#357) reads which samples a file's data comes from, so it sets no
+dimension either: out of the file's own content (a header, a GATK sample map's rows), or, at
+reconcile, out of its parent's settled samples (#668). It is declared in ``SAMPLE_RULES``; its
+id is what a file's ``samples.named_by`` carries for that source.
 
 ``basis`` says what a rule reads to reach its answer, in the report's terms
 (``BASES``). A YAML rule's basis is worked out from its ``when`` by the report. A code
@@ -125,10 +125,11 @@ class EdgeRule:
 
 @dataclass(frozen=True)
 class SampleRule:
-    """A rule that reads which samples a file's data comes from out of the file's header (#357).
+    """A rule that reads which samples a file's data comes from (#357): out of the file's own
+    content (a header, a sample map's rows), or at reconcile its parent's settled samples (#668).
 
-    ``reads`` says where in the header; ``rationale`` says why that names the samples. Each
-    string it reads becomes a sample only through ``rules/sample_namespaces.yaml``.
+    ``reads`` says where; ``rationale`` says why that names the samples. Each string a content
+    reader reads becomes a sample only through ``rules/sample_namespaces.yaml``.
     """
 
     id: str

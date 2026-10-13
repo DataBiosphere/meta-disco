@@ -260,9 +260,10 @@ def members_of(sample_list_entry: dict) -> frozenset[Identifier]:
     )
 
 
-# --- a file's own header --------------------------------------------------------
+# --- a file's own content: a header, a sample map's rows (#668) ------------------
 
-# What a header said about its samples, per file; a producer counts each per dataset.
+# What a file's header (or other content a reader reads) said about its samples, per file; a
+# producer counts each per dataset.
 NAMED = "named"  # every string it holds is recognised: the file's samples
 UNRECOGNISED = "unrecognised"  # it holds a string no rule recognises: no samples
 NO_SAMPLE = "no_sample"  # it names no sample (no @RG line; a sites-only VCF; a file that is no sample map)
@@ -293,7 +294,7 @@ class HeaderSamples:
 
 @dataclass(frozen=True)
 class SampleReader:
-    """A file type's sample reader: the strings its parsed header names samples with, and the rule that reads them."""
+    """A file type's sample reader: the strings its parsed content (a header, a sample map's rows) names samples with, and the rule that reads them."""
 
     rule: code_rules.SampleRule
     # The strings the parse names samples with, or None where the head read did not reach them.

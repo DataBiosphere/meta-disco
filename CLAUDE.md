@@ -388,8 +388,8 @@ evidence}` entry — plus the controlled vocabulary:
     its sorted members, each an `EntityIdentifier`. A string is a sample only through
     `rules/sample_namespaces.yaml` (`sample_identity`), which also declares the one rewrite
     (`GM` → `NA`, same number); a string no rule recognises is counted, never guessed.
-    Inference reads it from a header (`FileTypeConfig.samples`, `code_rules.SAMPLE_RULES`),
-    all of a header's strings or none, and each producer file holds its lists under
+    Inference reads it from the file's own content, a header or a sample map's rows
+    (`FileTypeConfig.samples`, `code_rules.SAMPLE_RULES`), all of its strings or none, and each producer file holds its lists under
     `sample_lists`. A submitter table states it through the slot map, one cell per column
     (`samples` is the one non-dimension in `models.EVIDENCE_FIELDS`, never translated by the
     value map), and `make check-slot-map` refuses a column whose files' names mostly name

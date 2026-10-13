@@ -82,7 +82,7 @@ class FileTypeConfig:
     # so the reader stays ignorant of which archives have a member worth reading. None
     # keeps none.
     kept_member: Callable | None = None
-    # The samples a file's header names (#357), read from the parse (or the payload, for a
+    # The samples a file's own content names (#357; a header, a sample map's rows, #668), read from the parse (or the payload, for a
     # type without a ``parser``). None means the type reads no samples.
     samples: SampleReader | None = None
 

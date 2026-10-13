@@ -1683,7 +1683,7 @@ class SampleReference(ConfiguredBaseModel):
 
     list_id: str = Field(default=..., description="""The `SampleList` this file points to: a digest of its sorted members, so two files naming the same samples point to the same list.""", json_schema_extra = { "linkml_meta": {'domain_of': ['SampleReference', 'SampleList']} })
     count: int = Field(default=..., description="""How many members the list has.""", ge=1, json_schema_extra = { "linkml_meta": {'domain_of': ['SampleReference']} })
-    named_by: list[Attribution] = Field(default=..., description="""Every source that named these samples: the file's header (`code_rules.SAMPLE_RULES`), a submitter-table column, the file's parent across a step that passes samples (#668), or each of them where they agree.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityInput', 'SampleReference']} })
+    named_by: list[Attribution] = Field(default=..., description="""Every source that named these samples: the file's own content, a header or a sample map's rows (`code_rules.SAMPLE_RULES`), a submitter-table column, the file's parent across a step that passes samples (#668), or each of them where they agree.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityInput', 'SampleReference']} })
 
     @field_validator('list_id')
     def pattern_list_id(cls, v):
