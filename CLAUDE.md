@@ -396,7 +396,11 @@ evidence}` entry — plus the controlled vocabulary:
     another sample. Reconcile (`reconcile_samples`) settles the two by the step rule:
     agreeing sources are each listed, different samples give none, counted as a conflict or
     as incomparable; a file name is a check, never a source. It writes
-    `reconciled/sample_lists.ndjson.gz`. A derived file does not take its parent's samples yet (#668).
+    `reconciled/sample_lists.ndjson.gz`. A derived file takes its parent's samples across a step whose
+    role declares `passes_samples` in `rules/activities.yaml` (index, checksum, QC report, coverage track,
+    cohort merge from its sample map, whose own rows name its samples), as one more source credited
+    `samples_inherited_from_parent` (#668, contract 4.9); across any other step the child keeps its own and a
+    disagreeing pair is counted in the report's samples block.
   - **A producer is declared once**, in `producers.PRODUCERS` — the thirteen writers of a
     run's `*_classifications.json` files. Add one there, never to a second list:
     `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,

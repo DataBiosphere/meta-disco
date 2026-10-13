@@ -613,13 +613,35 @@ def test_the_samples_section_counts_how_each_dataset_settled(tmp_path, evidence,
     assert "## Samples: whose data each file holds" in md
     header = (
         "| dataset | header named | header unrecognised | header no_sample | header unread | agreed | header_only "
-        "| table_only |"
+        "| table_only | inherited |"
     )
     assert header in md
-    assert f"| `{DATASET}` | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 1 | 0 |" in md
+    assert f"| `{DATASET}` | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 1 | 0 |" in md
+    assert "None in this run." in md
     assert "`Sample` (1)" in md
     # Every table value no rule recognises, with its table, column and files (contract 5.2).
     assert f"| `{DATASET}` | `participant` | `participant_id` | `Sample` | 1 |" in md
+
+
+def test_the_samples_section_lists_what_passed_and_each_parent_disagreement():
+    """#668: per activity, what each role passing samples gave, and pairs disagreeing across another step."""
+    block = {
+        "settled": {"inherited": 2},
+        "headers": {},
+        "conflict_examples": [],
+        "incomparable_examples": [],
+        "table_unrecognised": [],
+        "name_disagreements": 0,
+        "name_disagreement_examples": [],
+        "inheritance": {"IndexActivity": {"passed": 2, "parent_none": 1}},
+        "parent_disagreements": {"AlignmentActivity": 1},
+        "parent_disagreement_examples": [
+            {"file_name": "a.cram", "activity": "AlignmentActivity", "parent_file": "a.fastq.gz"}
+        ],
+    }
+    md = "\n".join(rr._samples_section(rr.samples_rows({"samples": {"by_dataset": {DATASET: block}}})))
+    assert f"| `{DATASET}` | `IndexActivity` | 2 | 1 | 0 |" in md
+    assert f"| `{DATASET}` | `AlignmentActivity` | 1 | `a.cram` ← `a.fastq.gz` |" in md
 
 
 def test_a_report_written_before_samples_says_so():

@@ -35,8 +35,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     and in the code. `samples` (#357) is not a dimension: it says which sample a file's data comes from. Its raw value is
     read through the identifier rules (`rules/sample_namespaces.yaml`), never translated by a row (3.4–3.12):
     a sample identifier is recognised by its namespace's pattern, one rule for a family of thousands of
-    values, rather than authored value by value. Reconcile settles it with a header's samples as a file's
-    step is settled (ADR-0002 decision 6), not by 4.x's resolution, and only a reader that asks for it is
+    values, rather than authored value by value. Reconcile settles it with a header's samples, and a
+    parent's across a step that passes them (4.9, #668), as a file's step is settled (ADR-0002 decision 6),
+    not by 4.x's resolution, and only a reader that asks for it is
     given its lines (`source_evidence.iter_evidence`).
     The importer names **both ends of the key correspondence** — `source_key` as the source publishes it,
     `target_key` as one of ours — and writes the value already in our space (#401). Evidence is attached to a
@@ -315,13 +316,24 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     gVCFs settle to. The declaration is credited to the list, not to its members; a list with no step naming
     its members passes nothing.
 
+    **Samples cross a step too** (#668), settled as 2.1 says rather than as a claim. A role declaring
+    `passes_samples` in `rules/activities.yaml` (an index's, a checksum's, a QC report's, a coverage
+    track's, a cohort merge's list) gives the child its parents' settled sample list where every parent in
+    the role holds the same one; a parent holding none, or two holding different lists, pass nothing. The
+    list is one more source of the child's samples, attributed to the step and the parents' record keys:
+    alone it is the child's samples, beside the child's own it is listed where they agree, and where they
+    differ the child has none. It is taken from the parent itself, never read through it: a GenomicsDB
+    workspace takes the list its sample map's own rows name. Across a step passing no samples the child
+    keeps its own, and a child and parent whose lists share a namespace but neither holds the other are
+    reported, not resolved.
+
     Which activity carries which dimension is its `passes` in `rules/activities.yaml`, the one place
     code reads it (ADR-0002 decision 8 records the reasoning, #580); `data_type` is never carried. Sources that name different parents for an
     input role that takes one are an edge conflict, across which nothing is
     inherited until it is settled. So is a source naming a different set of parents than inference names in any
     role, one that takes several included: inference's step names every input of the step it read (#609). The declaration is a claim like any other (1.1, 3.2), naming the step it
-    crossed as its rule. It is the only way a slot is filled from another file's answer, and nothing fills
-    one slot from another slot's answer within a file.
+    crossed as its rule. It, and samples crossing a step (above), are the only ways a slot is filled from
+    another file's answer, and nothing fills one slot from another slot's answer within a file.
 
 ## 5. Review
 

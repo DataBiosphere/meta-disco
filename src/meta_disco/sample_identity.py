@@ -265,7 +265,7 @@ def members_of(sample_list_entry: dict) -> frozenset[Identifier]:
 # What a header said about its samples, per file; a producer counts each per dataset.
 NAMED = "named"  # every string it holds is recognised: the file's samples
 UNRECOGNISED = "unrecognised"  # it holds a string no rule recognises: no samples
-NO_SAMPLE = "no_sample"  # it names no sample (no @RG line; a sites-only VCF)
+NO_SAMPLE = "no_sample"  # it names no sample (no @RG line; a sites-only VCF; a file that is no sample map)
 UNREAD = "unread"  # the head read did not reach where the samples are (a VCF's #CHROM line)
 
 
@@ -346,5 +346,11 @@ def _sample_column_strings(header: VCFHeader) -> tuple[str, ...] | None:
     return header.sample_columns
 
 
+def _sample_map_strings(rows: Sequence[tuple[str, str]] | None) -> list[str]:
+    """Each row's sample name; none for a file that is not a map (``cohort_steps.parse_sample_map``'s None)."""
+    return [sample for sample, _ in rows or ()]
+
+
 BAM_SAMPLES = SampleReader(code_rules.BAM_READ_GROUP_SAMPLES, _read_group_strings)
 VCF_SAMPLES = SampleReader(code_rules.VCF_SAMPLE_COLUMNS, _sample_column_strings)
+SAMPLE_MAP_SAMPLES = SampleReader(code_rules.SAMPLE_MAP_ROWS, _sample_map_strings)

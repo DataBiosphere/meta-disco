@@ -261,7 +261,12 @@ def test_the_sample_map_producer_writes_the_cohort_and_classifies_from_the_name(
     )
     # A file named like a map that is not one keeps what its name says: nothing.
     assert {c["status"] for c in rows["m2"]["classifications"].values()} == {"not_classified"}
-    assert details == {"producer_steps": {"T": {cs.STEPPED: 1, cs.NOT_A_LIST: 1}}}
+    assert details["producer_steps"] == {"T": {cs.STEPPED: 1, cs.NOT_A_LIST: 1}}
+    # Its rows' first column names its samples (#668); a file that is no map names none.
+    assert rows["m1"]["samples"]["count"] == 2
+    assert rows["m1"]["samples"]["named_by"][0]["rule_id"] == code_rules.SAMPLE_MAP_ROWS.id
+    assert rows["m2"]["samples"] is None
+    assert details["sample_outcomes"] == {"T": {"named": 1, "no_sample": 1}}
 
 
 def test_the_tar_producer_writes_the_workspace_step(tmp_path):

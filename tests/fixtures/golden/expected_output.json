@@ -1103,7 +1103,16 @@
           ]
         },
         "md5sum": "00000000000000000000000000000000",
-        "samples": null
+        "samples": {
+          "count": 1,
+          "list_id": "c2950245d589327c",
+          "named_by": [
+            {
+              "rule_id": "sample_map_rows",
+              "source_type": "content_read"
+            }
+          ]
+        }
       }
     ],
     "metadata": {
@@ -1114,7 +1123,13 @@
           "GOLDEN_FIXTURE": {
             "stepped": 1
           }
-        }
+        },
+        "sample_outcomes": {
+          "GOLDEN_FIXTURE": {
+            "named": 1
+          }
+        },
+        "unrecognised_samples": {}
       },
       "dropped": 0,
       "errored": 0,
@@ -1138,7 +1153,18 @@
       "successful": 1,
       "total_to_process": 1,
       "validation_failed": 0
-    }
+    },
+    "sample_lists": [
+      {
+        "list_id": "c2950245d589327c",
+        "members": [
+          {
+            "id": "HG00096",
+            "namespace": "coriell"
+          }
+        ]
+      }
+    ]
   },
   "tar": {
     "classifications": [

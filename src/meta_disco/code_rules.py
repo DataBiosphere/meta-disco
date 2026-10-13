@@ -26,7 +26,8 @@ is what an edge's ``rule_id`` carries, and nothing else lists it.
 
 A **sample rule** (#357) reads which samples a file's data comes from out of its header, so
 it sets no dimension either. It is declared in ``SAMPLE_RULES``; its id is what a file's
-``samples.named_by`` carries for the header.
+``samples.named_by`` carries for the header, or, for samples taken from a parent at
+reconcile (#668), for the parent.
 
 ``basis`` says what a rule reads to reach its answer, in the report's terms
 (``BASES``). A YAML rule's basis is worked out from its ``when`` by the report. A code
@@ -72,6 +73,7 @@ PRODUCER_STEPS = "src/meta_disco/producer_steps.py"
 COHORT_STEPS = "src/meta_disco/cohort_steps.py"
 METADATA_SCHEMA = "src/meta_disco/metadata_schema.py"
 SAMPLE_IDENTITY = "src/meta_disco/sample_identity.py"
+RECONCILE_SAMPLES = "src/meta_disco/reconcile_samples.py"
 
 
 @dataclass(frozen=True)
@@ -743,7 +745,35 @@ VCF_SAMPLE_COLUMNS = SampleRule(
     ),
 )
 
-SAMPLE_RULES = (BAM_READ_GROUP_SAMPLES, VCF_SAMPLE_COLUMNS)
+SAMPLE_MAP_ROWS = SampleRule(
+    id="sample_map_rows",
+    module=SAMPLE_IDENTITY,
+    source_type=SOURCE_CONTENT_READ,
+    reads="a GATK sample-name map's rows: the sample name in each row's first column",
+    rationale=(
+        "A sample-name map gives each sample a GenomicsDB import joint-calls a row, the sample's name "
+        "first and its gVCF second; the import writes that name as the sample's column in what it "
+        "makes (#668). A map whose every name is recognised names the samples of the cohort it "
+        "lists; one with a name no identifier rule recognises names none."
+    ),
+)
+SAMPLES_INHERITED_FROM_PARENT = SampleRule(
+    id="samples_inherited_from_parent",
+    module=RECONCILE_SAMPLES,
+    source_type=SOURCE_DERIVATION_INHERITANCE,
+    reads=(
+        "the settled samples, at reconcile, of the parent in an input role of the file's generated_by that "
+        "passes samples (rules/activities.yaml's passes_samples)"
+    ),
+    rationale=(
+        "An index, checksum, QC report or coverage track describes exactly the file it was made from, "
+        "and a cohort's merge exactly the samples its list names, so the file holds that parent's "
+        "samples (#668). A parent with none, or parents naming different lists, pass nothing; the "
+        "file's own sources and the parent's settle as any two sources do."
+    ),
+)
+
+SAMPLE_RULES = (BAM_READ_GROUP_SAMPLES, VCF_SAMPLE_COLUMNS, SAMPLE_MAP_ROWS, SAMPLES_INHERITED_FROM_PARENT)
 
 FETCH_FAILED = CodeMarker(
     id="fetch_failed",

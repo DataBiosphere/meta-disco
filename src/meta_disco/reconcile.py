@@ -7,7 +7,8 @@ file inherits what its activity passes from its parents (contract 4.9, #571,
 :mod:`reconcile_inherit`), so after the join's scan (which runs when there is evidence or
 lineage to place) the run is read twice more: once to settle every record's own answer and
 step, then, the parents settled before their children, to write each record with its
-inherited declarations weighed in.
+inherited declarations weighed in, and its parent's samples where its step passes them
+(#668, :mod:`reconcile_samples`).
 
 The stage after inference (contract 6.1): **infer → reconcile**. Reading the sources is
 the join below, reconcile's first step, and its per-source counts are a line of the
@@ -1307,10 +1308,11 @@ def reconcile_run(
     Inheritance (#571, :mod:`reconcile_inherit`) needs every parent's answer before its
     child is written, and the records come file by file, so inheritance reads the run twice,
     after the join's own scan (made when there is evidence or lineage to place). The
-    first pass settles each record's own answer and step and keeps, per record, only its
-    settled answer for the carried slots (and, for a child, what its own declarations
+    first pass settles each record's own answer, samples and step and keeps, per record, only
+    its settled answer for the carried slots and its settled sample list (and, for a child,
+    what its own declarations and, where its step passes samples, its own sample sources
     are), each distinct one held once. The second settles each record again, now with its
-    inherited declarations, and writes it. Refuses (``ReconcileError``) a run whose steps
+    inherited declarations and samples, and writes it. Refuses (``ReconcileError``) a run whose steps
     form a cycle.
     """
     if not run_dir.is_dir():
@@ -1397,9 +1399,10 @@ def reconcile_run(
             return merge_steps(record.get("generated_by"), lineage.steps[identity])
         return record.get("generated_by"), None
 
-    # The first pass: each record's own settled answers, and each child's step; and the
-    # sample lists inference's records point to (#357).
+    # The first pass: each record's own settled answers and samples, and each child's step;
+    # and the sample lists inference's records point to (#357).
     graph = _Graph()
+    samples = reconcile_samples.SampleReport(identifier_rules())
     seen: set[str] = set()
     inference_lists: dict[str, dict] = {}
     for _, records, lists in iter_run_file_contents(run_dir):
@@ -1408,13 +1411,14 @@ def reconcile_run(
             identity = identity_of(record, seen)
             step, _ = step_of(record, identity)
             graph.add(identity, record, joined.slots.get(identity, {}), step)
+            samples.hold(identity, record, inference_lists, joined.samples.get(identity, []), graph.steps.get(identity))
     try:
         inheritance = inherit(graph.steps, graph.base.get, graph.resolve, graph.intern)
     except InheritanceCycle as exc:
         raise ReconcileError(str(exc)) from None
+    # Across the same steps, each child takes its parent's samples where its step passes them (#668).
+    samples.inherit(graph.steps)
     del graph
-
-    samples = reconcile_samples.SampleReport(identifier_rules())
 
     def reconciled_rows(records: list[dict]):
         for record in records:
@@ -1422,7 +1426,9 @@ def reconcile_run(
             record_slots = joined.slots.get(identity, {})
             reconciled = reconcile_record(record, record_slots, inheritance.declarations.get(identity))
             reconciled["generated_by"], conflict = step_of(record, identity)
-            reconciled["samples"] = samples.settle(record, inference_lists, joined.samples.get(identity, []))
+            reconciled["samples"] = samples.settle(
+                record, inference_lists, joined.samples.get(identity, []), identity, reconciled["generated_by"]
+            )
             report.add(reconciled, record_slots)
             report.add_step(reconciled, conflict, lineage.steps.get(identity, []))
             report.add_inheritance(reconciled, inheritance.outcomes.get(identity, ()))

@@ -390,6 +390,17 @@ authority, and this table is its reading when #580 wrote it, amended where a row
 `CohortMergeActivity`'s `input_list` role (#621) passes all five, read through its list: what the list's
 `member`s settle to, not the list's own answer (contract 4.9).
 
+*Amended by #668.* **Sample identity passes too**, beside the dimensions, along the steps whose output
+describes exactly its parent: `IndexActivity`, `ChecksumActivity`, `QualityControlActivity`,
+`CoverageActivity`, and `CohortMergeActivity` from the list itself (a GATK sample map names its samples in
+its own first column), each role declaring `passes_samples` in `rules/activities.yaml`. A
+`HG02078.chr6.hc.vcf.gz.tbi` takes its VCF's `[HG02078]`, and a T2T GenomicsDB tar its map's 3,202
+samples. A checksum passes no dimension (#596) but does pass samples: a hash names nothing, but it is
+about exactly one file, whose samples it is about. No step that makes data with its own header passes
+samples (`AlignmentActivity`, `VariantCallActivity`, `MergeActivity`, `AssemblyActivity` and the rest): a
+CRAM names its own `@RG SM`, and a child and parent naming different samples there are reported, not
+resolved. Contract 4.9 has the rule.
+
 - Carrying `reference_assembly` carries the build's identity — `ReferenceBuild.base` and `version` —
   so a child describes its reference as precisely as its parents agree on it. The build's observations
   (`chr1_m5`, `chry_m5`, `name`, `name_source`) are readings of the parent's own header and are not

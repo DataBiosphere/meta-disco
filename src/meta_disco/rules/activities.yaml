@@ -1,5 +1,6 @@
 # What each activity takes in and passes on (#580). Shape: the LinkML class
-# `ActivityDeclarations`. `kind` absent: any; `passes` absent: nothing.
+# `ActivityDeclarations`. `kind` absent: any; `passes` absent: nothing; `passes_samples`
+# absent: no samples (#668).
 activities:
   - term: Activity
     output: {form: [file, identifier]}
@@ -96,9 +97,10 @@ activities:
         required: true
         many: false
         passes: [data_modality, assay_type, platform, instrument_model, reference_assembly, variant_kind, variant_origin]
+        passes_samples: true
     reason: >-
       An index describes the data it points into, so it takes every dimension but its own
-      kind, `data_type`.
+      kind, `data_type`, and the samples that data holds (#668).
   - term: ChecksumActivity
     output: {form: [file], kind: [checksum]}
     inputs:
@@ -106,10 +108,12 @@ activities:
         form: [file]
         required: true
         many: false
+        passes_samples: true
     reason: >-
-      A checksum is a hash of its file's bytes, so it takes nothing from it, and the step
+      A checksum is a hash of its file's bytes, so it takes no dimension from it, and the step
       is the link (ADR-0002 decision 8, amended by #596). For an `.md5`, the `checksum_file`
-      rule makes the dimensions `not_applicable`.
+      rule makes the dimensions `not_applicable`. It is about exactly its file, so it takes
+      that file's samples (#668).
   - term: QualityControlActivity
     output: {form: [file], kind: [qc_report, annotations]}
     inputs:
@@ -118,9 +122,10 @@ activities:
         required: true
         many: false
         passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
+        passes_samples: true
     reason: >-
       A report on one file's content (samtools stats, mosdepth) describes that file's data,
-      so it takes every dimension but its own kind.
+      so it takes every dimension but its own kind, and that file's samples (#668).
   - term: CoverageActivity
     output: {form: [file], kind: [annotations]}
     inputs:
@@ -130,9 +135,11 @@ activities:
         required: true
         many: false
         passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
+        passes_samples: true
     reason: >-
       A track of one alignment's read depth at each position is in that alignment's
-      coordinates and counts its reads, so it takes every dimension but its own kind.
+      coordinates and counts its reads, so it takes every dimension but its own kind, and
+      the alignment's samples (#668).
   - term: LiftoverActivity
     output: {form: [file]}
     inputs:
@@ -182,11 +189,13 @@ activities:
         many: false
         read_through: member
         passes: [data_modality, assay_type, platform, instrument_model, reference_assembly, variant_kind, variant_origin]
+        passes_samples: true
     reason: >-
       A merge of the files a cohort's list names (a GenomicsDB workspace built from a GATK
       sample-name map, #621): its input is the list, not each file, and the list passes
-      nothing of its own, so the output takes what the list's members settle to, read
-      through it, as a merge takes what its shards share.
+      no dimension of its own, so the output takes what the list's members settle to, read
+      through it, as a merge takes what its shards share. Its samples are the ones the list
+      names, taken from the list itself (#668).
   - term: CohortDefinitionActivity
     output: {form: [file]}
     inputs:
@@ -198,8 +207,8 @@ activities:
     reason: >-
       A list of the files processed together (a GATK sample-name map, #621) is not their
       data: a list of names is not Illumina data, so it passes nothing, as a checksum
-      passes nothing (#596). A step given the list reads its members' answers through it
-      (`read_through`).
+      passes no dimension (#596). A step given the list reads its members' answers through it
+      (`read_through`). The list names its samples itself, in its first column (#668).
   - term: AssemblyActivity
     output: {form: [file], kind: [assembly]}
     inputs:

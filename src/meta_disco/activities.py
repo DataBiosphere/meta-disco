@@ -3,9 +3,9 @@
 Its shape is the schema's ``ActivityDeclarations``, enforced by the generated model.
 The checks it cannot state are here: every term declared once, roles unique within a
 term, ``Activity`` passing nothing, no role that can only be an identifier passing
-anything, no role passing ``data_type``, which describes the file itself (contract
-4.9), and a ``read_through`` role (#621) passing something, through a role some term
-declares that passes nothing. Readers trust the result.
+anything (a dimension or samples, #668), no role passing ``data_type``, which describes
+the file itself (contract 4.9), and a ``read_through`` role (#621) passing something,
+through a role some term declares that passes nothing. Readers trust the result.
 
 **A term may take its declaration from an abstract ancestor** (#610). A term declared
 with a reason but no ``output`` and ``inputs`` takes both from its nearest ``is_a``
@@ -85,13 +85,15 @@ def load_activities(text: str | None = None) -> dict[str, Declared]:
         if len(set(roles)) != len(roles):
             raise ValueError(f"activity {term!r}: a role is named twice in {roles}")
         for i in declaration.inputs:
-            if i.passes and "file" not in {str(f) for f in i.form}:
+            if (i.passes or i.passes_samples) and "file" not in {str(f) for f in i.form}:
                 raise ValueError(f"activity {term!r}: role {i.role!r} is an identifier, which has nothing to pass")
             if DATA_TYPE in _role_slots(i):
                 raise ValueError(f"activity {term!r}: role {i.role!r} passes {DATA_TYPE}, which is never carried")
     unknown = _passes(declared[UNKNOWN])
     if unknown:
         raise ValueError(f"activity {UNKNOWN!r}: the step not known passes nothing, not {unknown}")
+    if any(i.passes_samples for i in declared[UNKNOWN].inputs):
+        raise ValueError(f"activity {UNKNOWN!r}: the step not known passes nothing, not samples")
     _check_read_through(declared)
     return declared
 
@@ -189,6 +191,12 @@ def read_through(term: str) -> dict[str, str]:
     Cached; callers must not change the dict.
     """
     return {i.role: str(i.read_through) for i in declarations()[term].inputs if i.read_through is not None}
+
+
+@cache
+def samples_roles(term: str) -> tuple[str, ...]:
+    """The input roles of ``term`` whose parent's settled ``samples`` the output takes (#668), in declaration order."""
+    return tuple(i.role for i in declarations()[term].inputs if i.passes_samples)
 
 
 def carried() -> tuple[str, ...]:

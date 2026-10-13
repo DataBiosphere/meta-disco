@@ -39,7 +39,7 @@ so there is one resolution rule.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 
 from . import activities, code_rules
@@ -308,8 +308,21 @@ def inherit(
             result.outcomes[key] = intern(tuple(outcomes))
         return intern.settled(answers, build, own.inferred)
 
+    for key in parent_first(steps):
+        final[key] = compute(key)
+    return result
+
+
+def parent_first(steps: Mapping[str, Step]) -> Iterator[str]:
+    """Each child of ``steps`` once, every child among its parents before it.
+
+    Raises :class:`InheritanceCycle`, naming the files, when a child is its own ancestor.
+    Shared by the dimensions (:func:`inherit`) and the samples (#668), so both settle a
+    parent before its children the same way.
+    """
+    done: set[str] = set()
     for start in steps:
-        if start in final:
+        if start in done:
             continue
         # Depth-first, parents before children; `path` holds the files being settled, so
         # a parent already on it is a cycle.
@@ -318,10 +331,11 @@ def inherit(
         while stack:
             key, ready = stack.pop()
             if ready:
-                final[key] = compute(key)
+                done.add(key)
+                yield key
                 del path[key]
                 continue
-            if key in final:
+            if key in done:
                 continue
             path[key] = None
             stack.append((key, True))
@@ -332,4 +346,3 @@ def inherit(
                     raise InheritanceCycle(f"files derive from themselves through their steps: {' -> '.join(cycle)}")
                 if parent in steps:
                     stack.append((parent, False))
-    return result
