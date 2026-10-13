@@ -1598,9 +1598,9 @@ class Evidence(ConfiguredBaseModel):
     raw_value: Optional[str] = Field(default=None, description="""What the source actually said, before mapping — `Revio` beside a mapped `PACBIO`. The mapping is the reviewable decision, and storing only the mapped value makes it unauditable. Also present on an `unmapped` or `no_vocabulary_term` claim, where it is the whole content of the claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'Evidence']} })
     join_key: Optional[JoinKeyEnum] = Field(default=None, description="""Which key attached this claim to our file. Recorded per claim rather than per source because identity is the risky step and sources publish different keys: md5 collides on 1.72% of the corpus's rows and the HPRC catalog publishes only file names (#390). Absent on a claim our own inference produced, which was never joined to anything.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
     match_exact: Optional[bool] = Field(default=None, description="""Whether the join on `join_key` was an exact match rather than a normalized or partial one. Absent whenever `join_key` is.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
-    activity: Optional[ActivityTypeEnum] = Field(default=None, description="""The kind of step that made the file (`activity_type_enum`); what passes from each input role is declared per term in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'GeneratedBy']} })
-    parent_role: Optional[str] = Field(default=None, description="""On an inherited claim (contract 4.9, #571): the input role of the step whose parents gave the claim, a role its `activity` declares in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
-    parent_keys: Optional[list[str]] = Field(default=None, description="""On an inherited claim (contract 4.9, #571): the record keys of the parents, in that role, whose settled answers gave the claim — each one's record in the same run.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
+    activity: Optional[ActivityTypeEnum] = Field(default=None, description="""The kind of step that made the file (`activity_type_enum`); what passes from each input role is declared per term in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'GeneratedBy', 'Attribution']} })
+    parent_role: Optional[str] = Field(default=None, description="""On an inherited claim (contract 4.9, #571), or an inherited sample attribution (#668): the input role of the step whose parents gave the claim or the samples, a role its `activity` declares in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
+    parent_keys: Optional[list[str]] = Field(default=None, description="""On an inherited claim (contract 4.9, #571), or an inherited sample attribution (#668): the record keys of the parents, in that role, whose settled answers or samples gave it — each one's record in the same run.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
 
 
 class GeneratedBy(ConfiguredBaseModel):
@@ -1609,7 +1609,7 @@ class GeneratedBy(ConfiguredBaseModel):
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
-    activity: ActivityTypeEnum = Field(default=..., description="""The kind of step that made the file (`activity_type_enum`); what passes from each input role is declared per term in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'GeneratedBy']} })
+    activity: ActivityTypeEnum = Field(default=..., description="""The kind of step that made the file (`activity_type_enum`); what passes from each input role is declared per term in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'GeneratedBy', 'Attribution']} })
     named_by: list[Attribution] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityInput', 'SampleReference']} })
     inputs: list[ActivityInput] = Field(default=..., description="""The inputs the step used, each in one of the roles its activity declares.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityDeclaration']} })
 
@@ -1644,10 +1644,11 @@ class ActivityInput(ConfiguredBaseModel):
 
 class Attribution(ConfiguredBaseModel):
     """
-    One source that named a step, an input (ADR-0002 decision 6) or a file's samples (#357): sources that agree are each listed.
+    One source that named a step, an input (ADR-0002 decision 6) or a file's samples (#357): sources that agree are each listed. Samples inherited from a parent (#668) name the step crossed and the parent, as an inherited claim does.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
-         'slot_usage': {'rule_id': {'description': 'The rule or translation row that '
+         'slot_usage': {'activity': {'name': 'activity', 'required': False},
+                        'rule_id': {'description': 'The rule or translation row that '
                                                    'turned what the source says into '
                                                    'this step, input or sample list: '
                                                    "for inference's, a "
@@ -1657,15 +1658,21 @@ class Attribution(ConfiguredBaseModel):
                                                    "samples; for a submitter table's "
                                                    'samples, the identifier rule '
                                                    '(`rules/sample_namespaces.yaml`) '
-                                                   'that read the cell.',
+                                                   'that read the cell; for inherited '
+                                                   'samples, '
+                                                   "`code_rules.SAMPLES_INHERITED_FROM_PARENT`'s "
+                                                   'id.',
                                     'name': 'rule_id',
                                     'required': True},
                         'source_type': {'name': 'source_type', 'required': True}}})
 
     source_type: SourceTypeEnum = Field(default=..., description="""Kind of source that produced this claim (provenance, #90; populated on every claim by #392) — see `source_type_enum` for the kinds. Absent on a synthetic marker and on the note left by a failed fetch or input contract, neither of which is a claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
-    rule_id: str = Field(default=..., description="""The rule or translation row that turned what the source says into this step, input or sample list: for inference's, a `code_rules.EDGE_RULES` id for a step or input and a `code_rules.SAMPLE_RULES` id for samples; for a submitter table's samples, the identifier rule (`rules/sample_namespaces.yaml`) that read the cell.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
+    rule_id: str = Field(default=..., description="""The rule or translation row that turned what the source says into this step, input or sample list: for inference's, a `code_rules.EDGE_RULES` id for a step or input and a `code_rules.SAMPLE_RULES` id for samples; for a submitter table's samples, the identifier rule (`rules/sample_namespaces.yaml`) that read the cell; for inherited samples, `code_rules.SAMPLES_INHERITED_FROM_PARENT`'s id.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
     activity_id: Optional[str] = Field(default=None, description="""The source's own id for the step (`anvil_activity.activity_id`), where it gives one.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow', 'Attribution']} })
     source: Optional[ClaimSource] = Field(default=None, description="""The external source that produced this claim, for a claim that is not from one of our rules. Absent on a rule or content claim, which carries `rule_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
+    activity: Optional[ActivityTypeEnum] = Field(default=None, description="""The kind of step that made the file (`activity_type_enum`); what passes from each input role is declared per term in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'GeneratedBy', 'Attribution']} })
+    parent_role: Optional[str] = Field(default=None, description="""On an inherited claim (contract 4.9, #571), or an inherited sample attribution (#668): the input role of the step whose parents gave the claim or the samples, a role its `activity` declares in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
+    parent_keys: Optional[list[str]] = Field(default=None, description="""On an inherited claim (contract 4.9, #571), or an inherited sample attribution (#668): the record keys of the parents, in that role, whose settled answers or samples gave it — each one's record in the same run.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
 
 
 class SampleReference(ConfiguredBaseModel):
@@ -1676,7 +1683,7 @@ class SampleReference(ConfiguredBaseModel):
 
     list_id: str = Field(default=..., description="""The `SampleList` this file points to: a digest of its sorted members, so two files naming the same samples point to the same list.""", json_schema_extra = { "linkml_meta": {'domain_of': ['SampleReference', 'SampleList']} })
     count: int = Field(default=..., description="""How many members the list has.""", ge=1, json_schema_extra = { "linkml_meta": {'domain_of': ['SampleReference']} })
-    named_by: list[Attribution] = Field(default=..., description="""Every source that named these samples: the file's header (`code_rules.SAMPLE_RULES`), a submitter-table column, or both where they agree.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityInput', 'SampleReference']} })
+    named_by: list[Attribution] = Field(default=..., description="""Every source that named these samples: the file's own content, a header or a sample map's rows (`code_rules.SAMPLE_RULES`), a submitter-table column, the file's parent across a step that passes samples (#668), or each of them where they agree.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityInput', 'SampleReference']} })
 
     @field_validator('list_id')
     def pattern_list_id(cls, v):
@@ -1869,6 +1876,7 @@ class InputRole(ActivityEnd):
     many: bool = Field(default=..., description="""Whether an output has several inputs in this role.""", json_schema_extra = { "linkml_meta": {'domain_of': ['InputRole']} })
     passes: Optional[list[PassedDimensionEnum]] = Field(default=None, description="""What the output takes from an input in this role. Absent: nothing.""", json_schema_extra = { "linkml_meta": {'domain_of': ['InputRole']} })
     read_through: Optional[str] = Field(default=None, description="""A role of the parent's own step whose inputs this role takes its values from, in place of the parent's own (#621): a sample map passes nothing itself, and a GenomicsDB workspace's `input_list` takes what the map's `member`s settle to. Absent: the parents' own answers.""", json_schema_extra = { "linkml_meta": {'domain_of': ['InputRole']} })
+    passes_samples: Optional[bool] = Field(default=None, description="""Whether the output takes its parent's settled `samples` (#668): an index, checksum, QC report or coverage track describes exactly its parent's samples, and a cohort's merge exactly its list's. Taken from the parent itself, never read through it. Absent: no samples pass.""", json_schema_extra = { "linkml_meta": {'domain_of': ['InputRole']} })
     form: list[ActivityFormEnum] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityEnd']} })
     kind: Optional[list[DataTypeEnum]] = Field(default=None, description="""The `data_type` terms a file here may carry, dotted children included. Absent: any kind.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityEnd']} })
 

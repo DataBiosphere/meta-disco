@@ -3,9 +3,9 @@
 Its shape is the schema's ``ActivityDeclarations``, enforced by the generated model.
 The checks it cannot state are here: every term declared once, roles unique within a
 term, ``Activity`` passing nothing, no role that can only be an identifier passing
-anything, no role passing ``data_type``, which describes the file itself (contract
-4.9), and a ``read_through`` role (#621) passing something, through a role some term
-declares that passes nothing. Readers trust the result.
+anything (a dimension or samples, #668), no role passing ``data_type``, which describes
+the file itself (contract 4.9), and a ``read_through`` role (#621) passing something,
+through a role some term declares that passes nothing. Readers trust the result.
 
 **A term may take its declaration from an abstract ancestor** (#610). A term declared
 with a reason but no ``output`` and ``inputs`` takes both from its nearest ``is_a``
@@ -85,13 +85,13 @@ def load_activities(text: str | None = None) -> dict[str, Declared]:
         if len(set(roles)) != len(roles):
             raise ValueError(f"activity {term!r}: a role is named twice in {roles}")
         for i in declaration.inputs:
-            if i.passes and "file" not in {str(f) for f in i.form}:
+            if _passes_anything(i) and "file" not in {str(f) for f in i.form}:
                 raise ValueError(f"activity {term!r}: role {i.role!r} is an identifier, which has nothing to pass")
             if DATA_TYPE in _role_slots(i):
                 raise ValueError(f"activity {term!r}: role {i.role!r} passes {DATA_TYPE}, which is never carried")
-    unknown = _passes(declared[UNKNOWN])
+    unknown = [i.role for i in declared[UNKNOWN].inputs if _passes_anything(i)]
     if unknown:
-        raise ValueError(f"activity {UNKNOWN!r}: the step not known passes nothing, not {unknown}")
+        raise ValueError(f"activity {UNKNOWN!r}: the step not known passes nothing, but role(s) {unknown} do")
     _check_read_through(declared)
     return declared
 
@@ -138,6 +138,11 @@ def _inherited(term: str, given: dict[str, ActivityDeclaration]) -> Declared:
     raise ValueError(f"activity {term!r}: declares no output or inputs, and no ancestor does")
 
 
+def _passes_anything(role: InputRole) -> bool:
+    """Whether a role passes a dimension or samples (#668)."""
+    return bool(role.passes) or bool(role.passes_samples)
+
+
 def _role_slots(role) -> set[str]:
     """The dimensions one input role declares it passes."""
     return {str(slot) for slot in role.passes or ()}
@@ -175,7 +180,7 @@ def passes(term: str) -> tuple[str, ...]:
 
 @cache
 def role_passes(term: str) -> dict[str, tuple[str, ...]]:
-    """Per input role of ``term`` that passes anything, the dimensions it passes, in ``CLASSIFICATION_FIELDS`` order.
+    """Per input role of ``term`` that passes a dimension, the dimensions it passes, in ``CLASSIFICATION_FIELDS`` order.
 
     Cached, since reconcile asks once per child; callers must not change the dict.
     """
@@ -189,6 +194,12 @@ def read_through(term: str) -> dict[str, str]:
     Cached; callers must not change the dict.
     """
     return {i.role: str(i.read_through) for i in declarations()[term].inputs if i.read_through is not None}
+
+
+@cache
+def samples_roles(term: str) -> tuple[str, ...]:
+    """The input roles of ``term`` whose parent's settled ``samples`` the output takes (#668), in declaration order."""
+    return tuple(i.role for i in declarations()[term].inputs if i.passes_samples)
 
 
 def carried() -> tuple[str, ...]:

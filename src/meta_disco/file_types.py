@@ -41,7 +41,7 @@ from .header_classifier import (
     workspace_header_member,
 )
 from .producer_steps import HeaderSteps
-from .sample_identity import BAM_SAMPLES, VCF_SAMPLES, SampleReader
+from .sample_identity import BAM_SAMPLES, SAMPLE_MAP_SAMPLES, VCF_SAMPLES, SampleReader
 from .summaries import print_bam_summary, print_fastq_summary, print_vcf_summary
 from .validators.header_extractors import parse_vcf_head
 
@@ -82,7 +82,7 @@ class FileTypeConfig:
     # so the reader stays ignorant of which archives have a member worth reading. None
     # keeps none.
     kept_member: Callable | None = None
-    # The samples a file's header names (#357), read from the parse (or the payload, for a
+    # The samples a file's own content names (#357; a header, a sample map's rows, #668), read from the parse (or the payload, for a
     # type without a ``parser``). None means the type reads no samples.
     samples: SampleReader | None = None
 
@@ -169,8 +169,8 @@ TAR_CONFIG = FileTypeConfig(
 )
 
 # GATK sample-name maps (#621): the list of gVCFs one GenomicsDB import joint-calls. Read
-# whole for the cohort step it states; a file whose content is a map is a `sample_map`, and
-# the data's seven dimensions do not apply to it.
+# whole for the cohort step it states and the samples its rows name (#668); a file whose
+# content is a map is a `sample_map`, and the data's seven dimensions do not apply to it.
 SAMPLE_MAP_CONFIG = FileTypeConfig(
     name="sample_map",
     extensions=(SAMPLE_MAP_SUFFIX,),
@@ -178,6 +178,7 @@ SAMPLE_MAP_CONFIG = FileTypeConfig(
     classifier=classify_sample_map,
     parser=parse_sample_map,
     step=SampleMapSteps.for_run,
+    samples=SAMPLE_MAP_SAMPLES,
 )
 
 # BED reference is inferred from coordinate content (chromosome names + per-contig max

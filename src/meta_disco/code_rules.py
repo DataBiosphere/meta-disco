@@ -24,9 +24,10 @@ An **edge rule** states a derivation edge (ADR-0002) rather than a claim, so it 
 dimension. It is declared here, in ``EDGE_RULES``, for the same reason the rules are: its id
 is what an edge's ``rule_id`` carries, and nothing else lists it.
 
-A **sample rule** (#357) reads which samples a file's data comes from out of its header, so
-it sets no dimension either. It is declared in ``SAMPLE_RULES``; its id is what a file's
-``samples.named_by`` carries for the header.
+A **sample rule** (#357) reads which samples a file's data comes from, so it sets no
+dimension either: out of the file's own content (a header, a GATK sample map's rows), or, at
+reconcile, out of its parent's settled samples (#668). It is declared in ``SAMPLE_RULES``; its
+id is what a file's ``samples.named_by`` carries for that source.
 
 ``basis`` says what a rule reads to reach its answer, in the report's terms
 (``BASES``). A YAML rule's basis is worked out from its ``when`` by the report. A code
@@ -72,6 +73,7 @@ PRODUCER_STEPS = "src/meta_disco/producer_steps.py"
 COHORT_STEPS = "src/meta_disco/cohort_steps.py"
 METADATA_SCHEMA = "src/meta_disco/metadata_schema.py"
 SAMPLE_IDENTITY = "src/meta_disco/sample_identity.py"
+RECONCILE_SAMPLES = "src/meta_disco/reconcile_samples.py"
 
 
 @dataclass(frozen=True)
@@ -123,10 +125,11 @@ class EdgeRule:
 
 @dataclass(frozen=True)
 class SampleRule:
-    """A rule that reads which samples a file's data comes from out of the file's header (#357).
+    """A rule that reads which samples a file's data comes from (#357): out of the file's own
+    content (a header, a sample map's rows), or at reconcile its parent's settled samples (#668).
 
-    ``reads`` says where in the header; ``rationale`` says why that names the samples. Each
-    string it reads becomes a sample only through ``rules/sample_namespaces.yaml``.
+    ``reads`` says where; ``rationale`` says why that names the samples. Each string a content
+    reader reads becomes a sample only through ``rules/sample_namespaces.yaml``.
     """
 
     id: str
@@ -743,7 +746,35 @@ VCF_SAMPLE_COLUMNS = SampleRule(
     ),
 )
 
-SAMPLE_RULES = (BAM_READ_GROUP_SAMPLES, VCF_SAMPLE_COLUMNS)
+SAMPLE_MAP_ROWS = SampleRule(
+    id="sample_map_rows",
+    module=SAMPLE_IDENTITY,
+    source_type=SOURCE_CONTENT_READ,
+    reads="a GATK sample-name map's rows: the sample name in each row's first column",
+    rationale=(
+        "A sample-name map gives each sample a GenomicsDB import joint-calls a row, the sample's name "
+        "first and its gVCF second; the import writes that name as the sample's column in what it "
+        "makes (#668). A map whose every name is recognised names the samples of the cohort it "
+        "lists; one with a name no identifier rule recognises names none."
+    ),
+)
+SAMPLES_INHERITED_FROM_PARENT = SampleRule(
+    id="samples_inherited_from_parent",
+    module=RECONCILE_SAMPLES,
+    source_type=SOURCE_DERIVATION_INHERITANCE,
+    reads=(
+        "the settled samples, at reconcile, of the parent in an input role of the file's generated_by that "
+        "passes samples (rules/activities.yaml's passes_samples)"
+    ),
+    rationale=(
+        "An index, checksum, QC report or coverage track describes exactly the file it was made from, "
+        "and a cohort's merge exactly the samples its list names, so the file holds that parent's "
+        "samples (#668). A parent with none, or parents naming different lists, pass nothing; the "
+        "file's own sources and the parent's settle as any two sources do."
+    ),
+)
+
+SAMPLE_RULES = (BAM_READ_GROUP_SAMPLES, VCF_SAMPLE_COLUMNS, SAMPLE_MAP_ROWS, SAMPLES_INHERITED_FROM_PARENT)
 
 FETCH_FAILED = CodeMarker(
     id="fetch_failed",

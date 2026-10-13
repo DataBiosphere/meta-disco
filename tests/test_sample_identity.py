@@ -7,6 +7,7 @@ from collections import Counter
 import pytest
 
 from meta_disco import code_rules
+from meta_disco.cohort_steps import parse_sample_map
 from meta_disco.file_types import BAM_CONFIG
 from meta_disco.pipeline import ClassifyPipeline
 from meta_disco.records import SAMPLE_LISTS_KEY, SAMPLE_OUTCOMES_KEY, UNRECOGNISED_SAMPLES_KEY
@@ -14,6 +15,7 @@ from meta_disco.sample_identity import (
     BAM_SAMPLES,
     NAMED,
     NO_SAMPLE,
+    SAMPLE_MAP_SAMPLES,
     UNREAD,
     UNRECOGNISED,
     VCF_SAMPLES,
@@ -240,6 +242,21 @@ def test_a_dataset_local_name_is_read_only_in_its_dataset():
     header = parse_vcf_header(f"{CHROM}\tFORMAT\tsimons_data_sample_7\n")
     assert VCF_SAMPLES.read(header, T2T_CHRY).outcome == NAMED
     assert VCF_SAMPLES.read(header, "ANVIL_T2T").outcome == UNRECOGNISED
+
+
+def test_a_sample_map_names_the_sample_in_each_rows_first_column():
+    rows = parse_sample_map("HG00096\tgs://b/HG00096.chr22.hc.vcf.gz\nGM19908\tgs://b/NA19908.chr22.hc.vcf.gz\n")
+    got = SAMPLE_MAP_SAMPLES.read(rows, None)
+    assert got.outcome == NAMED and got.members == {coriell("HG00096"), coriell("NA19908")}
+    ref = got.reference()
+    assert ref is not None and ref["named_by"][0]["rule_id"] == code_rules.SAMPLE_MAP_ROWS.id
+
+
+def test_a_sample_map_with_a_name_no_rule_recognises_names_none_and_a_file_no_map_names_none():
+    rows = parse_sample_map("HG00096\tgs://b/a.g.vcf.gz\nSample\tgs://b/b.g.vcf.gz\n")
+    assert SAMPLE_MAP_SAMPLES.read(rows, None).outcome == UNRECOGNISED
+    assert parse_sample_map("not a map\n") is None
+    assert SAMPLE_MAP_SAMPLES.read(None, None).outcome == NO_SAMPLE
 
 
 # --- the producer ----------------------------------------------------------------------

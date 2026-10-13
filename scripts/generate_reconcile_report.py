@@ -56,6 +56,7 @@ from meta_disco.reconcile_inherit import OUTCOMES as INHERITANCE_COLUMNS
 from meta_disco.reconcile_lineage import OUTCOMES
 from meta_disco.reconcile_samples import NONE as SAMPLE_NONE
 from meta_disco.reconcile_samples import OUTCOMES as SAMPLE_OUTCOMES
+from meta_disco.reconcile_samples import PASSING_OUTCOMES
 from meta_disco.sample_identity import NAMED, NO_SAMPLE, UNREAD, UNRECOGNISED
 from meta_disco.schema_vocab import top_term
 from meta_disco.summaries import embed_json, md_code, md_table
@@ -479,7 +480,9 @@ def samples_rows(report: dict) -> list[dict] | None:
     frequent strings no identifier rule recognised; ``settled``, the files per outcome
     (``reconcile_samples.OUTCOMES`` and ``none``); every table value no rule recognised, with
     its table, column and files; the files whose name names another sample; and the first few
-    examples of each.
+    examples of each. Since #668, also per activity what each role passing samples gave a child
+    (``inheritance``) and the child and parent pairs whose lists disagree across a step passing
+    none (``parent_disagreements``, with examples); empty in a report written before it.
     """
     samples = report.get(SAMPLES_FIELD)
     if samples is None:
@@ -495,6 +498,10 @@ def samples_rows(report: dict) -> list[dict] | None:
             "table_unrecognised": block["table_unrecognised"],
             "name_disagreements": block["name_disagreements"],
             "name_disagreement_examples": block["name_disagreement_examples"],
+            "inheritance": block.get("inheritance") or {},
+            # None in a report written before #668, which never ran the check.
+            "parent_disagreements": block.get("parent_disagreements"),
+            "parent_disagreement_examples": block.get("parent_disagreement_examples") or [],
         }
         for dataset, block in sorted(samples["by_dataset"].items())
     ]
@@ -1122,17 +1129,21 @@ def _by_value(entries: list[dict]) -> dict[str, int]:
 
 
 def _samples_section(rows: list[dict] | None) -> list[str]:
-    """Which samples each file's data comes from (#357): what headers said, and how header and table settled."""
+    """Which samples each file's data comes from (#357): what headers said, how header, table and parent settled (#668)."""
     lines = [
         "## Samples: whose data each file holds",
         "",
-        "A file's header names its samples (a BAM's `@RG SM`, a VCF's sample columns) and a submitter table may "
+        "A file's own content names its samples, read by inference and labelled *header* below (a BAM's `@RG SM`, "
+        "a VCF's sample columns, a GATK sample map's rows, #668), and a submitter table may "
         "name them in a column the slot map reads; each string becomes an identifier only through "
         "`rules/sample_namespaces.yaml` (#357). *named*: every string the header holds is recognised; "
         "*unrecognised*: it holds one no rule recognises (or a read group with no `SM`), so it names no samples; "
         "*no_sample*: it names none; *unread*: the head read ended before the samples (a VCF's `#CHROM` line). "
         "Settled: *agreed*, header and table named the same samples; *header_only* / *table_only*: only the "
-        "header, or only tables (one or several, agreeing), did; *conflict*: they named different samples in one namespace; *incomparable*: different samples in "
+        "header, or only tables (one or several, agreeing), did; *inherited*: only the file's parent did, across "
+        "a step that passes samples (an index, checksum, QC report, coverage track or cohort merge, #668), and a "
+        "parent agreeing with the file's own sources is listed beside them without changing its column; "
+        "*conflict*: they named different samples in one namespace; *incomparable*: different samples in "
         "no shared namespace, which only a crosswalk could join (#361); *none*: no source named any. A conflict "
         "or an incomparable file gets no `samples`. A file whose name names one other sample than its settled "
         "ones is counted under *name disagrees*; a name is a check, never a source.",
@@ -1197,6 +1208,56 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
             "",
             "</details>",
         ]
+    passing = [(r["dataset"], activity, counts) for r in rows for activity, counts in r["inheritance"].items()]
+    if passing:
+        lines += [
+            "",
+            "### Samples passed across a step",
+            "",
+            "Per step that passes samples, what each file's parent gave it, counted once per file and role: "
+            "*passed*: its parents named one list; *parents_differ*: its parents named different lists; "
+            "*parent_conflict*: a parent's own sources named different samples, so it is counted as a conflict or "
+            "incomparable above, and listed there; "
+            "*parent_none*: no source named a parent's samples. Nothing passes in the last three.",
+            "",
+            *md_table(
+                ["dataset", "activity", *PASSING_OUTCOMES],
+                [[md_code(shown(d)), md_code(a), *(_n(c.get(o, 0)) for o in PASSING_OUTCOMES)] for d, a, c in passing],
+            ),
+        ]
+    disagreeing = [(r, a, n) for r in rows for a, n in (r["parent_disagreements"] or {}).items()]
+    checked = any(r["parent_disagreements"] is not None for r in rows)
+    lines += [
+        "",
+        "### A file and its parent naming different samples",
+        "",
+        "Across a step that passes no samples (an alignment, a variant call, a merge), each file keeps its own. "
+        "A file and a parent whose sample lists use different namespaces, or where neither's list holds all the "
+        "other's, are counted here, once per file and parent, and not resolved: a mislabelled file, a swapped "
+        "sample or a wrong step (#668). Different namespaces count until a crosswalk can join them (#361).",
+        "",
+    ]
+    if disagreeing:
+        lines += md_table(
+            ["dataset", "activity", "pairs", "examples"],
+            [
+                [
+                    md_code(shown(r["dataset"])),
+                    md_code(a),
+                    _n(n),
+                    "<br>".join(
+                        f"{md_code(e['file_name'])} ← {md_code(str(e['parent_file']))}"
+                        for e in r["parent_disagreement_examples"]
+                        if e["activity"] == a
+                    ),
+                ]
+                for r, a, n in disagreeing
+            ],
+        )
+    elif checked:
+        lines.append("None in this run.")
+    else:
+        lines.append("This run's report predates this check (#668): run `make reconcile` again.")
     examples = [
         r for r in rows if r["conflict_examples"] or r["incomparable_examples"] or r["name_disagreement_examples"]
     ]

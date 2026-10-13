@@ -2445,7 +2445,16 @@
           ]
         },
         "md5sum": "00000000000000000000000000000000",
-        "samples": null
+        "samples": {
+          "count": 1,
+          "list_id": "c2950245d589327c",
+          "named_by": [
+            {
+              "rule_id": "sample_map_rows",
+              "source_type": "content_read"
+            }
+          ]
+        }
       }
     ]
   },

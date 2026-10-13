@@ -899,12 +899,16 @@ classes:
   Attribution:
     description: >-
       One source that named a step, an input (ADR-0002 decision 6) or a file's samples
-      (#357): sources that agree are each listed.
+      (#357): sources that agree are each listed. Samples inherited from a parent (#668)
+      name the step crossed and the parent, as an inherited claim does.
     slots:
       - source_type
       - rule_id
       - activity_id
       - source
+      - activity
+      - parent_role
+      - parent_keys
     slot_usage:
       source_type:
         required: true
@@ -914,7 +918,12 @@ classes:
           The rule or translation row that turned what the source says into this step,
           input or sample list: for inference's, a `code_rules.EDGE_RULES` id for a step or
           input and a `code_rules.SAMPLE_RULES` id for samples; for a submitter table's
-          samples, the identifier rule (`rules/sample_namespaces.yaml`) that read the cell.
+          samples, the identifier rule (`rules/sample_namespaces.yaml`) that read the cell;
+          for inherited samples, `code_rules.SAMPLES_INHERITED_FROM_PARENT`'s id.
+      # On inherited samples only (#668): the step crossed, the role its parent plays in
+      # it, and the parents' record keys. Required on a step, not here.
+      activity:
+        required: false
 
   SampleReference:
     description: >-
@@ -942,8 +951,10 @@ classes:
         inlined_as_list: true
         required: true
         description: >-
-          Every source that named these samples: the file's header (`code_rules.SAMPLE_RULES`),
-          a submitter-table column, or both where they agree.
+          Every source that named these samples: the file's own content, a header or a sample
+          map's rows (`code_rules.SAMPLE_RULES`),
+          a submitter-table column, the file's parent across a step that passes samples
+          (#668), or each of them where they agree.
 
   SampleList:
     description: >-
@@ -1126,6 +1137,13 @@ classes:
           place of the parent's own (#621): a sample map passes nothing itself, and a
           GenomicsDB workspace's `input_list` takes what the map's `member`s settle to.
           Absent: the parents' own answers.
+      passes_samples:
+        range: boolean
+        description: >-
+          Whether the output takes its parent's settled `samples` (#668): an index, checksum,
+          QC report or coverage track describes exactly its parent's samples, and a cohort's
+          merge exactly its list's. Taken from the parent itself, never read through it.
+          Absent: no samples pass.
 
 # =============================================================================
 # SLOTS
@@ -1357,12 +1375,14 @@ slots:
     range: parent_kind_enum
   parent_role:
     description: >-
-      On an inherited claim (contract 4.9, #571): the input role of the step whose parents
-      gave the claim, a role its `activity` declares in `rules/activities.yaml`.
+      On an inherited claim (contract 4.9, #571), or an inherited sample attribution (#668):
+      the input role of the step whose parents gave the claim or the samples, a role its
+      `activity` declares in `rules/activities.yaml`.
   parent_keys:
     description: >-
-      On an inherited claim (contract 4.9, #571): the record keys of the parents, in that
-      role, whose settled answers gave the claim — each one's record in the same run.
+      On an inherited claim (contract 4.9, #571), or an inherited sample attribution (#668):
+      the record keys of the parents, in that role, whose settled answers or samples gave
+      it — each one's record in the same run.
     multivalued: true
 
 # =============================================================================

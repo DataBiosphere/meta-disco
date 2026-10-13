@@ -1,4 +1,4 @@
-"""A file's samples settled at reconcile (#357): header and table, by the step rule."""
+"""A file's samples settled at reconcile (#357): header and table, by the step rule, and a parent's across a step (#668)."""
 
 import gzip
 import json
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from meta_disco import code_rules
+from meta_disco import code_rules, edges
 from meta_disco.models import SAMPLES_FIELD, SOURCE_REPOSITORY_METADATA, ClaimSource
 from meta_disco.output_utils import (
     RECONCILED_DIR,
@@ -14,19 +14,30 @@ from meta_disco.output_utils import (
     iter_reconciled_records,
     iter_reconciled_sample_lists,
 )
+from meta_disco.reconcile_inherit import Step
 from meta_disco.reconcile_samples import (
     AGREED,
     CONFLICT,
     HEADER_ONLY,
     INCOMPARABLE,
+    INHERITED,
+    MAX_EXAMPLES,
     NONE,
+    PARENT,
+    PARENT_CONFLICT,
+    PARENT_NONE,
+    PARENTS_DIFFER,
+    PASSED,
     TABLE_ONLY,
     Named,
+    SampleReport,
     from_line,
     from_record,
+    lists_disagree,
     name_disagrees,
     settle,
 )
+from meta_disco.record_keys import SOURCE_RECORD_KEYS
 from meta_disco.records import SAMPLE_LISTS_KEY, SAMPLE_OUTCOMES_KEY, UNRECOGNISED_SAMPLES_KEY
 from meta_disco.sample_identity import Identifier, identifier_rules, reference, sample_list
 from meta_disco.schema.classification_model import ClassificationRecord, SampleList
@@ -42,7 +53,7 @@ def coriell(n: str) -> Identifier:
 
 
 def header(*ids: str) -> Named:
-    return Named(frozenset(coriell(i) for i in ids), (HEADER,), from_header=True)
+    return Named(frozenset(coriell(i) for i in ids), (HEADER,), kind="header")
 
 
 def table_says(*members: Identifier, column: str = "participant_id") -> Named:
@@ -85,6 +96,55 @@ def test_no_source_gives_nothing():
     assert settle([]) == (NONE, None, frozenset())
 
 
+def parent_says(*ids: str) -> Named:
+    attribution = {"source_type": "derivation_inheritance", "rule_id": code_rules.SAMPLES_INHERITED_FROM_PARENT.id}
+    return Named(frozenset(coriell(i) for i in ids), (attribution,), kind=PARENT)
+
+
+def test_a_parent_alone_gives_inherited_samples():
+    outcome, samples, _ = settle([parent_says("HG00096")])
+    assert outcome == INHERITED and samples is not None and samples["count"] == 1
+
+
+def test_a_parent_agreeing_with_the_files_own_keeps_its_outcome_and_is_listed_last():
+    outcome, samples, _ = settle([parent_says("HG00096"), table_says(coriell("HG00096"))])
+    assert outcome == TABLE_ONLY and samples is not None
+    assert [a["rule_id"] for a in samples["named_by"]] == ["coriell_hg", code_rules.SAMPLES_INHERITED_FROM_PARENT.id]
+
+
+def test_a_parent_differing_from_the_files_own_is_a_conflict():
+    assert settle([parent_says("HG00096"), table_says(coriell("HG00097"))]) == (CONFLICT, None, frozenset())
+
+
+@pytest.mark.parametrize(
+    ("child", "parent", "expected"),
+    [
+        ({"HG00096"}, {"HG00096"}, False),
+        ({"HG00096", "HG00097"}, {"HG00096"}, False),  # a cohort's list beside one member
+        ({"HG00096"}, {"HG00096", "HG00097"}, False),  # a callset with samples dropped
+        ({"HG00097"}, {"HG00096"}, True),
+        ({"HG00096", "HG00098"}, {"HG00096", "HG00097"}, True),
+    ],
+)
+def test_lists_disagree_where_neither_holds_the_other(child, parent, expected):
+    assert lists_disagree(frozenset(map(coriell, child)), frozenset(map(coriell, parent))) is expected
+
+
+def test_lists_naming_samples_in_namespaces_the_other_lacks_disagree_until_a_crosswalk():
+    """``NA19770`` and ``SRS006871`` may be one person, but no crosswalk says so yet (#361)."""
+    sra = Identifier("sra_sample", "SRS006871")
+    assert lists_disagree(frozenset({coriell("NA19770")}), frozenset({sra}))
+    assert lists_disagree(
+        frozenset({coriell("HG00096"), sra}), frozenset({coriell("HG00096")}) | {Identifier("biosample", "SAMN1")}
+    )
+    # An extra namespace disagrees even where the rest of one list holds the other.
+    assert lists_disagree(frozenset({coriell("HG00096"), sra}), frozenset({coriell("HG00096")}))
+    assert lists_disagree(frozenset({coriell("HG00096")}), frozenset({coriell("HG00096"), sra}))
+    # A dataset's own names in two datasets are two namespaces, even where one list holds the other.
+    in_a, in_b = Identifier("dataset_local", "s7", "A"), Identifier("dataset_local", "s8", "B")
+    assert lists_disagree(frozenset({in_a, in_b}), frozenset({in_a}))
+
+
 # --- an evidence line ----------------------------------------------------------------
 
 
@@ -111,6 +171,14 @@ def test_a_record_pointing_to_a_list_its_run_lacks_is_refused():
     row = {"file_name": "x.bam", "samples": {"list_id": "0" * 16, "count": 1, "named_by": [HEADER]}}
     with pytest.raises(ValueError, match="no producer file of the run holds"):
         from_record(row, {}, {})
+
+
+def test_a_list_held_from_a_table_does_not_excuse_a_record_whose_run_lacks_it():
+    """The members cache also holds tables' lists (#668); the run's own lists are still checked."""
+    key = "0" * 16
+    row = {"file_name": "x.bam", "samples": {"list_id": key, "count": 1, "named_by": [HEADER]}}
+    with pytest.raises(ValueError, match="no producer file of the run holds"):
+        from_record(row, {}, {key: frozenset({coriell("HG00096")})})
 
 
 # --- the name check ------------------------------------------------------------------
@@ -260,3 +328,148 @@ def test_a_run_reconciled_before_samples_has_no_lists_to_read(tmp_path, run):
     (run / RECONCILED_DIR).mkdir(parents=True)
     with pytest.raises(FileNotFoundError, match=SAMPLE_LISTS_FILE):
         list(iter_reconciled_sample_lists(run))
+
+
+# --- across a step (#668) -------------------------------------------------------------
+
+
+def child(n: int, name: str, rule, parent: int, parent_name: str) -> dict:
+    row = record(n)
+    row["file_name"] = name
+    row["generated_by"] = edges.generated_by(
+        rule, [{"file_name": parent_name, "file_id": f"file-{parent}"}], SOURCE_RECORD_KEYS["anvil"]
+    )
+    return row
+
+
+def test_an_index_and_its_checksum_take_the_parents_samples_parents_first(tmp_path, run, table):
+    """``.tbi.md5`` <- ``.tbi`` <- ``.vcf.gz``: the checksum takes what its index took, whatever the row order."""
+    vcf, entry = with_header_samples(record(1), "HG02078")
+    vcf["file_name"] = "HG02078.chr6.hc.vcf.gz"
+    tbi = child(2, "HG02078.chr6.hc.vcf.gz.tbi", code_rules.INDEX_BY_NAME, 1, vcf["file_name"])
+    md5 = child(3, "HG02078.chr6.hc.vcf.gz.tbi.md5", code_rules.CHECKSUM_BY_NAME, 2, tbi["file_name"])
+    write_bam_run(run, [md5, tbi, vcf], [entry])
+    report = go(run, tmp_path, None, table)
+    rows = reconciled(run)
+    for key, parent in (("file-2", "file-1"), ("file-3", "file-2")):
+        samples = rows[key]["samples"]
+        assert samples["list_id"] == entry["list_id"] and samples["count"] == 1
+        (attribution,) = samples["named_by"]
+        assert attribution["rule_id"] == code_rules.SAMPLES_INHERITED_FROM_PARENT.id
+        assert (attribution["activity"], attribution["parent_role"]) == (
+            ("IndexActivity", "indexed") if key == "file-2" else ("ChecksumActivity", "checked")
+        )
+        assert attribution["source_type"] == "derivation_inheritance"
+        assert attribution["parent_keys"] == [parent]
+        ClassificationRecord(**rows[key])
+    block = report[SAMPLES_FIELD]["by_dataset"][DATASET]
+    assert block["settled"] == {HEADER_ONLY: 1, INHERITED: 2}
+    assert block["inheritance"] == {"ChecksumActivity": {PASSED: 1}, "IndexActivity": {PASSED: 1}}
+
+
+def test_a_parent_with_no_samples_passes_nothing_and_is_counted(tmp_path, run, table):
+    write_bam_run(run, [record(1), child(2, "f1.bam.bai", code_rules.INDEX_BY_NAME, 1, "f1.bam")], [])
+    report = go(run, tmp_path, None, table)
+    assert reconciled(run)["file-2"]["samples"] is None
+    assert report[SAMPLES_FIELD]["by_dataset"][DATASET]["inheritance"] == {"IndexActivity": {PARENT_NONE: 1}}
+
+
+def test_a_parent_in_conflict_passes_nothing_and_is_counted_apart_from_one_naming_none(tmp_path, run, evidence, table):
+    """The conflict is the parent's, listed on it once, not on its index (as contract 4.9's for dimensions)."""
+    bam, entry = with_header_samples(record(1), "HG00096")
+    bai = child(2, "f1.bam.bai", code_rules.INDEX_BY_NAME, 1, "f1.bam")
+    write_bam_run(run, [bam, bai], [entry])
+    write_evidence(evidence, [(SAMPLES_FIELD, drs(1), "HG00097")], table="participant", column="participant_id")
+    report = go(run, tmp_path, evidence, table)
+    rows = reconciled(run)
+    assert rows["file-1"]["samples"] is None and rows["file-2"]["samples"] is None
+    block = report[SAMPLES_FIELD]["by_dataset"][DATASET]
+    assert block["settled"] == {CONFLICT: 1, NONE: 1}
+    assert block["inheritance"] == {"IndexActivity": {PARENT_CONFLICT: 1}}
+
+
+def test_an_index_whose_own_table_row_names_another_sample_is_a_conflict(tmp_path, run, evidence, table):
+    bam, entry = with_header_samples(record(1), "HG00096")
+    bai = child(2, "f1.bam.bai", code_rules.INDEX_BY_NAME, 1, "f1.bam")
+    write_bam_run(run, [bam, bai], [entry])
+    write_evidence(evidence, [(SAMPLES_FIELD, drs(2), "HG00097")], table="participant", column="participant_id")
+    report = go(run, tmp_path, evidence, table)
+    assert reconciled(run)["file-2"]["samples"] is None
+    assert report[SAMPLES_FIELD]["by_dataset"][DATASET]["settled"][CONFLICT] == 1
+
+
+def test_a_cohort_merge_takes_its_lists_samples_not_its_members(tmp_path, run, table):
+    """A GenomicsDB tar takes the samples its sample map names, though each gVCF names one."""
+    members = [with_header_samples(record(n), s) for n, s in ((1, "HG00096"), (2, "HG00097"))]
+    smap, cohort = with_header_samples(record(3), "HG00096", "HG00097")
+    smap["file_name"] = "chr1_sample_map.tsv"
+    smap["generated_by"] = edges.generated_by(
+        code_rules.COHORT_BY_SAMPLE_MAP,
+        [{"file_name": f"f{n}.bam", "file_id": f"file-{n}"} for n in (1, 2)],
+        SOURCE_RECORD_KEYS["anvil"],
+    )
+    tar = child(4, "chr1.1_100000.tar", code_rules.MERGE_BY_WORKSPACE_HEADER, 3, smap["file_name"])
+    write_bam_run(run, [*(r for r, _ in members), smap, tar], [*(e for _, e in members), cohort])
+    report = go(run, tmp_path, None, table)
+    samples = reconciled(run)["file-4"]["samples"]
+    assert samples["list_id"] == cohort["list_id"] and samples["count"] == 2
+    # Each member's one sample is within the map's list: no disagreement across the definition step.
+    assert report[SAMPLES_FIELD]["by_dataset"][DATASET]["parent_disagreements"] == {}
+
+
+def test_samples_never_pass_across_a_variant_call_and_a_disagreement_is_counted(tmp_path, run, table):
+    cram, cram_list = with_header_samples(record(1), "HG00096")
+    vcf, vcf_list = with_header_samples(
+        child(2, "HG00097.g.vcf.gz", code_rules.VARIANT_CALL_BY_HEADER, 1, "f1.bam"), "HG00097"
+    )
+    silent = child(3, "x.g.vcf.gz", code_rules.VARIANT_CALL_BY_HEADER, 1, "f1.bam")
+    write_bam_run(run, [cram, vcf, silent], [cram_list, vcf_list])
+    report = go(run, tmp_path, None, table)
+    rows = reconciled(run)
+    assert rows["file-2"]["samples"]["list_id"] == vcf_list["list_id"]
+    assert rows["file-3"]["samples"] is None
+    block = report[SAMPLES_FIELD]["by_dataset"][DATASET]
+    assert block["parent_disagreements"] == {"VariantCallActivity": 1}
+    (example,) = block["parent_disagreement_examples"]
+    assert example["file_name"] == "HG00097.g.vcf.gz" and example["parent_file"] == "f1.bam"
+    assert example["parent_samples"] == [{"id": "HG00096", "namespace": "coriell"}]
+
+
+def test_each_activity_keeps_its_own_disagreement_examples():
+    """Five examples from one activity do not crowd out another's (#668)."""
+    report = SampleReport(identifier_rules())
+    report.members["p"] = frozenset({coriell("HG00096")})
+    report.held["parent"] = "p"
+    child_says = frozenset({coriell("HG00097")})
+
+    def step(activity: str) -> dict:
+        return {"activity": activity, "inputs": [{"role": "x", "parent_key": "parent", "parent_file": "p.bam"}]}
+
+    for n in range(MAX_EXAMPLES + 1):
+        report._check_parents(DATASET, f"a{n}.vcf.gz", child_says, step("VariantCallActivity"))
+    report._check_parents(DATASET, "b.cram", child_says, step("AlignmentActivity"))
+    assert report.parent_disagreements[DATASET] == {"VariantCallActivity": MAX_EXAMPLES + 1, "AlignmentActivity": 1}
+    assert [e["file_name"] for e in report.parent_examples[DATASET] if e["activity"] == "AlignmentActivity"] == [
+        "b.cram"
+    ]
+
+
+def test_parents_in_one_role_naming_different_lists_pass_nothing():
+    report = SampleReport(identifier_rules())
+    report.members.update({"l1": frozenset({coriell("HG00096")}), "l2": frozenset({coriell("HG00097")})})
+    report.held.update({"p1": "l1", "p2": "l2"})
+    report._own["c"] = ([], DATASET)
+    report.inherit({"c": Step("IndexActivity", (("indexed", "p1"), ("indexed", "p2")))})
+    assert report.passing[DATASET]["IndexActivity"] == {PARENTS_DIFFER: 1}
+    assert "c" not in report.held and "c" not in report._inherited
+
+
+def test_a_parent_named_twice_in_a_step_is_one_disagreement():
+    report = SampleReport(identifier_rules())
+    report.members["p"] = frozenset({coriell("HG00096")})
+    report.held["parent"] = "p"
+    twice = [{"role": "calls_from", "parent_key": "parent", "parent_file": "p.cram"}] * 2
+    report._check_parents(
+        DATASET, "c.vcf.gz", frozenset({coriell("HG00097")}), {"activity": "VariantCallActivity", "inputs": twice}
+    )
+    assert report.parent_disagreements[DATASET] == {"VariantCallActivity": 1}

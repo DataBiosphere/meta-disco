@@ -39,7 +39,7 @@ so there is one resolution rule.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 
 from . import activities, code_rules
@@ -113,6 +113,10 @@ class Step:
     def of(cls, generated_by: dict, share: Callable = lambda v: v) -> Step:
         inputs = tuple((share(i["role"]), i["parent_key"]) for i in generated_by["inputs"])
         return cls(share(generated_by["activity"]), inputs)
+
+    def parents(self, role: str) -> tuple[str, ...]:
+        """The distinct parent keys in ``role``, in input order."""
+        return tuple(dict.fromkeys(p for r, p in self.inputs if r == role))
 
 
 @dataclass(frozen=True, slots=True)
@@ -282,7 +286,7 @@ def inherit(
         outcomes: list[tuple[str, str, str]] = []
         throughs = activities.read_through(step.activity)
         for role, slots in activities.role_passes(step.activity).items():
-            parent_keys = tuple(dict.fromkeys(p for r, p in step.inputs if r == role))
+            parent_keys = step.parents(role)
             if not parent_keys:
                 continue
             through = throughs.get(role)
@@ -308,8 +312,21 @@ def inherit(
             result.outcomes[key] = intern(tuple(outcomes))
         return intern.settled(answers, build, own.inferred)
 
+    for key in parent_first(steps):
+        final[key] = compute(key)
+    return result
+
+
+def parent_first(steps: Mapping[str, Step]) -> Iterator[str]:
+    """Each child of ``steps`` once, every child among its parents before it.
+
+    Raises :class:`InheritanceCycle`, naming the files, when a child is its own ancestor.
+    Shared by the dimensions (:func:`inherit`) and the samples (#668), so both settle a
+    parent before its children the same way.
+    """
+    done: set[str] = set()
     for start in steps:
-        if start in final:
+        if start in done:
             continue
         # Depth-first, parents before children; `path` holds the files being settled, so
         # a parent already on it is a cycle.
@@ -318,10 +335,11 @@ def inherit(
         while stack:
             key, ready = stack.pop()
             if ready:
-                final[key] = compute(key)
+                done.add(key)
+                yield key
                 del path[key]
                 continue
-            if key in final:
+            if key in done:
                 continue
             path[key] = None
             stack.append((key, True))
@@ -332,4 +350,3 @@ def inherit(
                     raise InheritanceCycle(f"files derive from themselves through their steps: {' -> '.join(cycle)}")
                 if parent in steps:
                     stack.append((parent, False))
-    return result

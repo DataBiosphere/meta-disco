@@ -65,6 +65,11 @@ def test_passes_is_every_role_s_in_classification_fields_order():
             "nothing to pass",
         ),
         (
+            _every_term(IndexActivity=_entry("IndexActivity", [_input(form=["identifier"], passes_samples=True)])),
+            "nothing to pass",
+        ),
+        (_every_term(Activity=_entry("Activity", [_input(passes_samples=True)])), "passes nothing"),
+        (
             _every_term(IndexActivity={"term": "IndexActivity", "output": {"form": ["file"]}, "reason": "why"}),
             "declares one of output and inputs",
         ),
@@ -88,6 +93,8 @@ def test_passes_is_every_role_s_in_classification_fields_order():
         "repeated-role",
         "unknown-step-passes",
         "identifier-passes",
+        "identifier-passes-samples",
+        "unknown-step-passes-samples",
         "output-without-inputs",
         "abstract-takes",
         "nothing-to-take",
@@ -195,3 +202,22 @@ def test_the_variant_kind_passes_across_an_index_a_merge_and_a_cohort_merge_only
     """A call creates a kind and a filter can narrow one, so neither passes it (#654)."""
     passing = {term for term in activities.declarations() if "variant_kind" in activities.passes(term)}
     assert passing == {activities.INDEXING, activities.MERGE, activities.COHORT_MERGE}
+
+
+def test_samples_roles_are_the_roles_declaring_passes_samples():
+    roles = [_input("indexed", passes_samples=True), _input("other")]
+    loaded = activities.load_activities(_text(_every_term(IndexActivity=_entry("IndexActivity", roles))))
+    assert [i.role for i in loaded["IndexActivity"].inputs if i.passes_samples] == ["indexed"]
+
+
+def test_samples_pass_across_exactly_the_steps_whose_output_describes_its_parent():
+    """#668: an index, a checksum, a QC report, a coverage track, and a cohort merge from its list."""
+    passing = {term for term in activities.declarations() if activities.samples_roles(term)}
+    expected = {activities.INDEXING, activities.CHECKSUM, activities.COHORT_MERGE, "QualityControlActivity"}
+    assert passing == expected | {"CoverageActivity"}
+
+
+def test_samples_never_pass_across_a_step_that_makes_data_with_its_own_samples():
+    """An alignment, a call, a merge or an assembly names its own samples in its header (#668)."""
+    for term in ("AlignmentActivity", activities.VARIANT_CALL, activities.MERGE, "AssemblyActivity"):
+        assert not activities.samples_roles(term), term

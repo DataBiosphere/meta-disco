@@ -163,7 +163,8 @@ EDGE_RULES_NOTE = (
 )
 SAMPLE_RULES_NOTE = (
     "Rules that say which samples a file's data comes from, rather than giving a field an answer (#357). The code "
-    "rules read the file's header; the identifier rules (`rules/sample_namespaces.yaml`) say which strings are "
+    "rules read the file's own content (a header, a sample map's rows), or at reconcile its parent's settled "
+    "samples (#668); the identifier rules (`rules/sample_namespaces.yaml`) say which strings are "
     "samples and in which namespace, and are what a submitter table's sample is cited by. Counted by the sources "
     "a reconciled record's `samples` lists."
 )
@@ -466,7 +467,7 @@ def _attributions(record: dict):
 
 
 def sample_rule_rows() -> list[dict]:
-    """The sample rules (#357): the header readers in ``code_rules.SAMPLE_RULES``, then each identifier rule."""
+    """The sample rules (#357): ``code_rules.SAMPLE_RULES`` (the file-content readers and the parent's, #668), then each identifier rule."""
     rows = [
         {"id": r.id, "reads": r.reads, "rationale": r.rationale, "defined_in": r.module}
         for r in code_rules.SAMPLE_RULES
