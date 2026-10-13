@@ -952,7 +952,8 @@ classes:
         required: true
         description: >-
           Every source that named these samples: the file's header (`code_rules.SAMPLE_RULES`),
-          a submitter-table column, or both where they agree.
+          a submitter-table column, the file's parent across a step that passes samples
+          (#668), or each of them where they agree.
 
   SampleList:
     description: >-

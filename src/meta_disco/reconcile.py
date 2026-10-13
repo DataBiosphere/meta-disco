@@ -1416,7 +1416,6 @@ def reconcile_run(
         inheritance = inherit(graph.steps, graph.base.get, graph.resolve, graph.intern)
     except InheritanceCycle as exc:
         raise ReconcileError(str(exc)) from None
-    # Across the same steps, each child takes its parent's samples where its step passes them (#668).
     samples.inherit(graph.steps)
     del graph
 

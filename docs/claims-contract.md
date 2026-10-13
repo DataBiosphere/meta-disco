@@ -324,8 +324,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     alone it is the child's samples, beside the child's own it is listed where they agree, and where they
     differ the child has none. It is taken from the parent itself, never read through it: a GenomicsDB
     workspace takes the list its sample map's own rows name. Across a step passing no samples the child
-    keeps its own, and a child and parent whose lists share a namespace but neither holds the other are
-    reported, not resolved.
+    keeps its own, and a child and parent neither of whose lists holds the other are reported, not
+    resolved; an identifier in a namespace the other list does not use counts until a crosswalk (#361)
+    can say whether it names the same sample.
 
     Which activity carries which dimension is its `passes` in `rules/activities.yaml`, the one place
     code reads it (ADR-0002 decision 8 records the reasoning, #580); `data_type` is never carried. Sources that name different parents for an

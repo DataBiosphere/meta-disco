@@ -85,15 +85,13 @@ def load_activities(text: str | None = None) -> dict[str, Declared]:
         if len(set(roles)) != len(roles):
             raise ValueError(f"activity {term!r}: a role is named twice in {roles}")
         for i in declaration.inputs:
-            if (i.passes or i.passes_samples) and "file" not in {str(f) for f in i.form}:
+            if _passes_anything(i) and "file" not in {str(f) for f in i.form}:
                 raise ValueError(f"activity {term!r}: role {i.role!r} is an identifier, which has nothing to pass")
             if DATA_TYPE in _role_slots(i):
                 raise ValueError(f"activity {term!r}: role {i.role!r} passes {DATA_TYPE}, which is never carried")
-    unknown = _passes(declared[UNKNOWN])
+    unknown = [i.role for i in declared[UNKNOWN].inputs if _passes_anything(i)]
     if unknown:
-        raise ValueError(f"activity {UNKNOWN!r}: the step not known passes nothing, not {unknown}")
-    if any(i.passes_samples for i in declared[UNKNOWN].inputs):
-        raise ValueError(f"activity {UNKNOWN!r}: the step not known passes nothing, not samples")
+        raise ValueError(f"activity {UNKNOWN!r}: the step not known passes nothing, but role(s) {unknown} do")
     _check_read_through(declared)
     return declared
 
@@ -138,6 +136,11 @@ def _inherited(term: str, given: dict[str, ActivityDeclaration]) -> Declared:
                 raise ValueError(f"activity {term!r}: declares no output or inputs, and its parent is not abstract")
             return Declared(source.output, tuple(source.inputs), bool(declaration.abstract))
     raise ValueError(f"activity {term!r}: declares no output or inputs, and no ancestor does")
+
+
+def _passes_anything(role: InputRole) -> bool:
+    """Whether a role passes a dimension or samples (#668)."""
+    return bool(role.passes) or bool(role.passes_samples)
 
 
 def _role_slots(role) -> set[str]:

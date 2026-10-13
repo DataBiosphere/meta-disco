@@ -640,7 +640,8 @@ def test_the_samples_section_lists_what_passed_and_each_parent_disagreement():
         ],
     }
     md = "\n".join(rr._samples_section(rr.samples_rows({"samples": {"by_dataset": {DATASET: block}}})))
-    assert f"| `{DATASET}` | `IndexActivity` | 2 | 1 | 0 |" in md
+    assert f"| `{DATASET}` | `IndexActivity` | 2 | 0 | 0 | 1 |" in md
+    assert "| dataset | activity | pairs | examples |" in md
     assert f"| `{DATASET}` | `AlignmentActivity` | 1 | `a.cram` ← `a.fastq.gz` |" in md
 
 

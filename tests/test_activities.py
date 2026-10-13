@@ -68,7 +68,7 @@ def test_passes_is_every_role_s_in_classification_fields_order():
             _every_term(IndexActivity=_entry("IndexActivity", [_input(form=["identifier"], passes_samples=True)])),
             "nothing to pass",
         ),
-        (_every_term(Activity=_entry("Activity", [_input(passes_samples=True)])), "not samples"),
+        (_every_term(Activity=_entry("Activity", [_input(passes_samples=True)])), "passes nothing"),
         (
             _every_term(IndexActivity={"term": "IndexActivity", "output": {"form": ["file"]}, "reason": "why"}),
             "declares one of output and inputs",

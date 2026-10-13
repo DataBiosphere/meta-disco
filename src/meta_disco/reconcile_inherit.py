@@ -114,6 +114,10 @@ class Step:
         inputs = tuple((share(i["role"]), i["parent_key"]) for i in generated_by["inputs"])
         return cls(share(generated_by["activity"]), inputs)
 
+    def parents(self, role: str) -> tuple[str, ...]:
+        """The distinct parent keys in ``role``, in input order."""
+        return tuple(dict.fromkeys(p for r, p in self.inputs if r == role))
+
 
 @dataclass(frozen=True, slots=True)
 class Inherited:
@@ -282,7 +286,7 @@ def inherit(
         outcomes: list[tuple[str, str, str]] = []
         throughs = activities.read_through(step.activity)
         for role, slots in activities.role_passes(step.activity).items():
-            parent_keys = tuple(dict.fromkeys(p for r, p in step.inputs if r == role))
+            parent_keys = step.parents(role)
             if not parent_keys:
                 continue
             through = throughs.get(role)

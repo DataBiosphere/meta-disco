@@ -22,6 +22,7 @@ from meta_disco.reconcile_samples import (
     INHERITED,
     NONE,
     PARENT,
+    PARENT_CONFLICT,
     PARENT_NONE,
     PASSED,
     TABLE_ONLY,
@@ -125,8 +126,13 @@ def test_lists_disagree_where_neither_holds_the_other(child, parent, expected):
     assert lists_disagree(frozenset(map(coriell, child)), frozenset(map(coriell, parent))) is expected
 
 
-def test_lists_in_no_shared_namespace_do_not_disagree():
-    assert not lists_disagree(frozenset({coriell("NA19770")}), frozenset({Identifier("sra_sample", "SRS006871")}))
+def test_lists_naming_samples_in_namespaces_the_other_lacks_disagree_until_a_crosswalk():
+    """``NA19770`` and ``SRS006871`` may be one person, but no crosswalk says so yet (#361)."""
+    sra = Identifier("sra_sample", "SRS006871")
+    assert lists_disagree(frozenset({coriell("NA19770")}), frozenset({sra}))
+    assert lists_disagree(
+        frozenset({coriell("HG00096"), sra}), frozenset({coriell("HG00096")}) | {Identifier("biosample", "SAMN1")}
+    )
 
 
 # --- an evidence line ----------------------------------------------------------------
@@ -155,6 +161,14 @@ def test_a_record_pointing_to_a_list_its_run_lacks_is_refused():
     row = {"file_name": "x.bam", "samples": {"list_id": "0" * 16, "count": 1, "named_by": [HEADER]}}
     with pytest.raises(ValueError, match="no producer file of the run holds"):
         from_record(row, {}, {})
+
+
+def test_a_list_held_from_a_table_does_not_excuse_a_record_whose_run_lacks_it():
+    """The members cache also holds tables' lists (#668); the run's own lists are still checked."""
+    key = "0" * 16
+    row = {"file_name": "x.bam", "samples": {"list_id": key, "count": 1, "named_by": [HEADER]}}
+    with pytest.raises(ValueError, match="no producer file of the run holds"):
+        from_record(row, {}, {key: frozenset({coriell("HG00096")})})
 
 
 # --- the name check ------------------------------------------------------------------
@@ -345,6 +359,20 @@ def test_a_parent_with_no_samples_passes_nothing_and_is_counted(tmp_path, run, t
     report = go(run, tmp_path, None, table)
     assert reconciled(run)["file-2"]["samples"] is None
     assert report[SAMPLES_FIELD]["by_dataset"][DATASET]["inheritance"] == {"IndexActivity": {PARENT_NONE: 1}}
+
+
+def test_a_parent_in_conflict_passes_nothing_and_is_counted_apart_from_one_naming_none(tmp_path, run, evidence, table):
+    """The conflict is the parent's, listed on it once, not on its index (as contract 4.9's for dimensions)."""
+    bam, entry = with_header_samples(record(1), "HG00096")
+    bai = child(2, "f1.bam.bai", code_rules.INDEX_BY_NAME, 1, "f1.bam")
+    write_bam_run(run, [bam, bai], [entry])
+    write_evidence(evidence, [(SAMPLES_FIELD, drs(1), "HG00097")], table="participant", column="participant_id")
+    report = go(run, tmp_path, evidence, table)
+    rows = reconciled(run)
+    assert rows["file-1"]["samples"] is None and rows["file-2"]["samples"] is None
+    block = report[SAMPLES_FIELD]["by_dataset"][DATASET]
+    assert block["settled"] == {CONFLICT: 1, NONE: 1}
+    assert block["inheritance"] == {"IndexActivity": {PARENT_CONFLICT: 1}}
 
 
 def test_an_index_whose_own_table_row_names_another_sample_is_a_conflict(tmp_path, run, evidence, table):

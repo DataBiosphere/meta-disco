@@ -29,13 +29,14 @@ Parents settle before children (``reconcile_inherit.parent_first``), so a ``.cra
 takes what its ``.crai`` took from its CRAM. Parents in one role that name different lists,
 or a parent with none, pass nothing.
 
-Across any other step the child keeps its own samples, and a child and parent that share a
-namespace but neither of whose lists holds the other's are counted (:func:`lists_disagree`):
-a CRAM whose ``@RG SM`` is not its reads' sample.
+Across any other step the child keeps its own samples, and a child and parent neither of
+whose lists holds the other's are counted (:func:`lists_disagree`): a CRAM whose ``@RG SM``
+is not its reads' sample.
 """
 
 from __future__ import annotations
 
+import sys
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
@@ -44,7 +45,7 @@ from functools import lru_cache
 from . import activities, code_rules
 from .edges import distinct
 from .models import SOURCE_DERIVATION_INHERITANCE, ClaimSource
-from .reconcile_inherit import Step, parent_first
+from .reconcile_inherit import PARENT_CONFLICT, Step, parent_first
 from .sample_identity import (
     Identifier,
     IdentifierRuleSet,
@@ -68,13 +69,15 @@ OUTCOMES = (AGREED, HEADER_ONLY, TABLE_ONLY, INHERITED, CONFLICT, INCOMPARABLE)
 
 # Which kind of source named a file's samples, in the order ``named_by`` lists them.
 HEADER, TABLE, PARENT = "header", "table", "parent"
-_KIND_ORDER = {HEADER: 0, TABLE: 1, PARENT: 2}
+KINDS = (HEADER, TABLE, PARENT)
 
-# What a role that passes samples gave a child (#668); the report counts each per dataset and activity.
+# What a role that passes samples gave a child (#668); the report counts each per dataset and
+# activity. First match wins, in the order of the dimensions' rule (``reconcile_inherit.settle_parents``).
 PASSED = "passed"
-PARENT_NONE = "parent_none"  # a parent in the role has no settled samples
 PARENTS_DIFFER = "parents_differ"  # parents in the role name different lists
-PASSING_OUTCOMES = (PASSED, PARENT_NONE, PARENTS_DIFFER)
+# PARENT_CONFLICT: a parent's own sources named different samples, so it has none to pass
+PARENT_NONE = "parent_none"  # a parent in the role has no settled samples: no source named any
+PASSING_OUTCOMES = (PASSED, PARENTS_DIFFER, PARENT_CONFLICT, PARENT_NONE)
 
 
 @dataclass(frozen=True)
@@ -87,14 +90,6 @@ class Named:
     # The list the members make, where the source already named it (inference's record, a
     # parent's settled list), so it is not digested again for every file pointing to it.
     list_id: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class Held:
-    """A file's settled samples as its children and the disagreement check read them."""
-
-    list_id: str
-    members: frozenset[Identifier]
 
 
 def from_line(
@@ -128,20 +123,21 @@ def from_record(record: dict, lists: dict[str, dict], members: dict[str, frozens
     """The samples inference wrote on ``record``, its members read from the run's ``lists``.
 
     ``members`` keeps each list's members once read, by list id: 31,000 T2T windows point
-    to one 3,202-sample list. Raises ``ValueError`` where the record points to a list its
-    run does not hold: the producer file is damaged, or was written before its lists were.
+    to one 3,202-sample list. It may hold lists no producer file holds (a table's), so the
+    run's ``lists`` are checked whatever it holds. Raises ``ValueError`` where the record
+    points to a list its run does not hold: the producer file is damaged, or was written
+    before its lists were.
     """
     samples = record.get("samples")
     if not samples:
         return None
     key = samples["list_id"]
+    entry = lists.get(key)
+    if entry is None:
+        raise ValueError(
+            f"record {record.get('file_name')!r} points to sample list {key!r}, which no producer file of the run holds"
+        )
     if key not in members:
-        entry = lists.get(key)
-        if entry is None:
-            raise ValueError(
-                f"record {record.get('file_name')!r} points to sample list {key!r}, which no "
-                "producer file of the run holds"
-            )
         members[key] = members_of(entry)
     return Named(members[key], tuple(samples["named_by"]), kind=HEADER, list_id=key)
 
@@ -163,7 +159,7 @@ def settle(named: Iterable[Named]) -> tuple[str, dict | None, frozenset[Identifi
         overlapping = any(a & b for i, a in enumerate(namespaces) for b in namespaces[i + 1 :])
         return (CONFLICT if overlapping else INCOMPARABLE), None, frozenset()
     members = next(iter(sets))
-    named_by = list(distinct(a for n in sorted(named, key=lambda n: _KIND_ORDER[n.kind]) for a in n.named_by))
+    named_by = list(distinct(a for n in sorted(named, key=lambda n: KINDS.index(n.kind)) for a in n.named_by))
     kinds = {n.kind for n in named}
     if HEADER in kinds:
         outcome = AGREED if TABLE in kinds else HEADER_ONLY
@@ -174,14 +170,13 @@ def settle(named: Iterable[Named]) -> tuple[str, dict | None, frozenset[Identifi
 
 
 def lists_disagree(child: frozenset[Identifier], parent: frozenset[Identifier]) -> bool:
-    """Whether a child's and its parent's samples share a namespace and neither holds all the other's.
+    """Whether neither of a child's and its parent's sample lists holds all the other's.
 
     A child holding its parent's samples and more (a cohort's list beside one member) or fewer
-    (a callset with samples dropped) agrees; lists in no shared namespace cannot be compared (#361).
+    (a callset with samples dropped) agrees. An identifier in a namespace the other list does
+    not use disagrees, until a crosswalk can say whether it names the same sample (#361).
     """
-    if child <= parent or parent <= child:
-        return False
-    return bool({m.namespace for m in child} & {m.namespace for m in parent})
+    return not (child <= parent or parent <= child)
 
 
 def _inherited_attribution(activity: str, role: str, parent_keys: tuple[str, ...]) -> dict:
@@ -224,10 +219,11 @@ class SampleReport:
     name_examples: dict[str, list[dict]] = field(default_factory=lambda: defaultdict(list))
     # Each distinct list a reconciled record points to, by id.
     lists: dict[str, dict] = field(default_factory=dict)
-    # Each inference list's members once read, by id (:func:`from_record`).
+    # Each list's members once read, by id: an inference list's (:func:`from_record`), and each
+    # list a file holds (:attr:`held`).
     members: dict[str, frozenset[Identifier]] = field(default_factory=dict)
-    # Per record key, the file's settled samples, its parent's weighed in once :meth:`inherit` ran.
-    held: dict[str, Held] = field(default_factory=dict)
+    # Per record key, the id of the file's settled list, its parent's weighed in once :meth:`inherit` ran.
+    held: dict[str, str] = field(default_factory=dict)
     # Per dataset and activity, what each role passing samples gave a child (``PASSING_OUTCOMES``).
     passing: dict[str, dict[str, Counter]] = field(default_factory=lambda: defaultdict(lambda: defaultdict(Counter)))
     # Per dataset and activity, the child and parent pairs whose lists disagree, across a step
@@ -238,21 +234,25 @@ class SampleReport:
     _own: dict[str, tuple[list[Named], str]] = field(default_factory=dict, init=False, repr=False)
     # Per child, what its parents passed it, for the second pass.
     _inherited: dict[str, tuple[Named, ...]] = field(default_factory=dict, init=False, repr=False)
-    # Each distinct held list once, by id: 31,000 tars hold one 3,202-sample list.
-    _held_lists: dict[str, Held] = field(default_factory=dict, init=False, repr=False)
+    # The record keys whose sources named different samples (a conflict, or incomparable).
+    _conflicted: set[str] = field(default_factory=set, init=False, repr=False)
 
     def _own_sources(self, record: dict, inference_lists: dict[str, dict], table: list[Named]) -> list[Named]:
         header = from_record(record, inference_lists, self.members)
         return ([header] if header is not None else []) + table
 
-    def _hold(self, identity: str, samples: dict | None, members: frozenset[Identifier]) -> None:
+    def _hold(self, identity: str, outcome: str, samples: dict | None, members: frozenset[Identifier]) -> None:
+        if outcome in (CONFLICT, INCOMPARABLE):
+            self._conflicted.add(identity)
+        else:
+            self._conflicted.discard(identity)
         if samples is None:
             self.held.pop(identity, None)
             return
-        key = samples["list_id"]
-        if key not in self._held_lists:
-            self._held_lists[key] = Held(key, members)
-        self.held[identity] = self._held_lists[key]
+        # Interned, so the 31,000 tars holding one list share one id string.
+        key = sys.intern(samples["list_id"])
+        self.members.setdefault(key, members)
+        self.held[identity] = key
 
     def hold(
         self, identity: str, record: dict, inference_lists: dict[str, dict], table: list[Named], step: Step | None
@@ -261,14 +261,13 @@ class SampleReport:
         named = self._own_sources(record, inference_lists, table)
         if step is not None and activities.samples_roles(step.activity):
             self._own[identity] = (named, str(record.get("dataset_title") or ""))
-        _, samples, members = settle(named)
-        self._hold(identity, samples, members)
+        self._hold(identity, *settle(named))
 
     def inherit(self, steps: Mapping[str, Step]) -> None:
         """Settle each child whose step passes samples with its parents' settled samples, parents first.
 
-        A role's parents pass their list where every one holds the same; a parent holding
-        none, or two holding different lists, pass nothing. Raises
+        A role's parents pass their list where every one holds the same; two holding different
+        lists, a parent in conflict, or a parent holding none, pass nothing. Raises
         ``reconcile_inherit.InheritanceCycle`` where the steps form a cycle.
         """
         for key in parent_first(steps):
@@ -279,40 +278,41 @@ class SampleReport:
             step = steps[key]
             passed: list[Named] = []
             for role in activities.samples_roles(step.activity):
-                parent_keys = tuple(dict.fromkeys(p for r, p in step.inputs if r == role))
+                parent_keys = step.parents(role)
                 if not parent_keys:
                     continue
-                held = [h for h in map(self.held.get, parent_keys) if h is not None]
-                if len(held) < len(parent_keys):
-                    outcome = PARENT_NONE
-                elif len({h.list_id for h in held}) > 1:
+                lists = {self.held[p] for p in parent_keys if p in self.held}
+                if len(lists) > 1:
                     outcome = PARENTS_DIFFER
+                elif any(p in self._conflicted for p in parent_keys):
+                    outcome = PARENT_CONFLICT
+                elif any(p not in self.held for p in parent_keys):
+                    outcome = PARENT_NONE
                 else:
                     outcome = PASSED
+                    (list_key,) = lists
                     attribution = _inherited_attribution(step.activity, role, parent_keys)
-                    passed.append(Named(held[0].members, (attribution,), kind=PARENT, list_id=held[0].list_id))
+                    passed.append(Named(self.members[list_key], (attribution,), kind=PARENT, list_id=list_key))
                 self.passing[dataset][step.activity][outcome] += 1
             if passed:
                 self._inherited[key] = tuple(passed)
-                _, samples, members = settle([*named, *passed])
-                self._hold(key, samples, members)
-        self._own.clear()
+                self._hold(key, *settle([*named, *passed]))
 
     def settle(
         self,
         record: dict,
         inference_lists: dict[str, dict],
         table: list[Named],
-        identity: str | None = None,
-        generated_by: dict | None = None,
+        identity: str,
+        generated_by: dict | None,
     ) -> dict | None:
         """The reconciled ``samples`` for ``record``, counted; None where no source names them, or sources differ.
 
         ``identity`` is its record key, under which :meth:`inherit` kept what its parents
-        passed; ``generated_by`` its reconciled step, whose parents in roles passing no
-        samples are checked against the settled samples (:func:`lists_disagree`).
+        passed; ``generated_by`` its reconciled step (None where it has none), whose parents in
+        roles passing no samples are checked against the settled samples (:func:`lists_disagree`).
         """
-        inherited = list(self._inherited.get(identity, ())) if identity is not None else []
+        inherited = list(self._inherited.get(identity, ()))
         outcome, samples, members = settle(self._own_sources(record, inference_lists, table) + inherited)
         dataset = str(record.get("dataset_title") or "")
         file_name = str(record.get("file_name") or "")
@@ -350,7 +350,7 @@ class SampleReport:
                 continue
             seen.add(key)
             parent = self.held.get(key)
-            if parent is None or not lists_disagree(members, parent.members):
+            if parent is None or not lists_disagree(members, self.members[parent]):
                 continue
             self.parent_disagreements[dataset][activity] += 1
             if len(self.parent_examples[dataset]) < MAX_EXAMPLES:
@@ -360,7 +360,7 @@ class SampleReport:
                         "activity": activity,
                         "parent_file": i.get("parent_file"),
                         "samples": [m.to_dict() for m in sorted(members)[:MAX_EXAMPLES]],
-                        "parent_samples": [m.to_dict() for m in sorted(parent.members)[:MAX_EXAMPLES]],
+                        "parent_samples": [m.to_dict() for m in sorted(self.members[parent])[:MAX_EXAMPLES]],
                     }
                 )
 
@@ -392,7 +392,7 @@ class SampleReport:
                 "name_disagreements": self.name_disagreements[dataset],
                 "name_disagreement_examples": self.name_examples.get(dataset, []),
                 "inheritance": {
-                    activity: {o: counts[o] for o in PASSING_OUTCOMES if counts[o]}
+                    activity: {o: counts[o] for o in PASSING_OUTCOMES if o in counts}
                     for activity, counts in sorted(self.passing.get(dataset, {}).items())
                 },
                 "parent_disagreements": dict(sorted(self.parent_disagreements.get(dataset, Counter()).items())),

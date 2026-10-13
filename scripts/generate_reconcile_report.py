@@ -1213,41 +1213,41 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
             "### Samples passed across a step",
             "",
             "Per step that passes samples, what each file's parent gave it, counted once per file and role: "
-            "*passed*: its parents named one list; *parent_none*: a parent has no settled samples; "
-            "*parents_differ*: its parents named different lists. Nothing passes in the last two.",
+            "*passed*: its parents named one list; *parents_differ*: its parents named different lists; "
+            "*parent_conflict*: a parent's own sources named different samples, a conflict listed on the parent; "
+            "*parent_none*: no source named a parent's samples. Nothing passes in the last three.",
             "",
             *md_table(
                 ["dataset", "activity", *PASSING_OUTCOMES],
                 [[md_code(shown(d)), md_code(a), *(_n(c.get(o, 0)) for o in PASSING_OUTCOMES)] for d, a, c in passing],
             ),
         ]
-    disagreeing = [(r["dataset"], a, n) for r in rows for a, n in r["parent_disagreements"].items()]
+    disagreeing = [(r, a, n) for r in rows for a, n in r["parent_disagreements"].items()]
     lines += [
         "",
         "### A file and its parent naming different samples",
         "",
         "Across a step that passes no samples (an alignment, a variant call, a merge), each file keeps its own. "
-        "A file and a parent whose samples share a namespace, where neither's list holds all the other's, are "
-        "counted here and not resolved: a mislabelled file, a swapped sample or a wrong step (#668).",
+        "A file and a parent where neither's sample list holds all the other's are counted here, once per file "
+        "and parent, and not resolved: a mislabelled file, a swapped sample or a wrong step (#668). An "
+        "identifier in a namespace the other list does not use counts, until a crosswalk can join them (#361).",
         "",
     ]
     if disagreeing:
         lines += md_table(
-            ["dataset", "activity", "files", "examples"],
+            ["dataset", "activity", "pairs", "examples"],
             [
                 [
-                    md_code(shown(d)),
+                    md_code(shown(r["dataset"])),
                     md_code(a),
                     _n(n),
                     "<br>".join(
                         f"{md_code(e['file_name'])} ← {md_code(str(e['parent_file']))}"
-                        for r in rows
-                        if r["dataset"] == d
                         for e in r["parent_disagreement_examples"]
                         if e["activity"] == a
                     ),
                 ]
-                for d, a, n in disagreeing
+                for r, a, n in disagreeing
             ],
         )
     else:
