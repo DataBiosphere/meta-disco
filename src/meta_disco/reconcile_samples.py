@@ -282,17 +282,15 @@ class SampleReport:
                 parent_keys = tuple(dict.fromkeys(p for r, p in step.inputs if r == role))
                 if not parent_keys:
                     continue
-                held = [self.held.get(p) for p in parent_keys]
-                if any(h is None for h in held):
+                held = [h for h in map(self.held.get, parent_keys) if h is not None]
+                if len(held) < len(parent_keys):
                     outcome = PARENT_NONE
-                elif len({h.list_id for h in held if h is not None}) > 1:
+                elif len({h.list_id for h in held}) > 1:
                     outcome = PARENTS_DIFFER
                 else:
                     outcome = PASSED
-                    first = held[0]
-                    assert first is not None
                     attribution = _inherited_attribution(step.activity, role, parent_keys)
-                    passed.append(Named(first.members, (attribution,), kind=PARENT, list_id=first.list_id))
+                    passed.append(Named(held[0].members, (attribution,), kind=PARENT, list_id=held[0].list_id))
                 self.passing[dataset][step.activity][outcome] += 1
             if passed:
                 self._inherited[key] = tuple(passed)
