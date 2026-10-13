@@ -163,7 +163,8 @@ EDGE_RULES_NOTE = (
 )
 SAMPLE_RULES_NOTE = (
     "Rules that say which samples a file's data comes from, rather than giving a field an answer (#357). The code "
-    "rules read the file's header, or at reconcile its parent's settled samples (#668); the identifier rules (`rules/sample_namespaces.yaml`) say which strings are "
+    "rules read the file's own content (a header, a sample map's rows), or at reconcile its parent's settled "
+    "samples (#668); the identifier rules (`rules/sample_namespaces.yaml`) say which strings are "
     "samples and in which namespace, and are what a submitter table's sample is cited by. Counted by the sources "
     "a reconciled record's `samples` lists."
 )

@@ -20,6 +20,7 @@ from meta_disco.reconcile_samples import (
     HEADER_ONLY,
     INCOMPARABLE,
     INHERITED,
+    MAX_EXAMPLES,
     NONE,
     PARENT,
     PARENT_CONFLICT,
@@ -27,6 +28,7 @@ from meta_disco.reconcile_samples import (
     PASSED,
     TABLE_ONLY,
     Named,
+    SampleReport,
     from_line,
     from_record,
     lists_disagree,
@@ -420,3 +422,22 @@ def test_samples_never_pass_across_a_variant_call_and_a_disagreement_is_counted(
     (example,) = block["parent_disagreement_examples"]
     assert example["file_name"] == "HG00097.g.vcf.gz" and example["parent_file"] == "f1.bam"
     assert example["parent_samples"] == [{"id": "HG00096", "namespace": "coriell"}]
+
+
+def test_each_activity_keeps_its_own_disagreement_examples():
+    """Five examples from one activity do not crowd out another's (#668)."""
+    report = SampleReport(identifier_rules())
+    report.members["p"] = frozenset({coriell("HG00096")})
+    report.held["parent"] = "p"
+    child_says = frozenset({coriell("HG00097")})
+
+    def step(activity: str) -> dict:
+        return {"activity": activity, "inputs": [{"role": "x", "parent_key": "parent", "parent_file": "p.bam"}]}
+
+    for n in range(MAX_EXAMPLES + 1):
+        report._check_parents(DATASET, f"a{n}.vcf.gz", child_says, step("VariantCallActivity"))
+    report._check_parents(DATASET, "b.cram", child_says, step("AlignmentActivity"))
+    assert report.parent_disagreements[DATASET] == {"VariantCallActivity": MAX_EXAMPLES + 1, "AlignmentActivity": 1}
+    assert [e["file_name"] for e in report.parent_examples[DATASET] if e["activity"] == "AlignmentActivity"] == [
+        "b.cram"
+    ]

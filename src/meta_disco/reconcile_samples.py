@@ -1,6 +1,7 @@
 """Which samples each file's data comes from, settled at reconcile (#357).
 
-Two kinds of source name a file's samples. Inference reads the file's own content, called its
+Three kinds of source name a file's samples: its own content, a submitter table, and its
+parent across a step that passes samples (below). Inference reads the file's own content, called its
 header here (a BAM's ``@RG SM``, a VCF's sample columns, a GATK sample map's rows,
 ``sample_identity.SampleReader``), and writes the record's ``samples``, a pointer into its
 producer file's sample lists. A submitter table
@@ -229,7 +230,7 @@ class SampleReport:
     # Per dataset and activity, what each role passing samples gave a child (``PASSING_OUTCOMES``).
     passing: dict[str, dict[str, Counter]] = field(default_factory=lambda: defaultdict(lambda: defaultdict(Counter)))
     # Per dataset and activity, the child and parent pairs whose lists disagree, across a step
-    # passing no samples (:func:`lists_disagree`), and the first few.
+    # passing no samples (:func:`lists_disagree`), and the first few per activity.
     parent_disagreements: dict[str, Counter] = field(default_factory=lambda: defaultdict(Counter))
     parent_examples: dict[str, list[dict]] = field(default_factory=lambda: defaultdict(list))
     # Per child whose step passes samples, its own sources and dataset, until :meth:`inherit` reads them.
@@ -355,7 +356,7 @@ class SampleReport:
             if parent is None or not lists_disagree(members, self.members[parent]):
                 continue
             self.parent_disagreements[dataset][activity] += 1
-            if len(self.parent_examples[dataset]) < MAX_EXAMPLES:
+            if sum(e["activity"] == activity for e in self.parent_examples[dataset]) < MAX_EXAMPLES:
                 self.parent_examples[dataset].append(
                     {
                         "file_name": file_name,
