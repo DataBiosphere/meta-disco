@@ -135,6 +135,12 @@ def test_lists_naming_samples_in_namespaces_the_other_lacks_disagree_until_a_cro
     assert lists_disagree(
         frozenset({coriell("HG00096"), sra}), frozenset({coriell("HG00096")}) | {Identifier("biosample", "SAMN1")}
     )
+    # An extra namespace disagrees even where the rest of one list holds the other.
+    assert lists_disagree(frozenset({coriell("HG00096"), sra}), frozenset({coriell("HG00096")}))
+    assert lists_disagree(frozenset({coriell("HG00096")}), frozenset({coriell("HG00096"), sra}))
+    # A dataset's own names in two datasets are two namespaces.
+    sgdp = Identifier("dataset_local", "simons_data_sample_7", "ANVIL_T2T_CHRY")
+    assert lists_disagree(frozenset({sgdp}), frozenset({Identifier("dataset_local", "simons_data_sample_7", "X")}))
 
 
 # --- an evidence line ----------------------------------------------------------------

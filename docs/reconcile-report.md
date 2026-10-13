@@ -632,7 +632,7 @@ Per step that passes samples, what each file's parent gave it, counted once per 
 
 ### A file and its parent naming different samples
 
-Across a step that passes no samples (an alignment, a variant call, a merge), each file keeps its own. A file and a parent where neither's sample list holds all the other's are counted here, once per file and parent, and not resolved: a mislabelled file, a swapped sample or a wrong step (#668). An identifier in a namespace the other list does not use counts, until a crosswalk can join them (#361).
+Across a step that passes no samples (an alignment, a variant call, a merge), each file keeps its own. A file and a parent whose sample lists use different namespaces, or where neither's list holds all the other's, are counted here, once per file and parent, and not resolved: a mislabelled file, a swapped sample or a wrong step (#668). Different namespaces count until a crosswalk can join them (#361).
 
 None in this run.
 

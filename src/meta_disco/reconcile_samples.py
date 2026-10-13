@@ -31,9 +31,8 @@ Parents settle before children (``reconcile_inherit.parent_first``), so a ``.cra
 takes what its ``.crai`` took from its CRAM. Parents in one role that name different lists,
 or a parent with none, pass nothing.
 
-Across any other step the child keeps its own samples, and a child and parent neither of
-whose lists holds the other's are counted (:func:`lists_disagree`): a CRAM whose ``@RG SM``
-is not its reads' sample.
+Across any other step the child keeps its own samples, and a child and parent whose lists
+disagree are counted (:func:`lists_disagree`): a CRAM whose ``@RG SM`` is not its reads' sample.
 """
 
 from __future__ import annotations
@@ -176,13 +175,20 @@ def settle(named: Iterable[Named]) -> tuple[str, dict | None, frozenset[Identifi
 
 
 def lists_disagree(child: frozenset[Identifier], parent: frozenset[Identifier]) -> bool:
-    """Whether neither of a child's and its parent's sample lists holds all the other's.
+    """Whether a child's and its parent's sample lists disagree.
 
-    A child holding its parent's samples and more (a cohort's list beside one member) or fewer
-    (a callset with samples dropped) agrees. An identifier in a namespace the other list does
-    not use disagrees, until a crosswalk can say whether it names the same sample (#361).
+    Lists naming samples in different namespaces (a dataset's own names in each dataset as one)
+    disagree, until a crosswalk can say whether an identifier names the same sample (#361).
+    Within the same namespaces, a child holding its parent's samples and more (a cohort's list
+    beside one member) or fewer (a callset with samples dropped) agrees; otherwise they disagree.
     """
+    if _namespaces(child) != _namespaces(parent):
+        return True
     return not (child <= parent or parent <= child)
+
+
+def _namespaces(members: frozenset[Identifier]) -> set[tuple[str, str | None]]:
+    return {(m.namespace, m.dataset) for m in members}
 
 
 def _inherited_attribution(activity: str, role: str, parent_keys: tuple[str, ...]) -> dict:
