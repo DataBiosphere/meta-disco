@@ -136,7 +136,7 @@
 # - header_absent: true if header section should NOT exist
 # - header_present: true if header section should have at least one record (takes
 #     no header_field / header_pattern: it asks only whether the section is there)
-# - vcf_header_type: VCF header line type (##reference, ##source, ##contig)
+# - vcf_header_type: VCF header line type (##reference, ##contig)
 # - vcf_pattern: regex pattern for VCF header content
 # - fastq_pattern: regex pattern for FASTQ read name
 #
@@ -1035,62 +1035,6 @@ rules:
     then:
       reference_assembly: CHM13
     rationale: "##contig assembly subfield naming CHM13, T2T, or hs1 declares the reference genome"
-
-  # ---------------------------------------------------------------------------
-  # VCF germline variant callers
-  # ---------------------------------------------------------------------------
-  - id: vcf_gatk_haplotypecaller
-    tier: 3
-    scope: vcf_header
-    when:
-      extensions: [".vcf", ".bcf", ".gvcf", ".g.vcf"]
-      vcf_header_type: "##source"
-      vcf_pattern: "(?i)haplotypecaller"
-    then:
-      data_modality: genomic
-      data_type: variants.germline
-    rationale: "GATK HaplotypeCaller is the standard germline SNV/indel caller"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  - id: vcf_svim
-    tier: 3
-    scope: vcf_header
-    when:
-      extensions: [".vcf", ".bcf"]
-      vcf_header_type: "##source"
-      vcf_pattern: "(?i)svim"
-    then:
-      data_modality: genomic
-      data_type: variants.structural
-    rationale: "SVIM detects structural variants from long-read sequencing data (PacBio/ONT)"
-
-  - id: vcf_sniffles
-    tier: 3
-    scope: vcf_header
-    when:
-      extensions: [".vcf", ".bcf"]
-      vcf_header_type: "##source"
-      vcf_pattern: "(?i)sniffles"
-    then:
-      data_modality: genomic
-      data_type: variants.structural
-    rationale: "Sniffles is a long-read SV caller optimized for PacBio and ONT data"
-
-
-
-
 
   - id: fastq_illumina_modern
     tier: 3

@@ -448,8 +448,8 @@ def test_values_that_nest_agree_and_the_deepest_is_the_value():
     ("inferred_value", "source_value", "settled"),
     [
         ("assembly.reference", "assembly", "assembly.reference"),
-        ("variants.germline.gvcf", "variants", "variants.germline.gvcf"),
-        ("variants", "variants.germline.gvcf", "variants.germline.gvcf"),
+        ("variants.gvcf", "variants", "variants.gvcf"),
+        ("variants", "variants.gvcf", "variants.gvcf"),
     ],
 )
 def test_data_type_values_that_nest_agree_and_the_deepest_is_the_value(inferred_value, source_value, settled):
@@ -461,8 +461,8 @@ def test_data_type_values_that_nest_agree_and_the_deepest_is_the_value(inferred_
     )
 
 
-def test_data_type_siblings_still_conflict():
-    got = resolve_slot("data_type", inferred(CLASSIFIED, "variants.germline.gvcf"), [claim("variants.somatic")], False)
+def test_data_type_values_that_do_not_nest_still_conflict():
+    got = resolve_slot("data_type", inferred(CLASSIFIED, "variants.gvcf"), [claim("genotypes")], False)
     assert got == (CONFLICT, None)
 
 

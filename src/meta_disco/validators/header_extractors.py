@@ -61,8 +61,7 @@ class VCFHeader:
     fileformat: str | None = None  # ##fileformat
     reference: str | None = None  # ##reference
     contigs: list[VcfStructuredMeta] | None = None  # ##contig lines
-    source: str | None = None  # ##source: the last such line, which the YAML rules match
-    # Every ##source line's value, in header order (#654); ``source`` keeps only the last.
+    # Every ##source line's value, in header order (#654).
     # A header can carry several (T2T's joint-called files name GenomicsDBImport and
     # SelectVariants), and a merged one may keep only one input's.
     sources: tuple[str, ...] = ()
@@ -330,7 +329,6 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
             elif parsed.type == "reference":
                 header.reference = parsed.value
             elif parsed.type == "source":
-                header.source = parsed.value
                 header.sources += (parsed.value,)
             else:
                 other_meta.append(line)
@@ -418,22 +416,22 @@ def match_vcf_header_pattern(header: VCFHeader, header_type: str, pattern: str) 
 
     Args:
         header: Parsed VCFHeader object
-        header_type: Type of header line (##reference, ##source, ##contig, ##INFO,
+        header_type: Type of header line (##reference, ##contig, ##INFO,
             ##FORMAT, ##FILTER, ##ALT)
         pattern: Regex pattern to match
 
     Returns:
         True if a matching header line satisfies the pattern. What the pattern is
-        tested against depends on the type: the value for ##reference/##source,
+        tested against depends on the type: the value for ##reference,
         the ID for ##INFO/##FORMAT/##FILTER/##ALT, the ``assembly`` subfield for
-        ##contig, and the raw line for any other (##-prefixed) type.
+        ##contig, and the raw line for any other (##-prefixed) type, except
+        ##fileformat and ##source, whose lines the parser keeps only as fields and
+        which never match.
     """
     compiled = re.compile(pattern, re.IGNORECASE)
 
     if header_type == "##reference" and header.reference:
         return bool(compiled.search(header.reference))
-    if header_type == "##source" and header.source:
-        return bool(compiled.search(header.source))
     if header_type == "##contig" and header.contigs:
         # Match the parsed ``assembly`` subfield directly — the value is already
         # isolated in ``fields``, so the rule pattern is a bare name, not ``assembly=``.
