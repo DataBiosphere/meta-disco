@@ -114,8 +114,9 @@ evidence}` entry — plus the controlled vocabulary:
   term of our own (`snATAC-seq`) has no id and sits under the EFO term it narrows; the two
   array assays (`Methylation array`, `Genotyping array`) are EFO terms with no parent among the values
 - **data_type_enum**: dotted terms with `is_a` to the term before the last dot (#607),
-  e.g. `variants.germline.gvcf` under `variants.germline` under `variants`; each `variants`
-  subterm names its axis, origin or kind, which ADR-0003 separates (#654)
+  e.g. `annotations.coverage` under `annotations`; a callset's kind and origin are
+  `variant_kind` and `variant_origin`, not `variants` subterms (ADR-0003, #657), and
+  `variants.gvcf` is the one format term left in the tree until a format slot exists
 - **variant_kind_enum**: `small` and `structural`, the one dimension whose value is a list
   (`models.MULTIVALUED_FIELDS`, ADR-0003, #654): a claim declares one kind, a string, and
   the record stores the settled value as `["small"]` (`models.stored_value` /

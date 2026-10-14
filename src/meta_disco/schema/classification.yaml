@@ -1489,13 +1489,11 @@ enums:
       Content type, spanning two classes. BIOLOGICAL: the bytes are the signal.
       DESCRIPTIVE: the bytes are about another file. (See data-model doc 8c.)
       A dotted value is a child of the value before its last dot, and `is_a` names
-      that parent (`variants.germline.gvcf` is a `variants.germline`, which is a
-      `variants`). A record holds one term. Inference settles its claims by tier; where
-      reconcile meets two values that nest, the deeper one is the value. A consumer that
-      filters on a parent walks `is_a`. The `variants` subterms mix two axes in one tree,
-      origin (`.germline`, `.somatic`) and kind (`.structural`, `.cnv`), which ADR-0003
-      separates into dimensions of their own; each subterm's description names its axis,
-      and the tree is kept until its consumers move.
+      that parent (`annotations.coverage` is an `annotations`). A record holds one term.
+      Inference settles its claims by tier; where reconcile meets two values that nest, the
+      deeper one is the value. A consumer that filters on a parent walks `is_a`. A variant
+      callset's kind and origin are not terms here: they are `variant_kind` and
+      `variant_origin` (ADR-0003, #657).
     permissible_values:
       # --- biological class ---
       alignments:
@@ -1513,41 +1511,16 @@ enums:
           not "unknown": the file is known to hold variants. What kind they are is
           `variant_kind`'s to say, from the caller that made the file (#654).
         meaning: EDAM:data_3498
-      "variants.germline":
+      "variants.gvcf":
         is_a: variants
         description: >-
-          Origin axis: calls of germline variants, inherited or present from conception.
-          Assigned by the `##source` rule for GATK HaplotypeCaller, a germline caller
-          (`vcf_gatk_haplotypecaller`). The same fact is `variant_origin`'s `germline`
-          (#658), read from the caller; this term is kept until its consumers move (#657).
-      "variants.germline.gvcf":
-        is_a: variants.germline
-        description: >-
-          One sample's germline calls, with a reference-confidence record covering
-          every other position: one record per position, or a block (`END=`) per run
-          of positions, each with a `<NON_REF>` ALT. It is the input to joint calling
-          (#607). Placing it under germline variants is a modelling choice: the file
-          also holds the reference-confidence records. No `meaning`: EDAM names gVCF a format
-          (format_4018), beside VCF, and has no data term for it. It narrows two axes at
-          once, origin and file format; under ADR-0003 the format is the file's, not its
-          data type's. Assigned by the content rule `vcf_gvcf`.
-      "variants.somatic":
-        is_a: variants
-        description: >-
-          Origin axis: calls of variants acquired in some cells only, typically a tumor's.
-          No rule assigns it; the same fact is `variant_origin`'s `somatic` (#658).
-      "variants.structural":
-        is_a: variants
-        description: >-
-          Kind axis: calls of structural variants (symbolic or breakend alleles, or alleles
-          declaring SVTYPE). Assigned by the `##source` rules for Sniffles and SVIM
-          (`vcf_sniffles`, `vcf_svim`) and by the content rule `vcf_records_structural`
-          (#651). The same fact is `variant_kind`'s `structural`; this term is kept until
-          its consumers move (ADR-0003).
-      "variants.cnv":
-        is_a: variants
-        description: >-
-          Kind axis: copy-number variant calls. No rule assigns it.
+          One sample's calls, with a reference-confidence record covering every other
+          position: one record per position, or a block (`END=`) per run of positions,
+          each with a `<NON_REF>` ALT. It is the input to joint calling (#607). No
+          `meaning`: EDAM names gVCF a format (format_4018), beside VCF, and has no data
+          term for it. Under ADR-0003 the format is the file's, not its data type's; it is
+          the one format term in this tree, kept until a format slot exists (#657). Its
+          calls' origin is `variant_origin`'s. Assigned by the content rule `vcf_gvcf`.
       genotypes:
       expression_matrix:      # a features × samples abundance matrix
       quantification:         # one sample's per-feature abundance table (e.g. Salmon quant.sf); not a features × samples matrix (cf. expression_matrix)

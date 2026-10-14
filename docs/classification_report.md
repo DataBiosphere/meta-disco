@@ -540,22 +540,13 @@ When header-based detection fails, max variant positions can rule out references
 
 **Variant Caller Detection:**
 
-| `##source`      | data_type           | Rule                       |
-| --------------- | ------------------- | -------------------------- |
-| HaplotypeCaller | variants.germline   | `vcf_gatk_haplotypecaller` |
-| sniffles        | variants.structural | `vcf_sniffles`             |
-| svim            | variants.structural | `vcf_svim`                 |
-
-The records decide too, read from the file at the content tier (#630). Each ALT allele
-of the first records is counted, except those that are no variant (`*`, `.`,
-`<NON_REF>`, `<*>`). A VCF with one counted allele at least, every one a structural
-variant its caller declared (a symbolic ALT, a breakend, or `SVTYPE` in INFO), is
-`variants.structural`
-(`vcf_records_structural`). One whose header declares an `##INFO` field `SVTYPE`,
-`SVLEN`, `CIPOS`, `CIEND`, `MATEID` or `IMPRECISE` but whose first records include a
-counted small variant is `variants` (`vcf_records_small_variants`): such a header says
-structural variants may appear, not that the file holds only them. The somatic and CNV
-caller rules fired on nothing across 204,149 VCFs and were removed (#430).
+The caller a VCF's header names gives its `variant_kind` and `variant_origin`, looked up in
+`rules/callers.yaml` (ADR-0003, #654, #658); it no longer narrows `data_type`. The
+`##source` rules for HaplotypeCaller, Sniffles and SVIM, and the two record rules of #630,
+wrote `variants.germline` and `variants.structural` and were retired with those terms
+(#657). A VCF's `data_type`, where classified, is `variants`, or `variants.gvcf` where the content rule
+`vcf_gvcf` reads a gVCF (#607). The somatic and CNV caller rules fired on nothing across
+204,149 VCFs and were removed (#430).
 
 ### 4.3 FASTQ Read Name Rules
 
@@ -681,6 +672,7 @@ High confidence (≥80%): 20,462 (88.6%)
 
 The two record rules that replaced `vcf_info_sv` (#630) were counted on a later run,
 `20261009_005912`: `vcf_records_structural` 153, `vcf_records_small_variants` 62.
+They and `vcf_gatk_haplotypecaller` were retired in #657.
 
 High confidence (≥80%): 204,085 (99.5%)
 
@@ -955,7 +947,7 @@ All rules are defined in `src/meta_disco/rules/unified_rules.yaml`. The counts b
 by the rule's `scope` — the kind of evidence it reads — as the loader reports them, so
 they describe the file as it is rather than as it was last summarised. #430 cut the set
 from 129 rules to 59, deleting every rule that fired on no file in either
-catalog; #88 deleted `intervals_fallback`, leaving 58. Every rule left fires on something in the data, with two deliberate exceptions kept for
+catalog; #88 deleted `intervals_fallback`, and #657 the three VCF `##source` rules. Every rule left fires on something in the data, with two deliberate exceptions kept for
 what they guard rather than what they match: `index_file`, the engine's backstop for an index the
 index producer misses, and `image_svs_histology`, which `EXTENSION_MAP` binds by an invariant that
 every image extension has a rule.
@@ -963,11 +955,11 @@ every image extension has a rule.
 | Scope                        | Rule Count |
 | ---------------------------- | ---------- |
 | extension (tier 1–2)         |         14 |
-| filename pattern (tier 2)    |         19 |
-| BAM/CRAM header (tier 3)     |          9 |
-| VCF header (tier 3)          |          8 |
+| filename pattern (tier 2)    |         18 |
+| BAM/CRAM header (tier 3)     |         12 |
+| VCF header (tier 3)          |          4 |
 | FASTQ read name (tier 3)     |          8 |
-| **Total**                    | **58** |
+| **Total**                    | **56** |
 
 Beside the rules: 6 Python validators the header rules call into. No rule reads file size, and none
 reads another rule's answer (#88).

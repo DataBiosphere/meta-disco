@@ -121,7 +121,6 @@ def test_a_dragen_line_is_read_and_names_no_single_output():
 def test_every_source_line_is_kept_in_order():
     parsed = header("##source=GenomicsDBImport", "##source=SelectVariants")
     assert parsed.sources == ("GenomicsDBImport", "SelectVariants")
-    assert parsed.source == "SelectVariants"
 
 
 # --- rules 1, 2 and 4: the producing step's caller ---------------------------------------

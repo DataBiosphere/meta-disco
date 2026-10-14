@@ -31,7 +31,6 @@ import json
 import os
 import time
 from dataclasses import asdict, dataclass, field, replace
-from functools import cached_property
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -274,11 +273,6 @@ class VcfRecord:
     def alts(self) -> list[str]:
         """The ALT alleles, in order."""
         return self.alt.split(",")
-
-    @cached_property
-    def info_keys(self) -> frozenset[str]:
-        """The keys of the INFO column's entries, a flag's and a ``key=value`` entry's alike; empty for ``.``."""
-        return frozenset(entry.split("=", 1)[0] for entry in self.info.split(";") if entry and entry != ".")
 
 
 def records_of(lines: list[str]) -> tuple[VcfRecord, ...]:

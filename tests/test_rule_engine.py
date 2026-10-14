@@ -361,6 +361,18 @@ class TestHeaderSectionPresence:
         with pytest.raises(ValueError, match="'header_present' takes no"):
             RuleEngine(path)
 
+    @pytest.mark.parametrize("header_type", ["##source", "##fileformat"])
+    def test_a_vcf_header_type_no_line_can_match_is_refused(self, tmp_path, header_type):
+        """A rule on a line the parser keeps only as a field would load and never fire (#657)."""
+        import yaml
+
+        when = {"extensions": [".vcf"], "vcf_header_type": header_type, "vcf_pattern": "(?i)sniffles"}
+        path = tmp_path / "rules.yaml"
+        rule = {"id": "r", "tier": 3, "scope": "vcf_header", "when": when, "then": {"data_type": "variants"}}
+        path.write_text(yaml.safe_dump({"rules": [rule]}), encoding="utf-8")
+        with pytest.raises(ValueError, match="matches no header line"):
+            RuleEngine(path)
+
 
 class TestSetFieldValidation:
     """set_field rejects unknown fields/statuses instead of silently mis-storing."""

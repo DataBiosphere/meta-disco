@@ -282,7 +282,7 @@ def test_iter_records_unwraps_shapes_and_skips_non_dicts(tmp_path):
 
 def test_a_variant_kind_requires_a_variants_data_type():
     kind = (["small"], "classified")
-    assert "variant_kind_on_variants" not in _rule_ids(_rec(variant_kind=kind, data_type=_c("variants.germline.gvcf")))
+    assert "variant_kind_on_variants" not in _rule_ids(_rec(variant_kind=kind, data_type=_c("variants.gvcf")))
     assert "variant_kind_on_variants" in _rule_ids(_rec(variant_kind=kind, data_type=_c("alignments")))
     assert "variant_kind_on_variants" not in _rule_ids(_rec(variant_kind=NA, data_type=_c("alignments")))
 

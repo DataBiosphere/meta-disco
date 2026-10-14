@@ -213,6 +213,9 @@ class RuleLoader:
         "vcf_pattern",
         "fastq_pattern",
     }
+    # `vcf_header_type` values no line can match: the parser keeps these lines only as fields
+    # `match_vcf_header_pattern` does not read (#657). Callers are `rules/callers.yaml`'s to read.
+    UNMATCHABLE_VCF_HEADER_TYPES: ClassVar[frozenset[str]] = frozenset({"##fileformat", "##source"})
     # Effect keys _apply_rule() reads from a `then` block: the classification
     # fields (real-value effects) plus the reserved `status` key, whose value is a
     # sub-map of {field: status} for fields a rule declares non-classified (#133).
@@ -331,7 +334,8 @@ class RuleLoader:
 
         Validates each rule's id (present, unique), tier, scope, and the keys
         used in its ``when``/``then`` blocks (against VALID_WHEN_KEYS /
-        VALID_THEN_KEYS), including the ``then.status`` sub-map (fields, authorable
+        VALID_THEN_KEYS), a ``vcf_header_type`` against
+        UNMATCHABLE_VCF_HEADER_TYPES, and the ``then.status`` sub-map (fields, authorable
         statuses, and value/status non-overlap — see ``_parse_then_status``).
         Raises ValueError on any violation. Does not validate ``then`` *values*
         against the controlled vocabulary — that check lives in
@@ -378,6 +382,11 @@ class RuleLoader:
             ):
                 raise ValueError(
                     f"Rule {rule_id}: 'header_present' takes no 'header_absent', 'header_field' or 'header_pattern'"
+                )
+            if when.get("vcf_header_type") in self.UNMATCHABLE_VCF_HEADER_TYPES:
+                raise ValueError(
+                    f"Rule {rule_id}: 'vcf_header_type' {when['vcf_header_type']!r} matches no header line; "
+                    "a VCF's callers are read through rules/callers.yaml"
                 )
 
             then = rule_data.get("then", {})
