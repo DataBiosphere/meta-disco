@@ -69,7 +69,8 @@ rows:
       GenotypeGVCFs reads the workspace) and trimmed to the interval (SelectVariants). The
       VCF's header carries the workspace's GenomicsDBImport line and SelectVariants', but not
       GenotypeGVCFs', so the row is what states the link (#610), and with it the calls'
-      kind and origin, which the header no longer names (#678).
+      kind and origin, which the header no longer names (#678). The SelectVariants step
+      selects intervals, not types (no T2T header names --select-type), so the kind passes.
   - id: activity.t2t_variant_filter
     match:
       source_type: repository_metadata

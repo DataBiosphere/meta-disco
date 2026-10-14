@@ -924,7 +924,7 @@ def classify_from_tar_head(
     The caller is found as a VCF's is (``callers.find_caller``), with the workspace's name
     (:func:`workspace_name`) as the file's: the import step's output is the directory the
     tar was made from. A workspace whose header was not read gets both dimensions
-    ``not_classified`` with the reason ``ParsedTarHead.unread`` names, under the step rules. A tar that is
+    ``not_classified``, the reason worded from ``ParsedTarHead.unread``, under the step rules. A tar that is
     no GenomicsDB workspace gets neither claim. The cohort step is read from the same header
     by ``cohort_steps.TarSteps`` (#621). ``file_size`` and ``file_format`` are unused (a
     container has no format of its own), accepted to match the uniform ``_fetch_and_classify`` call.

@@ -223,8 +223,8 @@ VCF_STEP_CALLER_KIND = CodeRule(
     source_type=SOURCE_CONTENT_READ,
     reads=(
         "VCF header: its command lines, as steps; the producing step (the end of their data flow), "
-        "walked back through steps that keep the kind (SelectVariants, GenotypeGVCFs, ApplyVQSR, "
-        "ApplyRecalibration, bcftools view, norm, annotate) to the step that called the variants"
+        "walked back through steps that keep the kind (SelectVariants, GenotypeGVCFs, FilterMutectCalls, "
+        "ApplyVQSR, ApplyRecalibration, bcftools view, norm, annotate) to the step that called the variants"
     ),
     sets=("variant_kind",),
     rationale=(
@@ -333,7 +333,8 @@ _WORKSPACE_HEADER = (
 _WORKSPACE = (
     "A workspace holds the calls it imported, and its header records the steps behind it, so its caller "
     "is read as a VCF's (#678), the workspace's name (the tar's, less .tar and any .gz) standing for the "
-    "file's: the import's output is the directory the tar was made from. "
+    "file's, since the import's output is the directory the tar was made from; a tar named otherwise "
+    "reads the same, through the header's import, a merge. "
 )
 
 

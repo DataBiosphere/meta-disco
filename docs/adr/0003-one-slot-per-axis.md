@@ -162,8 +162,9 @@ is shown as "Not determined".
   variant processing (filters), which can drop calls but not change where they arose, and across
   a joint genotyping of gVCFs (#678).
 - **GATK's gVCF gatherers are not callers** (#678): GenomicsDBImport and CombineGVCFs are merges,
-  settled by the callers the header names, and GenotypeGVCFs keeps its input's calls, since each
-  also runs on Mutect2's gVCFs (GATK's panel-of-normals workflow, `--input-is-somatic`). A header
+  settled by the callers the header names, and GenotypeGVCFs keeps its input's calls: GATK's
+  panel-of-normals workflow imports Mutect2's VCFs with GenomicsDBImport, and CombineGVCFs and
+  GenotypeGVCFs take Mutect2's gVCFs with `--input-is-somatic`. A header
   that names the gatherer but not the caller behind it gives no kind or origin.
 
 ### How #657 retires the subterms (decided 2026-10-13)

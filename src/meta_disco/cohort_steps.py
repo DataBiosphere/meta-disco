@@ -12,9 +12,10 @@ Two steps are read here, each from the file's own content:
 - **A workspace tar's step** is a ``CohortMergeActivity`` with the map its one ``input_list``,
   read from the tar's own ``vcfheader.vcf``, which carries the ``GenomicsDBImport`` command
   line: ``--genomicsdb-workspace-path`` must name the tar itself, and ``--sample-name-map``
-  names the list, matched by base name among the dataset's sample maps. The tar takes its
-  values from the map's members, read through the map at reconcile
-  (``activities.read_through``), not from each gVCF as an input of its own.
+  names the list, matched by base name among the dataset's sample maps. At reconcile the tar
+  takes its values from the map's members, read through the map (``activities.read_through``),
+  not from each gVCF as an input of its own; its kind and origin it also reads itself, from the
+  same header's callers (``header_classifier.classify_from_tar_head``, #678).
 
 A step is written only where every parent resolves: exactly one file of the dataset carries
 the name (#438's rule). Each file's outcome is one of :data:`OUTCOMES`, which the tar and

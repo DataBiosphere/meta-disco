@@ -75,18 +75,22 @@ _DIMENSION_TEXT = {
             "walked back through steps that keep the kind, or a `##source` naming one tool, "
             "looked up in `rules/callers.yaml` (#654); a GenomicsDB workspace's from the "
             "caller its own `vcfheader.vcf` names, found the same way (#678). Not applicable "
-            "to a file whose rule says it holds no variants. An index takes its parent's kind "
-            "only at reconcile, which this report does not read."
+            "to a file whose rule says it holds no variants. An index, a VCF genotyped from a "
+            "GenomicsDB workspace (whose header names the import but not the caller) and a "
+            "merge of such VCFs take their parents' kind only at reconcile, which this report "
+            "does not read."
         ),
     ),
     "variant_origin": (
         "Variant Origin",
         (
-            "**Note**: Germline or somatic, read from the caller that made a VCF or a GenomicsDB "
-            "workspace, found as for the kind and looked up in `rules/callers.yaml` (#658, #678). A "
-            "caller with a somatic mode (Sniffles2) gives its origin only where its command line "
-            "shows the mode was off. Not applicable to a file whose rule says it holds no variants. "
-            "An index takes its parent's origin only at reconcile, which this report does not read."
+            "**Note**: Germline or somatic, read from the caller a VCF's header names, or the caller "
+            "of the calls a GenomicsDB workspace imported, found as for the kind and looked up in "
+            "`rules/callers.yaml` (#658, #678). A caller with a somatic mode (Sniffles2) gives its "
+            "origin only where its command line shows the mode was off. Not applicable to a file "
+            "whose rule says it holds no variants. An index, a VCF genotyped from a workspace, a "
+            "merge of such VCFs and a filtered callset take their parents' origin only at "
+            "reconcile, which this report does not read."
         ),
     ),
 }

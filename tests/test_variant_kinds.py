@@ -352,3 +352,12 @@ def test_the_classifier_claims_not_classified_with_the_reason_where_no_kind_is_r
     assert (entry["value"], entry["status"]) == (None, NOT_CLASSIFIED)
     (claim,) = [e for e in entry["evidence"] if e.get("rule_id") == "vcf_source_caller_kind"]
     assert claim["status"] == NOT_CLASSIFIED and claim["reason"] == f"{callers.NOT_IN_TABLE}: dbSNP"
+
+
+def test_combinegvcfs_merges_the_gvcfs_its_header_names_the_caller_of():
+    """1000G's joint calls: HaplotypeCaller gVCFs combined, then genotyped (#678). CombineGVCFs is a merge."""
+    combine = gatk4("CombineGVCFs", "-V HG00096.g.vcf -V HG00097.g.vcf -O cohort.g.vcf")
+    genotype = gatk4("GenotypeGVCFs", "-V cohort.g.vcf -O joint.vcf")
+    reading = kind(combine, genotype, HC, name="joint.vcf")
+    assert (reading.by, reading.value) == (callers.BY_MERGE, "small")
+    assert reading.reason.startswith("CombineGVCFs of calls by HaplotypeCaller")
