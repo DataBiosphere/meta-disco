@@ -36,6 +36,7 @@ rule's is declared, because a code rule has no ``when`` to work it out from.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from . import activities
@@ -391,29 +392,41 @@ _WORKSPACE = (
 )
 
 
-def _tar_twin(vcf_rule: CodeRule, rule_id: str, unread: str = "") -> CodeRule:
+# Each VCF caller rule's tar twin, by id: a twin's text names the twins, not the VCF rules.
+_TAR_TWIN_IDS = {
+    VCF_STEP_CALLER_KIND.id: "tar_step_caller_kind",
+    VCF_SOURCE_CALLER_KIND.id: "tar_source_caller_kind",
+    VCF_MERGE_SMALL_CALLERS.id: "tar_merge_small_callers",
+    VCF_STEP_CALLER_ORIGIN.id: "tar_step_caller_origin",
+    VCF_SOURCE_CALLER_ORIGIN.id: "tar_source_caller_origin",
+    VCF_MERGE_GERMLINE_CALLERS.id: "tar_merge_germline_callers",
+}
+
+
+def _as_tar(text: str) -> str:
+    """``text`` with each VCF caller rule's id it names replaced by its tar twin's."""
+    return re.sub(r"\b(" + "|".join(_TAR_TWIN_IDS) + r")\b", lambda m: _TAR_TWIN_IDS[m.group(1)], text)
+
+
+def _tar_twin(vcf_rule: CodeRule, unread: str = "") -> CodeRule:
     """The tar rule that reads a workspace's header as ``vcf_rule`` reads a VCF's (``unread``: what a header not read gives)."""
     return CodeRule(
-        id=rule_id,
+        id=_TAR_TWIN_IDS[vcf_rule.id],
         module=HEADER_CLASSIFIER,
         basis=BASIS_CONTENT,
         source_type=SOURCE_CONTENT_READ,
-        reads=f"{_WORKSPACE_HEADER}{vcf_rule.id} reads a VCF's: {vcf_rule.reads}",
+        reads=f"{_WORKSPACE_HEADER}a VCF's is: {_as_tar(vcf_rule.reads)}",
         sets=vcf_rule.sets,
-        rationale=_WORKSPACE + vcf_rule.rationale + unread,
+        rationale=_WORKSPACE + _as_tar(vcf_rule.rationale) + unread,
     )
 
 
-TAR_STEP_CALLER_KIND = _tar_twin(
-    VCF_STEP_CALLER_KIND, "tar_step_caller_kind", " A workspace whose header was not read gives no kind."
-)
-TAR_SOURCE_CALLER_KIND = _tar_twin(VCF_SOURCE_CALLER_KIND, "tar_source_caller_kind")
-TAR_MERGE_SMALL_CALLERS = _tar_twin(VCF_MERGE_SMALL_CALLERS, "tar_merge_small_callers")
-TAR_STEP_CALLER_ORIGIN = _tar_twin(
-    VCF_STEP_CALLER_ORIGIN, "tar_step_caller_origin", " A workspace whose header was not read gives no origin."
-)
-TAR_SOURCE_CALLER_ORIGIN = _tar_twin(VCF_SOURCE_CALLER_ORIGIN, "tar_source_caller_origin")
-TAR_MERGE_GERMLINE_CALLERS = _tar_twin(VCF_MERGE_GERMLINE_CALLERS, "tar_merge_germline_callers")
+TAR_STEP_CALLER_KIND = _tar_twin(VCF_STEP_CALLER_KIND, " A workspace whose header was not read gives no kind.")
+TAR_SOURCE_CALLER_KIND = _tar_twin(VCF_SOURCE_CALLER_KIND)
+TAR_MERGE_SMALL_CALLERS = _tar_twin(VCF_MERGE_SMALL_CALLERS)
+TAR_STEP_CALLER_ORIGIN = _tar_twin(VCF_STEP_CALLER_ORIGIN, " A workspace whose header was not read gives no origin.")
+TAR_SOURCE_CALLER_ORIGIN = _tar_twin(VCF_SOURCE_CALLER_ORIGIN)
+TAR_MERGE_GERMLINE_CALLERS = _tar_twin(VCF_MERGE_GERMLINE_CALLERS)
 BED_COORDINATE_REFERENCE = CodeRule(
     id="bed_coordinate_reference",
     module=HEADER_CLASSIFIER,
