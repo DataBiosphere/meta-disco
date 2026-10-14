@@ -88,7 +88,7 @@ GROUP_LABELS = {
 # there is never counted as a value here.
 VALUE_STATUSES = tuple(sorted(STATUS_LABELS))
 # A slot with more values than this, some of them below another, is shown in the markdown with
-# each term under its top term by `is_a` (`variants.germline` under `variants`); the dashboard
+# each term under its top term by `is_a` (`variants.gvcf` under `variants`); the dashboard
 # shows every term. It triggers the grouping and does not bound the table's width: a slot
 # with many top-level terms stays wide.
 MARKDOWN_VALUE_COLUMNS = 12

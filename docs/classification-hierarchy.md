@@ -48,14 +48,14 @@ file_format (extension)
 
 ## Variants (.vcf, .vcf.gz, .g.vcf.gz, .gvcf.gz, .bcf)
 
-**data_type**: `variants`, `variants.germline`, `variants.germline.gvcf`, `variants.structural`
+**data_type**: `variants`, `variants.gvcf`
 
-A gVCF is `variants.germline.gvcf` when the step that made it, read from its header, is a GATK HaplotypeCaller in GVCF or BP_RESOLUTION mode, and its first records all carry `<NON_REF>`, at least one alone (`vcf_gvcf`, #607). The name is not read: T2T's gVCFs are named `HG00096.chr10.hc.vcf.gz`. Neither are the `##ALT=<ID=NON_REF>` and `##GVCFBlock` lines, which joint-called VCFs and PLINK `.pvar` files carry over from their gVCFs.
+A gVCF is `variants.gvcf` when the step that made it, read from its header, is a GATK HaplotypeCaller in GVCF or BP_RESOLUTION mode, and its first records all carry `<NON_REF>`, at least one alone (`vcf_gvcf`, #607). The name is not read: T2T's gVCFs are named `HG00096.chr10.hc.vcf.gz`. Neither are the `##ALT=<ID=NON_REF>` and `##GVCFBlock` lines, which joint-called VCFs and PLINK `.pvar` files carry over from their gVCFs.
 
-`variants.somatic` and `variants.cnv` are in the vocabulary but no rule emits them: every somatic and CNV caller rule fired on nothing across 204,149 VCFs and was removed (#430). Caller detection survives for GATK HaplotypeCaller, sniffles and svim, which is what the catalogs actually hold.
+A callset's kind and origin are not `data_type` terms: they are `variant_kind` and `variant_origin`, read from the caller (ADR-0003). The `variants.germline`, `.somatic`, `.structural` and `.cnv` subterms, and the `##source` and record rules that wrote them, were retired in #657.
 
 **data_modality**:
-- `genomic` ← extension default; the three surviving caller rules assert it too
+- `genomic` ← extension default
 
 **assay_type**: _(not determined — VCF doesn't encode assay)_
 

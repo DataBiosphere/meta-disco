@@ -540,22 +540,13 @@ When header-based detection fails, max variant positions can rule out references
 
 **Variant Caller Detection:**
 
-| `##source`      | data_type           | Rule                       |
-| --------------- | ------------------- | -------------------------- |
-| HaplotypeCaller | variants.germline   | `vcf_gatk_haplotypecaller` |
-| sniffles        | variants.structural | `vcf_sniffles`             |
-| svim            | variants.structural | `vcf_svim`                 |
-
-The records decide too, read from the file at the content tier (#630). Each ALT allele
-of the first records is counted, except those that are no variant (`*`, `.`,
-`<NON_REF>`, `<*>`). A VCF with one counted allele at least, every one a structural
-variant its caller declared (a symbolic ALT, a breakend, or `SVTYPE` in INFO), is
-`variants.structural`
-(`vcf_records_structural`). One whose header declares an `##INFO` field `SVTYPE`,
-`SVLEN`, `CIPOS`, `CIEND`, `MATEID` or `IMPRECISE` but whose first records include a
-counted small variant is `variants` (`vcf_records_small_variants`): such a header says
-structural variants may appear, not that the file holds only them. The somatic and CNV
-caller rules fired on nothing across 204,149 VCFs and were removed (#430).
+The caller a VCF's header names gives its `variant_kind` and `variant_origin`, looked up in
+`rules/callers.yaml` (ADR-0003, #654, #658); it no longer narrows `data_type`. The
+`##source` rules for HaplotypeCaller, Sniffles and SVIM, and the two record rules of #630,
+wrote `variants.germline` and `variants.structural` and were retired with those terms
+(#657). A VCF's `data_type` is `variants`, or `variants.gvcf` where the content rule
+`vcf_gvcf` reads a gVCF (#607). The somatic and CNV caller rules fired on nothing across
+204,149 VCFs and were removed (#430).
 
 ### 4.3 FASTQ Read Name Rules
 
@@ -681,6 +672,7 @@ High confidence (≥80%): 20,462 (88.6%)
 
 The two record rules that replaced `vcf_info_sv` (#630) were counted on a later run,
 `20261009_005912`: `vcf_records_structural` 153, `vcf_records_small_variants` 62.
+They and `vcf_gatk_haplotypecaller` were retired in #657.
 
 High confidence (≥80%): 204,085 (99.5%)
 

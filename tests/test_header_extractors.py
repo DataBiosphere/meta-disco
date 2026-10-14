@@ -52,7 +52,7 @@ class TestParseVcfHeader:
         header = parse_vcf_header(self.HEADER)
         assert header.fileformat == "VCFv4.2"
         assert header.reference == "file:///GRCh38.fa"
-        assert header.source == "MyCaller"
+        assert header.sources == ("MyCaller",)
 
     def test_structured_fields_are_typed(self):
         header = parse_vcf_header(self.HEADER)
@@ -107,10 +107,6 @@ class TestMatchVcfHeaderPattern:
     def test_reference_pattern_matches(self):
         header = parse_vcf_header(self.HEADER)
         assert match_vcf_header_pattern(header, "##reference", "GRCh38")
-
-    def test_source_pattern_matches(self):
-        header = parse_vcf_header(self.HEADER)
-        assert match_vcf_header_pattern(header, "##source", "MyCaller")
 
     def test_contig_matches_against_assembly_subfield(self):
         # Processor test: ##contig dispatch reads the ``assembly`` subfield

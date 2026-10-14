@@ -2,7 +2,7 @@
 
 - **Status:** Accepted (2026-10-10, with #654's PR #661); proposed 2026-10-09, when the storage and user model were decided by Dave
 - **Decision record for:** [#654](https://github.com/DataBiosphere/meta-disco/issues/654) (variant kind), [#658](https://github.com/DataBiosphere/meta-disco/issues/658) (variant origin), and the vocabularies it touches
-- **Related:** #630, #651, #652, #607 (gVCF), #580 (activity vocabulary), #563 (MODAL), #533 (EFO), #655 (sample count)
+- **Related:** #630, #651, #652, #607 (gVCF), #657 (subterms retired), #580 (activity vocabulary), #563 (MODAL), #533 (EFO), #655 (sample count)
 
 ## Context
 
@@ -159,11 +159,24 @@ is shown as "Not determined".
 - **Reconcile carries the origin** across index, merge and cohort-merge steps, and across
   variant processing (filters), which can drop calls but not change where they arose.
 
+### How #657 retires the subterms (decided 2026-10-13)
+
+- **Kind and origin leave `data_type`.** `variants.structural`, `variants.cnv`,
+  `variants.germline` and `variants.somatic` are gone from the vocabulary: once the explorer read
+  `variant_kind` and `variant_origin`, every file holding one held the same fact in those slots.
+  The rules that wrote them go too: the `##source` rules for HaplotypeCaller, SVIM and Sniffles,
+  and the two record rules from #630, whose only use was to set `.structural` or to overrule a
+  header rule that did.
+- **gVCF becomes `variants.gvcf`, under `variants`**, the one format term left in `data_type`.
+  No slot holds a file's format read from its content (`file_format` is the source's extension),
+  so it stays here until one does.
+
 ## Consequences
 
-- The `variants.*` terms other than `variants` retire from `data_type` over time; their files carry
-  the same information in `variant_kind`, `variant_origin` and the format.
+- The `variants.*` terms other than `variants` retire from `data_type`; their files carry the same
+  information in `variant_kind`, `variant_origin` and the format. #657 retired the kind and origin
+  terms; `variants.gvcf` waits for a format slot.
 - Each new slot is a new dimension: the schema, the 13 producers' output shape, reconcile, the reports
   and the explorer's data dictionary all change. That cost is paid once per axis, not once per
   combination.
-- Consumers that filter on `variants.structural` today move to `variant_kind`.
+- Consumers that filtered on `variants.structural` filter on `variant_kind` instead.

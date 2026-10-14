@@ -611,7 +611,7 @@ def test_a_cached_vcf_entry_whose_record_lines_are_not_lines_of_eight_columns_is
 
 
 def test_the_vcf_fetcher_keeps_the_first_100_records(monkeypatch, evidence_dir):
-    """The rules' "first 100 records" (#630) is the matcher's limit."""
+    """The "first 100 records" the record readers take (#630, `vcf_gvcf` since #657) is the matcher's limit."""
     records = b"".join(b"chr1\t%d\t.\tA\tC\t.\t.\t.\n" % pos for pos in range(1, 102))
     _install(
         monkeypatch, gzip.compress(b"##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\n" + records)
