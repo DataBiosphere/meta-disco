@@ -73,19 +73,20 @@ _DIMENSION_TEXT = {
         (
             "**Note**: Read from the caller that made a VCF: its header's producing step, "
             "walked back through steps that keep the kind, or a `##source` naming one tool, "
-            "looked up in `rules/callers.yaml` (#654). Not applicable to a file whose "
-            "rule says it holds no variants. An index or a GenomicsDB workspace takes its "
-            "parent's kind only at reconcile, which this report does not read."
+            "looked up in `rules/callers.yaml` (#654); a GenomicsDB workspace's from the "
+            "caller its own `vcfheader.vcf` names, found the same way (#678). Not applicable "
+            "to a file whose rule says it holds no variants. An index takes its parent's kind "
+            "only at reconcile, which this report does not read."
         ),
     ),
     "variant_origin": (
         "Variant Origin",
         (
-            "**Note**: Germline or somatic, read from the caller that made a VCF, found as for "
-            "the kind and looked up in `rules/callers.yaml` (#658). A caller with a somatic mode "
-            "(Sniffles2) gives its origin only where its command line shows the mode was off. Not "
-            "applicable to a file whose rule says it holds no variants. An index or a GenomicsDB "
-            "workspace takes its parent's origin only at reconcile, which this report does not read."
+            "**Note**: Germline or somatic, read from the caller that made a VCF or a GenomicsDB "
+            "workspace, found as for the kind and looked up in `rules/callers.yaml` (#658, #678). A "
+            "caller with a somatic mode (Sniffles2) gives its origin only where its command line "
+            "shows the mode was off. Not applicable to a file whose rule says it holds no variants. "
+            "An index takes its parent's origin only at reconcile, which this report does not read."
         ),
     ),
 }

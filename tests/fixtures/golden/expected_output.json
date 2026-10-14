@@ -1243,24 +1243,30 @@
           "variant_kind": {
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for variant_kind",
-                "status": "not_classified"
+                "reason": "called by GenomicsDBImport (the producing step)",
+                "rule_id": "tar_step_caller_kind",
+                "source_type": "content_read",
+                "tier": 4,
+                "value": "small"
               }
             ],
-            "status": "not_classified",
-            "value": null
+            "status": "classified",
+            "value": [
+              "small"
+            ]
           },
           "variant_origin": {
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for variant_origin",
-                "status": "not_classified"
+                "reason": "called by GenomicsDBImport (the producing step)",
+                "rule_id": "tar_step_caller_origin",
+                "source_type": "content_read",
+                "tier": 4,
+                "value": "germline"
               }
             ],
-            "status": "not_classified",
-            "value": null
+            "status": "classified",
+            "value": "germline"
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",

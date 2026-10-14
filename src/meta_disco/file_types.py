@@ -161,8 +161,8 @@ TAR_CONFIG = FileTypeConfig(
     # Escalating head-read (#260): read deeper only until the members are classifiable,
     # so a GenomicsDB store whose variant signal sits past the first 256KiB is reached.
     head_detector=tar_head_is_conclusive,
-    # A GenomicsDB workspace's `vcfheader.vcf` names the sample map it imported: the tar's
-    # step (#621).
+    # A GenomicsDB workspace's `vcfheader.vcf` names the sample map it imported, the tar's
+    # step (#621), and the caller its kind and origin are read from (#678).
     kept_member=workspace_header_member,
     parser=parse_tar_head,
     step=TarSteps.for_run,

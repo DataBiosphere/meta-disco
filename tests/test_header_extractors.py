@@ -1,6 +1,11 @@
 """Tests for VCF header extraction and its typed line records."""
 
+import dataclasses
+
+import pytest
+
 from meta_disco.validators.header_extractors import (
+    VCFHeader,
     VcfSimpleMeta,
     VcfStructuredMeta,
     declared_alt_ids,
@@ -63,6 +68,32 @@ class TestParseVcfHeader:
         assert header.format_fields[0].fields["ID"] == "GT"
         assert header.filter_fields is not None
         assert header.filter_fields[0].fields["ID"] == "PASS"
+
+    def test_contig_lines_are_kept_as_text_and_parsed_on_first_read(self):
+        """#678: a header's ##contig lines are parsed only where ``contigs`` is read."""
+        header = parse_vcf_header(self.HEADER)
+        assert header.contig_lines == ("##contig=<ID=chr1,length=248956422>",)
+        assert header._parsed_contigs is None
+        assert header.contigs == [VcfStructuredMeta(type="contig", fields={"ID": "chr1", "length": "248956422"})]
+        assert header.contigs is header.contigs
+
+    def test_contigs_cannot_be_set(self):
+        """``contigs`` comes only from ``contig_lines``: not an argument, not replaceable, not assignable (#678)."""
+        header = parse_vcf_header(self.HEADER)
+        with pytest.raises(TypeError):
+            VCFHeader(contigs=[])  # pyright: ignore[reportCallIssue]
+        with pytest.raises(TypeError):
+            dataclasses.replace(header, contigs=[])
+        with pytest.raises(AttributeError):
+            header.contigs = []  # pyright: ignore[reportAttributeAccessIssue]  (the refusal under test)
+
+    def test_a_contig_line_that_is_not_structured_falls_to_other_meta(self):
+        """A ##contig line the structured pattern does not match is a simple line, as before #678."""
+        header = parse_vcf_header("##fileformat=VCFv4.2\n##contig=<ID=chr1,length=248956422\n##contig=chr2")
+        assert header.contig_lines == ()
+        assert header.contigs is None
+        assert header.other_meta == ["##contig=<ID=chr1,length=248956422", "##contig=chr2"]
+        assert header.meta_keys == ("contig", "contig")
 
     def test_unrecognized_simple_line_falls_to_other_meta(self):
         header = parse_vcf_header(self.HEADER)

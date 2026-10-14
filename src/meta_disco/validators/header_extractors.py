@@ -5,7 +5,7 @@ for use in classification rules.
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 
 from ..evidence import VcfHead, VcfRecord, records_of
@@ -60,7 +60,9 @@ class VCFHeader:
 
     fileformat: str | None = None  # ##fileformat
     reference: str | None = None  # ##reference
-    contigs: list[VcfStructuredMeta] | None = None  # ##contig lines
+    # Structured ``##contig=<...>`` lines, verbatim, parsed on first read of :attr:`contigs` (#678):
+    # GRCh38 with its alt and HLA contigs has 3,366, which a command-line reader need not pay for.
+    contig_lines: tuple[str, ...] = ()
     source: str | None = None  # ##source: the last such line, which the YAML rules match
     # Every ##source line's value, in header order (#654); ``source`` keeps only the last.
     # A header can carry several (T2T's joint-called files name GenomicsDBImport and
@@ -87,6 +89,20 @@ class VCFHeader:
     # empty for a sites-only file (no ``FORMAT`` column, a PLINK ``.pvar`` included), None
     # where the text holds no ``#CHROM`` line.
     sample_columns: tuple[str, ...] | None = None
+    # :attr:`contigs`' cache: not an argument, not compared, so nothing but the parse sets it.
+    _parsed_contigs: list[VcfStructuredMeta] | None = field(default=None, init=False, repr=False, compare=False)
+
+    @property
+    def contigs(self) -> list[VcfStructuredMeta] | None:
+        """The ``##contig`` lines (:attr:`contig_lines`), parsed once, on first read; None where there are none.
+
+        Read-only: a property with no setter, so assigning it raises and pyright refuses it.
+        """
+        if self._parsed_contigs is None:
+            self._parsed_contigs = [
+                VcfStructuredMeta("contig", _fields(line[len(_CONTIG_PREFIX) : -1])) for line in self.contig_lines
+            ]
+        return self._parsed_contigs or None
 
     @cached_property
     def commands(self) -> list[VcfCommand]:
@@ -256,6 +272,7 @@ _VCF_STRUCTURED_LINE_RE = re.compile(r"^##(\w+)=<(.*)>$")
 _VCF_SIMPLE_LINE_RE = re.compile(r"^##(\w+)=(.*)$")
 # key=value or key="value with spaces"
 _VCF_FIELD_RE = re.compile(r'(\w+)=("[^"]*"|[^,]*)')
+_CONTIG_PREFIX = "##contig=<"
 
 
 def parse_vcf_header_line(line: str) -> VcfHeaderLine | None:
@@ -278,18 +295,17 @@ def parse_vcf_header_line(line: str) -> VcfHeaderLine | None:
             return VcfSimpleMeta(type=simple_match.group(1), value=simple_match.group(2))
         return None
 
-    header_type = match.group(1)
-    content = match.group(2)
+    return VcfStructuredMeta(type=match.group(1), fields=_fields(match.group(2)))
 
-    # Parse key=value pairs (handling quoted values)
+
+def _fields(content: str) -> dict[str, str]:
+    """The key=value pairs inside a structured line's ``<...>``, a quoted value unquoted."""
     fields: dict[str, str] = {}
     for key, value in _VCF_FIELD_RE.findall(content):
-        # Remove quotes if present
         if value.startswith('"') and value.endswith('"'):
             value = value[1:-1]
         fields[key] = value
-
-    return VcfStructuredMeta(type=header_type, fields=fields)
+    return fields
 
 
 def parse_vcf_header(header_text: str) -> VCFHeader:
@@ -303,7 +319,7 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
         VCFHeader object with parsed fields
     """
     header = VCFHeader()
-    contigs = []
+    contig_lines = []
     info_fields = []
     format_fields = []
     filter_fields = []
@@ -317,6 +333,10 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
             if line.startswith("#CHROM"):
                 columns = line.split("\t")
                 header.sample_columns = tuple(columns[9:]) if len(columns) > 8 and columns[8] == "FORMAT" else ()
+            continue
+        # A structured ##contig line, kept as text for `contigs` (#678); any other is parsed below.
+        if line.startswith(_CONTIG_PREFIX) and line.endswith(">"):
+            contig_lines.append(line)
             continue
 
         parsed = parse_vcf_header_line(line)
@@ -335,8 +355,6 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
             else:
                 other_meta.append(line)
                 meta_keys.append(parsed.type)
-        elif parsed.type == "contig":
-            contigs.append(parsed)
         elif parsed.type == "INFO":
             info_fields.append(parsed)
         elif parsed.type == "FORMAT":
@@ -348,8 +366,7 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
         else:
             other_meta.append(line)
 
-    if contigs:
-        header.contigs = contigs
+    header.contig_lines = tuple(contig_lines)
     if info_fields:
         header.info_fields = info_fields
     if format_fields:
@@ -471,22 +488,5 @@ def match_vcf_header_pattern(header: VCFHeader, header_type: str, pattern: str) 
 
 
 def get_contig_lines(header: VCFHeader) -> list[str]:
-    """
-    Get contig lines from a VCF header in the original format.
-
-    Args:
-        header: Parsed VCFHeader object
-
-    Returns:
-        List of ##contig=<...> lines
-    """
-    if not header.contigs:
-        return []
-
-    lines = []
-    for contig in header.contigs:
-        # Reconstruct the line
-        parts = [f"{key}={value}" for key, value in contig.fields.items()]
-        lines.append(f"##contig=<{','.join(parts)}>")
-
-    return lines
+    """The header's structured ``##contig=<...>`` lines, as written."""
+    return list(header.contig_lines)

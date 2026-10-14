@@ -123,8 +123,8 @@ def test_only_a_genomicsdb_store_has_its_header_member_kept():
 def test_the_tar_head_is_parsed_once_with_its_header():
     parsed = cs.parse_tar_head(TarHead(["a"], header_text(IMPORT)))
     assert parsed.member_names == ["a"]
-    assert parsed.commands is not None and [c.step.tool for c in parsed.commands] == ["GenomicsDBImport"]
-    assert cs.parse_tar_head(TarHead(["a"], None)).commands is None
+    assert parsed.header is not None and [c.step.tool for c in parsed.header.commands] == ["GenomicsDBImport"]
+    assert cs.parse_tar_head(TarHead(["a"], None)).header is None
 
 
 # --- the sample map's step -------------------------------------------------------------------

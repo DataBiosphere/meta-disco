@@ -379,6 +379,41 @@ VCF_MERGE_GERMLINE_CALLERS = CodeRule(
         "##source line, so a somatic input is also looked for in what the header declares (#658)."
     ),
 )
+# The six tar rules mirror the six VCF caller rules, one per way the caller is found (#678).
+_WORKSPACE_HEADER = (
+    "GenomicsDB workspace tar: its vcfheader.vcf, the header GenomicsDBImport writes, which records the "
+    "import's command line beside command lines carried over from its gVCFs' headers, read as "
+)
+_WORKSPACE = (
+    "A workspace holds the calls it imported, and its header records the steps behind it, so its caller "
+    "is read as a VCF's (#678), the workspace's name (the tar's, less .tar and any .gz) standing for the "
+    "file's: the import's output is the directory the tar was made from. "
+)
+
+
+def _tar_twin(vcf_rule: CodeRule, rule_id: str, unread: str = "") -> CodeRule:
+    """The tar rule that reads a workspace's header as ``vcf_rule`` reads a VCF's (``unread``: what a header not read gives)."""
+    return CodeRule(
+        id=rule_id,
+        module=HEADER_CLASSIFIER,
+        basis=BASIS_CONTENT,
+        source_type=SOURCE_CONTENT_READ,
+        reads=f"{_WORKSPACE_HEADER}{vcf_rule.id} reads a VCF's: {vcf_rule.reads}",
+        sets=vcf_rule.sets,
+        rationale=_WORKSPACE + vcf_rule.rationale + unread,
+    )
+
+
+TAR_STEP_CALLER_KIND = _tar_twin(
+    VCF_STEP_CALLER_KIND, "tar_step_caller_kind", " A workspace whose header was not read gives no kind."
+)
+TAR_SOURCE_CALLER_KIND = _tar_twin(VCF_SOURCE_CALLER_KIND, "tar_source_caller_kind")
+TAR_MERGE_SMALL_CALLERS = _tar_twin(VCF_MERGE_SMALL_CALLERS, "tar_merge_small_callers")
+TAR_STEP_CALLER_ORIGIN = _tar_twin(
+    VCF_STEP_CALLER_ORIGIN, "tar_step_caller_origin", " A workspace whose header was not read gives no origin."
+)
+TAR_SOURCE_CALLER_ORIGIN = _tar_twin(VCF_SOURCE_CALLER_ORIGIN, "tar_source_caller_origin")
+TAR_MERGE_GERMLINE_CALLERS = _tar_twin(VCF_MERGE_GERMLINE_CALLERS, "tar_merge_germline_callers")
 BED_COORDINATE_REFERENCE = CodeRule(
     id="bed_coordinate_reference",
     module=HEADER_CLASSIFIER,
@@ -578,6 +613,12 @@ CODE_RULES = (
     VCF_STEP_CALLER_ORIGIN,
     VCF_SOURCE_CALLER_ORIGIN,
     VCF_MERGE_GERMLINE_CALLERS,
+    TAR_STEP_CALLER_KIND,
+    TAR_SOURCE_CALLER_KIND,
+    TAR_MERGE_SMALL_CALLERS,
+    TAR_STEP_CALLER_ORIGIN,
+    TAR_SOURCE_CALLER_ORIGIN,
+    TAR_MERGE_GERMLINE_CALLERS,
     BED_COORDINATE_REFERENCE,
     BED_NONSTANDARD_CONTIGS,
     FASTA_TRANSCRIPT_CONTIGS,
