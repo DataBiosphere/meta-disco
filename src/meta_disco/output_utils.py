@@ -5,6 +5,7 @@ import io
 import json
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from .producers import classification_files
@@ -16,6 +17,19 @@ from .records import SAMPLE_LISTS_KEY
 # silently excluded from both reports — half of what #151 cost. Registering a producer
 # is now the only step: the list follows.
 CLASSIFICATION_FILES = classification_files()
+
+
+# How a run folder is named, in local time, and how the reports read its name back as a time.
+# The Makefile names `make classify`'s run with `date`, held to this by test_orchestration.
+RUN_DIR_FORMAT = "%Y%m%d_%H%M%S"
+
+
+def new_run_dir(output_dir_base: Path) -> Path:
+    """Name a run folder under ``output_dir_base`` by the time it is called (:data:`RUN_DIR_FORMAT`).
+
+    Names it only; the caller creates it.
+    """
+    return output_dir_base / datetime.now().strftime(RUN_DIR_FORMAT)
 
 
 def list_runs(output_dir: Path) -> list[Path]:

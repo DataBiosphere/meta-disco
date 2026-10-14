@@ -36,6 +36,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TypedDict
 
+from meta_disco.output_utils import RUN_DIR_FORMAT
 from meta_disco.summaries import escape_md_cell
 
 DIMENSIONS = ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]
@@ -361,7 +362,7 @@ def report_run_time(run_dir: Path | None, hprc_results_path: Path) -> str:
             return "unrecorded"
         run_dir = Path(runs[0])
     try:
-        return datetime.strptime(run_dir.name, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
+        return datetime.strptime(run_dir.name, RUN_DIR_FORMAT).strftime("%Y-%m-%d %H:%M:%S")
     except ValueError:
         return run_dir.name
 

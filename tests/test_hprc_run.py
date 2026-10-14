@@ -65,11 +65,10 @@ def test_hprc_shaped_records_complete_every_phase(tmp_path, capsys):
     rather than reaching any phase."""
     metadata, records = _hprc_input(tmp_path, [*_CATALOG, _NO_LOCATION])
     assert [r["file_name"] for r in records if r["file_md5sum"] is None] == ["orphan.readme"]
-    output_base = tmp_path / "output"
+    run_dir = tmp_path / "output" / "run"
 
-    assert run_all_classifications(metadata, output_base, tmp_path / "evidence") is True
+    assert run_all_classifications(metadata, run_dir, tmp_path / "evidence") is True
 
-    [run_dir] = output_base.iterdir()
     # The header producers write nothing when no record routes to them, so what is
     # pinned is that every producer these four files route to wrote its file.
     written = {p.name for p in run_dir.glob("*_classifications.json")}

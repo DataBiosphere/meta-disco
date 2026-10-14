@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI wrapper: run all classifications over the AnVIL metadata, with timestamped output.
+"""CLI wrapper: run all classifications over the AnVIL metadata into one run folder.
 
 The orchestration itself lives in ``meta_disco.classify_run`` (the single classification
 path shared with the HPRC source); this script is just the AnVIL-facing entry point.
@@ -11,16 +11,15 @@ from pathlib import Path
 
 from meta_disco.classify_run import run_all_classifications
 from meta_disco.deployments import PROD
+from meta_disco.output_utils import new_run_dir
 
 
 def main():
     parser = argparse.ArgumentParser(description="Re-run all classification scripts")
     parser.add_argument(
-        "--output-dir",
-        "-o",
+        "--run-dir",
         type=Path,
-        default=Path("output/anvil"),
-        help="Output directory for results",
+        help="Run folder to write, which must not exist yet (default: output/anvil/<the time now>)",
     )
     parser.add_argument(
         "--metadata",
@@ -44,7 +43,13 @@ def main():
         "for a cold full re-fetch of the network-bound long poles)",
     )
     args = parser.parse_args()
-    ok = run_all_classifications(args.metadata, args.output_dir, args.evidence_base, workers=args.workers)
+    run_dir = args.run_dir or new_run_dir(Path("output/anvil"))
+    try:
+        ok = run_all_classifications(args.metadata, run_dir, args.evidence_base, workers=args.workers)
+    except FileExistsError as exc:
+        if exc.filename != str(run_dir):
+            raise
+        sys.exit(f"classify refused: run folder {run_dir} already exists; a run writes a new one")
     sys.exit(0 if ok else 1)
 
 

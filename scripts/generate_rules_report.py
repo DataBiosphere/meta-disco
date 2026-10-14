@@ -68,7 +68,7 @@ from meta_disco import code_rules
 from meta_disco.activity_map import default_activity_map_resource, describe_match, load_activity_map
 from meta_disco.callers import callers_in_reason, load_callers
 from meta_disco.models import MIXED, SAMPLES_FIELD, SOURCE_DERIVATION_INHERITANCE
-from meta_disco.output_utils import find_latest_run, iter_reconciled_records
+from meta_disco.output_utils import RUN_DIR_FORMAT, find_latest_run, iter_reconciled_records
 from meta_disco.reconcile import declaration
 from meta_disco.rule_engine import CONFLICT_MARKER, CONTENT_TIER, NOT_CLASSIFIED_MARKER
 from meta_disco.rule_loader import RuleLoader, default_rules_resource
@@ -532,7 +532,7 @@ def _counted(entry: Tally | None) -> dict:
 def run_date(name: str) -> str | None:
     """A run directory's date, from its ``YYYYMMDD_HHMMSS`` name, as "28 September 2026"; None for another name."""
     try:
-        when = datetime.strptime(name, "%Y%m%d_%H%M%S")
+        when = datetime.strptime(name, RUN_DIR_FORMAT)
     except ValueError:
         return None
     return f"{when.day} {when:%B %Y}"

@@ -35,6 +35,7 @@ from pathlib import Path
 from meta_disco.classify_run import run_all_classifications
 from meta_disco.fetchers import FetchError, fetch_content_length
 from meta_disco.file_name import FileName
+from meta_disco.output_utils import new_run_dir
 from meta_disco.record_keys import HPRC_REPOSITORY
 
 # The S3 location field differs per HPRC catalog; each maps to the meta-disco ``url``.
@@ -245,7 +246,9 @@ def main():
     print(f"Wrote {len(all_records):,} meta-disco records to {args.metadata_out}")
 
     # Step 6: call the one classifier, exactly as AnVIL does; propagate its success.
-    ok = run_all_classifications(args.metadata_out, args.output_dir, args.evidence_base, workers=args.workers)
+    ok = run_all_classifications(
+        args.metadata_out, new_run_dir(args.output_dir), args.evidence_base, workers=args.workers
+    )
     sys.exit(0 if ok else 1)
 
 
