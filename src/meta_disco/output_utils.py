@@ -19,8 +19,8 @@ from .records import SAMPLE_LISTS_KEY
 CLASSIFICATION_FILES = classification_files()
 
 
-# How a run folder is named, and how the reports read its name back as a time. The Makefile
-# names `make classify`'s run with `date`, held to this by test_orchestration.
+# How a run folder is named, in local time, and how the reports read its name back as a time.
+# The Makefile names `make classify`'s run with `date`, held to this by test_orchestration.
 RUN_DIR_FORMAT = "%Y%m%d_%H%M%S"
 
 

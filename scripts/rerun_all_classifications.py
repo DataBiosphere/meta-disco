@@ -46,7 +46,9 @@ def main():
     run_dir = args.run_dir or new_run_dir(Path("output/anvil"))
     try:
         ok = run_all_classifications(args.metadata, run_dir, args.evidence_base, workers=args.workers)
-    except FileExistsError:
+    except FileExistsError as exc:
+        if exc.filename != str(run_dir):
+            raise
         sys.exit(f"classify refused: run folder {run_dir} already exists; a run writes a new one")
     sys.exit(0 if ok else 1)
 

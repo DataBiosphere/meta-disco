@@ -11,10 +11,12 @@ the Makefile — still hand-written — against the registry.
 """
 
 import dataclasses
+import importlib.util
 import json
 import os
 import shlex
 import subprocess
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -410,6 +412,41 @@ def _make_classify_steps() -> tuple[list[str], list[str]]:
     return inference, reconcile_step
 
 
+def _run_inference_script(monkeypatch, argv: list[str], metadata: Path, tmp_path: Path) -> object:
+    """Run scripts/rerun_all_classifications.py's `main` in-process with ``argv``, over
+    ``metadata``, and return its exit code.
+
+    The script's own `new_run_dir` raises: a script that named its own folder instead of the
+    one it was given would otherwise write a run into the shared output/anvil.
+    """
+    spec = importlib.util.spec_from_file_location(
+        "rerun_all_classifications", _REPO_ROOT / "scripts" / "rerun_all_classifications.py"
+    )
+    assert spec is not None and spec.loader is not None
+    script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(script)
+
+    def refuse(_base):
+        raise AssertionError("the script named its own run folder instead of the one it was given")
+
+    monkeypatch.setattr(script, "new_run_dir", refuse)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "rerun_all_classifications.py",
+            *argv,
+            "--metadata",
+            str(metadata),
+            "--evidence-base",
+            str(tmp_path / "evidence"),
+        ],
+    )
+    with pytest.raises(SystemExit) as exit_:
+        script.main()
+    return exit_.value.code
+
+
 class TestMakeClassifyReconcilesItsOwnRun:
     """`make classify` reconciles the run folder its own inference wrote, not the newest one
     in output/anvil, which is shared across clones (#686)."""
@@ -419,13 +456,16 @@ class TestMakeClassifyReconcilesItsOwnRun:
         run_dir = _flag_value(inference, "--run-dir")
         assert _flag_value(reconcile_step, "--run") == run_dir
         assert Path(run_dir).parent == Path("output/anvil")
-        # The Makefile names the folder with `date`, so it is held to the format the reports parse.
-        datetime.strptime(Path(run_dir).name, RUN_DIR_FORMAT)
+        # The Makefile names the folder with `date`, so it is held to the format the reports parse
+        # and to the clock `new_run_dir` reads, local time.
+        named = datetime.strptime(Path(run_dir).name, RUN_DIR_FORMAT)
+        assert abs(named - datetime.now()) < timedelta(minutes=1)
 
     def test_a_newer_run_folder_made_during_the_run_is_not_reconciled(self, tmp_path, monkeypatch, capsys):
-        """Another clone's run folder appears after this run starts. The run writes its own
-        folder, and reconcile, run with the arguments `make classify` gives it from the
-        directory those paths are relative to, reconciles that folder and not the newer one."""
+        """Another clone's run folder appears after this run starts. Each step runs with the
+        arguments `make classify` gives it: inference writes the folder it is given (moved
+        under tmp_path), and reconcile, from the directory its path is relative to, reconciles
+        that folder and not the newer one."""
         inference, reconcile_step = _make_classify_steps()
         metadata, _ = _empty_run_input(tmp_path)
         own = tmp_path / _flag_value(inference, "--run-dir")
@@ -438,7 +478,10 @@ class TestMakeClassifyReconcilesItsOwnRun:
             return report_exclusions(output_dir)
 
         monkeypatch.setattr(classify_run, "_report_exclusions", another_clone_starts)
-        assert run_all_classifications(metadata, own, tmp_path / "evidence") is True
+        script_argv = inference[inference.index("scripts/rerun_all_classifications.py") + 1 :]
+        script_argv[script_argv.index("--run-dir") + 1] = str(own)
+        assert _run_inference_script(monkeypatch, script_argv, metadata, tmp_path) == 0
+        assert (own / EXCLUDED_FILE).is_file(), "the run's producers wrote into the folder make named"
         # The race is real in this setup: the latest folder is the other clone's.
         assert find_latest_run(own.parent) == newer
 
@@ -457,6 +500,21 @@ class TestMakeClassifyReconcilesItsOwnRun:
         with pytest.raises(FileExistsError):
             run_all_classifications(metadata, run_dir, tmp_path / "evidence")
         assert [p.name for p in run_dir.iterdir()] == ["earlier.json"]
+
+    def test_the_script_refuses_an_existing_run_folder_by_name(self, tmp_path, monkeypatch):
+        metadata, run_dir = _empty_run_input(tmp_path)
+        run_dir.mkdir(parents=True)
+        code = _run_inference_script(monkeypatch, ["--run-dir", str(run_dir)], metadata, tmp_path)
+        assert code == f"classify refused: run folder {run_dir} already exists; a run writes a new one"
+
+    def test_the_script_does_not_blame_the_run_folder_for_a_blocked_parent(self, tmp_path, monkeypatch):
+        """A dangling `output` symlink (output/ is a symlink shared across clones) raises its own
+        error, naming it, rather than "run folder … already exists"."""
+        metadata, run_dir = _empty_run_input(tmp_path)
+        run_dir.parent.symlink_to(tmp_path / "gone")
+        with pytest.raises(FileExistsError) as raised:
+            _run_inference_script(monkeypatch, ["--run-dir", str(run_dir)], metadata, tmp_path)
+        assert raised.value.filename == str(run_dir.parent)
 
     def test_new_run_dir_names_a_folder_by_the_time(self, tmp_path):
         run_dir = new_run_dir(tmp_path)
