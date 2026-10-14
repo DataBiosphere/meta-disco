@@ -14,7 +14,6 @@ import heapq
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
 from pathlib import Path
 
 from meta_disco.exclusions import EXCLUDED_FILE, read_excluded
@@ -171,7 +170,7 @@ def require_environment() -> None:
 
 def run_all_classifications(
     metadata: Path,
-    output_dir_base: Path,
+    output_dir: Path,
     evidence_base: Path,
     workers: int | None = None,
     source_evidence_root: Path = DEFAULT_SOURCE_EVIDENCE_ROOT,
@@ -180,11 +179,12 @@ def run_all_classifications(
 
     This is the single classification path shared by every source. A source (AnVIL,
     HPRC, …) maps its native metadata into the meta-disco record shape and calls this;
-    there is no per-source classifier. It writes a timestamped run dir under
-    ``output_dir_base`` and caches header evidence under ``evidence_base``, running
-    Phase 1 (header types + non-header scripts), Phase 2 (index files and their parent
-    edges), and Phase 3 (the remaining catch-all). ``workers`` sets the header-fetch concurrency
-    (``None`` = the pipeline default). Returns True only if every phase succeeded and
+    there is no per-source classifier. It writes the run into ``output_dir``, which the
+    caller names (:func:`output_utils.new_run_dir` names one by the time), and caches
+    header evidence under ``evidence_base``, running Phase 1 (header types + non-header
+    scripts), Phase 2 (index files and their parent edges), and Phase 3 (the remaining
+    catch-all). ``workers`` sets the header-fetch concurrency (``None`` = the pipeline
+    default). Returns True only if every phase succeeded and
     no value of the source's record key repeats across the completed run
     (:func:`_check_one_row_per_file`, which passes rows that carry none rather than
     checking them).
@@ -209,6 +209,9 @@ def run_all_classifications(
     them to our files is #402, so until then an evidence file changes what a run *says*,
     never what it writes.
 
+    After every refusal above it creates ``output_dir``, raising ``FileExistsError`` if it
+    already exists, so a run does not start in a folder another run made.
+
     Every producer writes ``excluded_files.json`` into the run directory as it loads,
     naming each input record with no usable ``file_md5sum`` (#376) — the file is where
     those records are named, since they appear in no classification output. This
@@ -228,11 +231,8 @@ def run_all_classifications(
 
     require_one_published_source(report_evidence_files(source_evidence_root), PUBLISHED_TABLES)
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_dir = output_dir_base / timestamp
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.mkdir(parents=True, exist_ok=False)
 
-    print(f"Re-running classifications with timestamp: {timestamp}")
     print(f"Output directory: {output_dir}")
     print(f"Evidence cache: {evidence_base}")
 

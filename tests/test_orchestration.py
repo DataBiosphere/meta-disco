@@ -12,11 +12,15 @@ the Makefile — still hand-written — against the registry.
 
 import dataclasses
 import json
+import os
+import shlex
+import subprocess
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
 
-from meta_disco import classify_run
+from meta_disco import classify_run, reconcile
 from meta_disco.classify_run import (
     _report_exclusions,
     build_parallel_jobs,
@@ -26,7 +30,13 @@ from meta_disco.classify_run import (
 from meta_disco.deployments import PROD
 from meta_disco.exclusions import EXCLUDED_FILE, ExcludedFile, write_excluded
 from meta_disco.file_types import FILE_TYPE_REGISTRY
-from meta_disco.output_utils import CLASSIFICATION_FILES
+from meta_disco.output_utils import (
+    CLASSIFICATION_FILES,
+    RECONCILED_DIR,
+    RUN_DIR_FORMAT,
+    find_latest_run,
+    new_run_dir,
+)
 from meta_disco.producers import PRODUCERS, Producer, producers_in_phase
 from meta_disco.source_evidence import EvidenceTarget, write_evidence_file
 from tests.test_source_evidence import evidence_file_envelope, published_envelope
@@ -34,6 +44,7 @@ from tests.test_source_evidence import evidence_file_envelope, published_envelop
 METADATA = PROD.input_file
 OUTPUT_DIR = Path("output/anvil/20260101_000000")
 EVIDENCE_BASE = Path("data/evidence/anvil")
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 @pytest.fixture(autouse=True)
@@ -76,7 +87,7 @@ def test_the_later_phases_are_invoked_from_the_registry_too():
     """Phase 2 and 3 are one producer each, run in sequence rather than in the pool, so
     they are not in `build_parallel_jobs` — and must still be named from the registry
     rather than spelled in the orchestrator."""
-    run_source = (Path(__file__).parent.parent / "src" / "meta_disco" / "classify_run.py").read_text()
+    run_source = (_REPO_ROOT / "src" / "meta_disco" / "classify_run.py").read_text()
     for name in ("index", "remaining"):
         assert f'PRODUCERS["{name}"]' in run_source, (
             f"run_all_classifications does not take the {name} producer from the registry, "
@@ -158,7 +169,7 @@ def test_every_registered_file_type_has_a_makefile_target():
     Checked against the Makefile text rather than against the same f-string
     build_parallel_jobs uses — comparing a value to itself proves nothing.
     """
-    makefile = (Path(__file__).parent.parent / "Makefile").read_text()
+    makefile = (_REPO_ROOT / "Makefile").read_text()
     for ftype in FILE_TYPE_REGISTRY:
         assert f"\nclassify-{ftype}:" in makefile, (
             f"No `classify-{ftype}` target in the Makefile for registered type {ftype!r}."
@@ -251,12 +262,12 @@ class TestTheRunReportsItsEvidenceFiles:
         """
         metadata = tmp_path / "anvil_files_metadata.json"
         metadata.write_text(json.dumps({"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": []}))
-        output_base = tmp_path / "output"
+        run_dir = tmp_path / "output" / "run"
 
         run_all_classifications(
-            metadata, output_base, tmp_path / "evidence", source_evidence_root=self._evidence_file(tmp_path, "anvil14")
+            metadata, run_dir, tmp_path / "evidence", source_evidence_root=self._evidence_file(tmp_path, "anvil14")
         )
-        assert output_base.exists(), "the run must start regardless of an evidence file's catalog"
+        assert run_dir.exists(), "the run must start regardless of an evidence file's catalog"
         assert "anvil/manifest.ndjson" in capsys.readouterr().out.replace("\\", "/")
 
     def test_a_published_file_from_an_undeclared_table_stops_the_run_before_it_writes_anything(self, tmp_path):
@@ -268,19 +279,19 @@ class TestTheRunReportsItsEvidenceFiles:
             published_envelope(dataset="AnVIL_ENCORE_293T", table="file"),
             [],
         )
-        metadata, output_base = _empty_run_input(tmp_path)
+        metadata, run_dir = _empty_run_input(tmp_path)
         with pytest.raises(ValueError, match="exactly one published source"):
             run_all_classifications(
-                metadata, output_base, tmp_path / "evidence", source_evidence_root=tmp_path / "source_evidence"
+                metadata, run_dir, tmp_path / "evidence", source_evidence_root=tmp_path / "source_evidence"
             )
-        assert not output_base.exists()
+        assert not run_dir.exists()
 
 
 def _empty_run_input(tmp_path):
-    """The metadata file a run needs to start, over an empty corpus."""
+    """The metadata file a run needs to start, over an empty corpus, and the run folder to write."""
     metadata = tmp_path / "anvil_files_metadata.json"
     metadata.write_text(json.dumps({"metadata": {"repository": "anvil", "catalog": "anvil15"}, "files": []}))
-    return metadata, tmp_path / "output"
+    return metadata, tmp_path / "output" / "run"
 
 
 class TestTheRunIsFailedByTheUniquenessCheck:
@@ -293,16 +304,16 @@ class TestTheRunIsFailedByTheUniquenessCheck:
 
     def test_a_duplicated_run_fails(self, tmp_path, monkeypatch):
         monkeypatch.setattr("meta_disco.classify_run._check_one_row_per_file", lambda _output_dir, _key: False)
-        metadata, output_base = _empty_run_input(tmp_path)
+        metadata, run_dir = _empty_run_input(tmp_path)
 
-        assert run_all_classifications(metadata, output_base, tmp_path / "evidence") is False
+        assert run_all_classifications(metadata, run_dir, tmp_path / "evidence") is False
 
     def test_the_same_run_succeeds_when_every_file_has_one_row(self, tmp_path):
         """The other half: without the check failing, this same input returns True — so
         the assertion above is about the check's answer and not about the run itself."""
-        metadata, output_base = _empty_run_input(tmp_path)
+        metadata, run_dir = _empty_run_input(tmp_path)
 
-        assert run_all_classifications(metadata, output_base, tmp_path / "evidence") is True
+        assert run_all_classifications(metadata, run_dir, tmp_path / "evidence") is True
 
 
 class TestTheRegistryIsCheckedBeforeTheRunStarts:
@@ -314,8 +325,8 @@ class TestTheRegistryIsCheckedBeforeTheRunStarts:
     """
 
     def _run(self, tmp_path):
-        metadata, output_base = _empty_run_input(tmp_path)
-        return run_all_classifications(metadata, output_base, tmp_path / "evidence")
+        metadata, run_dir = _empty_run_input(tmp_path)
+        return run_all_classifications(metadata, run_dir, tmp_path / "evidence")
 
     def test_an_overlapping_registry_stops_the_run_before_it_writes_anything(self, tmp_path, monkeypatch):
         """Nothing of the run exists afterwards — no output folder, so no half-run for an
@@ -363,10 +374,95 @@ class TestTheEnvironmentIsCheckedBeforeTheRunStarts:
             raise RuntimeError("samtools not found")
 
         monkeypatch.setattr("meta_disco.classify_run.require_environment", no_samtools)
-        metadata, output_base = _empty_run_input(tmp_path)
+        metadata, run_dir = _empty_run_input(tmp_path)
         with pytest.raises(RuntimeError, match="samtools not found"):
-            run_all_classifications(metadata, output_base, tmp_path / "evidence")
+            run_all_classifications(metadata, run_dir, tmp_path / "evidence")
         assert not (tmp_path / "output").exists()
+
+
+def _classify_commands() -> list[list[str]]:
+    """The commands `make classify` runs, as `make -n` prints them: the run folder already named.
+
+    Without the MAKE* variables an outer `make test` sets, which can make it print its directory.
+    """
+    env = {k: v for k, v in os.environ.items() if k not in ("MAKEFLAGS", "MFLAGS", "MAKELEVEL")}
+    out = subprocess.run(
+        ["make", "-n", "-s", "--no-print-directory", "classify"],
+        cwd=_REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    return [shlex.split(line) for line in out.splitlines() if line.strip()]
+
+
+def _flag_value(argv: list[str], flag: str) -> str:
+    [value] = [argv[i + 1] for i, word in enumerate(argv[:-1]) if word == flag]
+    return value
+
+
+def _make_classify_steps() -> tuple[list[str], list[str]]:
+    """The inference and reconcile commands `make classify` runs, as `make -n` prints them."""
+    commands = _classify_commands()
+    [inference] = [argv for argv in commands if "scripts/rerun_all_classifications.py" in argv]
+    [reconcile_step] = [argv for argv in commands if "scripts/reconcile.py" in argv]
+    return inference, reconcile_step
+
+
+class TestMakeClassifyReconcilesItsOwnRun:
+    """`make classify` reconciles the run folder its own inference wrote, not the newest one
+    in output/anvil, which is shared across clones (#686)."""
+
+    def test_both_steps_are_given_the_same_run_folder(self):
+        inference, reconcile_step = _make_classify_steps()
+        run_dir = _flag_value(inference, "--run-dir")
+        assert _flag_value(reconcile_step, "--run") == run_dir
+        assert Path(run_dir).parent == Path("output/anvil")
+        # The Makefile names the folder with `date`, so it is held to the format the reports parse.
+        datetime.strptime(Path(run_dir).name, RUN_DIR_FORMAT)
+
+    def test_a_newer_run_folder_made_during_the_run_is_not_reconciled(self, tmp_path, monkeypatch, capsys):
+        """Another clone's run folder appears after this run starts. The run writes its own
+        folder, and reconcile, run with the arguments `make classify` gives it from the
+        directory those paths are relative to, reconciles that folder and not the newer one."""
+        inference, reconcile_step = _make_classify_steps()
+        metadata, _ = _empty_run_input(tmp_path)
+        own = tmp_path / _flag_value(inference, "--run-dir")
+        started = datetime.strptime(own.name, RUN_DIR_FORMAT)
+        newer = own.parent / (started + timedelta(seconds=38)).strftime(RUN_DIR_FORMAT)
+        report_exclusions = classify_run._report_exclusions
+
+        def another_clone_starts(output_dir):
+            newer.mkdir()
+            return report_exclusions(output_dir)
+
+        monkeypatch.setattr(classify_run, "_report_exclusions", another_clone_starts)
+        assert run_all_classifications(metadata, own, tmp_path / "evidence") is True
+        # The race is real in this setup: the latest folder is the other clone's.
+        assert find_latest_run(own.parent) == newer
+
+        monkeypatch.chdir(tmp_path)
+        argv = reconcile_step[reconcile_step.index("scripts/reconcile.py") + 1 :]
+        assert reconcile.main([*argv, "--metadata", str(metadata), "--no-evidence"]) == 0
+        assert (own / RECONCILED_DIR / "reconcile_report.json").is_file()
+        assert list(newer.iterdir()) == []
+        assert "Reconciled output/anvil/" + own.name in capsys.readouterr().out
+
+    def test_a_run_folder_that_exists_is_refused_before_anything_is_written(self, tmp_path):
+        """A run does not start in a folder that exists, whether named in the same second or an old run's."""
+        metadata, run_dir = _empty_run_input(tmp_path)
+        run_dir.mkdir(parents=True)
+        (run_dir / "earlier.json").write_text("{}")
+        with pytest.raises(FileExistsError):
+            run_all_classifications(metadata, run_dir, tmp_path / "evidence")
+        assert [p.name for p in run_dir.iterdir()] == ["earlier.json"]
+
+    def test_new_run_dir_names_a_folder_by_the_time(self, tmp_path):
+        run_dir = new_run_dir(tmp_path)
+        assert run_dir.parent == tmp_path
+        datetime.strptime(run_dir.name, RUN_DIR_FORMAT)
+        assert not run_dir.exists()
 
 
 def test_no_producer_spells_its_output_filename_outside_the_registry():
@@ -380,7 +476,7 @@ def test_no_producer_spells_its_output_filename_outside_the_registry():
     outputs = {producer.output for producer in PRODUCERS.values()}
     offenders = []
     for script in sorted({producer.script for producer in PRODUCERS.values()}):
-        source = (Path(__file__).parent.parent / "scripts" / script).read_text()
+        source = (_REPO_ROOT / "scripts" / script).read_text()
         offenders += [f"{script}: {name}" for name in outputs if f'"{name}"' in source or f"'{name}'" in source]
     assert not offenders, (
         f"Output filenames spelled as literals instead of read off the registry: {offenders}. "

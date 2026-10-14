@@ -22,7 +22,7 @@ from typing import TypedDict
 from meta_disco.deployments import PROD
 from meta_disco.file_name import FileName
 from meta_disco.models import CLASSIFICATION_FIELDS, CONFLICT, NOT_CLASSIFIED, field_evidence, field_label
-from meta_disco.output_utils import CLASSIFICATION_FILES, find_latest_run
+from meta_disco.output_utils import CLASSIFICATION_FILES, RUN_DIR_FORMAT, find_latest_run
 from meta_disco.rule_engine import CONFLICT_MARKER
 from meta_disco.summaries import escape_md_cell, md_code
 
@@ -287,7 +287,7 @@ def main():
 
     # Parse run timestamp from directory name (e.g., 20260322_005526)
     try:
-        run_time = datetime.strptime(run_dir.name, "%Y%m%d_%H%M%S").strftime("%Y-%m-%d %H:%M:%S")
+        run_time = datetime.strptime(run_dir.name, RUN_DIR_FORMAT).strftime("%Y-%m-%d %H:%M:%S")
     except ValueError:
         run_time = run_dir.name
 

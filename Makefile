@@ -117,13 +117,16 @@ format-check:
 #
 # The run is then reconciled with the source evidence (#432, #395), so every run carries
 # its reconciled artifact and `make all-reports` can follow `make classify`. Reconcile
-# reads the inference output and never writes it (contract 6.3). It is prod's latest run
-# and prod's input, as above, so it is called directly rather than through the reconcile
-# target, which follows RUN_DIR and DEPLOYMENT.
+# reads the inference output and never writes it (contract 6.3). It reconciles
+# CLASSIFY_RUN, the run folder this target's inference wrote, not the latest run:
+# output/ is shared across clones, so another clone's run can be newer (#686). It is
+# prod's input, as above, so reconcile is called directly rather than through the
+# reconcile target, which follows RUN_DIR and DEPLOYMENT.
+classify: CLASSIFY_RUN := output/anvil/$(shell date +%Y%m%d_%H%M%S)
 classify:
 	uv run python scripts/validate_metadata.py --deployment prod
-	uv run python scripts/rerun_all_classifications.py
-	uv run python scripts/reconcile.py --deployment prod
+	uv run python scripts/rerun_all_classifications.py --run-dir $(CLASSIFY_RUN)
+	uv run python scripts/reconcile.py --deployment prod --run $(CLASSIFY_RUN)
 
 classify-hprc:
 	uv run python scripts/classify_hprc_files.py

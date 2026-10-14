@@ -12,12 +12,12 @@ Examples:
 import argparse
 import json
 import sys
-from datetime import datetime
 from pathlib import Path
 
 # Add project root to path
 from meta_disco.deployments import PROD
 from meta_disco.file_types import FILE_TYPE_REGISTRY
+from meta_disco.output_utils import new_run_dir
 from meta_disco.pipeline import ClassifyPipeline
 
 
@@ -127,7 +127,7 @@ def main():
     if args.output:
         output_path = args.output
     else:
-        run_dir = args.run_dir or (Path("output/anvil/partials") / datetime.now().strftime("%Y%m%d_%H%M%S"))
+        run_dir = args.run_dir or new_run_dir(Path("output/anvil/partials"))
         output_path = run_dir / f"{args.type}_classifications.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
