@@ -168,7 +168,7 @@ its own.
 *Amended by #580.* A step is named by its **activity**, not by a verb between two files. The
 vocabulary is `activity_type_enum`: AnVIL FSS's `ActivityTypes`, spelled as FSS's released LinkML schema
 spells them (`DataBiosphere/biocore-data-model`, `AnVILDataSubmissionFindabilitySubsetSchema.linkml.yaml`),
-plus nine of our own (`CoverageActivity` added by #595; `VariantProcessingActivity` and `VariantFilterActivity` by #610; `CohortDefinitionActivity` and `CohortMergeActivity` by #621). FSS's values spreadsheet spells three differently (`VariantCallingActivity`,
+plus ten of our own (`CoverageActivity` added by #595; `VariantProcessingActivity` and `VariantFilterActivity` by #610; `CohortDefinitionActivity` and `CohortMergeActivity` by #621; `JointGenotypingActivity` by #678). FSS's values spreadsheet spells three differently (`VariantCallingActivity`,
 `ImagingActivity`, `IndexingActivity`); the schema a submission is validated against wins. A term's `meaning` is the Terra
 Interoperability Model's class where it has one, else EDAM's operation where EDAM defines the same step.
 TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `generated_file_id` are PROV's

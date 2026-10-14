@@ -63,12 +63,13 @@ rows:
       these files is an index of it.
   - id: activity.t2t_joint_genotype
     match: {source_type: repository_metadata, table: interval, child_column: genotyped_bgzip, parent_column: genomics_db_tar}
-    declares: {activity: VariantCallActivity, role: calls_from}
+    declares: {activity: JointGenotypingActivity, role: genotyped_from}
     reason: >-
       The interval row's VCF is its GenomicsDB workspace genotyped across every sample (GATK
       GenotypeGVCFs reads the workspace) and trimmed to the interval (SelectVariants). The
       VCF's header carries the workspace's GenomicsDBImport line and SelectVariants', but not
-      GenotypeGVCFs', so the row is what states the link (#610).
+      GenotypeGVCFs', so the row is what states the link (#610), and with it the calls'
+      kind and origin, which the header no longer names (#678).
   - id: activity.t2t_variant_filter
     match:
       source_type: repository_metadata

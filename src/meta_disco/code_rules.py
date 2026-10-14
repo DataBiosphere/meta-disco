@@ -279,8 +279,8 @@ VCF_STEP_CALLER_KIND = CodeRule(
     source_type=SOURCE_CONTENT_READ,
     reads=(
         "VCF header: its command lines, as steps; the producing step (the end of their data flow), "
-        "walked back through steps that keep the kind (SelectVariants, ApplyVQSR, ApplyRecalibration, "
-        "bcftools view, norm, annotate) to the step that called the variants"
+        "walked back through steps that keep the kind (SelectVariants, GenotypeGVCFs, ApplyVQSR, "
+        "ApplyRecalibration, bcftools view, norm, annotate) to the step that called the variants"
     ),
     sets=("variant_kind",),
     rationale=(
@@ -312,8 +312,9 @@ VCF_MERGE_SMALL_CALLERS = CodeRule(
     basis=BASIS_CONTENT,
     source_type=SOURCE_CONTENT_READ,
     reads=(
-        "VCF header whose caller is a merge (bcftools concat, merge): every caller its command lines "
-        "and ##source lines name, and its ##INFO and ##ALT declarations of structural variants"
+        "VCF header whose caller is a merge (bcftools concat, merge; GATK GenomicsDBImport, CombineGVCFs): "
+        "every caller its command lines and ##source lines name, and its ##INFO and ##ALT declarations "
+        "of structural variants"
     ),
     sets=("variant_kind",),
     rationale=(
@@ -368,9 +369,9 @@ VCF_MERGE_GERMLINE_CALLERS = CodeRule(
     basis=BASIS_CONTENT,
     source_type=SOURCE_CONTENT_READ,
     reads=(
-        "VCF header whose caller is a merge (bcftools concat, merge): every caller its command lines "
-        "and ##source lines name, those callers' command lines for a somatic mode's flags, and its "
-        "declarations of somatic calls"
+        "VCF header whose caller is a merge (bcftools concat, merge; GATK GenomicsDBImport, CombineGVCFs): "
+        "every caller its command lines and ##source lines name, those callers' command lines for a "
+        "somatic mode's flags, and its declarations of somatic calls"
     ),
     sets=("variant_origin",),
     rationale=(

@@ -131,8 +131,10 @@ is shown as "Not determined".
   read depth, assembly QC), never derived from `data_type`. Other annotations, genotypes and pangenomes,
   which can hold variants, stay `not_classified`.
 - **The kind is the caller's,** read from the header by three content rules and looked up in
-  `rules/caller_kinds.yaml` (now `rules/callers.yaml`, #658). Reconcile carries it across index, merge and cohort-merge steps only: a
-  filter can narrow a kind, and a call creates one.
+  `rules/caller_kinds.yaml` (now `rules/callers.yaml`, #658); a GenomicsDB workspace's own header
+  is read the same way by three tar rules (#678). Reconcile carries it across index, merge and cohort-merge steps, and across a
+  joint genotyping of gVCFs (#678), which calls nothing the gVCFs did not hold: a filter can narrow
+  a kind, and a call from alignments creates one.
 - **Reference resources** (dbSNP, ClinVar, known-indels) name no caller and stay `not_classified`; a
   curator knowledge base keyed on md5 is a later option.
 
@@ -156,8 +158,13 @@ is shown as "Not determined".
   a somatic caller to write its rule from; the step reader knows Mutect2 and FilterMutectCalls,
   so a Mutect2 file is `not_classified` as a caller the table does not list, until a somatic
   dataset's own issue adds the row from its headers.
-- **Reconcile carries the origin** across index, merge and cohort-merge steps, and across
-  variant processing (filters), which can drop calls but not change where they arose.
+- **Reconcile carries the origin** across index, merge and cohort-merge steps, across
+  variant processing (filters), which can drop calls but not change where they arose, and across
+  a joint genotyping of gVCFs (#678).
+- **GATK's gVCF gatherers are not callers** (#678): GenomicsDBImport and CombineGVCFs are merges,
+  settled by the callers the header names, and GenotypeGVCFs keeps its input's calls, since each
+  also runs on Mutect2's gVCFs (GATK's panel-of-normals workflow, `--input-is-somatic`). A header
+  that names the gatherer but not the caller behind it gives no kind or origin.
 
 ## Consequences
 

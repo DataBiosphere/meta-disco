@@ -492,7 +492,7 @@ class CreditedToEnum(str, Enum):
 
 class ActivityTypeEnum(str, Enum):
     """
-    The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its released LinkML schema spells them, plus nine of our own, each under the term it narrows. `meaning` is TerraCore's class, else EDAM's operation for the same step; a near EDAM operation is a close mapping. What each passes is in `rules/activities.yaml`.
+    The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its released LinkML schema spells them, plus ten of our own, each under the term it narrows. `meaning` is TerraCore's class, else EDAM's operation for the same step; a near EDAM operation is a close mapping. What each passes is in `rules/activities.yaml`.
     """
     Activity = "Activity"
     """
@@ -510,7 +510,11 @@ class ActivityTypeEnum(str, Enum):
     AlignmentActivity = "AlignmentActivity"
     VariantCallActivity = "VariantCallActivity"
     """
-    Calling variants or genotypes from alignments or gVCFs. EDAM's Variant calling is a close step, and its Genotyping is close for a joint genotyping step (GenotypeGVCFs).
+    Calling variants or genotypes from alignments; a joint genotyping of gVCFs is JointGenotypingActivity. EDAM's Variant calling is a close step.
+    """
+    JointGenotypingActivity = "JointGenotypingActivity"
+    """
+    Genotyping many samples at once from the calls their gVCFs hold, gathered in one store: GATK's GenotypeGVCFs reading a GenomicsDB workspace or a CombineGVCFs file. It calls no variant the gVCFs did not hold, so the calls keep the kind and origin their caller gave them (#678). Our own term; TerraCore has no such class, and EDAM's Genotyping is a close step.
     """
     ExpressionActivity = "ExpressionActivity"
     """

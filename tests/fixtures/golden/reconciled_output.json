@@ -2623,8 +2623,8 @@
             "credited_to": "filled_by_inference",
             "evidence": [
               {
-                "reason": "called by GenomicsDBImport (the producing step)",
-                "rule_id": "tar_step_caller_kind",
+                "reason": "GenomicsDBImport of calls by HaplotypeCaller; no structural-variant field declared",
+                "rule_id": "tar_merge_small_callers",
                 "source_type": "content_read",
                 "tier": 4,
                 "value": "small"
@@ -2657,8 +2657,8 @@
             "credited_to": "filled_by_inference",
             "evidence": [
               {
-                "reason": "called by GenomicsDBImport (the producing step)",
-                "rule_id": "tar_step_caller_origin",
+                "reason": "GenomicsDBImport of calls by HaplotypeCaller; no somatic field declared",
+                "rule_id": "tar_merge_germline_callers",
                 "source_type": "content_read",
                 "tier": 4,
                 "value": "germline"

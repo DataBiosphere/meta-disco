@@ -60,12 +60,12 @@ def test_a_somatic_callers_output_walked_back_through_its_filter_gives_somatic()
 
 @pytest.mark.usefixtures("somatic_caller")
 def test_the_headers_one_other_step_is_refused_where_the_header_names_a_caller_of_another_origin():
-    reading = origin(IMPORT, SELECT, "##source=Mutect2", name="chr1.100000001_100100000.genotyped.vcf.gz")
+    reading = origin(HC, SELECT, "##source=Mutect2", name="chr1.100000001_100100000.genotyped.vcf.gz")
     assert reading.value is None and reading.reason.startswith(callers.FALLBACK_DISAGREES)
 
 
 def test_the_headers_one_other_step_is_refused_where_the_header_names_a_caller_whose_mode_is_open():
-    reading = origin(IMPORT, SELECT, "##source=Sniffles2_2.0.7", name="chr1.100000001_100100000.genotyped.vcf.gz")
+    reading = origin(HC, SELECT, "##source=Sniffles2_2.0.7", name="chr1.100000001_100100000.genotyped.vcf.gz")
     assert reading.value is None and reading.reason.startswith(callers.FALLBACK_DISAGREES)
     assert "Sniffles2_2.0.7" in reading.reason
 
@@ -164,8 +164,18 @@ def test_a_somatic_callers_own_declarations_do_not_refuse_its_origin():
 
 
 def test_a_merge_of_germline_callers_is_germline():
-    reading = origin(IMPORT, SELECT, CONCAT, name="chr1.genotyped.vcf.gz")
+    reading = origin(HC, SELECT, CONCAT, name="chr1.genotyped.vcf.gz")
     assert (reading.by, reading.value) == (callers.BY_MERGE, "germline")
+
+
+def test_an_import_of_haplotypecaller_gvcfs_is_germline_and_of_mutect2_gvcfs_is_not_said():
+    """GenomicsDBImport gathers its gVCFs' calls: their caller says the origin, never the import (#678)."""
+    workspace = origin(IMPORT, HC, name="chr1.100000001_100100000")
+    assert (workspace.by, workspace.value) == (callers.BY_MERGE, "germline")
+    normals = origin(
+        IMPORT, gatk4("Mutect2", "-I n.bam -O n.g.vcf.gz -ERC GVCF -R ref.fa"), name="chr1.100000001_100100000"
+    )
+    assert normals.value is None and normals.reason.startswith(vo.MIXED_MERGE)
 
 
 def test_a_merge_of_germline_callers_of_two_kinds_is_germline():
@@ -183,7 +193,7 @@ def test_a_merge_naming_a_caller_that_is_not_germline_gives_no_origin(other):
 
 
 def test_a_merge_whose_header_declares_somatic_fields_gives_no_origin():
-    reading = origin(IMPORT, SELECT, CONCAT, SOMATIC_INFO, name="chr1.genotyped.vcf.gz")
+    reading = origin(HC, SELECT, CONCAT, SOMATIC_INFO, name="chr1.genotyped.vcf.gz")
     assert reading.value is None and reading.reason.startswith(vo.SOMATIC_DECLARED)
 
 
@@ -273,13 +283,15 @@ def test_the_classifier_claims_not_classified_with_the_reason_under_the_rule_tha
     assert claim["status"] == NOT_CLASSIFIED and claim["reason"]
 
 
-def test_the_variant_origin_passes_across_an_index_a_merge_a_cohort_merge_and_variant_processing():
-    """A filter can drop calls but not change where they arose, so variant processing passes the origin (#658)."""
+def test_the_variant_origin_passes_across_an_index_a_merge_a_cohort_merge_variant_processing_and_joint_genotyping():
+    """A filter can drop calls but not change where they arose, so variant processing passes the origin (#658);
+    a joint genotyping calls nothing its gVCFs did not hold (#678)."""
     passing = {term for term in activities.declarations() if "variant_origin" in activities.passes(term)}
     assert passing == {
         activities.INDEXING,
         activities.MERGE,
         activities.COHORT_MERGE,
+        activities.JOINT_GENOTYPING,
         "VariantProcessingActivity",
         "VariantFilterActivity",
     }

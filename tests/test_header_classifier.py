@@ -1044,7 +1044,14 @@ class TestWorkspaceCaller:
     # As T2T's workspaces carry them: the import's line, a HaplotypeCaller line carried over
     # from a gVCF's header, and a ##source line naming each tool.
     HEADER = header_text(IMPORT, HC, "##source=GenomicsDBImport", "##source=HaplotypeCaller")
+    # GenomicsDBImport is a merge (#678): a workspace's answer is the import of its callers' calls.
     RULES = MappingProxyType(
+        {
+            "variant_kind": code_rules.TAR_MERGE_SMALL_CALLERS.id,
+            "variant_origin": code_rules.TAR_MERGE_GERMLINE_CALLERS.id,
+        }
+    )
+    STEP_RULES = MappingProxyType(
         {
             "variant_kind": code_rules.TAR_STEP_CALLER_KIND.id,
             "variant_origin": code_rules.TAR_STEP_CALLER_ORIGIN.id,
@@ -1059,15 +1066,30 @@ class TestWorkspaceCaller:
         (claim,) = [e for e in field_evidence(out, field) if e.get("rule_id") == rules[field]]
         return claim
 
-    @pytest.mark.parametrize("file_name", ["chr1.100000001_100100000.tar", "CHR1.100000001_100100000.tar.gz"])
-    def test_the_import_step_names_the_caller(self, file_name):
+    @pytest.mark.parametrize("file_name", ["chr1.100000001_100100000.tar", "renamed.tar"])
+    def test_a_workspace_is_the_import_of_its_callers_calls(self, file_name):
+        """Named for its workspace or not: the header's GenomicsDBImport merges what HaplotypeCaller called."""
         out = self.classify(file_name)
         assert out["variant_kind"]["value"] == ["small"]  # stored as a one-item list (models.stored_value)
         assert val(out, "variant_origin") == "germline"
-        for field, value in (("variant_kind", "small"), ("variant_origin", "germline")):
+        for field, value, tail in (
+            ("variant_kind", "small", "no structural-variant field declared"),
+            ("variant_origin", "germline", "no somatic field declared"),
+        ):
             claim = self.claim(out, field)
             assert (claim["value"], claim["tier"], claim["source_type"]) == (value, CONTENT_TIER, SOURCE_CONTENT_READ)
-            assert claim["reason"] == "called by GenomicsDBImport (the producing step)"
+            assert claim["reason"] == f"GenomicsDBImport of calls by HaplotypeCaller; {tail}"
+
+    @pytest.mark.parametrize("file_name", ["chr1.100000001_100100000.tar", "CHR1.100000001_100100000.tar.gz"])
+    def test_the_caller_is_looked_for_in_what_the_import_wrote(self, file_name, monkeypatch):
+        """The import's output is the directory the tar was made from: its name, less .tar and any .gz."""
+        import meta_disco.header_classifier as hc
+
+        seen = []
+        real = hc.find_caller
+        monkeypatch.setattr(hc, "find_caller", lambda header, name: seen.append(name) or real(header, name))
+        self.classify(file_name)
+        assert seen == ["chr1.100000001_100100000"]
 
     def test_a_caller_named_only_by_source_is_claimed_under_the_source_rules(self):
         """The VCF path's routing (#654, #658): a header with no command line, its one ##source a caller."""
@@ -1083,31 +1105,30 @@ class TestWorkspaceCaller:
                 == "called by HaplotypeCaller (named by the header: HaplotypeCaller)"
             )
 
-    def test_a_tar_not_named_for_its_workspace_gives_no_value(self):
-        """The import wrote the directory the tar was made from; under another name it made no
-        file of this name, and the header's two ##source tools (rule 3) leave the caller open."""
-        out = self.classify("renamed.tar")
-        rules = {
-            "variant_kind": code_rules.TAR_SOURCE_CALLER_KIND.id,
-            "variant_origin": code_rules.TAR_SOURCE_CALLER_ORIGIN.id,
-        }
-        for field in rules:
+    def test_an_import_of_mutect2_gvcfs_gives_neither(self):
+        """GATK's panel-of-normals workflow imports Mutect2's calls, which the caller table does not list."""
+        mutect = '##GATKCommandLine=<ID=Mutect2,CommandLine="Mutect2 -I n.bam -O n.g.vcf.gz -ERC GVCF -R r.fa">'
+        out = self.classify("chr1.100000001_100100000.tar", header=header_text(IMPORT, mutect))
+        for field in self.RULES:
             assert field_status(out, field) == NOT_CLASSIFIED
-            assert self.claim(out, field, rules)["reason"].startswith(callers.SEVERAL_TOOLS)
+            assert self.claim(out, field)["reason"].startswith("a merge whose callers are not all")
 
     def test_a_workspace_whose_header_was_not_read_says_why(self):
         missing = self.classify("chr1.100000001_100100000.tar", header=None)
         failed = self.classify("chr1.100000001_100100000.tar", header=None, unread="ConnectionError: reset")
-        for field in self.RULES:
+        for field in self.STEP_RULES:
             assert field_status(missing, field) == NOT_CLASSIFIED
-            assert self.claim(missing, field)["reason"] == NO_WORKSPACE_HEADER
-            assert self.claim(failed, field)["reason"] == f"{WORKSPACE_HEADER_UNREADABLE}: ConnectionError: reset"
+            assert self.claim(missing, field, self.STEP_RULES)["reason"] == NO_WORKSPACE_HEADER
+            assert (
+                self.claim(failed, field, self.STEP_RULES)["reason"]
+                == f"{WORKSPACE_HEADER_UNREADABLE}: ConnectionError: reset"
+            )
 
     def test_a_tar_that_is_no_workspace_gets_no_caller_claim(self):
         out = self.classify("asm.tar", header=None, members=["asm/hap1.fasta", "asm/hap2.fasta"])
         assert val(out, "data_type") == "sequence"
-        for field, rule_id in self.RULES.items():
-            assert all(e.get("rule_id") != rule_id for e in field_evidence(out, field))
+        for field in self.RULES:
+            assert not [e for e in field_evidence(out, field) if str(e.get("rule_id", "")).startswith("tar_")]
 
 
 # =============================================================================
