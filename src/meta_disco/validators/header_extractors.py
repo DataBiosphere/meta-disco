@@ -424,7 +424,9 @@ def match_vcf_header_pattern(header: VCFHeader, header_type: str, pattern: str) 
         True if a matching header line satisfies the pattern. What the pattern is
         tested against depends on the type: the value for ##reference,
         the ID for ##INFO/##FORMAT/##FILTER/##ALT, the ``assembly`` subfield for
-        ##contig, and the raw line for any other (##-prefixed) type.
+        ##contig, and the raw line for any other (##-prefixed) type, except
+        ##fileformat and ##source, whose lines the parser keeps only as fields and
+        which never match.
     """
     compiled = re.compile(pattern, re.IGNORECASE)
 
