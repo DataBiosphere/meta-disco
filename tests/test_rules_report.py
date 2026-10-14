@@ -447,3 +447,10 @@ def test_a_sample_rule_is_counted_by_the_sources_a_records_samples_lists(tmp_pat
     assert rows["coriell_hg"]["files"] == 1
     assert rows[code_rules.VCF_SAMPLE_COLUMNS.id]["files"] == 0
     assert not {u["id"] for u in data["undeclared"]} & set(rows)
+
+
+def test_every_caller_rule_is_counted_in_the_caller_table():
+    """The VCF and tar caller rules alike (#678): each reads a dimension from ``callers.find_caller``'s caller."""
+    caller_rules = [r for r in code_rules.CODE_RULES if r.id.startswith(("vcf_", "tar_")) and "caller" in r.id]
+    assert len(caller_rules) == 12
+    assert {r.id: r.sets[0] for r in caller_rules} == grr.CALLER_RULES

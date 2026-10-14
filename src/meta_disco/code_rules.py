@@ -380,7 +380,7 @@ VCF_MERGE_GERMLINE_CALLERS = CodeRule(
         "##source line, so a somatic input is also looked for in what the header declares (#658)."
     ),
 )
-# The six tar rules mirror the six VCF caller rules, one per way the caller is found (#678).
+# The six tar rules mirror the six VCF caller rules: per dimension, one per way the caller is found (#678).
 _WORKSPACE_HEADER = (
     "GenomicsDB workspace tar: its vcfheader.vcf, the header GenomicsDBImport writes, which records the "
     "import's command line beside command lines carried over from its gVCFs' headers, read as "

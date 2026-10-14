@@ -61,7 +61,7 @@ class VCFHeader:
     fileformat: str | None = None  # ##fileformat
     reference: str | None = None  # ##reference
     # Structured ``##contig=<...>`` lines, verbatim, parsed on first read of :attr:`contigs` (#678):
-    # GRCh38 with its alt and HLA contigs has 3,366, which a command-line reader need not pay for.
+    # GRCh38 with its alt, decoy and HLA contigs (hs38DH) has 3,366, which a command-line reader need not pay for.
     contig_lines: tuple[str, ...] = ()
     source: str | None = None  # ##source: the last such line, which the YAML rules match
     # Every ##source line's value, in header order (#654); ``source`` keeps only the last.
@@ -89,7 +89,8 @@ class VCFHeader:
     # empty for a sites-only file (no ``FORMAT`` column, a PLINK ``.pvar`` included), None
     # where the text holds no ``#CHROM`` line.
     sample_columns: tuple[str, ...] | None = None
-    # :attr:`contigs`' cache: not an argument, not compared, so nothing but the parse sets it.
+    # :attr:`contigs`' cache, filled by that property from `contig_lines` on first read: not an argument,
+    # not compared. `parse_vcf_header` sets `contig_lines` before anything reads `contigs`.
     _parsed_contigs: list[VcfStructuredMeta] | None = field(default=None, init=False, repr=False, compare=False)
 
     @property

@@ -1,6 +1,7 @@
 """The rules and markers written in Python are declared once, in ``code_rules`` (#572)."""
 
 import ast
+import re
 from pathlib import Path
 
 import pytest
@@ -265,3 +266,28 @@ def test_no_activity_passes_a_dimension_a_rule_makes_not_applicable_on_its_outpu
                 stamped = {slot for slot, status in rule.then_status.items() if status == NOT_APPLICABLE}
                 clashes += [(term, rule.id, slot) for slot in sorted(stamped & passed)]
     assert clashes == [], f"(activity, rule, dimension) that would always conflict: {clashes}"
+
+
+TAR_CALLER_RULES = (
+    code_rules.TAR_STEP_CALLER_KIND,
+    code_rules.TAR_SOURCE_CALLER_KIND,
+    code_rules.TAR_MERGE_SMALL_CALLERS,
+    code_rules.TAR_STEP_CALLER_ORIGIN,
+    code_rules.TAR_SOURCE_CALLER_ORIGIN,
+    code_rules.TAR_MERGE_GERMLINE_CALLERS,
+)
+
+
+@pytest.mark.parametrize("rule", TAR_CALLER_RULES, ids=lambda r: r.id)
+def test_a_tar_caller_rule_names_its_twins_not_the_vcf_rules(rule):
+    """A tar rule's text is its VCF rule's, each VCF caller rule it names swapped for the tar twin (#678)."""
+    vcf_ids = set(code_rules._TAR_TWIN_IDS)
+    named = set(re.findall(r"\b[a-z]+(?:_[a-z]+)+\b", rule.reads + " " + rule.rationale))
+    assert not named & vcf_ids
+    assert rule.id in code_rules._TAR_TWIN_IDS.values()
+
+
+def test_only_a_whole_rule_id_is_swapped_for_its_twin():
+    assert code_rules._as_tar("vcf_step_caller_kind, vcf_step_caller_kinds") == (
+        "tar_step_caller_kind, vcf_step_caller_kinds"
+    )

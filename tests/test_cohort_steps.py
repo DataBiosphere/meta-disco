@@ -103,6 +103,21 @@ def test_an_identical_import_line_twice_is_one_step():
     assert outcome == cs.STEPPED and step is not None
 
 
+@pytest.mark.parametrize("name", [TAR, "CHR1.100000001_100100000.TAR.GZ"])
+def test_a_tar_is_matched_to_its_workspace_case_folded_less_tar_and_gz(name):
+    """The workspace path names the directory: the tar's name less .tar and any .gz, either case (#678)."""
+    step, outcome = cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(tar_head(IMPORT), name, "D")
+    assert outcome == cs.STEPPED and step is not None
+
+
+def test_unread_names_why_only_for_a_workspace_whose_header_was_not_parsed():
+    assert cs.ParsedTarHead(["x/callset.json"], None).unread == cs.NO_VCF_HEADER
+    assert cs.ParsedTarHead(["x/callset.json"], None, "reset").unread == cs.VCF_HEADER_UNREADABLE
+    # Not a workspace, or a header parsed: nothing to explain.
+    assert cs.ParsedTarHead(["reads/a.fastq"], None, "reset").unread is None
+    assert tar_head(IMPORT).unread is None
+
+
 def test_a_tar_whose_header_was_not_read_gives_no_step():
     head = cs.ParsedTarHead(["x/callset.json"], None)
     assert cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(head, TAR, "D") == (None, cs.NO_VCF_HEADER)

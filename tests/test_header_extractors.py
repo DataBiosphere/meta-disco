@@ -77,6 +77,12 @@ class TestParseVcfHeader:
         assert header.contigs == [VcfStructuredMeta(type="contig", fields={"ID": "chr1", "length": "248956422"})]
         assert header.contigs is header.contigs
 
+    def test_a_quoted_contig_value_is_unquoted_as_the_line_parser_unquotes_it(self):
+        line = '##contig=<ID=chr1,length=248956422,assembly="GRCh38 p14">'
+        contigs = parse_vcf_header(line).contigs
+        assert contigs == [parse_vcf_header_line(line)]
+        assert contigs is not None and contigs[0].fields["assembly"] == "GRCh38 p14"
+
     def test_contigs_cannot_be_set(self):
         """``contigs`` comes only from ``contig_lines``: not an argument, not replaceable, not assignable (#678)."""
         header = parse_vcf_header(self.HEADER)
@@ -187,11 +193,11 @@ class TestMatchVcfHeaderPattern:
 
 
 class TestGetContigLines:
-    """Test get_contig_lines reconstruction from typed contigs."""
+    """Test get_contig_lines: the ##contig lines as the header wrote them (#678)."""
 
-    def test_reconstructs_all_fields(self):
-        header = parse_vcf_header("##contig=<ID=chr1,length=248956422>")
-        assert get_contig_lines(header) == ["##contig=<ID=chr1,length=248956422>"]
+    def test_returns_the_lines_verbatim(self):
+        line = '##contig=<ID=chr1,length=248956422,assembly="GRCh38 p14">'
+        assert get_contig_lines(parse_vcf_header(line)) == [line]
 
     def test_empty_when_no_contigs(self):
         header = parse_vcf_header("##fileformat=VCFv4.2")
