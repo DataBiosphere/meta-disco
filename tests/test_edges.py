@@ -7,6 +7,8 @@ that merges inference's step with the source tables' into one (``merge_steps``) 
 step that does not fit its declaration (``misfits``).
 """
 
+import pytest
+
 from meta_disco.edges import (
     ACTIVITY_CONFLICT,
     EDGE_CONFLICT,
@@ -288,3 +290,22 @@ def test_a_file_whose_only_steps_are_generic_gets_no_step_and_no_conflict():
     assert merge_steps(None, [generic]) == (None, None)
     assert generic_only(None, [generic])
     assert not generic_only(inferred_index("k", "a.cram"), [generic])
+
+
+@pytest.mark.parametrize(
+    ("activity", "role", "parent_kind", "flagged"),
+    [
+        ("VariantCallActivity", "calls_from", "alignments", False),
+        ("VariantCallActivity", "calls_from", "variants", True),
+        ("JointGenotypingActivity", "genotyped_from", "variants", False),
+        ("JointGenotypingActivity", "genotyped_from", "alignments", True),
+    ],
+)
+def test_a_call_takes_alignments_and_a_joint_genotyping_a_store_of_gvcfs(activity, role, parent_kind, flagged):
+    """#678: genotyping a GenomicsDB workspace is JointGenotypingActivity, not a call from alignments."""
+    step = {
+        "activity": activity,
+        "named_by": [ROW],
+        "inputs": [{"role": role, "parent_file": "p", "parent_key": "k", "parent_kind": None, "named_by": [ROW]}],
+    }
+    assert (("input kind (" + role + ")", parent_kind) in misfits(step, "variants", {"k": parent_kind})) is flagged

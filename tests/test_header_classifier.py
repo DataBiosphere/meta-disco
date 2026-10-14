@@ -1,20 +1,25 @@
 """Tests for the header classifier module."""
 
 import importlib
+from collections.abc import Mapping
+from types import MappingProxyType
 
 import pytest
 
-from meta_disco import code_rules
-from meta_disco.evidence import VcfHead
+from meta_disco import callers, code_rules
+from meta_disco.cohort_steps import parse_tar_head
+from meta_disco.evidence import TarHead, VcfHead
 from meta_disco.file_name import FileName
 from meta_disco.header_classifier import (
+    NO_WORKSPACE_HEADER,
+    WORKSPACE_HEADER_UNREADABLE,
     # Result models
     FastqReadMetadata,
     # Classification functions
     classify_from_fasta_header,
     classify_from_fastq_header,
     classify_from_header,
-    classify_from_tar_members,
+    classify_from_tar_head,
     classify_from_vcf_header,
     detect_paired_end_indicators,
     # Helper functions
@@ -37,7 +42,7 @@ from meta_disco.models import (
 from meta_disco.rule_engine import CONTENT_TIER
 from meta_disco.validators.header_extractors import VCFHeader, parse_vcf_head, parse_vcf_header
 from meta_disco.validators.read_name_parsers import IlluminaFormat, PacBioFormat
-from tests.test_producer_steps import GATK3_HC, HC, gatk4, header_text
+from tests.test_producer_steps import GATK3_HC, HC, IMPORT, gatk4, header_text
 
 
 def vcf_head(text: str, alts) -> VCFHeader:
@@ -936,13 +941,18 @@ class TestEdgeCases:
         assert val(result, "platform") == "ILLUMINA"
 
 
+def classify_members(members: list[str]) -> dict:
+    """A tar classified from its member names alone: its head as parsed with no vcfheader.vcf read."""
+    return classify_from_tar_head(parse_tar_head(TarHead(members, None)))
+
+
 class TestTarClassifier:
-    """classify_from_tar_members: classify a tar archive by its contents (#255)."""
+    """classify_from_tar_head on a head with no vcfheader.vcf read: a tar classified by its members (#255)."""
 
     def test_genomicsdb_store_from_schema_files(self):
         """A GenomicsDB store recognized by its schema files (the common case)."""
         members = ["./chr22.1_2/vidmap.json", "./chr22.1_2/callset.json", "./chr22.1_2/vcfheader.vcf"]
-        result = classify_from_tar_members(members)
+        result = classify_members(members)
         assert val(result, "data_modality") == "genomic"
         assert val(result, "data_type") == "variants"
 
@@ -955,7 +965,7 @@ class TestTarClassifier:
             "./chr4.1_2/chr4$1$2/DP_FORMAT.tdb",
             "./chr4.1_2/chr4$1$2/MLEAC_var.tdb",
         ]
-        result = classify_from_tar_members(members)
+        result = classify_members(members)
         assert val(result, "data_modality") == "genomic"
         assert val(result, "data_type") == "variants"
 
@@ -967,37 +977,132 @@ class TestTarClassifier:
             "chr4.1_2/chr4$1$2/PL.tdb/__array_schema.tdb",
             "chr4.1_2/chr4$1$2/PL.tdb/__fragment/a.tdb",
         ]
-        result = classify_from_tar_members(members)
+        result = classify_members(members)
         assert val(result, "data_type") == "variants"
 
     def test_bare_tiledb_is_not_called_variants(self):
         """Honesty: a `.tdb` is a *generic* TileDB array — a head of only generic TileDB
         structure files (no schema, no VCF-field array) is not read as variants."""
         members = ["store/__tiledb_workspace.tdb", "store/__array_schema.tdb", "store/__coords.tdb"]
-        result = classify_from_tar_members(members)
+        result = classify_members(members)
         assert field_status(result, "data_type") == NOT_CLASSIFIED
         assert field_status(result, "data_modality") == NOT_CLASSIFIED
 
     def test_generic_dominant_inner_extension(self):
         """A tar of FASTA members → the inner format's classification (sequence)."""
-        result = classify_from_tar_members(["asm/hap1.fasta", "asm/hap2.fasta", "asm/readme.txt"])
+        result = classify_members(["asm/hap1.fasta", "asm/hap2.fasta", "asm/readme.txt"])
         assert val(result, "data_type") == "sequence"
 
     def test_a_tar_of_matrices_takes_the_inner_format_assay(self):
         """The inner format's assay reaches the archive too, not only its modality and type (#533)."""
-        result = classify_from_tar_members(["out/cells_x_genes.mtx", "out/spliced.mtx", "out/genes.txt"])
+        result = classify_members(["out/cells_x_genes.mtx", "out/spliced.mtx", "out/genes.txt"])
         assert val(result, "data_modality") == "transcriptomic"
         assert val(result, "assay_type") == "sc/snRNA-seq"
 
     def test_unrecognized_contents_stay_not_classified(self):
         """Read it, but no GenomicsDB signal and no recognized inner extension → not_classified."""
-        result = classify_from_tar_members(["blob/x.dat", "blob/y.bin"])
+        result = classify_members(["blob/x.dat", "blob/y.bin"])
         assert field_status(result, "data_type") == NOT_CLASSIFIED
 
     def test_empty_member_list_is_not_classified(self):
         """A non-tar / empty head read as no members → not_classified, not a crash."""
-        result = classify_from_tar_members([])
+        result = classify_members([])
         assert field_status(result, "data_type") == NOT_CLASSIFIED
+
+
+class TestWorkspaceCaller:
+    """classify_from_tar_head: a GenomicsDB workspace's kind and origin from the caller its own
+    ``vcfheader.vcf`` names (#678), found as a VCF's is."""
+
+    MEMBERS = ("./chr1.100000001_100100000/vcfheader.vcf", "./chr1.100000001_100100000/callset.json")
+    # As T2T's workspaces carry them: the import's line, a HaplotypeCaller line carried over
+    # from a gVCF's header, and a ##source line naming each tool.
+    HEADER = header_text(IMPORT, HC, "##source=GenomicsDBImport", "##source=HaplotypeCaller")
+    # GenomicsDBImport is a merge (#678): a workspace's answer is the import of its callers' calls.
+    RULES = MappingProxyType(
+        {
+            "variant_kind": code_rules.TAR_MERGE_SMALL_CALLERS.id,
+            "variant_origin": code_rules.TAR_MERGE_GERMLINE_CALLERS.id,
+        }
+    )
+    STEP_RULES = MappingProxyType(
+        {
+            "variant_kind": code_rules.TAR_STEP_CALLER_KIND.id,
+            "variant_origin": code_rules.TAR_STEP_CALLER_ORIGIN.id,
+        }
+    )
+
+    def classify(self, file_name: str, header: str | None = HEADER, unread: str | None = None, members=None):
+        head = parse_tar_head(TarHead(list(self.MEMBERS if members is None else members), header, unread))
+        return classify_from_tar_head(head, name=FileName.parse(file_name))
+
+    def claim(self, out: dict, field: str, rules: Mapping[str, str] = RULES) -> dict:
+        (claim,) = [e for e in field_evidence(out, field) if e.get("rule_id") == rules[field]]
+        return claim
+
+    @pytest.mark.parametrize("file_name", ["chr1.100000001_100100000.tar", "renamed.tar"])
+    def test_a_workspace_is_the_import_of_its_callers_calls(self, file_name):
+        """Named for its workspace or not: the header's GenomicsDBImport merges what HaplotypeCaller called."""
+        out = self.classify(file_name)
+        assert out["variant_kind"]["value"] == ["small"]  # stored as a one-item list (models.stored_value)
+        assert val(out, "variant_origin") == "germline"
+        for field, value, tail in (
+            ("variant_kind", "small", "no structural-variant field declared"),
+            ("variant_origin", "germline", "no somatic field declared"),
+        ):
+            claim = self.claim(out, field)
+            assert (claim["value"], claim["tier"], claim["source_type"]) == (value, CONTENT_TIER, SOURCE_CONTENT_READ)
+            assert claim["reason"] == f"GenomicsDBImport of calls by HaplotypeCaller; {tail}"
+
+    @pytest.mark.parametrize("file_name", ["chr1.100000001_100100000.tar", "CHR1.100000001_100100000.tar.gz"])
+    def test_the_caller_is_looked_for_in_what_the_import_wrote(self, file_name, monkeypatch):
+        """The import's output is the directory the tar was made from: its name, less .tar and any .gz."""
+        import meta_disco.header_classifier as hc
+
+        seen = []
+        real = hc.find_caller
+        monkeypatch.setattr(hc, "find_caller", lambda header, name: seen.append(name) or real(header, name))
+        self.classify(file_name)
+        assert seen == ["chr1.100000001_100100000"]
+
+    def test_a_caller_named_only_by_source_is_claimed_under_the_source_rules(self):
+        """The VCF path's routing (#654, #658): a header with no command line, its one ##source a caller."""
+        out = self.classify("chr1.100000001_100100000.tar", header=header_text("##source=HaplotypeCaller"))
+        rules = {
+            "variant_kind": code_rules.TAR_SOURCE_CALLER_KIND.id,
+            "variant_origin": code_rules.TAR_SOURCE_CALLER_ORIGIN.id,
+        }
+        assert val(out, "variant_origin") == "germline"
+        for field in rules:
+            assert (
+                self.claim(out, field, rules)["reason"]
+                == "called by HaplotypeCaller (named by the header: HaplotypeCaller)"
+            )
+
+    def test_an_import_of_mutect2_gvcfs_gives_neither(self):
+        """GATK's panel-of-normals workflow imports Mutect2's calls, which the caller table does not list."""
+        mutect = '##GATKCommandLine=<ID=Mutect2,CommandLine="Mutect2 -I n.bam -O n.g.vcf.gz -ERC GVCF -R r.fa">'
+        out = self.classify("chr1.100000001_100100000.tar", header=header_text(IMPORT, mutect))
+        for field in self.RULES:
+            assert field_status(out, field) == NOT_CLASSIFIED
+            assert self.claim(out, field)["reason"].startswith("a merge whose callers are not all")
+
+    def test_a_workspace_whose_header_was_not_read_says_why(self):
+        missing = self.classify("chr1.100000001_100100000.tar", header=None)
+        failed = self.classify("chr1.100000001_100100000.tar", header=None, unread="ConnectionError: reset")
+        for field in self.STEP_RULES:
+            assert field_status(missing, field) == NOT_CLASSIFIED
+            assert self.claim(missing, field, self.STEP_RULES)["reason"] == NO_WORKSPACE_HEADER
+            assert (
+                self.claim(failed, field, self.STEP_RULES)["reason"]
+                == f"{WORKSPACE_HEADER_UNREADABLE}: ConnectionError: reset"
+            )
+
+    def test_a_tar_that_is_no_workspace_gets_no_caller_claim(self):
+        out = self.classify("asm.tar", header=None, members=["asm/hap1.fasta", "asm/hap2.fasta"])
+        assert val(out, "data_type") == "sequence"
+        for field in self.RULES:
+            assert not [e for e in field_evidence(out, field) if str(e.get("rule_id", "")).startswith("tar_")]
 
 
 # =============================================================================

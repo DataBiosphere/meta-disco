@@ -2620,12 +2620,14 @@
             "value": "GRCh38"
           },
           "variant_kind": {
-            "credited_to": "inherited",
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for variant_kind",
-                "status": "not_classified"
+                "reason": "GenomicsDBImport of calls by HaplotypeCaller; no structural-variant field declared",
+                "rule_id": "tar_merge_small_callers",
+                "source_type": "content_read",
+                "tier": 4,
+                "value": "small"
               },
               {
                 "activity": "CohortMergeActivity",
@@ -2640,8 +2642,10 @@
               }
             ],
             "inferred": {
-              "status": "not_classified",
-              "value": null
+              "status": "classified",
+              "value": [
+                "small"
+              ]
             },
             "status": "classified",
             "use": "meta_disco",
@@ -2650,21 +2654,23 @@
             ]
           },
           "variant_origin": {
-            "credited_to": "not_classified",
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for variant_origin",
-                "status": "not_classified"
+                "reason": "GenomicsDBImport of calls by HaplotypeCaller; no somatic field declared",
+                "rule_id": "tar_merge_germline_callers",
+                "source_type": "content_read",
+                "tier": 4,
+                "value": "germline"
               }
             ],
             "inferred": {
-              "status": "not_classified",
-              "value": null
+              "status": "classified",
+              "value": "germline"
             },
-            "status": "not_classified",
-            "use": "published",
-            "value": null
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "germline"
           }
         },
         "dataset_title": "GOLDEN_FIXTURE",

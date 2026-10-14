@@ -53,14 +53,28 @@ activities:
     inputs:
       - role: calls_from
         form: [file]
-        kind: [alignments, variants]
+        kind: [alignments]
         required: true
         many: true
         passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
     reason: >-
-      Variants are called in the coordinates of the alignments (or gVCFs) they are called
-      from, so the reference passes with the sequencer and the library. The variant kind
-      does not: the caller decides it (#654).
+      Variants are called in the coordinates of the alignments they are called from, so the
+      reference passes with the sequencer and the library. The variant kind does not: the
+      caller decides it (#654). A joint genotyping of gVCFs is JointGenotypingActivity.
+  - term: JointGenotypingActivity
+    output: {form: [file], kind: [variants, genotypes]}
+    inputs:
+      - role: genotyped_from
+        form: [file]
+        kind: [variants]
+        required: true
+        many: false
+        passes: [data_modality, assay_type, platform, instrument_model, reference_assembly, variant_kind, variant_origin]
+    reason: >-
+      GATK's GenotypeGVCFs genotypes the calls one store of gVCFs holds (a GenomicsDB
+      workspace, or a CombineGVCFs file) across every sample in it, and calls no variant the
+      gVCFs did not hold: the caller that made them decided the calls' kind and origin, so
+      both pass, with what the store's reads and reference say (#678).
   - term: ExpressionActivity
     output: {form: [file], kind: [quantification, expression_matrix]}
     inputs:

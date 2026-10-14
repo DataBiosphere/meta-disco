@@ -198,10 +198,12 @@ def test_read_through_names_each_role_of_a_term_that_reads_through_its_parent():
         assert any(through in {i.role for i in d.inputs} for d in activities.declarations().values())
 
 
-def test_the_variant_kind_passes_across_an_index_a_merge_and_a_cohort_merge_only():
-    """A call creates a kind and a filter can narrow one, so neither passes it (#654)."""
+def test_the_variant_kind_passes_across_an_index_a_merge_a_cohort_merge_and_a_joint_genotyping_only():
+    """A call from alignments creates a kind and a filter can narrow one, so neither passes it (#654); a
+    joint genotyping calls nothing its gVCFs did not hold, so it does (#678)."""
     passing = {term for term in activities.declarations() if "variant_kind" in activities.passes(term)}
-    assert passing == {activities.INDEXING, activities.MERGE, activities.COHORT_MERGE}
+    assert passing == {activities.INDEXING, activities.MERGE, activities.COHORT_MERGE, activities.JOINT_GENOTYPING}
+    assert "variant_kind" not in activities.passes(activities.VARIANT_CALL)
 
 
 def test_samples_roles_are_the_roles_declaring_passes_samples():

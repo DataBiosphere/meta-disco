@@ -238,12 +238,15 @@ STUB_PAYLOADS = {
     "fasta": [STUB_HEADER],
     "gfa": [SegmentTag(sn="chr1", sr="0")],
     # tar returns a TarHead: a GenomicsDB-store marker set, and the workspace's vcfheader.vcf
-    # naming the golden sample map (#621).
+    # naming the golden sample map (#621) and, as every T2T workspace's does, the
+    # HaplotypeCaller line its gVCFs carried, whose calls it imported (#678).
     "tar": TarHead(
         ["chr5.1_2/callset.json", "chr5.1_2/vidmap.json", "chr5.1_2/vcfheader.vcf"],
         "##fileformat=VCFv4.2\n"
         '##GATKCommandLine=<ID=GenomicsDBImport,CommandLine="GenomicsDBImport --genomicsdb-workspace-path '
-        './chr5.136400001_136500001 --sample-name-map gs://b/sample_maps/chr5_sample_map.tsv",Version="4.1.8.0">\n',
+        './chr5.136400001_136500001 --sample-name-map gs://b/sample_maps/chr5_sample_map.tsv",Version="4.1.8.0">\n'
+        '##GATKCommandLine=<ID=HaplotypeCaller,CommandLine="HaplotypeCaller --emit-ref-confidence GVCF '
+        '--output HG00096.chr5.hc.vcf --input inputs/HG00096.cram",Version="4.1.8.0">\n',
     ),
     # sample_map returns the map's text: one row, naming the golden's `sample.vcf.gz`.
     "sample_map": "HG00096\tgs://b/hc_vcfs/sample.vcf.gz\n",

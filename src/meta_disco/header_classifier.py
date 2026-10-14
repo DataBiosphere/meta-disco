@@ -14,7 +14,7 @@ from functools import cache
 from typing import TYPE_CHECKING
 
 from . import code_rules
-from .callers import BY_MERGE, BY_SOURCE, Reading, find_caller
+from .callers import BY_MERGE, BY_SOURCE, BY_STEP, Reading, find_caller
 from .evidence import BedSignals, IdatHeader, SegmentTag
 from .file_name import FileName
 from .models import (
@@ -41,7 +41,8 @@ from .variant_kinds import read_kind
 from .variant_origins import read_origin
 
 if TYPE_CHECKING:
-    from .rule_engine import RuleEngine
+    from .cohort_steps import ParsedTarHead
+    from .rule_engine import ExtendedClassificationResult, RuleEngine
 
 # Text GFA formats this module can parse. The other graph extensions the
 # `pangenome` rules cover (.gbz, .vg, .gbwt, .xg) are binary vg/GBWT formats.
@@ -359,32 +360,42 @@ def classify_from_vcf_header(
     if gvcf_reason is not None:
         _add_content_data_type(result, code_rules.VCF_GVCF.id, GVCF_DATA_TYPE, gvcf_reason)
 
-    # One caller, found once, gives both dimensions read from it.
-    found = find_caller(parsed, name.raw)
-    kind = read_kind(parsed, found)
-    if kind.by == BY_SOURCE:
-        _add_variant_kind(result, code_rules.VCF_SOURCE_CALLER_KIND.id, kind)
-    elif kind.by == BY_MERGE:
-        _add_variant_kind(result, code_rules.VCF_MERGE_SMALL_CALLERS.id, kind)
-    else:
-        _add_variant_kind(result, code_rules.VCF_STEP_CALLER_KIND.id, kind)
-    origin = read_origin(parsed, found)
-    if origin.by == BY_SOURCE:
-        _add_variant_origin(result, code_rules.VCF_SOURCE_CALLER_ORIGIN.id, origin)
-    elif origin.by == BY_MERGE:
-        _add_variant_origin(result, code_rules.VCF_MERGE_GERMLINE_CALLERS.id, origin)
-    else:
-        _add_variant_origin(result, code_rules.VCF_STEP_CALLER_ORIGIN.id, origin)
-
+    kind, origin = _read_caller(parsed, name.raw)
+    _add_variant_kind(
+        result,
+        kind,
+        code_rules.VCF_STEP_CALLER_KIND.id,
+        code_rules.VCF_SOURCE_CALLER_KIND.id,
+        code_rules.VCF_MERGE_SMALL_CALLERS.id,
+    )
+    _add_variant_origin(
+        result,
+        origin,
+        code_rules.VCF_STEP_CALLER_ORIGIN.id,
+        code_rules.VCF_SOURCE_CALLER_ORIGIN.id,
+        code_rules.VCF_MERGE_GERMLINE_CALLERS.id,
+    )
     return result.to_output_dict()
 
 
-# One helper per dimension, each claiming its field by name, so `test_code_rules` reads what
-# each rule claims.
-def _add_variant_kind(result, rule_id: str, reading: Reading) -> None:
+def _read_caller(header: VCFHeader, file_name: str) -> tuple[Reading, Reading]:
+    """The kind and the origin the caller ``header`` names for ``file_name`` gives, the caller found once (#654, #658)."""
+    found = find_caller(header, file_name)
+    return read_kind(header, found), read_origin(header, found)
+
+
+def _rule_for(reading: Reading, step_rule: str, source_rule: str, merge_rule: str) -> str:
+    """The rule a caller reading is claimed under: the one for how its caller was found (``Reading.by``)."""
+    return {BY_STEP: step_rule, BY_SOURCE: source_rule, BY_MERGE: merge_rule}[reading.by]
+
+
+# One helper per dimension, each claiming its field by name and called with its rule ids, so
+# `test_code_rules` reads what each rule claims. The VCF and tar paths both claim through them.
+def _add_variant_kind(result, reading: Reading, step_rule: str, source_rule: str, merge_rule: str) -> None:
     """Claim the kind a header's caller gives (#654), or ``not_classified`` with the reason where it gives none."""
     from .rule_engine import CONTENT_TIER
 
+    rule_id = _rule_for(reading, step_rule, source_rule, merge_rule)
     result.add_claim(
         "variant_kind",
         rule_id=rule_id,
@@ -396,10 +407,11 @@ def _add_variant_kind(result, rule_id: str, reading: Reading) -> None:
     )
 
 
-def _add_variant_origin(result, rule_id: str, reading: Reading) -> None:
+def _add_variant_origin(result, reading: Reading, step_rule: str, source_rule: str, merge_rule: str) -> None:
     """Claim the origin a header's caller gives (#658), or ``not_classified`` with the reason where it gives none."""
     from .rule_engine import CONTENT_TIER
 
+    rule_id = _rule_for(reading, step_rule, source_rule, merge_rule)
     result.add_claim(
         "variant_origin",
         rule_id=rule_id,
@@ -771,7 +783,7 @@ def _recognized_inner_extensions(member_names: list[str]) -> list[tuple[str, str
     Returns ``(extension, basename)`` pairs. ``FileName.parse`` reads the extension from
     the basename (peeling any wrappers, yielding a clean core incl. multi-dot cores like
     ``.g.vcf``); parsing the basename rather than the full member path keeps a mid-path
-    directory dot out of it. Shared by :func:`classify_from_tar_members` (which picks the
+    directory dot out of it. Shared by :func:`_classify_tar_members` (which picks the
     dominant extension) and :func:`tar_head_is_conclusive` (which only asks whether any
     exists), so the two cannot drift apart in what they count as recognized.
     """
@@ -795,7 +807,7 @@ def tar_head_is_conclusive(member_names: list[str]) -> bool:
     archive as a variant store regardless of the other members — or once any member
     carries a recognized inner extension. The recognized-extension case is a
     *first-signal* stop, not a promise about the final value: the generic path in
-    :func:`classify_from_tar_members` picks the *dominant* recognized extension over the
+    :func:`_classify_tar_members` picks the *dominant* recognized extension over the
     members read, and a deeper read could still shift that dominant. Stopping at the
     first recognized member is deliberate — it keeps the generic path the fixed-head
     sample it always was, while letting the GenomicsDB signal (the #260 target) escalate.
@@ -807,13 +819,9 @@ def tar_head_is_conclusive(member_names: list[str]) -> bool:
     return bool(_is_genomicsdb_variant_store(member_names) or _recognized_inner_extensions(member_names))
 
 
-def classify_from_tar_members(
-    member_names: list[str],
-    *,
-    name: FileName = FileName.EMPTY,
-    file_size: int | None = None,
-    file_format: str | None = None,
-) -> dict:
+def _classify_tar_members(
+    member_names: list[str], name: FileName, is_workspace: bool
+) -> "ExtendedClassificationResult":
     """Classify a tar/tar.gz archive from its member files (#255).
 
     A container carries no format of its own (#245), so it is classified by its
@@ -840,8 +848,7 @@ def classify_from_tar_members(
     contents. A GenomicsDB store whose variant signal is deeper than the fetched head
     also lands here (~1%); a dynamic, deeper read is the follow-up.
 
-    ``file_size`` and ``file_format`` are unused (a container has no format of its
-    own); both are accepted only to match the uniform ``_fetch_and_classify`` call.
+    ``is_workspace`` is path 1's test, decided once per file (``cohort_steps.ParsedTarHead``).
     """
     from collections import Counter
 
@@ -872,18 +879,18 @@ def classify_from_tar_members(
 
     # (1) GenomicsDB variant store — a member-name layout signature, caught even when
     # the `.vcf` member / schema files are pushed past the head in the larger stores.
-    if _is_genomicsdb_variant_store(member_names):
+    if is_workspace:
         _claim_content(
             "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)",
             data_modality="genomic",
             data_type="variants",
         )
-        return result.to_output_dict()
+        return result
 
     # (2) Generic: classify by the dominant recognized inner member extension.
     recognized = _recognized_inner_extensions(member_names)  # (inner extension, member basename)
     if not recognized:
-        return result.to_output_dict()
+        return result
 
     # Counter.most_common breaks ties by first-seen order, so this is deterministic.
     dominant, dom_count = Counter(ext for ext, _ in recognized).most_common(1)[0]
@@ -895,24 +902,83 @@ def classify_from_tar_members(
         data_type=inner.data_type,
         assay_type=inner.assay_type,
     )
+    return result
+
+
+# Why a GenomicsDB workspace's caller was not read, where its ``vcfheader.vcf`` was not (#678).
+NO_WORKSPACE_HEADER = "no vcfheader.vcf was found where the archive was read"
+WORKSPACE_HEADER_UNREADABLE = "vcfheader.vcf could not be read"
+
+
+def classify_from_tar_head(
+    head: "ParsedTarHead",
+    *,
+    name: FileName = FileName.EMPTY,
+    file_size: int | None = None,
+    file_format: str | None = None,
+) -> dict:
+    """Classify a tar from its parsed head (``cohort_steps.ParsedTarHead``): from its member names, as
+    :func:`_classify_tar_members`, and a GenomicsDB workspace's ``variant_kind`` and ``variant_origin``
+    from the caller its ``vcfheader.vcf`` names (#678).
+
+    The caller is found as a VCF's is (``callers.find_caller``), with the workspace's name
+    (:func:`workspace_name`) as the file's: the import step's output is the directory the
+    tar was made from. A workspace whose header was not read gets both dimensions
+    ``not_classified``, the reason worded from ``ParsedTarHead.unread``, under the step rules. A tar that is
+    no GenomicsDB workspace gets neither claim. The cohort step is read from the same header
+    by ``cohort_steps.TarSteps`` (#621). ``file_size`` and ``file_format`` are unused (a
+    container has no format of its own), accepted to match the uniform ``_fetch_and_classify`` call.
+    """
+    from .cohort_steps import VCF_HEADER_UNREADABLE
+
+    result = _classify_tar_members(head.member_names, name, head.is_workspace)
+    if not head.is_workspace:
+        return result.to_output_dict()
+    if head.header is None:
+        why = (
+            f"{WORKSPACE_HEADER_UNREADABLE}: {head.vcf_header_unread}"
+            if head.unread == VCF_HEADER_UNREADABLE
+            else NO_WORKSPACE_HEADER
+        )
+        kind = origin = Reading(BY_STEP, None, why)
+    else:
+        kind, origin = _read_caller(head.header, workspace_name(name.raw))
+    _add_variant_kind(
+        result,
+        kind,
+        code_rules.TAR_STEP_CALLER_KIND.id,
+        code_rules.TAR_SOURCE_CALLER_KIND.id,
+        code_rules.TAR_MERGE_SMALL_CALLERS.id,
+    )
+    _add_variant_origin(
+        result,
+        origin,
+        code_rules.TAR_STEP_CALLER_ORIGIN.id,
+        code_rules.TAR_SOURCE_CALLER_ORIGIN.id,
+        code_rules.TAR_MERGE_GERMLINE_CALLERS.id,
+    )
     return result.to_output_dict()
-
-
-def classify_from_tar_head(head, **kwargs) -> dict:
-    """Classify a tar from its parsed head (``cohort_steps.ParsedTarHead``): from its member names alone, as
-    :func:`classify_from_tar_members`; the ``vcfheader.vcf`` the head may carry is the step reader's (#621)."""
-    return classify_from_tar_members(head.member_names, **kwargs)
 
 
 # The member a GenomicsDB workspace's GenomicsDBImport command line is read from (#621).
 WORKSPACE_HEADER_MEMBER = "vcfheader.vcf"
 
 
+def workspace_name(file_name: str) -> str:
+    """A tar's name as its workspace directory is named: case-folded, less ``.tar`` and any ``.gz``.
+
+    What a GenomicsDB import's ``--genomicsdb-workspace-path`` names, as
+    ``producer_steps.data_name`` compares it.
+    """
+    return file_name.lower().removesuffix(".gz").removesuffix(".tar")
+
+
 def workspace_header_member(member_names: list[str]) -> str | None:
     """The base name of the member whose text the tar fetcher keeps (``FileTypeConfig.kept_member``), or None.
 
     ``vcfheader.vcf`` where the members read so far are a GenomicsDB variant store
-    (:func:`_is_genomicsdb_variant_store`), whose step is read from it; no other tar's.
+    (:func:`_is_genomicsdb_variant_store`), whose step (#621) and caller (#678) are read
+    from it; no other tar's.
     """
     return WORKSPACE_HEADER_MEMBER if _is_genomicsdb_variant_store(member_names) else None
 

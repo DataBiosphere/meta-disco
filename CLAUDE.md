@@ -120,7 +120,8 @@ evidence}` entry — plus the controlled vocabulary:
 - **variant_kind_enum**: `small` and `structural`, the one dimension whose value is a list
   (`models.MULTIVALUED_FIELDS`, ADR-0003, #654): a claim declares one kind, a string, and
   the record stores the settled value as `["small"]` (`models.stored_value` /
-  `settled_value`); read from a VCF's caller (`variant_kinds`, `rules/callers.yaml`)
+  `settled_value`); read from the caller a VCF's header names, or a GenomicsDB workspace's
+  `vcfheader.vcf` (#678) (`variant_kinds`, `rules/callers.yaml`)
 - **variant_origin_enum**: `germline` and `somatic`, Sequence Ontology's two children of
   `variant_origin` (#658); read from the same caller (`variant_origins`, found by `callers`),
   a caller with a somatic mode (Sniffles2) only where its command line shows the mode off

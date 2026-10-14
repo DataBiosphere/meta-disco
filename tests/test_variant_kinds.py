@@ -23,7 +23,12 @@ from tests.test_producer_steps import (
     steps,
 )
 
-GENOTYPE = gatk4("GenotypeGVCFs", "-V gendb://chr1_db -O chr1.100000001_100100000.margined.genotyped.vcf.gz -R ref.fa")
+# GenotypeGVCFs reading the workspace IMPORT wrote, as a joint-called region's full header would record it.
+GENOTYPE_WORKSPACE = gatk4(
+    "GenotypeGVCFs",
+    "-V gendb://chr1.100000001_100100000 -O chr1.100000001_100100000.margined.genotyped.vcf.gz -R ref.fa",
+)
+MUTECT_GVCF = gatk4("Mutect2", "-I normal.bam -O normal.g.vcf.gz -ERC GVCF -R ref.fa")
 SNIFFLES_COMMAND = '##command="/usr/local/bin/sniffles -i /x/minimap2.bam -v sniffles.vcf -t 64 --minsvlen 30"'
 SVTYPE = '##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">'
 ALT_DEL = '##ALT=<ID=DEL,Description="Deletion">'
@@ -126,15 +131,36 @@ def test_a_producing_caller_gives_its_kind():
     assert (reading.by, reading.value) == (callers.BY_STEP, "small")
 
 
-def test_the_walk_back_passes_steps_that_keep_the_kind_to_the_caller_that_wrote_their_input():
-    reading = kind(GENOTYPE, SELECT, name="chr1.100000001_100100000.genotyped.vcf.gz")
-    assert reading.value == "small"
-    assert "SelectVariants <- GenotypeGVCFs" in reading.reason
+def test_the_walk_back_passes_genotyping_to_the_import_whose_callers_settle_it():
+    """GenotypeGVCFs keeps its gVCFs' calls and GenomicsDBImport merges them: the caller is HaplotypeCaller (#678)."""
+    reading = kind(IMPORT, GENOTYPE_WORKSPACE, SELECT, HC, name="chr1.100000001_100100000.genotyped.vcf.gz")
+    assert (reading.by, reading.value) == (callers.BY_MERGE, "small")
+    assert reading.reason.startswith("GenomicsDBImport of calls by HaplotypeCaller")
+
+
+def test_a_region_file_naming_the_import_but_not_its_caller_gives_no_kind():
+    """T2T's region files carry GenomicsDBImport's and SelectVariants' lines, not the caller's (#678)."""
+    reading = kind(IMPORT, SELECT, name="chr1.100000001_100100000.genotyped.vcf.gz")
+    assert reading.value is None
+    assert reading.reason == (
+        f"{callers.NO_CALLER_LINE}: GenomicsDBImport of inputs whose callers the header does not name"
+    )
+
+
+def test_a_workspace_header_is_the_import_of_its_callers_calls():
+    """A GenomicsDB workspace's own vcfheader.vcf keeps the HaplotypeCaller line of the gVCFs it imported (#678)."""
+    reading = kind(IMPORT, HC, name="chr1.100000001_100100000")
+    assert (reading.by, reading.value) == (callers.BY_MERGE, "small")
+
+
+def test_an_import_of_a_caller_the_table_does_not_list_gives_no_kind():
+    """GATK's panel-of-normals workflow imports Mutect2's calls: the import says nothing of its own (#678)."""
+    reading = kind(IMPORT, MUTECT_GVCF, name="chr1.100000001_100100000")
+    assert reading.value is None and reading.reason.startswith(vk.MIXED_MERGE)
 
 
 def test_a_kept_step_whose_input_no_step_wrote_takes_the_headers_one_other_step():
-    # T2T's region files: GenomicsDBImport and SelectVariants, and no GenotypeGVCFs line between them.
-    reading = kind(IMPORT, SELECT, name="chr1.100000001_100100000.genotyped.vcf.gz")
+    reading = kind(HC, SELECT, name="chr1.100000001_100100000.genotyped.vcf.gz")
     assert reading.value == "small"
     assert "the header's one other step" in reading.reason
 
@@ -144,7 +170,7 @@ def test_a_kept_step_whose_input_no_step_wrote_takes_the_headers_one_other_step(
     [(SVTYPE, "declares structural-variant fields"), ("##source=Sniffles2_2.0.7", "also names Sniffles2_2.0.7")],
 )
 def test_the_headers_one_other_step_is_not_taken_where_the_rest_of_the_header_doubts_it(extra, doubt):
-    reading = kind(IMPORT, SELECT, extra, name="chr1.100000001_100100000.genotyped.vcf.gz")
+    reading = kind(HC, SELECT, extra, name="chr1.100000001_100100000.genotyped.vcf.gz")
     assert reading.value is None and reading.reason.startswith(callers.FALLBACK_DISAGREES) and doubt in reading.reason
 
 
@@ -182,8 +208,13 @@ def test_with_no_one_producing_step_two_other_tools_give_no_kind():
 
 
 def test_a_kept_steps_input_written_by_two_steps_is_not_walked_to_either():
-    combine = gatk4("CombineGVCFs", "-V a.g.vcf -O chr1.100000001_100100000.margined.genotyped.vcf.gz")
-    reading = kind(GENOTYPE, combine, SELECT, name="chr1.100000001_100100000.genotyped.vcf.gz")
+    wrote = "-I a.bam -O chr1.100000001_100100000.margined.genotyped.vcf.gz -R ref.fa"
+    reading = kind(
+        gatk4("HaplotypeCaller", wrote),
+        gatk4("Mutect2", wrote),
+        SELECT,
+        name="chr1.100000001_100100000.genotyped.vcf.gz",
+    )
     assert reading.value is None and "several steps" in reading.reason
 
 
@@ -258,13 +289,13 @@ def test_a_reference_resource_names_a_tool_the_table_does_not_list():
 
 
 def test_a_merge_of_small_variant_callers_declaring_no_sv_field_is_small():
-    reading = kind(IMPORT, SELECT, CONCAT, name="chr1.genotyped.vcf.gz")
+    reading = kind(HC, SELECT, CONCAT, name="chr1.genotyped.vcf.gz")
     assert (reading.by, reading.value) == (callers.BY_MERGE, "small")
 
 
 @pytest.mark.parametrize("declaration", [SVTYPE, ALT_DEL])
 def test_a_merge_whose_header_declares_an_sv_field_gives_no_kind(declaration):
-    reading = kind(IMPORT, SELECT, CONCAT, declaration, name="chr1.genotyped.vcf.gz")
+    reading = kind(HC, SELECT, CONCAT, declaration, name="chr1.genotyped.vcf.gz")
     assert reading.value is None and reading.reason.startswith(vk.SV_DECLARED)
 
 
@@ -284,7 +315,7 @@ def test_with_no_one_producing_step_a_merge_in_the_header_settles_the_kind():
     other_view = (
         "##bcftools_viewCommand=view -s HG00096 /cromwell_root/z/1kgp.chr1.recalibrated.snp_indel.pass.vcf.gz; Date=x"
     )
-    reading = kind(IMPORT, SELECT, CONCAT, VQSR_SNP, VQSR_INDEL, PASS, other_view, name="1kgp.chr1.pass.EUR.vcf.gz")
+    reading = kind(HC, SELECT, CONCAT, VQSR_SNP, VQSR_INDEL, PASS, other_view, name="1kgp.chr1.pass.EUR.vcf.gz")
     assert (reading.by, reading.value) == (callers.BY_MERGE, "small")
 
 
@@ -321,3 +352,12 @@ def test_the_classifier_claims_not_classified_with_the_reason_where_no_kind_is_r
     assert (entry["value"], entry["status"]) == (None, NOT_CLASSIFIED)
     (claim,) = [e for e in entry["evidence"] if e.get("rule_id") == "vcf_source_caller_kind"]
     assert claim["status"] == NOT_CLASSIFIED and claim["reason"] == f"{callers.NOT_IN_TABLE}: dbSNP"
+
+
+def test_combinegvcfs_merges_the_gvcfs_its_header_names_the_caller_of():
+    """1000G's joint calls: HaplotypeCaller gVCFs combined, then genotyped (#678). CombineGVCFs is a merge."""
+    combine = gatk4("CombineGVCFs", "-V HG00096.g.vcf -V HG00097.g.vcf -O cohort.g.vcf")
+    genotype = gatk4("GenotypeGVCFs", "-V cohort.g.vcf -O joint.vcf")
+    reading = kind(combine, genotype, HC, name="joint.vcf")
+    assert (reading.by, reading.value) == (callers.BY_MERGE, "small")
+    assert reading.reason.startswith("CombineGVCFs of calls by HaplotypeCaller")

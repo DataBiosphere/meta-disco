@@ -36,6 +36,7 @@ rule's is declared, because a code rule has no ``when`` to work it out from.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from . import activities
@@ -222,8 +223,8 @@ VCF_STEP_CALLER_KIND = CodeRule(
     source_type=SOURCE_CONTENT_READ,
     reads=(
         "VCF header: its command lines, as steps; the producing step (the end of their data flow), "
-        "walked back through steps that keep the kind (SelectVariants, ApplyVQSR, ApplyRecalibration, "
-        "bcftools view, norm, annotate) to the step that called the variants"
+        "walked back through steps that keep the kind (SelectVariants, GenotypeGVCFs, FilterMutectCalls, "
+        "ApplyVQSR, ApplyRecalibration, bcftools view, norm, annotate) to the step that called the variants"
     ),
     sets=("variant_kind",),
     rationale=(
@@ -255,8 +256,9 @@ VCF_MERGE_SMALL_CALLERS = CodeRule(
     basis=BASIS_CONTENT,
     source_type=SOURCE_CONTENT_READ,
     reads=(
-        "VCF header whose caller is a merge (bcftools concat, merge): every caller its command lines "
-        "and ##source lines name, and its ##INFO and ##ALT declarations of structural variants"
+        "VCF header whose caller is a merge (bcftools concat, merge; GATK GenomicsDBImport, CombineGVCFs): "
+        "every caller its command lines and ##source lines name, and its ##INFO and ##ALT declarations "
+        "of structural variants"
     ),
     sets=("variant_kind",),
     rationale=(
@@ -311,9 +313,9 @@ VCF_MERGE_GERMLINE_CALLERS = CodeRule(
     basis=BASIS_CONTENT,
     source_type=SOURCE_CONTENT_READ,
     reads=(
-        "VCF header whose caller is a merge (bcftools concat, merge): every caller its command lines "
-        "and ##source lines name, those callers' command lines for a somatic mode's flags, and its "
-        "declarations of somatic calls"
+        "VCF header whose caller is a merge (bcftools concat, merge; GATK GenomicsDBImport, CombineGVCFs): "
+        "every caller its command lines and ##source lines name, those callers' command lines for a "
+        "somatic mode's flags, and its declarations of somatic calls"
     ),
     sets=("variant_origin",),
     rationale=(
@@ -323,6 +325,54 @@ VCF_MERGE_GERMLINE_CALLERS = CodeRule(
         "##source line, so a somatic input is also looked for in what the header declares (#658)."
     ),
 )
+# The six tar rules mirror the six VCF caller rules: per dimension, one per way the caller is found (#678).
+_WORKSPACE_HEADER = (
+    "GenomicsDB workspace tar: its vcfheader.vcf, the header GenomicsDBImport writes, which records the "
+    "import's command line beside command lines carried over from its gVCFs' headers, read as "
+)
+_WORKSPACE = (
+    "A workspace holds the calls it imported, and its header records the steps behind it, so its caller "
+    "is read as a VCF's (#678), the workspace's name (the tar's, less .tar and any .gz) standing for the "
+    "file's, since the import's output is the directory the tar was made from; a tar named otherwise "
+    "reads the same, through the header's import, a merge. "
+)
+
+
+# Each VCF caller rule's tar twin, by id: a twin's text names the twins, not the VCF rules.
+_TAR_TWIN_IDS = {
+    VCF_STEP_CALLER_KIND.id: "tar_step_caller_kind",
+    VCF_SOURCE_CALLER_KIND.id: "tar_source_caller_kind",
+    VCF_MERGE_SMALL_CALLERS.id: "tar_merge_small_callers",
+    VCF_STEP_CALLER_ORIGIN.id: "tar_step_caller_origin",
+    VCF_SOURCE_CALLER_ORIGIN.id: "tar_source_caller_origin",
+    VCF_MERGE_GERMLINE_CALLERS.id: "tar_merge_germline_callers",
+}
+
+
+def _as_tar(text: str) -> str:
+    """``text`` with each VCF caller rule's id it names replaced by its tar twin's."""
+    return re.sub(r"\b(" + "|".join(_TAR_TWIN_IDS) + r")\b", lambda m: _TAR_TWIN_IDS[m.group(1)], text)
+
+
+def _tar_twin(vcf_rule: CodeRule, unread: str = "") -> CodeRule:
+    """The tar rule that reads a workspace's header as ``vcf_rule`` reads a VCF's (``unread``: what a header not read gives)."""
+    return CodeRule(
+        id=_TAR_TWIN_IDS[vcf_rule.id],
+        module=HEADER_CLASSIFIER,
+        basis=BASIS_CONTENT,
+        source_type=SOURCE_CONTENT_READ,
+        reads=f"{_WORKSPACE_HEADER}a VCF's is: {_as_tar(vcf_rule.reads)}",
+        sets=vcf_rule.sets,
+        rationale=_WORKSPACE + _as_tar(vcf_rule.rationale) + unread,
+    )
+
+
+TAR_STEP_CALLER_KIND = _tar_twin(VCF_STEP_CALLER_KIND, " A workspace whose header was not read gives no kind.")
+TAR_SOURCE_CALLER_KIND = _tar_twin(VCF_SOURCE_CALLER_KIND)
+TAR_MERGE_SMALL_CALLERS = _tar_twin(VCF_MERGE_SMALL_CALLERS)
+TAR_STEP_CALLER_ORIGIN = _tar_twin(VCF_STEP_CALLER_ORIGIN, " A workspace whose header was not read gives no origin.")
+TAR_SOURCE_CALLER_ORIGIN = _tar_twin(VCF_SOURCE_CALLER_ORIGIN)
+TAR_MERGE_GERMLINE_CALLERS = _tar_twin(VCF_MERGE_GERMLINE_CALLERS)
 BED_COORDINATE_REFERENCE = CodeRule(
     id="bed_coordinate_reference",
     module=HEADER_CLASSIFIER,
@@ -520,6 +570,12 @@ CODE_RULES = (
     VCF_STEP_CALLER_ORIGIN,
     VCF_SOURCE_CALLER_ORIGIN,
     VCF_MERGE_GERMLINE_CALLERS,
+    TAR_STEP_CALLER_KIND,
+    TAR_SOURCE_CALLER_KIND,
+    TAR_MERGE_SMALL_CALLERS,
+    TAR_STEP_CALLER_ORIGIN,
+    TAR_SOURCE_CALLER_ORIGIN,
+    TAR_MERGE_GERMLINE_CALLERS,
     BED_COORDINATE_REFERENCE,
     BED_NONSTANDARD_CONTIGS,
     FASTA_TRANSCRIPT_CONTIGS,

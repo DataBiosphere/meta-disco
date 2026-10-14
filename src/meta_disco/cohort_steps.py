@@ -12,9 +12,10 @@ Two steps are read here, each from the file's own content:
 - **A workspace tar's step** is a ``CohortMergeActivity`` with the map its one ``input_list``,
   read from the tar's own ``vcfheader.vcf``, which carries the ``GenomicsDBImport`` command
   line: ``--genomicsdb-workspace-path`` must name the tar itself, and ``--sample-name-map``
-  names the list, matched by base name among the dataset's sample maps. The tar takes its
-  values from the map's members, read through the map at reconcile
-  (``activities.read_through``), not from each gVCF as an input of its own.
+  names the list, matched by base name among the dataset's sample maps. At reconcile the tar
+  takes its values from the map's members, read through the map (``activities.read_through``),
+  not from each gVCF as an input of its own; its kind and origin it also reads itself, from the
+  same header's callers (``header_classifier.classify_from_tar_head``, #678).
 
 A step is written only where every parent resolves: exactly one file of the dataset carries
 the name (#438's rule). Each file's outcome is one of :data:`OUTCOMES`, which the tar and
@@ -25,11 +26,12 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path, PurePosixPath
 
 from . import code_rules, edges
 from .evidence import TarHead
-from .header_classifier import workspace_header_member
+from .header_classifier import workspace_header_member, workspace_name
 from .producer_steps import (
     NO_ACTIVITY,
     NO_COMMAND_LINE,
@@ -41,7 +43,8 @@ from .producer_steps import (
     resolve_names,
 )
 from .record_keys import RecordKey
-from .validators.command_lines import GATK, VcfCommand, vcf_commands
+from .validators.command_lines import GATK
+from .validators.header_extractors import VCFHeader, parse_vcf_header
 
 # The name every sample map the sample-map producer claims ends in, case-folded.
 SAMPLE_MAP_SUFFIX = "_sample_map.tsv"
@@ -71,23 +74,33 @@ OUTCOMES = (
 @dataclass(frozen=True)
 class ParsedTarHead:
     """A tar's fetched head as the classifier and the step reader take it: the member names,
-    the command lines of its ``vcfheader.vcf`` where it was read (None where not), and why it
-    could not be where its read failed."""
+    its ``vcfheader.vcf`` parsed where it was read (None where not), and why it could not be
+    where its read failed."""
 
     member_names: list[str]
-    commands: list[VcfCommand] | None
+    header: VCFHeader | None
     vcf_header_unread: str | None = None
+
+    @cached_property
+    def is_workspace(self) -> bool:
+        """Whether the members are a GenomicsDB workspace's (``workspace_header_member``), decided once for both readers."""
+        return workspace_header_member(self.member_names) is not None
+
+    @property
+    def unread(self) -> str | None:
+        """Why a workspace's ``vcfheader.vcf`` was not parsed: :data:`VCF_HEADER_UNREADABLE` where its read
+        failed (the cause in ``vcf_header_unread``), else :data:`NO_VCF_HEADER`; None where it was, or for
+        a tar that is no workspace."""
+        if not self.is_workspace or self.header is not None:
+            return None
+        return NO_VCF_HEADER if self.vcf_header_unread is None else VCF_HEADER_UNREADABLE
 
 
 def parse_tar_head(head: TarHead) -> ParsedTarHead:
-    """``head`` with its ``vcfheader.vcf`` command lines read, once per file (``FileTypeConfig.parser``).
-
-    Only the command lines: the step reader reads nothing else of it, and a whole-header
-    parse (contigs, INFO, FORMAT) of 124K tars' headers per run is work no reader uses. The
-    cache keeps the text whole.
-    """
-    commands = vcf_commands(head.vcf_header.splitlines()) if head.vcf_header is not None else None
-    return ParsedTarHead(head.member_names, commands, head.vcf_header_unread)
+    """``head`` with its ``vcfheader.vcf`` parsed, once per file (``FileTypeConfig.parser``), for the
+    classifier's caller reader and the step reader both (#678)."""
+    header = parse_vcf_header(head.vcf_header) if head.vcf_header is not None else None
+    return ParsedTarHead(head.member_names, header, head.vcf_header_unread)
 
 
 def parse_sample_map(text: str) -> tuple[tuple[str, str], ...] | None:
@@ -113,11 +126,6 @@ def parse_sample_map(text: str) -> tuple[tuple[str, str], ...] | None:
 
 def _is_member_path(path: str) -> bool:
     return edges.parent_kind_of(PurePosixPath(path).name) == MEMBER_KIND
-
-
-def _workspace_name(file_name: str) -> str:
-    """A tar's name as its workspace directory is named: case-folded, less ``.tar`` and any ``.gz``."""
-    return file_name.lower().removesuffix(".gz").removesuffix(".tar")
 
 
 class _StepReader:
@@ -162,23 +170,22 @@ class TarSteps(_StepReader):
         :data:`PARENT_AMBIGUOUS`). A workspace whose ``vcfheader.vcf`` was not read gives
         :data:`VCF_HEADER_UNREADABLE` where reading it failed, else :data:`NO_VCF_HEADER`.
         """
-        if workspace_header_member(head.member_names) is None:
+        if not head.is_workspace:
             return None, None
-        if head.commands is None:
-            return None, NO_VCF_HEADER if head.vcf_header_unread is None else VCF_HEADER_UNREADABLE
-        if not head.commands:
+        if head.header is None:
+            return None, head.unread
+        commands = head.header.commands
+        if not commands:
             return None, NO_COMMAND_LINE
         imports = list(
             dict.fromkeys(
-                c.step
-                for c in head.commands
-                if c.step.read and c.step.family == GATK and c.step.tool == GENOMICSDB_IMPORT
+                c.step for c in commands if c.step.read and c.step.family == GATK and c.step.tool == GENOMICSDB_IMPORT
             )
         )
         if len(imports) != 1:
             return None, NO_ACTIVITY
         (step,) = imports
-        if step.output is None or data_name(step.output) != _workspace_name(file_name):
+        if step.output is None or data_name(step.output) != workspace_name(file_name):
             return None, OUTPUT_NOT_THIS_FILE
         lists = list(dict.fromkeys(step.input_lists))
         if step.inputs or len(lists) != 1:

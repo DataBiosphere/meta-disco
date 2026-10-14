@@ -179,12 +179,14 @@ UNDECLARED_NOTE = (
 NONE_NOTE = "None: every rule the counts name is in the rule files."
 CALLERS_NOTE = (
     "The rows of `rules/callers.yaml` (#654, #658): each variant caller, the kind of variant it calls and their "
-    "origin, which the caller rules look up once they have found the caller in a VCF's header. A caller with a "
+    "origin, which the caller rules look up once they have found the caller in a VCF's header, or a GenomicsDB "
+    "workspace's (#678). A caller with a "
     "somatic mode gives its origin only where its command line shows none of the mode's flags, or a `##source` "
     "spelling predates the mode. Counted by the files whose kind or origin a caller rule took from the row: a "
     "merge counts each of its callers."
 )
-# The rules that read a dimension from a VCF's caller (`callers.find_caller`), by the dimension they set.
+# The rules that read a dimension from the caller a VCF's or a GenomicsDB workspace's header names
+# (`callers.find_caller`), by the dimension they set.
 CALLER_RULES = {
     rule.id: rule.sets[0]
     for rule in (
@@ -194,6 +196,12 @@ CALLER_RULES = {
         code_rules.VCF_STEP_CALLER_ORIGIN,
         code_rules.VCF_SOURCE_CALLER_ORIGIN,
         code_rules.VCF_MERGE_GERMLINE_CALLERS,
+        code_rules.TAR_STEP_CALLER_KIND,
+        code_rules.TAR_SOURCE_CALLER_KIND,
+        code_rules.TAR_MERGE_SMALL_CALLERS,
+        code_rules.TAR_STEP_CALLER_ORIGIN,
+        code_rules.TAR_SOURCE_CALLER_ORIGIN,
+        code_rules.TAR_MERGE_GERMLINE_CALLERS,
     )
 }
 # The engine's two placeholders, worded for the reader. Held to the schema's marker enum

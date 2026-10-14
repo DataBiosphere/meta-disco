@@ -168,7 +168,7 @@ its own.
 *Amended by #580.* A step is named by its **activity**, not by a verb between two files. The
 vocabulary is `activity_type_enum`: AnVIL FSS's `ActivityTypes`, spelled as FSS's released LinkML schema
 spells them (`DataBiosphere/biocore-data-model`, `AnVILDataSubmissionFindabilitySubsetSchema.linkml.yaml`),
-plus nine of our own (`CoverageActivity` added by #595; `VariantProcessingActivity` and `VariantFilterActivity` by #610; `CohortDefinitionActivity` and `CohortMergeActivity` by #621). FSS's values spreadsheet spells three differently (`VariantCallingActivity`,
+plus ten of our own (`CoverageActivity` added by #595; `VariantProcessingActivity` and `VariantFilterActivity` by #610; `CohortDefinitionActivity` and `CohortMergeActivity` by #621; `JointGenotypingActivity` by #678). FSS's values spreadsheet spells three differently (`VariantCallingActivity`,
 `ImagingActivity`, `IndexingActivity`); the schema a submission is validated against wins. A term's `meaning` is the Terra
 Interoperability Model's class where it has one, else EDAM's operation where EDAM defines the same step.
 TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `generated_file_id` are PROV's
@@ -181,7 +181,8 @@ TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `gener
 | `ChecksumActivity` | checksum ← checked file | filename convention, `anvil_activity` `Checksum` | `checksum_of` |
 | `QualityControlActivity` (ours, under `AnalysisActivity`) | QC report ← the file it reports on | submitter same-row (T2T `samtools_stats`, `mosdepth_*` → `cram`) | `summarizes` |
 | `AlignmentActivity` | alignment ← reads | submitter same-row, `@PG`, `anvil_activity` (ENCORE `Alignment: STAR`) | `aligned_from` |
-| `VariantCallActivity` | variants ← alignments or gVCFs | VCF caller command lines, submitter same-row (1000G `cram` → `gvcf`; T2T `interval`: region VCF ← GenomicsDB tar, #610) | `called_from` |
+| `VariantCallActivity` | variants ← alignments | VCF caller command lines, submitter same-row (1000G `cram` → `gvcf`) | `called_from` |
+| `JointGenotypingActivity` (ours, under `VariantCallActivity`; amended by #678) | genotyped callset ← the gVCF store it genotypes (`genotyped_from`) | submitter same-row (T2T `interval`: region VCF ← GenomicsDB tar, #610) | — |
 | `MergeActivity` (ours) | merged file ← shards | VCF headers (T2T chromosome VCF ← region VCFs, its `bcftools concat` line, #610), `anvil_activity` (ENCORE `Merger: multiple FASTQ files`, #595) | `merged_from` |
 | `CohortMergeActivity` (ours, under `MergeActivity`; #621) | merged file ← the cohort's list naming its inputs (`input_list`) | a GenomicsDB workspace's `vcfheader.vcf` (T2T tar ← its chromosome's sample map, its `GenomicsDBImport` line) | — |
 | `CohortDefinitionActivity` (ours; #621) | list ← each file it lists (`member`) | a GATK sample-name map's own rows (T2T `chrN_sample_map.tsv` ← its gVCFs) | — |
@@ -207,7 +208,7 @@ for one of these takes the id as its `meaning`, by the rule above, rather than s
 | variant annotation or classification | `operation_3225` Variant classification | none annotated yet; `operation_0331` Variant effect prediction is about protein structure, not this |
 
 EDAM has no operation for variant normalization, joint genotyping as a step of its own (Genotyping,
-`operation_3196`, is a close mapping on `VariantCallActivity`), a GenomicsDB import, a cohort
+`operation_3196`, is a close mapping on `JointGenotypingActivity`, amended by #678), a GenomicsDB import, a cohort
 definition, or a file's checksum (`operation_3348` checksums a sequence). A term for one of these
 records no id.
 
@@ -380,7 +381,7 @@ authority, and this table is its reading when #580 wrote it, amended where a row
 
 | activity | `data_modality` | `assay_type` | `platform` | `instrument_model` | `reference_assembly` |
 |---|---|---|---|---|---|
-| `IndexActivity`, `QualityControlActivity`, `CoverageActivity` (amended by #595), `MergeActivity`, `VariantCallActivity`, `VariantFilterActivity` (#610, from its parent `VariantProcessingActivity`) | yes | yes | yes | yes | yes |
+| `IndexActivity`, `QualityControlActivity`, `CoverageActivity` (amended by #595), `MergeActivity`, `VariantCallActivity`, `JointGenotypingActivity` (#678, which also passes `variant_kind` and `variant_origin`), `VariantFilterActivity` (#610, from its parent `VariantProcessingActivity`) | yes | yes | yes | yes | yes |
 | `AlignmentActivity` | yes, from `reads` | yes, from `reads` | yes, from `reads` | yes, from `reads` | from its `reference` input only, not from the reads |
 | `LiftoverActivity` | yes | yes | yes | yes | **no** — liftover changes it |
 | `AssemblyActivity` | yes | yes | yes | yes | **no** — an assembly is its own reference |
