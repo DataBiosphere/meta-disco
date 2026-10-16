@@ -1,6 +1,6 @@
 # Review queue
 
-Source values the slot map routed to a slot but that no authored translation rule reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per source, dataset, table and column it was found in; "rule it would use" names the seeded rule that matches it, or — where none does. 23 listed, from evidence under data/source_evidence.
+Source values the slot map or the entity map routed to a slot but that no authored translation rule reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per source, dataset, table and column it was found in; "rule it would use" names the seeded rule that matches it, or — where none does. For a donor's slot (phenotypic_sex, genetic_ancestry), files counts donors, each dataset's identifiers apart. 25 listed, from evidence under data/source_evidence and data/entity_evidence.
 
 ## Published: the catalog's published columns
 
@@ -59,13 +59,20 @@ Source values the slot map routed to a slot but that no authored translation rul
 | 230 | `'isoseq'` | `anvil` | `AnVIL_HPRC_R2` | `kinnex` | `library_strategy` | assay_type.isoseq |
 | 6 | `'Nanopore'` | `anvil` | `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` | `sequencing` | `sequencing_strategy` | — |
 
+### genetic_ancestry
+
+| files | raw value | source | dataset | table | column | rule it would use |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | `'ASL'` | `anvil` | `AnVIL_HPRC_R2` | `sample_metadata` | `population_abbreviation` | — |
+| 1 | `'MKK'` | `anvil` | `AnVIL_HPRC_R2` | `sample_metadata` | `population_abbreviation` | — |
+
 ## External: other catalogs
 
 No unreviewed values.
 
 ## Authored mappings: what each translation rule declares
 
-Every authored translation rule, by slot and most files first: the source values it matches in that slot, wherever the slot map found them, and what it declares. Files are those it matched in the same evidence as the queue above, per kind of source; a row that matched nothing shows 0.
+Every authored translation rule, by slot and most files first: the source values it matches in that slot, wherever the slot map or the entity map found them, and what it declares. Files are those it matched in the same evidence as the queue above, per kind of source; a row that matched nothing shows 0.
 
 ### data_modality
 
@@ -147,6 +154,51 @@ Every authored translation rule, by slot and most files first: the source values
 | 3,770 | 0 | 3,770 | 0 | assay_type.hi_c | `any` | `'Hi-C' · 'hic'` | data_modality: epigenomic.3d_contact_maps | Hi-C measures chromatin contacts, which MODAL's `3D contact maps` names (#563); the modality is the information measured, not the use HPRC puts it to (scaffolding). The vocabulary has no assay term for it yet (#399), so nothing is declared for assay_type. `hic` is the table-name span of the same data. |
 | 12 | 0 | 12 | 0 | assay_type.single_nucleus_atac_seq+single_nucleus_rna_sequencing_assay | `anvil / AnVIL_IGVF_Mouse_R1` | `['single-nucleus ATAC-seq', 'single-nucleus RNA sequencing assay']` | assay_type: SHARE-seq | IGVF's `file.assay_titles`. Both assays of one SHARE-seq experiment: IGVF's analysis sets that carry the pair (IGVFDS5339UKYM, IGVFDS5530HYKI) give `preferred_assay_titles: ["SHARE-seq"]`, EFO:0022962. Nothing is declared for data_modality. The value is the analysis set's label, on every file of the set, and each file holds one half: the count matrices and kallisto outputs are RNA, the fragment files ATAC. Any one modality would be wrong for some of them, and the vocabulary holds one per file, so each file's own evidence decides. Scoped to this dataset: the two titles alone do not name the protocol, since another joint assay (10x Multiome for one) could carry the same pair, so elsewhere the value selects no row and is queued. |
 | 10 | 0 | 10 | 0 | assay_type.single_nucleus_atac_seq | `any` | `['single-nucleus ATAC-seq']` | assay_type: snATAC-seq; data_modality: epigenomic.chromatin_accessibility | IGVF's `file.assay_titles`. Single-nucleus ATAC-seq: our own term, under EFO's sc/snATAC-seq, which has no single-nucleus child (#533). ATAC-seq measures open chromatin. In AnVIL_IGVF_Mouse_R1 the value is on the reads (FASTQ) and seqspec files of the ATAC half of a SHARE-seq experiment. |
+
+### phenotypic_sex
+
+| files | published | submitter | external | rule | scope | matches | declares | reason |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 5,293 | 1,845 | 3,448 | 0 | phenotypic_sex.female | `any` | `'female'` | phenotypic_sex: Female | The term itself, as T2T, HPRC and NIA_CARD write it lower case and PRIMED and AnVIL capitalised. |
+| 5,243 | 1,822 | 3,421 | 0 | phenotypic_sex.male | `any` | `'male'` | phenotypic_sex: Male | The term itself, as T2T, HPRC and NIA_CARD write it lower case and PRIMED and AnVIL capitalised. |
+| 1,603 | 0 | 1,603 | 0 | phenotypic_sex.pedigree_2 | `anvil / ANVIL_1000G_high_coverage_2019` | `'2'` | phenotypic_sex: Female | 1000 Genomes' `pedigree.sex` is a PED file's sex column, where 1 is male and 2 female; scoped to the dataset, since a bare `2` means this only in a PED file. |
+| 1,599 | 0 | 1,599 | 0 | phenotypic_sex.pedigree_1 | `anvil / ANVIL_1000G_high_coverage_2019` | `'1'` | phenotypic_sex: Male | 1000 Genomes' `pedigree.sex` is a PED file's sex column, where 1 is male and 2 female; scoped to the dataset, since a bare `1` means this only in a PED file. |
+
+### genetic_ancestry
+
+| files | published | submitter | external | rule | scope | matches | declares | reason |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 893 | 0 | 893 | 0 | genetic_ancestry.afr | `any` | `'AFR'` | genetic_ancestry: AFR | 1000 Genomes' superpopulation code, the term itself (HANCESTRO:2000). |
+| 633 | 0 | 633 | 0 | genetic_ancestry.eur | `any` | `'EUR'` | genetic_ancestry: EUR | 1000 Genomes' superpopulation code, the term itself (HANCESTRO:2003). |
+| 601 | 0 | 601 | 0 | genetic_ancestry.sas | `any` | `'SAS'` | genetic_ancestry: SAS | 1000 Genomes' superpopulation code, the term itself (HANCESTRO:2004). |
+| 587 | 0 | 587 | 0 | genetic_ancestry.gwd | `any` | `'GWD' · 'GWD \| AFR'` | genetic_ancestry: GWD | 1000 Genomes' population code, the term itself (HANCESTRO:0664); PRIMED's `population_label` writes it with its superpopulation, `GWD \| AFR`, which the term sits under. |
+| 585 | 0 | 585 | 0 | genetic_ancestry.eas | `any` | `'EAS'` | genetic_ancestry: EAS | 1000 Genomes' superpopulation code, the term itself (HANCESTRO:2002). |
+| 572 | 0 | 572 | 0 | genetic_ancestry.yri | `any` | `'YRI' · 'YRI \| AFR'` | genetic_ancestry: YRI | 1000 Genomes' population code, the term itself (HANCESTRO:0668); PRIMED's `population_label` writes it with its superpopulation, `YRI \| AFR`, which the term sits under. |
+| 567 | 0 | 567 | 0 | genetic_ancestry.ceu | `any` | `'CEU' · 'CEU \| EUR'` | genetic_ancestry: CEU | 1000 Genomes' population code, the term itself (HANCESTRO:0766); PRIMED's `population_label` writes it with its superpopulation, `CEU \| EUR`, which the term sits under. |
+| 531 | 0 | 531 | 0 | genetic_ancestry.chs | `any` | `'CHS' · 'CHS \| EAS'` | genetic_ancestry: CHS | 1000 Genomes' population code, the term itself (HANCESTRO:0756); PRIMED's `population_label` writes it with its superpopulation, `CHS \| EAS`, which the term sits under. |
+| 502 | 0 | 502 | 0 | genetic_ancestry.ibs | `any` | `'IBS' · 'IBS \| EUR'` | genetic_ancestry: IBS | 1000 Genomes' population code, the term itself (HANCESTRO:0768); PRIMED's `population_label` writes it with its superpopulation, `IBS \| EUR`, which the term sits under. |
+| 490 | 0 | 490 | 0 | genetic_ancestry.amr | `any` | `'AMR'` | genetic_ancestry: AMR | 1000 Genomes' superpopulation code, the term itself (HANCESTRO:2001). |
+| 486 | 0 | 486 | 0 | genetic_ancestry.esn | `any` | `'ESN' · 'ESN \| AFR'` | genetic_ancestry: ESN | 1000 Genomes' population code, the term itself (HANCESTRO:0661); PRIMED's `population_label` writes it with its superpopulation, `ESN \| AFR`, which the term sits under. |
+| 477 | 0 | 477 | 0 | genetic_ancestry.pjl | `any` | `'PJL' · 'PJL \| SAS'` | genetic_ancestry: PJL | 1000 Genomes' population code, the term itself (HANCESTRO:0804); PRIMED's `population_label` writes it with its superpopulation, `PJL \| SAS`, which the term sits under. |
+| 469 | 0 | 469 | 0 | genetic_ancestry.pur | `any` | `'PUR' · 'PUR \| AMR'` | genetic_ancestry: PUR | 1000 Genomes' population code, the term itself (HANCESTRO:0687); PRIMED's `population_label` writes it with its superpopulation, `PUR \| AMR`, which the term sits under. |
+| 439 | 0 | 439 | 0 | genetic_ancestry.clm | `any` | `'CLM' · 'CLM \| AMR'` | genetic_ancestry: CLM | 1000 Genomes' population code, the term itself (HANCESTRO:0684); PRIMED's `population_label` writes it with its superpopulation, `CLM \| AMR`, which the term sits under. |
+| 431 | 0 | 431 | 0 | genetic_ancestry.beb | `any` | `'BEB' · 'BEB \| SAS'` | genetic_ancestry: BEB | 1000 Genomes' population code, the term itself (HANCESTRO:0802); PRIMED's `population_label` writes it with its superpopulation, `BEB \| SAS`, which the term sits under. |
+| 413 | 0 | 413 | 0 | genetic_ancestry.pel | `any` | `'PEL' · 'PEL \| AMR'` | genetic_ancestry: PEL | 1000 Genomes' population code, the term itself (HANCESTRO:0686); PRIMED's `population_label` writes it with its superpopulation, `PEL \| AMR`, which the term sits under. |
+| 408 | 0 | 408 | 0 | genetic_ancestry.khv | `any` | `'KHV' · 'KHV \| EAS'` | genetic_ancestry: KHV | 1000 Genomes' population code, the term itself (HANCESTRO:0755); PRIMED's `population_label` writes it with its superpopulation, `KHV \| EAS`, which the term sits under. |
+| 395 | 0 | 395 | 0 | genetic_ancestry.acb | `any` | `'ACB' · 'ACB \| AFR'` | genetic_ancestry: ACB | 1000 Genomes' population code, the term itself (HANCESTRO:0660); PRIMED's `population_label` writes it with its superpopulation, `ACB \| AFR`, which the term sits under. |
+| 375 | 0 | 375 | 0 | genetic_ancestry.stu | `any` | `'STU' · 'STU \| SAS'` | genetic_ancestry: STU | 1000 Genomes' population code, the term itself (HANCESTRO:0805); PRIMED's `population_label` writes it with its superpopulation, `STU \| SAS`, which the term sits under. |
+| 357 | 0 | 357 | 0 | genetic_ancestry.tsi | `any` | `'TSI' · 'TSI \| EUR'` | genetic_ancestry: TSI | 1000 Genomes' population code, the term itself (HANCESTRO:0769); PRIMED's `population_label` writes it with its superpopulation, `TSI \| EUR`, which the term sits under. |
+| 356 | 0 | 356 | 0 | genetic_ancestry.jpt | `any` | `'JPT' · 'JPT \| EAS'` | genetic_ancestry: JPT | 1000 Genomes' population code, the term itself (HANCESTRO:0754); PRIMED's `population_label` writes it with its superpopulation, `JPT \| EAS`, which the term sits under. |
+| 352 | 0 | 352 | 0 | genetic_ancestry.itu | `any` | `'ITU' · 'ITU \| SAS'` | genetic_ancestry: ITU | 1000 Genomes' population code, the term itself (HANCESTRO:0806); PRIMED's `population_label` writes it with its superpopulation, `ITU \| SAS`, which the term sits under. |
+| 344 | 0 | 344 | 0 | genetic_ancestry.gih | `any` | `'GIH' · 'GIH \| SAS'` | genetic_ancestry: GIH | 1000 Genomes' population code, the term itself (HANCESTRO:0803); PRIMED's `population_label` writes it with its superpopulation, `GIH \| SAS`, which the term sits under. |
+| 342 | 0 | 342 | 0 | genetic_ancestry.chb | `any` | `'CHB' · 'CHB \| EAS'` | genetic_ancestry: CHB | 1000 Genomes' population code, the term itself (HANCESTRO:0753); PRIMED's `population_label` writes it with its superpopulation, `CHB \| EAS`, which the term sits under. |
+| 338 | 0 | 338 | 0 | genetic_ancestry.msl | `any` | `'MSL' · 'MSL \| AFR'` | genetic_ancestry: MSL | 1000 Genomes' population code, the term itself (HANCESTRO:0667); PRIMED's `population_label` writes it with its superpopulation, `MSL \| AFR`, which the term sits under. |
+| 334 | 0 | 334 | 0 | genetic_ancestry.fin | `any` | `'FIN' · 'FIN \| EUR'` | genetic_ancestry: FIN | 1000 Genomes' population code, the term itself (HANCESTRO:0767); PRIMED's `population_label` writes it with its superpopulation, `FIN \| EUR`, which the term sits under. |
+| 331 | 0 | 331 | 0 | genetic_ancestry.lwk | `any` | `'LWK' · 'LWK \| AFR'` | genetic_ancestry: LWK | 1000 Genomes' population code, the term itself (HANCESTRO:0666); PRIMED's `population_label` writes it with its superpopulation, `LWK \| AFR`, which the term sits under. |
+| 322 | 0 | 322 | 0 | genetic_ancestry.mxl | `any` | `'MXL' · 'MXL \| AMR'` | genetic_ancestry: MXL | 1000 Genomes' population code, the term itself (HANCESTRO:0685); PRIMED's `population_label` writes it with its superpopulation, `MXL \| AMR`, which the term sits under. |
+| 313 | 0 | 313 | 0 | genetic_ancestry.cdx | `any` | `'CDX' · 'CDX \| EAS'` | genetic_ancestry: CDX | 1000 Genomes' population code, the term itself (HANCESTRO:0752); PRIMED's `population_label` writes it with its superpopulation, `CDX \| EAS`, which the term sits under. |
+| 311 | 0 | 311 | 0 | genetic_ancestry.gbr | `any` | `'GBR' · 'GBR \| EUR'` | genetic_ancestry: GBR | 1000 Genomes' population code, the term itself (HANCESTRO:0765); PRIMED's `population_label` writes it with its superpopulation, `GBR \| EUR`, which the term sits under. |
+| 257 | 0 | 257 | 0 | genetic_ancestry.asw | `any` | `'ASW' · 'ASW \| AFR'` | genetic_ancestry: ASW | 1000 Genomes' population code, the term itself (HANCESTRO:0659); PRIMED's `population_label` writes it with its superpopulation, `ASW \| AFR`, which the term sits under. |
 
 ## Lineage: what each step is (the activity map)
 

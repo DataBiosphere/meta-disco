@@ -43,6 +43,7 @@ from .source_evidence import (
     decode_line,
     parse_iso_datetime,
     read_envelope_from,
+    require_file_key,
     require_scoped_target,
     write_ndjson,
 )
@@ -89,6 +90,7 @@ def _check_row_in(row: LineageRow, envelope: EvidenceFileEnvelope, where: str) -
 
 def _check_envelope(envelope: EvidenceFileEnvelope, where: str) -> None:
     require_scoped_target(envelope, where)
+    require_file_key(envelope, where)
     parse_iso_datetime(envelope.fetched_at, "envelope fetched_at", where)
     if envelope.source_type not in LINEAGE_SOURCE_TYPES:
         raise ValueError(

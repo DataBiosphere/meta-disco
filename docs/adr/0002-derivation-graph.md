@@ -5,7 +5,7 @@
 - **Extends, and supersedes in part:** `docs/derived-file-data-model.md` (#109), which settled the edge for companion files only; see [What this supersedes](#what-this-supersedes)
 - **Contract:** adds 4.9 to `docs/claims-contract.md` (inheritance) and its entry under "What is not true yet"; amends 2.8, 3.1, 4.1, 4.2 and 6.6 to match
 - **Related:** #356 (companion edges), #357 (sample identity), #358 (alignment ← reads), #359 (variants ← alignments), #360 (assemblies), #361 (sample ← donor), #362 (consistency and coverage), #371 (the edge carries the parent's record key), #413 (index inheritance and contract 1.1), #438 (ambiguous index parents)
-- **Amended by:** [#580](https://github.com/DataBiosphere/meta-disco/issues/580) (2026-09-29): a step is an activity from AnVIL FSS's vocabulary, not a verb between two files (decision 5); [#609](https://github.com/DataBiosphere/meta-disco/issues/609) (2026-10-03): which of a header's command lines made the file (decision 6); [#620](https://github.com/DataBiosphere/meta-disco/issues/620) (2026-10-05): a header-named alignment several files carry is settled by contigs (decision 6); [#357](https://github.com/DataBiosphere/meta-disco/issues/357) (2026-10-12): the namespaces, a declared rewrite, and a file's samples as a field (decision 1, Open)
+- **Amended by:** [#580](https://github.com/DataBiosphere/meta-disco/issues/580) (2026-09-29): a step is an activity from AnVIL FSS's vocabulary, not a verb between two files (decision 5); [#609](https://github.com/DataBiosphere/meta-disco/issues/609) (2026-10-03): which of a header's command lines made the file (decision 6); [#620](https://github.com/DataBiosphere/meta-disco/issues/620) (2026-10-05): a header-named alignment several files carry is settled by contigs (decision 6); [#357](https://github.com/DataBiosphere/meta-disco/issues/357) (2026-10-12): the namespaces, a declared rewrite, and a file's samples as a field (decision 1, Open); [#693](https://github.com/DataBiosphere/meta-disco/issues/693) (2026-10-16, epic [#692](https://github.com/DataBiosphere/meta-disco/issues/692)): donors and samples are records keyed by their identifier (decision 1)
 
 ## Context
 
@@ -39,7 +39,42 @@ headers (13,125 of 16,427), VCF sample columns on 99.9% of VCF headers (203,823 
 and a parent not found there is `external` (decision 2). Only sample and donor identifiers cross datasets
 (decision 1), and the one declared pair of decision 2's exception (#594).
 
-### 1. Samples and donors are identifiers, not records
+### 1. Samples and donors are records keyed by their identifier
+
+*Amended by #693 (epic #692's decisions, 2026-10-15/16); this replaces the heading's earlier
+"identifiers, not records".*
+
+1. **Donors and samples get their own records**: a `DonorRecord` and a `SampleRecord`
+   (`classification.yaml`), written by reconcile to `reconciled/donors.ndjson.gz` and
+   `reconciled/samples.ndjson.gz`. The reason against records below, that AnVIL's entities are
+   empty, does not hold for the submitter tables: 1000 Genomes' `pedigree` gives all 3,202 of its
+   people a sex and a population, and PRIMED, T2T, T2T_CHRY, HPRC, HPRC_R2 and MAGE give a sex, a
+   population or both, mostly for the same people (measured on anvil15, #693).
+2. **A record is keyed by its identifier** (`coriell:HG00096`), not by AnVIL's donor UUID, which is
+   minted again in every snapshot. One record gathers every dataset's rows for one person, so each
+   property is settled once, by the rule a file's dimensions are settled by (`reconcile.settle`).
+3. **A Coriell number keys both a donor and a sample**, the person and their cell line. An identifier
+   rule says what its strings name (`names` in `rules/sample_namespaces.yaml`), and a rule naming a
+   sample and a donor says the sample was collected from the donor with the same identifier: the
+   sample's `collected_from`. `coriell` and `giab` name both; `sra_sample`, `biosample` and T2T_CHRY's
+   `dataset_local` names name samples; `igvf`'s donor accessions name donors. A person's facts (sex,
+   ancestry, family) go on the donor; a sample's (karyotype, tissue, age at collection) on the sample.
+   This replaces, for a rule naming both, the sentence below that equal identifiers say nothing about
+   whether a sample and a donor are one person. Where a sample's own row names its donor
+   (`anvil_biosample.donor_id`, a submitter donor column), reading that link is #361's and #559's.
+4. **The AnVIL model is followed**: its donor fields (`phenotypic_sex`, `reported_ethnicity`,
+   `genetic_ancestry`) and the vocabularies its submission guide suggests. `phenotypic_sex` takes
+   AnVIL's values, `Female` and `Male`, with PATO's terms as their `meaning`; population codes are
+   `genetic_ancestry`, HANCESTRO terms as an `is_a` tree (`GBR` under `EUR`, the most specific kept).
+5. **Nothing is copied onto a file.** A file reaches its donors through `samples` → sample →
+   `collected_from` → donor, joined by the explorer; a file with several samples takes the set of its
+   donors' values.
+
+A donor's slots are read from **entity evidence** (`data/entity_evidence/`, `entity_evidence`), lines
+keyed by the identifier the source wrote, imported through the entity map
+(`sources/anvil_entity_map.yaml`), translated by the value map and settled at reconcile
+(`reconcile_entities`). What follows is decision 1 as #355 and #357 wrote it; where it says
+"identifiers, not records" the amendment above governs.
 
 A sample or donor is `{id, namespace, source_type}`, plus its dataset where the namespace is
 `dataset_local`, not an entity record of its own. *Amended by #357:* the identifier itself is
@@ -79,9 +114,10 @@ file edges do not**, but for decision 2's one declared exception (#594).
 `coriell:HG03016` in one dataset and `sra_sample:SRS…` in another needs a registry crosswalk (IGSR,
 BioSample), and without one the two stay separate.
 
-*Why not records:* AnVIL's donor and biosample entities are populated almost nowhere (participant brief,
-2026-08-22), and the attributes worth having come from registries keyed on these same ids, so a record
-table would be empty scaffolding. Revisit if #337's manifest route populates them.
+*Why not records (superseded by #693):* AnVIL's donor and biosample entities are populated almost
+nowhere (participant brief, 2026-08-22), and the attributes worth having come from registries keyed on
+these same ids, so a record table would be empty scaffolding. Revisit if #337's manifest route populates
+them. *Revisited by #693:* the submitter tables populate them, as the amendment above measures.
 
 ### 2. Parent scope: `internal` and `external`
 

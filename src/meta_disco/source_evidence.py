@@ -131,6 +131,7 @@ from pydantic import TypeAdapter, ValidationError
 from .models import (
     CLASSIFICATION_FIELDS,
     EVIDENCE_FIELDS,
+    JOIN_KEY_ENTITY_IDENTIFIER,
     JOIN_KEY_FILE_NAME,
     LINEAGE_ONLY_SOURCE_TYPES,
     SOURCE_PUBLISHED_VALUE,
@@ -286,7 +287,7 @@ def claim_source_for(source: EvidenceFileSource, column: str | None) -> ClaimSou
 
 
 def require_slot_evidence_kind(envelope: EvidenceFileEnvelope, where: str) -> None:
-    """Refuse a slot evidence envelope declaring a lineage-only kind (``LINEAGE_ONLY_SOURCE_TYPES``, #583).
+    """Refuse a slot evidence envelope declaring a lineage-only kind (``LINEAGE_ONLY_SOURCE_TYPES``, #583), or keyed by an identifier (:func:`require_file_key`).
 
     ``repository_activity`` is an importer kind, so the envelope model takes it, but it
     says how a file was made and not what a file is: its lines are ``LineageRow``s,
@@ -298,6 +299,20 @@ def require_slot_evidence_kind(envelope: EvidenceFileEnvelope, where: str) -> No
         raise ValueError(
             f"{where}: source_type {envelope.source_type!r} is written only as lineage evidence "
             "(lineage_evidence), never as slot evidence"
+        )
+    require_file_key(envelope, where)
+
+
+def require_file_key(envelope: EvidenceFileEnvelope, where: str) -> None:
+    """Refuse an envelope keyed by ``entity_identifier``: a donor's key, never a file's (#693).
+
+    An entity file's lines are ``EntityEvidenceRow``s, written by ``entity_evidence`` under
+    their own root; a slot or lineage file keyed by an identifier would attach to no file.
+    """
+    if envelope.target_key == JOIN_KEY_ENTITY_IDENTIFIER:
+        raise ValueError(
+            f"{where}: target_key {JOIN_KEY_ENTITY_IDENTIFIER!r} keys an entity evidence file "
+            "(entity_evidence), never a file's evidence"
         )
 
 
@@ -406,7 +421,8 @@ class EvidenceEntry:
 
     ``field`` is one of ``CLASSIFICATION_FIELDS`` — the slot, spelled ``field`` on the
     wire and in the code (contract 2.1) — or ``samples`` (#357), which a submitter table
-    states the same way. ``target_key_value`` is the value to match
+    states the same way; or, for a line of an entity evidence file read through
+    ``entity_evidence.entries`` (#693), a donor's slot, keyed by the donor's identifier. ``target_key_value`` is the value to match
     on, already in the target's value space: the importer owns the mapping between
     its own key and the target's, and any transform needed to get there, so the run
     performs equality lookup only. The key *names* are on the envelope, because they

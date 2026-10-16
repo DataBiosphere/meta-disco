@@ -13,6 +13,7 @@ from meta_disco.pipeline import ClassifyPipeline
 from meta_disco.records import SAMPLE_LISTS_KEY, SAMPLE_OUTCOMES_KEY, UNRECOGNISED_SAMPLES_KEY
 from meta_disco.sample_identity import (
     BAM_SAMPLES,
+    DONOR,
     NAMED,
     NO_SAMPLE,
     SAMPLE_MAP_SAMPLES,
@@ -103,12 +104,19 @@ def test_a_name_gives_the_identifiers_its_tokens_are():
 
 # --- the loader ----------------------------------------------------------------------
 
-RULE = "  - {{id: {id}, namespace: {ns}, match: '{match}'{extra}, rationale: r}}\n"
+RULE = "  - {{id: {id}, namespace: {ns}, match: '{match}', names: [{names}]{extra}, rationale: r}}\n"
 
 
 def rules_text(*rules: dict) -> str:
     return "rules:\n" + "".join(
-        RULE.format(id=r["id"], ns=r.get("ns", "coriell"), match=r["match"], extra=r.get("extra", "")) for r in rules
+        RULE.format(
+            id=r["id"],
+            ns=r.get("ns", "coriell"),
+            match=r["match"],
+            names=r.get("names", "sample"),
+            extra=r.get("extra", ""),
+        )
+        for r in rules
     )
 
 
@@ -127,6 +135,9 @@ def rules_text(*rules: dict) -> str:
         (({"id": "a", "match": "^(A)$", "extra": r", write: 'X\10'"},), "not literal text"),
         (({"id": "a", "match": "^(A)$", "extra": ', write: "X\\nY"'},), "not literal text"),
         (({"id": "a.b", "match": "^A$"},), "a.b"),
+        (({"id": "a", "match": "^A$", "names": ""},), "must name a sample, a donor or both"),
+        (({"id": "a", "match": "^A$", "names": "sample, sample"},), "must name a sample, a donor or both"),
+        (({"id": "a", "match": "^A$", "names": "person"},), "names"),
     ],
 )
 def test_the_loader_refuses_what_the_model_cannot(rules, message):
@@ -140,6 +151,49 @@ def test_two_rules_matching_one_string_is_refused_not_chosen():
     )
     with pytest.raises(ValueError, match="matches 2 identifier rules"):
         rules.recognise("HG002", None)
+
+
+def recognised(rules, raw: str, dataset: str | None, entity: str = "sample") -> Identifier:
+    got = rules.recognise(raw, dataset, entity)
+    assert got is not None, raw
+    return got.identifier
+
+
+def test_a_string_is_read_only_as_what_its_rule_names():
+    """A donor accession is no file's sample, and a sample accession keys no donor (#693)."""
+    rules = identifier_rules()
+    assert rules.recognise("IGVFDO2696EIGV", None) is None
+    assert recognised(rules, "IGVFDO2696EIGV", None, DONOR) == Identifier("igvf", "IGVFDO2696EIGV")
+    assert rules.recognise("SRS006902", None, DONOR) is None
+    assert recognised(rules, "HG00096", None, DONOR) == coriell("HG00096")
+    assert rules.in_name("IGVFDO2696EIGV.fastq.gz") == set()
+    with pytest.raises(ValueError, match="is not one of"):
+        rules.recognise("HG00096", None, "person")
+
+
+def test_two_rules_naming_different_entities_do_not_compete():
+    rules = load_identifier_rules(
+        rules_text({"id": "s", "match": "^X\\d$"}, {"id": "d", "ns": "giab", "match": "^X\\d$", "names": "donor"})
+    )
+    assert recognised(rules, "X1", None) == coriell("X1")
+    assert recognised(rules, "X1", None, DONOR) == Identifier("giab", "X1")
+
+
+def test_a_sample_is_collected_from_the_donor_its_rule_names_with_the_same_identifier():
+    """Decision 3 of epic #692: a Coriell number is the cell line and the person it came from."""
+    rules = identifier_rules()
+    found = rules.collected_from(recognised(rules, "GM19908", None))
+    assert found is not None
+    assert (found.identifier, found.rule_id) == (coriell("NA19908"), "coriell_cell_line_or_dna")
+    giab = rules.collected_from(Identifier("giab", "HG002"))
+    assert giab is not None and giab.identifier == Identifier("giab", "HG002")
+    assert rules.collected_from(Identifier("sra_sample", "SRS006902")) is None
+    assert rules.collected_from(recognised(rules, "simons_data_sample_1", T2T_CHRY)) is None
+
+
+def test_a_rule_naming_only_samples_links_no_donor():
+    rules = load_identifier_rules(rules_text({"id": "s", "match": "^X\\d$"}))
+    assert rules.collected_from(coriell("X1")) is None
 
 
 def test_no_identifier_rule_id_is_a_code_rule_or_marker_id():

@@ -87,6 +87,12 @@ make unprocessable-report
 make test
 make lint
 
+# Donors' sex and ancestry from the submitter tables and AnVIL's anvil_donor (#693):
+# check the entity map against the manifests, or import it as entity evidence under
+# data/entity_evidence/; `make reconcile` settles each donor from it
+make check-entity-map
+make import-anvil-entities
+
 # Probe a TDR snapshot in place in BigQuery (#498): list its tables, COUNT(*)
 # each, stream one and time it. Syncs the `tdr` extra in for the run; identity
 # is the environment's, see Environment below.
@@ -125,9 +131,12 @@ evidence}` entry — plus the controlled vocabulary:
 - **variant_origin_enum**: `germline` and `somatic`, Sequence Ontology's two children of
   `variant_origin` (#658); read from the same caller (`variant_origins`, found by `callers`),
   a caller with a somatic mode (Sniffles2) only where its command line shows the mode off
-- **identifier_namespace_enum**: who issued a sample identifier (#357): `coriell`, `giab`,
-  `sra_sample`, `biosample`, `dataset_local`; which strings each recognises is
-  `rules/sample_namespaces.yaml`'s
+- **identifier_namespace_enum**: who issued a sample or donor identifier (#357, #693): `coriell`,
+  `giab`, `sra_sample`, `biosample`, `igvf`, `dataset_local`; which strings each recognises, and
+  whether they name a sample, a donor or both (`names`), is `rules/sample_namespaces.yaml`'s
+- **phenotypic_sex_enum** and **genetic_ancestry_enum**: a donor's slots (#693), AnVIL's
+  `Female`/`Male` (PATO `meaning`s) and 1000 Genomes' population codes as a HANCESTRO `is_a`
+  tree (`GBR` under `EUR`), on a `DonorRecord`, never on a file
 - also **platform_enum**
 
 `status` is required on every dimension; `value` is null unless status is `classified`.
@@ -403,6 +412,24 @@ evidence}` entry — plus the controlled vocabulary:
     cohort merge from its sample map, whose own rows name its samples), as one more source credited
     `samples_inherited_from_parent` (#668, contract 4.9); across any other step the child keeps its own and a
     disagreeing pair is counted in the report's samples block.
+  - **Donors and samples are records keyed by their identifier** (#693, ADR-0002 decision 1 as
+    amended): reconcile (`reconcile_entities`) writes `reconciled/donors.ndjson.gz`, a
+    `DonorRecord` per donor with `phenotypic_sex` and `genetic_ancestry` (`models.DONOR_FIELDS`)
+    settled by `reconcile.settle` (now in `resolution`, re-exported), and
+    `reconciled/samples.ndjson.gz`, a `SampleRecord` per sample a reconciled file names, with its
+    `collected_from` donor where an identifier rule naming both a sample and a donor says so
+    (`IdentifierRuleSet.collected_from`). A donor's slots come from **entity evidence**,
+    `data/entity_evidence/` (`entity_evidence`), its own root because every reader of
+    `data/source_evidence/` reads each file there as a file's slot lines: lines
+    (`EntityEvidenceRow`) keyed by the identifier as the source wrote it (`target_key:
+    entity_identifier`, which a slot or lineage file refuses), recognised as a donor at
+    reconcile, never at import. The importer is `anvil_entities`, driven by
+    `sources/anvil_entity_map.yaml` (`make check-entity-map` / `make import-anvil-entities`):
+    per table the identifier column and each slot's columns, and AnVIL's published
+    `anvil_donor`, attached to an identifier through its `source_datarepo_row_ids`. The value
+    map translates both kinds of slot (`models.TRANSLATED_FIELDS`), a row declaring only slots of
+    the kind it matches, and its seeding and review queue read the entity root beside the slot
+    root. No donor value is copied onto a file record.
   - **A producer is declared once**, in `producers.PRODUCERS` — the thirteen writers of a
     run's `*_classifications.json` files. Add one there, never to a second list:
     `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,

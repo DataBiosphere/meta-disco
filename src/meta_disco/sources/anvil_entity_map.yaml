@@ -1,0 +1,69 @@
+# The AnVIL entity map (#693): which submitter tables say what about a donor. Shape and
+# rules: src/meta_disco/entity_map.py; checked against the manifests by `make
+# check-entity-map`, imported by `make import-anvil-entities` (src/meta_disco/anvil_entities.py)
+# as entity evidence under data/entity_evidence/. The slot map cannot hold this: it is keyed
+# by a file-link column, and these rows have none.
+#
+# Per dataset and table: `identifier`, the column naming the donor, read through
+# rules/sample_namespaces.yaml at reconcile; and for each of a donor's slots
+# (models.DONOR_FIELDS), the columns whose cells it reads. Measured on anvil15, 2026-10-16.
+#
+# Left out: AnVIL_ENCORE_293T and AnVIL_ENCORE_RS293, whose donors (`293T`,
+# `Ribo-STAMP-293T`, `DOX-RS293`) are engineered lines of one cell line and no rule
+# recognises; T2T_CHRY's SGDP tables, whose donors' identifiers are #559's; MAGE's
+# `kgp_sample.sex` (`XX`/`XY`), a sample's karyotype rather than a donor's sex; NIA_CARD's
+# `race_ethnicity`, a reported ethnicity.
+catalog: anvil15
+datasets:
+  ANVIL_1000G_high_coverage_2019:
+    pedigree:
+      identifier: pedigree_id
+      phenotypic_sex: [sex]
+      genetic_ancestry: [population, superpopulation]
+    participant:
+      identifier: library_name
+      genetic_ancestry: [population]
+  ANVIL_1000G_PRIMED_data_model:
+    subject:
+      identifier: subject_id
+      phenotypic_sex: [reported_sex]
+    population_descriptor:
+      identifier: subject_id
+      genetic_ancestry: [population_label]
+  ANVIL_HPRC:
+    participant:
+      identifier: participant_id
+      phenotypic_sex: [sex]
+      genetic_ancestry: [subpopulation]
+  AnVIL_HPRC_R2:
+    sample_metadata:
+      identifier: sample_metadata_id
+      phenotypic_sex: [sex]
+      genetic_ancestry: [population_abbreviation]
+  AnVIL_IGVF_Mouse_R1:
+    donor:
+      identifier: donor_id
+      phenotypic_sex: [phenotypic_sex]
+  AnVIL_MAGE:
+    kgp_sample:
+      identifier: kgp_sample_id
+      genetic_ancestry: [population]
+  ANVIL_NIA_CARD_Coriell_Cell_Lines_Open:
+    subject:
+      identifier: subject_id
+      phenotypic_sex: [sex]
+  ANVIL_T2T:
+    participant:
+      identifier: participant_id
+      phenotypic_sex: [sex]
+  ANVIL_T2T_CHRY:
+    1KGP_CHM13v2_sample:
+      identifier: t_1kgp_chm13v2_sample_id
+      genetic_ancestry: [population]
+# What AnVIL itself publishes for a donor, in every dataset above: `anvil_donor`'s columns,
+# each donor attached to an identifier through the submitter row AnVIL made it from (its
+# `source_rows` column, `<table>:<datarepo_row_id>`), read in that table's identifier column.
+published:
+  table: anvil_donor
+  source_rows: source_datarepo_row_ids
+  phenotypic_sex: [phenotypic_sex]

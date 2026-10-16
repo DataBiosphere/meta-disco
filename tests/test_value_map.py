@@ -828,15 +828,16 @@ def test_two_rows_keyed_alike_are_refused_by_the_table_itself(tmp_path):
 def test_ac26_nothing_but_reconcile_imports_the_table():
     """Inference output is unchanged because no classification code reaches the module: the argument the
     issue allows in place of a corpus diff, made checkable over every module and script but the table's own.
-    The reconcile stage is the table's one reader in a run (#432), and it writes its own artifact, never
-    inference's; the review-queue report (#524) and the rules report (#572) read it too, and each writes only its
-    two report files."""
+    The reconcile stage is the table's one reader in a run (#432), its file records through `reconcile` and its
+    donor records through `reconcile_entities` (#693), and it writes its own artifact, never inference's; the
+    review-queue report (#524) and the rules report (#572) read it too, and each writes only its two report files."""
     sources = [*Path("src/meta_disco").rglob("*.py"), *Path("scripts").rglob("*.py")]
     importers = sorted(str(p) for p in sources if p.name != "value_map.py" and "value_map" in imported_segments(p))
     assert importers == [
         "scripts/generate_review_queue.py",
         "scripts/generate_rules_report.py",
         "src/meta_disco/reconcile.py",
+        "src/meta_disco/reconcile_entities.py",
     ], importers
 
 

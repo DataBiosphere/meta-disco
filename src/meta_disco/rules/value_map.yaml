@@ -2,6 +2,206 @@
 # Shape, matching, selection and the seeder: src/meta_disco/value_map.py.
 # A row with a `reason` is authored; without one it is seeded and declares nothing.
 rows:
+  # --- phenotypic_sex (#693): a donor's slot, from entity evidence ------------------
+  - id: "phenotypic_sex.female"
+    match: {slot: phenotypic_sex, value: "female"}
+    declares: {phenotypic_sex: Female}
+    reason: The term itself, as T2T, HPRC and NIA_CARD write it lower case and PRIMED and AnVIL capitalised.
+  - id: "phenotypic_sex.male"
+    match: {slot: phenotypic_sex, value: "male"}
+    declares: {phenotypic_sex: Male}
+    reason: The term itself, as T2T, HPRC and NIA_CARD write it lower case and PRIMED and AnVIL capitalised.
+  - id: "phenotypic_sex.pedigree_1"
+    match: {slot: phenotypic_sex, value: "1"}
+    scope: {source: anvil, dataset: ANVIL_1000G_high_coverage_2019}
+    declares: {phenotypic_sex: Male}
+    reason: >-
+      1000 Genomes' `pedigree.sex` is a PED file's sex column, where 1 is male and 2 female;
+      scoped to the dataset, since a bare `1` means this only in a PED file.
+  - id: "phenotypic_sex.pedigree_2"
+    match: {slot: phenotypic_sex, value: "2"}
+    scope: {source: anvil, dataset: ANVIL_1000G_high_coverage_2019}
+    declares: {phenotypic_sex: Female}
+    reason: >-
+      1000 Genomes' `pedigree.sex` is a PED file's sex column, where 1 is male and 2 female;
+      scoped to the dataset, since a bare `2` means this only in a PED file.
+  # --- genetic_ancestry (#693): a donor's slot, from entity evidence ----------------
+  - id: "genetic_ancestry.afr"
+    match: {slot: genetic_ancestry, value: "AFR"}
+    declares: {genetic_ancestry: AFR}
+    reason: 1000 Genomes' superpopulation code, the term itself (HANCESTRO:2000).
+  - id: "genetic_ancestry.amr"
+    match: {slot: genetic_ancestry, value: "AMR"}
+    declares: {genetic_ancestry: AMR}
+    reason: 1000 Genomes' superpopulation code, the term itself (HANCESTRO:2001).
+  - id: "genetic_ancestry.eas"
+    match: {slot: genetic_ancestry, value: "EAS"}
+    declares: {genetic_ancestry: EAS}
+    reason: 1000 Genomes' superpopulation code, the term itself (HANCESTRO:2002).
+  - id: "genetic_ancestry.eur"
+    match: {slot: genetic_ancestry, value: "EUR"}
+    declares: {genetic_ancestry: EUR}
+    reason: 1000 Genomes' superpopulation code, the term itself (HANCESTRO:2003).
+  - id: "genetic_ancestry.sas"
+    match: {slot: genetic_ancestry, value: "SAS"}
+    declares: {genetic_ancestry: SAS}
+    reason: 1000 Genomes' superpopulation code, the term itself (HANCESTRO:2004).
+  - id: "genetic_ancestry.acb"
+    match: {slot: genetic_ancestry, value: "ACB", alternates: ["ACB | AFR"]}
+    declares: {genetic_ancestry: ACB}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0660); PRIMED's
+      `population_label` writes it with its superpopulation, `ACB | AFR`, which the term sits under.
+  - id: "genetic_ancestry.asw"
+    match: {slot: genetic_ancestry, value: "ASW", alternates: ["ASW | AFR"]}
+    declares: {genetic_ancestry: ASW}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0659); PRIMED's
+      `population_label` writes it with its superpopulation, `ASW | AFR`, which the term sits under.
+  - id: "genetic_ancestry.beb"
+    match: {slot: genetic_ancestry, value: "BEB", alternates: ["BEB | SAS"]}
+    declares: {genetic_ancestry: BEB}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0802); PRIMED's
+      `population_label` writes it with its superpopulation, `BEB | SAS`, which the term sits under.
+  - id: "genetic_ancestry.cdx"
+    match: {slot: genetic_ancestry, value: "CDX", alternates: ["CDX | EAS"]}
+    declares: {genetic_ancestry: CDX}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0752); PRIMED's
+      `population_label` writes it with its superpopulation, `CDX | EAS`, which the term sits under.
+  - id: "genetic_ancestry.ceu"
+    match: {slot: genetic_ancestry, value: "CEU", alternates: ["CEU | EUR"]}
+    declares: {genetic_ancestry: CEU}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0766); PRIMED's
+      `population_label` writes it with its superpopulation, `CEU | EUR`, which the term sits under.
+  - id: "genetic_ancestry.chb"
+    match: {slot: genetic_ancestry, value: "CHB", alternates: ["CHB | EAS"]}
+    declares: {genetic_ancestry: CHB}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0753); PRIMED's
+      `population_label` writes it with its superpopulation, `CHB | EAS`, which the term sits under.
+  - id: "genetic_ancestry.chs"
+    match: {slot: genetic_ancestry, value: "CHS", alternates: ["CHS | EAS"]}
+    declares: {genetic_ancestry: CHS}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0756); PRIMED's
+      `population_label` writes it with its superpopulation, `CHS | EAS`, which the term sits under.
+  - id: "genetic_ancestry.clm"
+    match: {slot: genetic_ancestry, value: "CLM", alternates: ["CLM | AMR"]}
+    declares: {genetic_ancestry: CLM}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0684); PRIMED's
+      `population_label` writes it with its superpopulation, `CLM | AMR`, which the term sits under.
+  - id: "genetic_ancestry.esn"
+    match: {slot: genetic_ancestry, value: "ESN", alternates: ["ESN | AFR"]}
+    declares: {genetic_ancestry: ESN}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0661); PRIMED's
+      `population_label` writes it with its superpopulation, `ESN | AFR`, which the term sits under.
+  - id: "genetic_ancestry.fin"
+    match: {slot: genetic_ancestry, value: "FIN", alternates: ["FIN | EUR"]}
+    declares: {genetic_ancestry: FIN}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0767); PRIMED's
+      `population_label` writes it with its superpopulation, `FIN | EUR`, which the term sits under.
+  - id: "genetic_ancestry.gbr"
+    match: {slot: genetic_ancestry, value: "GBR", alternates: ["GBR | EUR"]}
+    declares: {genetic_ancestry: GBR}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0765); PRIMED's
+      `population_label` writes it with its superpopulation, `GBR | EUR`, which the term sits under.
+  - id: "genetic_ancestry.gih"
+    match: {slot: genetic_ancestry, value: "GIH", alternates: ["GIH | SAS"]}
+    declares: {genetic_ancestry: GIH}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0803); PRIMED's
+      `population_label` writes it with its superpopulation, `GIH | SAS`, which the term sits under.
+  - id: "genetic_ancestry.gwd"
+    match: {slot: genetic_ancestry, value: "GWD", alternates: ["GWD | AFR"]}
+    declares: {genetic_ancestry: GWD}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0664); PRIMED's
+      `population_label` writes it with its superpopulation, `GWD | AFR`, which the term sits under.
+  - id: "genetic_ancestry.ibs"
+    match: {slot: genetic_ancestry, value: "IBS", alternates: ["IBS | EUR"]}
+    declares: {genetic_ancestry: IBS}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0768); PRIMED's
+      `population_label` writes it with its superpopulation, `IBS | EUR`, which the term sits under.
+  - id: "genetic_ancestry.itu"
+    match: {slot: genetic_ancestry, value: "ITU", alternates: ["ITU | SAS"]}
+    declares: {genetic_ancestry: ITU}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0806); PRIMED's
+      `population_label` writes it with its superpopulation, `ITU | SAS`, which the term sits under.
+  - id: "genetic_ancestry.jpt"
+    match: {slot: genetic_ancestry, value: "JPT", alternates: ["JPT | EAS"]}
+    declares: {genetic_ancestry: JPT}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0754); PRIMED's
+      `population_label` writes it with its superpopulation, `JPT | EAS`, which the term sits under.
+  - id: "genetic_ancestry.khv"
+    match: {slot: genetic_ancestry, value: "KHV", alternates: ["KHV | EAS"]}
+    declares: {genetic_ancestry: KHV}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0755); PRIMED's
+      `population_label` writes it with its superpopulation, `KHV | EAS`, which the term sits under.
+  - id: "genetic_ancestry.lwk"
+    match: {slot: genetic_ancestry, value: "LWK", alternates: ["LWK | AFR"]}
+    declares: {genetic_ancestry: LWK}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0666); PRIMED's
+      `population_label` writes it with its superpopulation, `LWK | AFR`, which the term sits under.
+  - id: "genetic_ancestry.msl"
+    match: {slot: genetic_ancestry, value: "MSL", alternates: ["MSL | AFR"]}
+    declares: {genetic_ancestry: MSL}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0667); PRIMED's
+      `population_label` writes it with its superpopulation, `MSL | AFR`, which the term sits under.
+  - id: "genetic_ancestry.mxl"
+    match: {slot: genetic_ancestry, value: "MXL", alternates: ["MXL | AMR"]}
+    declares: {genetic_ancestry: MXL}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0685); PRIMED's
+      `population_label` writes it with its superpopulation, `MXL | AMR`, which the term sits under.
+  - id: "genetic_ancestry.pel"
+    match: {slot: genetic_ancestry, value: "PEL", alternates: ["PEL | AMR"]}
+    declares: {genetic_ancestry: PEL}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0686); PRIMED's
+      `population_label` writes it with its superpopulation, `PEL | AMR`, which the term sits under.
+  - id: "genetic_ancestry.pjl"
+    match: {slot: genetic_ancestry, value: "PJL", alternates: ["PJL | SAS"]}
+    declares: {genetic_ancestry: PJL}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0804); PRIMED's
+      `population_label` writes it with its superpopulation, `PJL | SAS`, which the term sits under.
+  - id: "genetic_ancestry.pur"
+    match: {slot: genetic_ancestry, value: "PUR", alternates: ["PUR | AMR"]}
+    declares: {genetic_ancestry: PUR}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0687); PRIMED's
+      `population_label` writes it with its superpopulation, `PUR | AMR`, which the term sits under.
+  - id: "genetic_ancestry.stu"
+    match: {slot: genetic_ancestry, value: "STU", alternates: ["STU | SAS"]}
+    declares: {genetic_ancestry: STU}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0805); PRIMED's
+      `population_label` writes it with its superpopulation, `STU | SAS`, which the term sits under.
+  - id: "genetic_ancestry.tsi"
+    match: {slot: genetic_ancestry, value: "TSI", alternates: ["TSI | EUR"]}
+    declares: {genetic_ancestry: TSI}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0769); PRIMED's
+      `population_label` writes it with its superpopulation, `TSI | EUR`, which the term sits under.
+  - id: "genetic_ancestry.yri"
+    match: {slot: genetic_ancestry, value: "YRI", alternates: ["YRI | AFR"]}
+    declares: {genetic_ancestry: YRI}
+    reason: >-
+      1000 Genomes' population code, the term itself (HANCESTRO:0668); PRIMED's
+      `population_label` writes it with its superpopulation, `YRI | AFR`, which the term sits under.
   # --- assay_type -----------------------------------------------------------------
   - id: "assay_type.hi_c"
     match: {slot: assay_type, value: "Hi-C", alternates: ["hic"]}

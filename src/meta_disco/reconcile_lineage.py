@@ -92,8 +92,9 @@ class Carrier:
 def applies(target: EvidenceTarget, repository: str, catalog: str | None) -> bool:
     """Whether evidence about ``target`` is this run's: about ``repository``'s files, of ``catalog`` where the input names one.
 
-    The one rule for slot evidence (``reconcile.select_evidence``) and lineage alike: a file
-    for another catalog is an older catalog's history and is not read.
+    The one rule for slot evidence (``reconcile.select_evidence``), lineage and entity evidence
+    (``reconcile_entities.select_entity_evidence``, #693) alike: a file for another catalog is an
+    older catalog's history and is not read.
     """
     return target.system == repository and (catalog is None or target.version == catalog)
 

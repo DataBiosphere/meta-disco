@@ -1,4 +1,4 @@
-.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-sample_map classify-idat classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published check-lineage-map import-anvil-lineage import-ena-evidence check-ena-lineage-map import-ena-lineage seed-activity-map seed-value-map review-queue corpus-diff reconcile reconcile-report rules-report all-reports download-hprc validate-hprc clean help
+.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-sample_map classify-idat classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published check-lineage-map import-anvil-lineage check-entity-map import-anvil-entities import-ena-evidence check-ena-lineage-map import-ena-lineage seed-activity-map seed-value-map review-queue corpus-diff reconcile reconcile-report rules-report all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -35,6 +35,8 @@ help:
 	@echo "  make import-anvil-published Import AnVIL's published anvil_file columns as a generation of evidence files"
 	@echo "  make check-lineage-map  Check the AnVIL lineage map against the manifests on disk (offline)"
 	@echo "  make import-anvil-lineage Import AnVIL's lineage (anvil_activity, sample rows, IGVF derived_from) as lineage evidence"
+	@echo "  make check-entity-map   Check the AnVIL entity map (donors' sex and ancestry) against the manifests (offline)"
+	@echo "  make import-anvil-entities Import AnVIL's donor facts (submitter tables, anvil_donor) as entity evidence"
 	@echo "  make import-ena-evidence Import ENA's run records for the FASTQs ENA generated, where the md5 matches (network)"
 	@echo "  make check-ena-lineage-map Check the ENA run lineage map against the deployment and the manifests (offline)"
 	@echo "  make import-ena-lineage Link declared alignments to the ENA run whose reads they hold, by read and base counts (network)"
@@ -269,6 +271,16 @@ check-lineage-map:
 
 import-anvil-lineage:
 	uv run python scripts/import_anvil_lineage.py $(ARGS)
+
+# The AnVIL entity map (#693): which submitter tables give a donor's sex and ancestry, and
+# AnVIL's published anvil_donor. Check it against the manifests on disk, or import every
+# dataset it names, each as a new generation of entity evidence under
+# data/entity_evidence/{anvil,anvil_published}/. Reconcile settles each donor from it. Offline.
+check-entity-map:
+	uv run python scripts/import_anvil_entities.py --check
+
+import-anvil-entities:
+	uv run python scripts/import_anvil_entities.py $(ARGS)
 
 # ENA's run records (#606), for the files named as ENA names its generated FASTQs and
 # whose md5 ENA's equals: a generation per dataset under data/source_evidence/ena/, with

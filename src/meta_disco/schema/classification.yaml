@@ -29,6 +29,8 @@ prefixes:
   TerraCore: "https://datamodel.terra.bio/TerraCore#"
   MODAL: "https://datamodel.terra.bio/BioCoreTerms#"
   insdc.gca: "https://identifiers.org/insdc.gca:"
+  HANCESTRO: http://purl.obolibrary.org/obo/HANCESTRO_
+  PATO: http://purl.obolibrary.org/obo/PATO_
 default_prefix: anvil
 default_range: string
 
@@ -645,6 +647,53 @@ classes:
         pattern: "^[^\\r\\n]+\\Z"
         description: The column `raw_activity` was read from; present exactly when it is.
 
+  EntityEvidenceRow:
+    description: >-
+      One line of an entity evidence file after the envelope (#693): a source saying, about
+      one donor, what it wrote for one of the donor's slots. It reads "about the donor the
+      source names `target_key_value` (read from `identifier_column`), the source wrote
+      `raw_value` in `column`". The envelope is an `EvidenceFileEnvelope` keyed by
+      `entity_identifier`; the lines are written under their own root,
+      `data/entity_evidence/`, because every reader of `data/source_evidence/` takes each file
+      there as a file's slot lines.
+
+      **It declares nothing**, as an `EvidenceRow` declares nothing: the identifier is the
+      string as written, recognised through `rules/sample_namespaces.yaml` at reconcile, and
+      the value is the value map's to translate. `entity_evidence` refuses an answer on a
+      line by name.
+    slots:
+      - raw_value
+    slot_usage:
+      raw_value:
+        required: true
+        description: What the source wrote, verbatim, as on an `EvidenceRow`.
+    attributes:
+      field:
+        required: true
+        pattern: "^(phenotypic_sex|genetic_ancestry)\\Z"
+        description: >-
+          The donor slot this line speaks to; pinned to `models.DONOR_FIELDS` by
+          `test_the_entity_row_field_pattern_lists_every_donor_field`.
+      target_key_value:
+        required: true
+        pattern: "^[^\\r\\n]+\\Z"
+        description: The identifier the source wrote for the donor, verbatim.
+      column:
+        required: true
+        pattern: "^[^\\r\\n]+\\Z"
+        description: The column `raw_value` was read from.
+      identifier_column:
+        required: true
+        pattern: "^[^\\r\\n]+\\Z"
+        description: The column `target_key_value` was read from.
+      identifier_table:
+        pattern: "^[^\\r\\n]+\\Z"
+        description: >-
+          The table `target_key_value` was read from, where it is not the envelope's: AnVIL's
+          published `anvil_donor` names its donor only through the submitter row it was made
+          from (`source_datarepo_row_ids`), so its lines take the identifier from that row's
+          table.
+
   EvidenceFileEnvelope:
     description: >-
       What an evidence file records once, for every row in it (issue #401, amended
@@ -1055,9 +1104,89 @@ classes:
       dataset:
         pattern: "^[^\\r\\n]+\\Z"
         description: The one dataset a `dataset_local` rule applies in; set exactly on those.
+      names:
+        range: entity_kind_enum
+        multivalued: true
+        required: true
+        description: >-
+          What a string the rule recognises names: a sample, a donor, or both (#693). A rule
+          naming both says one string is a sample and the donor it was collected from, as a
+          Coriell number names a cell line and the person it came from; the sample's
+          `collected_from` is then that donor. A file's samples are read only through rules
+          naming `sample`, and a donor's identifier only through rules naming `donor`.
       rationale:
         required: true
-        description: Why a string matching the pattern names one sample in this namespace.
+        description: Why a string matching the pattern names one sample or donor in this namespace.
+
+  DonorRecord:
+    description: >-
+      One donor (#693, ADR-0002 decision 1 as amended): the person or animal samples were
+      collected from, keyed by its identifier, so one record gathers what every dataset's
+      tables say about one person, and each property is settled once, by the rule a file's
+      dimensions are settled by (`reconcile.settle`). Reconcile writes one per donor that
+      entity evidence names or a sample's `collected_from` points to, in
+      `reconciled/donors.ndjson.gz`. A file reaches its donors through its `samples` and each
+      sample's `collected_from`; no donor property is copied onto a file (epic #692,
+      decision 5).
+    attributes:
+      identifier:
+        range: EntityIdentifier
+        required: true
+        inlined: true
+      phenotypic_sex:
+        range: PhenotypicSexClassification
+        required: true
+        inlined: true
+      genetic_ancestry:
+        range: GeneticAncestryClassification
+        required: true
+        inlined: true
+
+  PhenotypicSexClassification:
+    is_a: Classification
+    description: A donor's phenotypic sex, settled from every source that states it (#693).
+    slot_usage:
+      value:
+        range: phenotypic_sex_enum
+
+  GeneticAncestryClassification:
+    is_a: Classification
+    description: >-
+      A donor's genetic ancestry, settled from every source that states it (#693): the most
+      specific term the sources support, where they nest.
+    slot_usage:
+      value:
+        range: genetic_ancestry_enum
+
+  SampleRecord:
+    description: >-
+      One sample (#693): every sample a reconciled file names, in
+      `reconciled/samples.ndjson.gz`, with the donor it was collected from where a rule says.
+    attributes:
+      identifier:
+        range: EntityIdentifier
+        required: true
+        inlined: true
+      collected_from:
+        range: CollectedFrom
+        inlined: true
+        description: Absent where nothing names the sample's donor.
+
+  CollectedFrom:
+    description: >-
+      The donor a sample was collected from, and every source that said so (#693). Today
+      the one source is an identifier rule naming both a sample and a donor
+      (`IdentifierRule.names`), cited by its id with `source_type: identifier_rule`.
+    attributes:
+      donor:
+        range: EntityIdentifier
+        required: true
+        inlined: true
+      named_by:
+        range: Attribution
+        multivalued: true
+        inlined_as_list: true
+        required: true
 
   ActivityDeclarations:
     description: >-
@@ -1839,6 +1968,160 @@ enums:
           (GATK Mutect2) calls them against a matched normal.
         meaning: SO:0001777
 
+  phenotypic_sex_enum:
+    description: >-
+      A donor's phenotypic sex (#693), in AnVIL's values: AnVIL's published
+      `anvil_donor.phenotypic_sex` writes `Female` and `Male`, and its data model's coding
+      system for the slot is PATO's phenotypic sex (PATO:0001894), whose children are the
+      `meaning`s. A value no source writes is not listed; one is added when a source does.
+    permissible_values:
+      Female:
+        meaning: PATO:0000383
+      Male:
+        meaning: PATO:0000384
+
+  genetic_ancestry_enum:
+    description: >-
+      A donor's genetic ancestry (#693), as AnVIL's data model suggests: HANCESTRO terms.
+      The values are 1000 Genomes' population codes, as its tables and the datasets built
+      on it write them, each under its superpopulation by `is_a` as HANCESTRO places it;
+      `meaning` is the HANCESTRO term and `description` its label (HANCESTRO 2025-10-14).
+      A record holds the most specific term its evidence supports (`GBR` beside `EUR` is
+      `GBR`), as the assay tree does; a consumer that filters on a superpopulation walks
+      `is_a`. Other populations (SGDP's, #559; HPRC_R2's `ASL`, which HANCESTRO has no term
+      for) are not values yet, and their names wait in the review queue.
+    permissible_values:
+      AFR:
+        description: African (AFR) reference superpopulation (1KGP)
+        meaning: HANCESTRO:2000
+      AMR:
+        description: American (AMR) reference superpopulation (1KGP)
+        meaning: HANCESTRO:2001
+      EAS:
+        description: East Asian (EAS) reference superpopulation (1KGP)
+        meaning: HANCESTRO:2002
+      EUR:
+        description: European (EUR) reference superpopulation (1KGP)
+        meaning: HANCESTRO:2003
+      SAS:
+        description: South Asian (SAS) reference superpopulation (1KGP)
+        meaning: HANCESTRO:2004
+      ACB:
+        description: "African Caribbean in Barbados (1KGP)"
+        is_a: AFR
+        meaning: HANCESTRO:0660
+      ASW:
+        description: "African Ancestry in Southwest US (1KGP)"
+        is_a: AFR
+        meaning: HANCESTRO:0659
+      BEB:
+        description: "Bengali in Bangladesh (1KGP)"
+        is_a: SAS
+        meaning: HANCESTRO:0802
+      CDX:
+        description: "Chinese Dai in Xishuangbanna, China (1KGP)"
+        is_a: EAS
+        meaning: HANCESTRO:0752
+      CEU:
+        description: "Utah residents (CEPH) with Northern and Western European ancestry (1KGP)"
+        is_a: EUR
+        meaning: HANCESTRO:0766
+      CHB:
+        description: "Han Chinese in Beijing, China (1KGP)"
+        is_a: EAS
+        meaning: HANCESTRO:0753
+      CHS:
+        description: "Han Chinese South (1KGP)"
+        is_a: EAS
+        meaning: HANCESTRO:0756
+      CLM:
+        description: "Colombian in Medellin, Colombia (1KGP)"
+        is_a: AMR
+        meaning: HANCESTRO:0684
+      ESN:
+        description: "Esan in Nigeria (1KGP)"
+        is_a: AFR
+        meaning: HANCESTRO:0661
+      FIN:
+        description: "Finnish in Finland (1KGP)"
+        is_a: EUR
+        meaning: HANCESTRO:0767
+      GBR:
+        description: "British in England and Scotland (1KGP)"
+        is_a: EUR
+        meaning: HANCESTRO:0765
+      GIH:
+        description: "Gujarati Indians in Houston, TX (1KGP)"
+        is_a: SAS
+        meaning: HANCESTRO:0803
+      GWD:
+        description: "Gambian in Western Division, The Gambia - Mandinka (GGVP). HANCESTRO's term for 1000 Genomes' GWD is the Gambian Genome Variation Project's, whose samples 1000 Genomes sequenced; its synonym is `GWD` and its parent the AFR superpopulation"
+        is_a: AFR
+        meaning: HANCESTRO:0664
+      IBS:
+        description: "Iberian populations in Spain (1KGP)"
+        is_a: EUR
+        meaning: HANCESTRO:0768
+      ITU:
+        description: "Indian Telugu in the UK (1KGP)"
+        is_a: SAS
+        meaning: HANCESTRO:0806
+      JPT:
+        description: "Japanese in Tokyo, Japan (1KGP)"
+        is_a: EAS
+        meaning: HANCESTRO:0754
+      KHV:
+        description: "Kinh in Ho Chi Minh City, Vietnam (1KGP)"
+        is_a: EAS
+        meaning: HANCESTRO:0755
+      LWK:
+        description: "Luhya in Webuye, Kenya (1KGP)"
+        is_a: AFR
+        meaning: HANCESTRO:0666
+      MSL:
+        description: "Mende in Sierra Leone (1KGP)"
+        is_a: AFR
+        meaning: HANCESTRO:0667
+      MXL:
+        description: "Mexican Ancestry in Los Angeles, California (1KGP)"
+        is_a: AMR
+        meaning: HANCESTRO:0685
+      PEL:
+        description: "Peruvian in Lima, Peru (1KGP)"
+        is_a: AMR
+        meaning: HANCESTRO:0686
+      PJL:
+        description: "Punjabi in Lahore, Pakistan (1KGP)"
+        is_a: SAS
+        meaning: HANCESTRO:0804
+      PUR:
+        description: "Puerto Rican in Puerto Rico (1KGP)"
+        is_a: AMR
+        meaning: HANCESTRO:0687
+      STU:
+        description: "Sri Lankan Tamil in the UK (1KGP)"
+        is_a: SAS
+        meaning: HANCESTRO:0805
+      TSI:
+        description: "Toscani in Italy (1KGP)"
+        is_a: EUR
+        meaning: HANCESTRO:0769
+      YRI:
+        description: "Yoruba in Ibadan, Nigeria (1KGP)"
+        is_a: AFR
+        meaning: HANCESTRO:0668
+
+  entity_kind_enum:
+    description: >-
+      What an identifier names (#693): a sample, the material a file's data was read from,
+      or a donor, the person or animal it was collected from. An identifier rule declares
+      which (`IdentifierRule.names`).
+    permissible_values:
+      sample:
+        description: A sample, as a file's `samples` names it.
+      donor:
+        description: A donor, as a `DonorRecord` is keyed.
+
   classification_status_enum:
     description: >-
       Why a field has (or lacks) a value. Replaces sentinel values that were
@@ -2136,6 +2419,11 @@ enums:
       wrangler_annotation:
         description: >-
           A human curator's decision, recorded deliberately rather than inferred.
+      identifier_rule:
+        description: >-
+          One of our identifier rules (`rules/sample_namespaces.yaml`), from the identifier
+          alone (#693): a rule naming a sample and a donor with one string says the sample
+          was collected from the donor with the same identifier.
 
   importer_source_type_enum:
     description: >-
@@ -2251,6 +2539,13 @@ enums:
           per-dataset — 2 rows in 16,271 within `AnVIL_HPRC_R2`, against 99.3%
           within `ANVIL_1000G_PRIMED_data_model` — so it is usable only with a
           dataset scope, which is what `EvidenceTarget.dataset` is for.
+      entity_identifier:
+        description: >-
+          A donor's or sample's identifier as the source wrote it (`HG00096`), the key of
+          an entity evidence file (`EntityEvidenceRow`, #693) and of the claims made from
+          it. Never a file's key: a slot or lineage evidence file keyed by it is refused.
+          Read through `rules/sample_namespaces.yaml` at reconcile, in the envelope's
+          target dataset.
 
   lineage_parent_key_enum:
     description: >-
@@ -2284,6 +2579,10 @@ enums:
         description: An SRA, ENA or DDBJ sample accession (`SRS`/`ERS`/`DRS`).
       biosample:
         description: An NCBI, EBI or DDBJ BioSample accession (`SAMN`/`SAMEA`/`SAMD`).
+      igvf:
+        description: >-
+          The IGVF Data Portal's donor accessions (`IGVFDO` and eight capitals or digits, #693),
+          as AnVIL_IGVF_Mouse_R1's `donor` table names its mice.
       dataset_local:
         description: >-
           A name one dataset gives its samples, unique only within it; recognised only by a

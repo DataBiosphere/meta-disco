@@ -1,8 +1,10 @@
-# How a source's string becomes a sample identifier (#357, ADR-0002 decision 1). Shape:
-# the schema's `IdentifierRules`, read by `meta_disco.sample_identity`. A string no rule
-# matches is not a sample: it is counted, never guessed (`Sample`, `BioSample_3`, a BAM
-# path). A `dataset_local` rule applies in its one dataset only, and is added only once
-# its names are shown to be per-sample there.
+# How a source's string becomes a sample or donor identifier (#357, #693, ADR-0002
+# decision 1). Shape: the schema's `IdentifierRules`, read by `meta_disco.sample_identity`.
+# A string no rule matches is not a sample or donor: it is counted, never guessed
+# (`Sample`, `BioSample_3`, a BAM path). A `dataset_local` rule applies in its one dataset
+# only, and is added only once its names are shown to be per-sample there. `names` says
+# what a rule's strings name; a rule naming a sample and a donor says the sample was
+# collected from the donor with the same identifier (`SampleRecord.collected_from`).
 rules:
   # Coriell sells a cell line (`GM12878`, "LCL from B-Lymphocyte") and DNA extracted from
   # it (`NA12878`, "DNA from LCL"), under the same number:
@@ -14,16 +16,19 @@ rules:
     namespace: coriell
     match: '^(?:GM|NA)(\d{5})$'
     write: 'NA\1'
+    names: [sample, donor]
     rationale: >-
       A Coriell repository number names one person's cell line (GM) or the DNA extracted
       from it (NA); both prefixes with the same number are one sample, written NA as 1000
-      Genomes writes it.
+      Genomes writes it. The number also names the person the line came from, as 1000
+      Genomes' `pedigree` and PRIMED's `subject` key their people by it.
   - id: coriell_hg
     namespace: coriell
     match: '^HG\d{5}$'
+    names: [sample, donor]
     rationale: >-
       The NHGRI repository's HG numbers at Coriell, as 1000 Genomes, HPRC and T2T name their
-      samples: one number, one person.
+      samples: one number, one person, and that person's cell line.
   # GIAB's names: HG001 = NA12878, HG002 = NA24385, HG003 = NA24149, HG004 = NA24143,
   # HG005 = NA24631 (https://github.com/genome-in-a-bottle/about_GIAB); HG006 = NA24694 and
   # HG007 = NA24695, the Han Chinese father and mother
@@ -32,18 +37,32 @@ rules:
   - id: giab_name
     namespace: giab
     match: '^HG00[1-7]$'
+    names: [sample, donor]
     rationale: >-
-      Genome in a Bottle names its seven reference samples HG001 to HG007. They are the same
-      people as some Coriell numbers, but joining two namespaces is a crosswalk's (#361), so
-      they stay apart.
+      Genome in a Bottle names its seven reference samples HG001 to HG007, each one person's
+      cell line, and HPRC's `participant` and NIA_CARD's `subject` key those people by the same
+      name. They are the same people as some Coriell numbers, but joining two namespaces is a
+      crosswalk's (#361), so they stay apart.
   - id: sra_sample_accession
     namespace: sra_sample
     match: '^[SED]RS\d+$'
+    names: [sample]
     rationale: An INSDC sample accession (SRA, ENA, DDBJ) names one sample.
   - id: biosample_accession
     namespace: biosample
     match: '^SAM(?:N|EA|D)\d+$'
+    names: [sample]
     rationale: An INSDC BioSample accession (NCBI, EBI, DDBJ) names one sample.
+  # IGVF's donor accessions: AnVIL_IGVF_Mouse_R1's `donor` table keys its 183 mice by them
+  # (`IGVFDO2696EIGV`), and its `phenotypic_sex` column gives each a sex. Measured on
+  # anvil15, 2026-10-16: all 183 are `IGVFDO` and eight capitals or digits.
+  - id: igvf_donor_accession
+    namespace: igvf
+    match: '^IGVFDO[0-9A-Z]{8}$'
+    names: [donor]
+    rationale: >-
+      The IGVF Data Portal issues one donor accession per donor, unique across the portal;
+      its samples have accessions of their own (IGVFSM…), so the accession names no sample.
   # The Simons Genome Diversity Project's samples in T2T_CHRY: each name is one row of
   # `SGDP_CHM13v2_sample` and of `SGDP_GRCh38_sample` (279 each), and its VCFs' and BAMs'
   # headers carry the same names.
@@ -51,6 +70,7 @@ rules:
     namespace: dataset_local
     dataset: ANVIL_T2T_CHRY
     match: '^simons_data_sample_\d+$'
+    names: [sample]
     rationale: >-
       ANVIL_T2T_CHRY's SGDP sample tables have one row per name, so a name is one sample in
       that dataset; it is not an identifier anywhere else.
