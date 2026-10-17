@@ -1,12 +1,16 @@
-# The AnVIL entity map (#693): which submitter tables say what about a donor. Shape and
+# The AnVIL entity map (#693, #669): which submitter tables say what about a donor, and which
+# column of each names the donor or sample AnVIL's own records were made from. Shape and
 # rules: src/meta_disco/entity_map.py; checked against the manifests by `make
 # check-entity-map`, imported by `make import-anvil-entities` (src/meta_disco/anvil_entities.py)
 # as entity evidence under data/entity_evidence/. The slot map cannot hold this: it is keyed
 # by a file-link column, and these rows have none.
 #
-# Per dataset and table: `identifier`, the column naming the donor, read through
+# Per dataset and table: `identifier`, the column naming the donor (or the sample, where
+# AnVIL's `anvil_biosample` is made from the table's rows), read through
 # rules/sample_namespaces.yaml at reconcile; and for each of a donor's slots
-# (models.DONOR_FIELDS), the columns whose cells it reads. Measured on anvil15, 2026-10-16.
+# (models.DONOR_FIELDS), the columns whose cells it reads. A table naming only its
+# `identifier` reads no slot: it is there for AnVIL's records made from its rows to tie to
+# (`published`, below). Measured on anvil15, 2026-10-16 and (the sample tables) 2026-10-17.
 # Each table's comment says why its columns are the donor's sex or population: a sex
 # column is read as phenotypic sex wherever it is a sex recorded for the person (reported
 # or catalogued), as AnVIL's own `anvil_donor.phenotypic_sex` is filled from such columns;
@@ -14,7 +18,7 @@
 #
 # Left out: AnVIL_ENCORE_293T and AnVIL_ENCORE_RS293, whose donors (`293T`,
 # `Ribo-STAMP-293T`, `DOX-RS293`) are engineered lines of one cell line and no rule
-# recognises; T2T_CHRY's SGDP tables, whose donors' identifiers are #559's; MAGE's
+# recognises, nor their biosamples' names (`TIAL1-BG293LV06-111B`); T2T_CHRY's SGDP tables, whose donors' identifiers are #559's; MAGE's
 # `kgp_sample.sex` (`XX`/`XY`), a sample's karyotype rather than a donor's sex; NIA_CARD's
 # `race_ethnicity`, a reported ethnicity.
 catalog: anvil15
@@ -31,6 +35,10 @@ datasets:
     participant:
       identifier: library_name
       genetic_ancestry: [population]
+    # The sequenced samples again, keyed by SRA accession; `library_name` is the Coriell
+    # number, as on `participant`. AnVIL makes a biosample from each row of both tables.
+    sample:
+      identifier: library_name
   ANVIL_1000G_PRIMED_data_model:
     # PRIMED's subject table: `reported_sex`, the sex reported for the person.
     subject:
@@ -40,6 +48,9 @@ datasets:
     population_descriptor:
       identifier: subject_id
       genetic_ancestry: [population_label]
+    # PRIMED's samples, keyed by the Coriell number.
+    sample:
+      identifier: sample_id
   ANVIL_HPRC:
     # HPRC's participants, 1000 Genomes and GIAB people: `sex`, and `subpopulation`, a
     # 1000 Genomes population code.
@@ -47,6 +58,9 @@ datasets:
       identifier: participant_id
       phenotypic_sex: [sex]
       genetic_ancestry: [subpopulation]
+    # HPRC's samples, keyed by the Coriell or GIAB name (56 of 57; `mHomSap3`, no rule's, is not).
+    sample:
+      identifier: sample_id
   AnVIL_HPRC_R2:
     # HPRC release 2's sample metadata, a row per person: `sex`, and `population_abbreviation`,
     # a 1000 Genomes code, or another population's (`ASL`, `MKK`) left unmapped.
@@ -59,17 +73,27 @@ datasets:
     donor:
       identifier: donor_id
       phenotypic_sex: [phenotypic_sex]
+    # IGVF's samples, keyed by their IGVF sample accession (`IGVFSM…`).
+    sample:
+      identifier: sample_id
   AnVIL_MAGE:
     # MAGE's 1000 Genomes samples: `population`, the person's 1000 Genomes code. Its `sex`
     # (XX/XY) is a karyotype, a sample's fact, and is not read here.
     kgp_sample:
       identifier: kgp_sample_id
       genetic_ancestry: [population]
+    # MAGE's sequencing libraries: `kgp_sample_id`, the Coriell number of the sample the
+    # library was made from (its `coriell_id` is the same number, `GM`-prefixed on 278 of 779).
+    sequencing_library:
+      identifier: kgp_sample_id
   ANVIL_NIA_CARD_Coriell_Cell_Lines_Open:
     # NIA CARD's subjects, Coriell and GIAB people: `sex`.
     subject:
       identifier: subject_id
       phenotypic_sex: [sex]
+    # NIA CARD's samples, keyed by the Coriell or GIAB name, the same as its subject's.
+    sample:
+      identifier: sample_id
   ANVIL_T2T:
     # T2T's participants, the 1000 Genomes people: `sex`.
     participant:
@@ -80,10 +104,19 @@ datasets:
     1KGP_CHM13v2_sample:
       identifier: t_1kgp_chm13v2_sample_id
       genetic_ancestry: [population]
-# What AnVIL itself publishes for a donor, in every dataset above: `anvil_donor`'s columns,
-# each donor attached to an identifier through the submitter row AnVIL made it from (its
-# `source_rows` column, `<table>:<datarepo_row_id>`), read in that table's identifier column.
+# What AnVIL itself publishes for a donor and a sample, in every dataset above: its own
+# record of each, attached to an identifier through the submitter row AnVIL made it from (its
+# `source_rows` column, `<table>:<datarepo_row_id>`), read in that table's identifier column;
+# `repository_id`, AnVIL's own identifier for the record (the same in prod anvil15 and dev's
+# 1000G snapshot, measured on #692), which the record it ties to lists (#669); and for a donor,
+# its slots' columns.
 published:
-  table: anvil_donor
-  source_rows: source_datarepo_row_ids
-  phenotypic_sex: [phenotypic_sex]
+  donor:
+    table: anvil_donor
+    source_rows: source_datarepo_row_ids
+    repository_id: donor_id
+    phenotypic_sex: [phenotypic_sex]
+  sample:
+    table: anvil_biosample
+    source_rows: source_datarepo_row_ids
+    repository_id: biosample_id

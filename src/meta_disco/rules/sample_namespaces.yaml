@@ -63,6 +63,17 @@ rules:
     rationale: >-
       The IGVF Data Portal issues one donor accession per donor, unique across the portal;
       its samples have accessions of their own (IGVFSM…), so the accession names no sample.
+  # IGVF's sample accessions: AnVIL_IGVF_Mouse_R1's `sample` table keys its 1,935 samples by
+  # them (`IGVFSM9197PTER`), one row each, and AnVIL's `anvil_biosample` is made from those
+  # rows (#669). Measured on anvil15, 2026-10-17: all 1,935 are `IGVFSM` and eight capitals or
+  # digits, none repeated.
+  - id: igvf_sample_accession
+    namespace: igvf
+    match: '^IGVFSM[0-9A-Z]{8}$'
+    names: [sample]
+    rationale: >-
+      The IGVF Data Portal issues one sample accession per sample, unique across the portal;
+      its donors have accessions of their own (IGVFDO…), so the accession names no donor.
   # The Simons Genome Diversity Project's samples in T2T_CHRY: each name is one row of
   # `SGDP_CHM13v2_sample` and of `SGDP_GRCh38_sample` (279 each), and its VCFs' and BAMs'
   # headers carry the same names.

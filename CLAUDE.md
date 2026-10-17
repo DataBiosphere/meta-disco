@@ -87,9 +87,10 @@ make unprocessable-report
 make test
 make lint
 
-# Donors' sex and ancestry from the submitter tables and AnVIL's anvil_donor (#693):
-# check the entity map against the manifests, or import it as entity evidence under
-# data/entity_evidence/; `make reconcile` settles each donor from it
+# Donors' sex and ancestry from the submitter tables and AnVIL's anvil_donor (#693), and
+# AnVIL's donor and biosample ids (#669): check the entity map against the manifests, or
+# import it as entity evidence under data/entity_evidence/; `make reconcile` settles each
+# donor from it and lists each AnVIL id on the record it ties to
 make check-entity-map
 make import-anvil-entities
 
@@ -416,17 +417,22 @@ evidence}` entry — plus the controlled vocabulary:
     amended): reconcile (`reconcile_entities`) writes `reconciled/donors.ndjson.gz`, a
     `DonorRecord` per donor with `phenotypic_sex` and `genetic_ancestry` (`models.DONOR_FIELDS`)
     settled by `reconcile.settle` (now in `resolution`, re-exported), and
-    `reconciled/samples.ndjson.gz`, a `SampleRecord` per sample a reconciled file names, with its
-    `collected_from` donor where an identifier rule naming both a sample and a donor says so
-    (`IdentifierRuleSet.collected_from`). A donor's slots come from **entity evidence**,
+    `reconciled/samples.ndjson.gz`, a `SampleRecord` per sample a reconciled file names or an
+    AnVIL biosample ties to, with its `collected_from` donor where an identifier rule naming both
+    a sample and a donor says so (`IdentifierRuleSet.collected_from`). A donor's slots come from **entity evidence**,
     `data/entity_evidence/` (`entity_evidence`), its own root because every reader of
     `data/source_evidence/` reads each file there as a file's slot lines: lines
     (`EntityEvidenceRow`) keyed by the identifier as the source wrote it (`target_key:
     entity_identifier`, which a slot or lineage file refuses), recognised as a donor at
     reconcile, never at import. The importer is `anvil_entities`, driven by
     `sources/anvil_entity_map.yaml` (`make check-entity-map` / `make import-anvil-entities`):
-    per table the identifier column and each slot's columns, and AnVIL's published
-    `anvil_donor`, attached to an identifier through its `source_datarepo_row_ids`. The value
+    per table the identifier column and each slot's columns (none, for a table AnVIL's
+    biosamples are made from), and per kind AnVIL's published `anvil_donor` and
+    `anvil_biosample`, each record attached to an identifier through its
+    `source_datarepo_row_ids`. **AnVIL's own `donor_id` and `biosample_id`** (#669), the same in
+    prod anvil15 and dev's 1000G snapshot (#692) and often several per person, are lines of their own
+    (`models.REPOSITORY_ID_FIELDS`), never translated: reconcile lists each on the one record
+    it ties to, as `repository_ids` (many to one), and refuses one tying to two records. The value
     map translates both kinds of slot (`models.TRANSLATED_FIELDS`), a row declaring only slots of
     the kind it matches, and its seeding and review queue read the entity root beside the slot
     root. No donor value is copied onto a file record.
