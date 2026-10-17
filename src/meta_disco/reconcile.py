@@ -1173,8 +1173,8 @@ def reconcile_run(
     input paths, reconciled by the same code, write the same bytes (criterion 16); line 1's
     ``reconciled_by`` names the commit (not a dirty tree's edits), and it lists the slot evidence, lineage
     and entity evidence files read. Both tables' sha256 are in the envelope
-    and the report. The report echoes the input path as given and evidence paths
-    relative to ``evidence_root``.
+    and the report. The report echoes the input path as given, evidence paths
+    relative to ``evidence_root`` and entity evidence paths relative to the entity root.
 
     Refuses, before reading evidence, an input whose ``repository`` or ``catalog`` is not
     what a run file records (:func:`require_run_input`, #404).

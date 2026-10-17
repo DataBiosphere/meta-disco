@@ -1923,7 +1923,7 @@ class Attribution(ConfiguredBaseModel):
 
 class SampleReference(ConfiguredBaseModel):
     """
-    Which samples a file's data comes from (#357): the run's sample list it points to, how many members that list has, and every source that named it. A sample is an identifier, not a record (ADR-0002 decision 1), and a joint VCF names thousands, so the members are written as a `SampleList` and each file points to one: once in each producer file that points to it (`sample_lists`), and once across the run in the reconciled `sample_lists.ndjson.gz`.
+    Which samples a file's data comes from (#357): the run's sample list it points to, how many members that list has, and every source that named it. A joint VCF names thousands of samples, so the members are written as a `SampleList` and each file points to one: once in each producer file that points to it (`sample_lists`), and once across the run in the reconciled `sample_lists.ndjson.gz`.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 

@@ -64,9 +64,9 @@ class TableImport:
     ``no_identifier`` counts rows whose identifier cell is not a non-empty string;
     ``null_cells`` is per column, null or empty-list cells on the other rows. For the
     published table, ``unmapped`` counts donors none of whose source rows (often none at
-    all) is a mapped table's, ``unresolved``
-    those whose source row is not in the manifest, and ``ambiguous`` those whose source rows
-    name two identifiers.
+    all) is a mapped table's, ``unresolved`` those whose mapped source rows name no
+    identifier (not in the manifest, or an identifier cell that is not a non-empty string),
+    and ``ambiguous`` those whose source rows name two identifiers.
     """
 
     table: str
@@ -205,7 +205,8 @@ def import_dataset(
 
     Each kind is its own generation directory (``anvil/`` and ``anvil_published/``), staged
     together and renamed into place only once both are written: a failure while writing
-    either removes both, so the two kinds of a dataset are always from one import. A
+    either removes both. The two renames are separate, so a crash between them can still
+    leave the new published generation beside the older submitter one. A
     mapped table that writes no line is the map disagreeing with the catalog and raises.
     The published table's file is written for every dataset, with no line where the dataset
     has no published donor or none with a value (1000 Genomes' carry no published sex), so a
@@ -348,7 +349,7 @@ def describe(imports: list[DatasetImport]) -> list[str]:
                 lines.append(f"    {column}: null on {n:,} rows")
             for label, n in (
                 ("with no source row in a mapped table", table.unmapped),
-                ("source row not in the manifest", table.unresolved),
+                ("whose source rows name no identifier", table.unresolved),
                 ("source rows naming two identifiers", table.ambiguous),
             ):
                 if n:

@@ -466,7 +466,8 @@ def test_a_donor_record_counts_its_rows_and_the_identifier_rule_that_keys_it(tmp
         "phenotypic_sex": {"value": "Male", "status": "classified", "evidence": [claim]},
         "genetic_ancestry": {"value": None, "status": "not_classified", "evidence": []},
     }
-    write_reconciled_file(run_dir / RECONCILED_DIR / DONORS_FILE, {"catalog": "t"}, [donor])
+    mouse = {**donor, "identifier": {"id": "IGVFDO2696EIGV", "namespace": "igvf"}}
+    write_reconciled_file(run_dir / RECONCILED_DIR / DONORS_FILE, {"catalog": "t"}, [donor, mouse])
     rules, value_map = rule_files(tmp_path)
     value_map.write_text(
         VALUE_MAP + '  - id: "phenotypic_sex.male"\n    match: {slot: phenotypic_sex, value: "male"}\n'
@@ -474,8 +475,8 @@ def test_a_donor_record_counts_its_rows_and_the_identifier_rule_that_keys_it(tmp
     )
     data = grr.build(rules, value_map, iter_reconciled_records(run_dir), run_dir, donors=grr.donor_records(run_dir))
     rows = by_id(data) | {r["id"]: r for r in data["sample_rules"]}
-    assert (rows["phenotypic_sex.male"]["files"], rows["phenotypic_sex.male"]["won"]) == (1, 1)
-    assert rows["phenotypic_sex.male"]["datasets"] == {grr.DONOR_RECORDS: 1}
-    assert rows["coriell_hg"]["files"] == 1
+    assert (rows["phenotypic_sex.male"]["files"], rows["phenotypic_sex.male"]["won"]) == (2, 2)
+    assert rows["phenotypic_sex.male"]["datasets"] == {grr.DONOR_RECORDS: 2}
+    assert (rows["coriell_hg"]["files"], rows["igvf_donor_accession"]["files"]) == (1, 1)
     assert data["records"] == len(RECORDS)
     assert list(grr.donor_records(tmp_path / "unreconciled")) == []

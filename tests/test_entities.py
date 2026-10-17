@@ -33,7 +33,7 @@ from meta_disco.models import (
     SOURCE_REPOSITORY_METADATA,
 )
 from meta_disco.output_utils import DONORS_FILE, RECONCILED_DIR, SAMPLES_FILE, iter_reconciled_artifact
-from meta_disco.reconcile import ENTITIES_KEY
+from meta_disco.reconcile import ENTITIES_KEY, reconcile_run
 from meta_disco.reconcile_entities import gather, reconcile_entities, select_entity_evidence
 from meta_disco.sample_identity import Identifier, identifier_rules, reference, sample_list
 from meta_disco.schema.classification_model import (
@@ -56,7 +56,7 @@ from meta_disco.source_evidence import (
 from meta_disco.value_map import review, seed
 from tests.manifest_fixtures import CATALOG, REAL_MANIFESTS, SERVICE, write_dataset
 from tests.run_fixtures import write_run
-from tests.test_reconcile import go, record
+from tests.test_reconcile import go, record, write_input
 from tests.test_value_map import load
 
 STAMP = "20261016T000000Z"
@@ -614,3 +614,85 @@ def test_a_claim_joined_through_a_rewritten_identifier_is_not_an_exact_match(tmp
     (donor,) = result.donors
     assert donor["identifier"] == {"id": "NA19908", "namespace": "coriell"}
     assert sorted(c["match_exact"] for c in donor["phenotypic_sex"]["evidence"]) == [False, True]
+
+
+def test_the_report_counts_each_slot_overall_and_by_the_datasets_naming_its_donors(imported, tmp_path):
+    """A dataset's counts are of the donors it names, each at its overall settled status."""
+    result = settled(tmp_path / "entity_evidence", tmp_path)
+    report = result.report
+    assert [d["identifier"]["id"] for d in result.donors] == ["HG00096", "HG02300", "HG06807"]
+    assert report["statuses"] == {
+        "phenotypic_sex": {CLASSIFIED: 2, CONFLICT: 1},
+        "genetic_ancestry": {CLASSIFIED: 1, NOT_CLASSIFIED: 2},
+    }
+    assert report["by_dataset"] == {
+        G1K: {
+            "phenotypic_sex": {"donors": 2, CLASSIFIED: 1, CONFLICT: 1},
+            "genetic_ancestry": {"donors": 1, CLASSIFIED: 1},
+        },
+        R2: {
+            "phenotypic_sex": {"donors": 3, CLASSIFIED: 2, CONFLICT: 1},
+            "genetic_ancestry": {"donors": 2, CLASSIFIED: 1, NOT_CLASSIFIED: 1},
+        },
+    }
+    pedigree_file = next(f for f in report["files"] if f["table"] == "pedigree")
+    assert (pedigree_file["lines"], pedigree_file["unrecognised"]) == (5, 1)
+
+
+def test_the_importer_counts_what_it_cannot_write(tmp_path, entity_map):
+    """A row naming no donor is counted, and a published donor whose rows name two donors is dropped as ambiguous."""
+    write_dataset(
+        tmp_path / "m",
+        R2,
+        [
+            sample_metadata("HG00096", "male", None, "s1"),
+            sample_metadata("HG00097", "male", None, "s2"),
+            sample_metadata(None, "male", None, "s3"),
+            donor(["sample_metadata:s1", "sample_metadata:s2"], "Male"),
+        ],
+    )
+    (run,) = ae.import_all(
+        entity_map, tmp_path / "m", CATALOG, SERVICE, tmp_path / "entity_evidence", datasets=[R2], generation=STAMP
+    )
+    table, published = run.tables
+    assert (table.rows, table.no_identifier, table.written) == (3, 1, 2)
+    assert (published.ambiguous, published.written) == (1, 0)
+
+
+def test_a_mapped_table_writing_nothing_fails_the_import_and_leaves_nothing(tmp_path, entity_map):
+    write_dataset(tmp_path / "m", G1K, [pedigree("HG00096", None, None, None, "p1")])
+    root = tmp_path / "entity_evidence"
+    with pytest.raises(ValueError, match="no line written"):
+        ae.import_all(entity_map, tmp_path / "m", CATALOG, SERVICE, root, datasets=[G1K], generation=STAMP)
+    assert not list(root.rglob("*.ndjson"))
+
+
+def test_the_check_accepts_a_column_half_of_whose_values_are_donors(tmp_path, entity_map):
+    write_dataset(
+        tmp_path / "m",
+        G1K,
+        [pedigree("HG00096", 1, "GBR", "EUR", "p1"), pedigree("S1", 1, "GBR", "EUR", "p2")],
+    )
+    assert ae.check(entity_map, tmp_path / "m", CATALOG, [G1K]) == []
+
+
+def test_entity_evidence_leaves_every_file_record_as_it_was(imported, tmp_path):
+    """File records are the same, byte for byte from line 2, with the entity evidence and without it."""
+    run = tmp_path / "output" / "20261016_000000"
+    row = record(1)
+    members = [Identifier("coriell", "HG00096")]
+    row["samples"] = reference(members, [{"source_type": "content_read", "rule_id": "bam_read_group_samples"}])
+    write_run(run, [row])
+    body = json.loads((run / "bam_classifications.json").read_text())
+    body["sample_lists"] = [sample_list(members)]
+    (run / "bam_classifications.json").write_text(json.dumps(body))
+    (tmp_path / "source_evidence").mkdir()
+
+    def records_written(entity_root):
+        reconcile_run(
+            run, write_input(tmp_path), tmp_path / "source_evidence", load(tmp_path, TABLE), entity_root=entity_root
+        )
+        return gzip.decompress((run / RECONCILED_DIR / "bam_classifications.ndjson.gz").read_bytes()).splitlines()[1:]
+
+    with_entities = records_written(tmp_path / "entity_evidence")
+    assert records_written(tmp_path / "nowhere") == with_entities

@@ -155,6 +155,8 @@ def reconcile_entities(
                 conflicts.append({"identifier": donor.to_dict(), "slot": slot, "evidence": list(said.claims)})
         donors.append(record)
 
+    # Per dataset and slot: the donors the dataset's lines name, each counted at its overall settled
+    # status, so a dataset agreeing with a conflicted donor still shows the conflict.
     by_dataset: dict[str, dict[str, dict]] = defaultdict(dict)
     for (dataset, slot), named in named_in.items():
         by_dataset[dataset][slot] = {"donors": len(named), **Counter(settled[d][slot] for d in named)}

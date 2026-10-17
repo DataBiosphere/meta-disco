@@ -14,7 +14,13 @@ import pytest
 import yaml
 
 from meta_disco import code_rules
-from meta_disco.models import CLASSIFICATION_FIELDS, JOIN_KEY_DRS_URI, NOT_APPLICABLE, SOURCE_REPOSITORY_METADATA
+from meta_disco.models import (
+    CLASSIFICATION_FIELDS,
+    JOIN_KEY_DRS_URI,
+    NOT_APPLICABLE,
+    SOURCE_REPOSITORY_METADATA,
+    TRANSLATED_FIELDS,
+)
 from meta_disco.rule_loader import get_unified_rules
 from meta_disco.schema_vocab import dimension_values
 from meta_disco.source_evidence import (
@@ -869,7 +875,7 @@ def test_ac27_the_seeder_and_the_queue_read_every_line_through_iter_evidence(emp
 
 def test_the_normalizer_cannot_merge_two_terms_of_any_slot():
     """Contract 3.5's binding half: casefold-and-strip keeps every slot's terms distinct."""
-    for slot in CLASSIFICATION_FIELDS:
+    for slot in TRANSLATED_FIELDS:
         terms = dimension_values(slot)
         assert len({normalize(t) for t in terms}) == len(terms), slot
     assert normalize(" WGS ") == "wgs" and normalize("WES") == "wes"

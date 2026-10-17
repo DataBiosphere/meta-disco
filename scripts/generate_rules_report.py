@@ -411,7 +411,7 @@ _DONOR = "_donor"
 
 def donor_records(run_dir: Path):
     """A run's donor records (#693) in the shape :func:`tally` reads: a donor's slots as its classifications,
-    and the identifier rule that recognises its identifier as its samples' one source. None for a run
+    and the identifier rule that recognises its identifier as its samples' one source. Nothing for a run
     reconciled before #693, which has no donor file."""
     if not (run_dir / "reconciled" / DONORS_FILE).exists():
         return

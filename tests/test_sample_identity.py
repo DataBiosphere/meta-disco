@@ -193,6 +193,43 @@ def test_a_sample_is_collected_from_the_donor_its_rule_names_with_the_same_ident
     assert rules.collected_from(recognised(rules, "simons_data_sample_1", T2T_CHRY)) is None
 
 
+@pytest.mark.parametrize(
+    ("sample", "expected"),
+    [
+        # Only a rule of the sample's own namespace links it, not one matching the same string in another.
+        (Identifier("coriell", "X1"), ("coriell", "a")),
+        # A dataset_local rule links only its own dataset's samples.
+        (Identifier("dataset_local", "S1", "D"), ("dataset_local", "l")),
+        (Identifier("dataset_local", "S1", "E"), None),
+        # A rule naming donors alone links nothing.
+        (Identifier("giab", "X1"), None),
+    ],
+)
+def test_a_sample_is_linked_only_by_a_rule_of_its_namespace_and_dataset_naming_both(sample, expected):
+    rules = load_identifier_rules(
+        rules_text(
+            {"id": "a", "match": "^X\\d$", "names": "sample, donor"},
+            {"id": "g", "ns": "giab", "match": "^X\\d$", "names": "donor"},
+            {"id": "l", "ns": "dataset_local", "match": "^S\\d$", "names": "sample, donor", "extra": ", dataset: D"},
+        )
+    )
+    found = rules.collected_from(sample)
+    assert (None if found is None else (found.identifier.namespace, found.rule_id)) == expected
+    if found is not None:
+        assert found.identifier == sample
+
+
+def test_two_rules_linking_one_sample_are_refused():
+    rules = load_identifier_rules(
+        rules_text(
+            {"id": "a", "match": "^X\\d$", "names": "sample, donor"},
+            {"id": "b", "match": "^X1$", "names": "sample, donor"},
+        )
+    )
+    with pytest.raises(ValueError, match="matches 2 identifier rules"):
+        rules.collected_from(coriell("X1"))
+
+
 def test_a_rule_naming_only_samples_links_no_donor():
     rules = load_identifier_rules(rules_text({"id": "s", "match": "^X\\d$"}))
     assert rules.collected_from(coriell("X1")) is None
