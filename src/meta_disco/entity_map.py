@@ -86,7 +86,8 @@ def load_entity_map(source: Readable | None = None) -> EntityMap:
     Checked here: the shape, each slot one of ``DONOR_FIELDS`` with a non-empty list of
     distinct columns, no column read both as the identifier (or a published table's source
     rows or repository identifier) and as a slot's, a slot only on a table or on the published
-    donors, and no harmonized table under ``datasets``. Whether the columns exist and hold
+    donors, at least one table per dataset reading a slot, and no harmonized table under
+    ``datasets``. Whether the columns exist and hold
     what the map says, and whether a table reading no slot serves a published table, is
     ``anvil_entities.check``'s, against the manifests.
     """
@@ -103,7 +104,14 @@ def load_entity_map(source: Readable | None = None) -> EntityMap:
             identifier = expect_name(entry[IDENTIFIER], f"{at} identifier")
             slots = _slots(entry, at, {identifier})
             tables.append(EntityTable(dataset=dataset, table=str(table), identifier=identifier, slots=slots))
-    return EntityMap(catalog=document["catalog"], tables=tuple(tables), published=_published(document["published"]))
+    published = _published(document["published"])
+    for dataset in document["datasets"]:
+        if not any(t.slots for t in tables if t.dataset == dataset):
+            raise ValueError(
+                f"{_WHERE} {dataset}: no table reads a slot, so its submitter generation would be empty, "
+                "and an empty generation never supersedes an earlier one"
+            )
+    return EntityMap(catalog=document["catalog"], tables=tuple(tables), published=published)
 
 
 def _published(document: dict) -> tuple[PublishedEntities, ...]:

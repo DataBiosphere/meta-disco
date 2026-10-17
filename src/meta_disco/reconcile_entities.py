@@ -30,6 +30,7 @@ Nothing here reads or writes a file record: a file reaches its donors through it
 
 from __future__ import annotations
 
+import re
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
@@ -67,6 +68,8 @@ MAX_EXAMPLES = 5
 
 # Every field an entity line may name, for :func:`gather`'s one read of each file.
 _ENTITY_FIELDS = (*DONOR_FIELDS, *REPOSITORY_ID_FIELDS)
+# What a repository identifier must be to be listed: the schema's `RepositoryIdentifier.id` pattern.
+_ONE_LINE = re.compile(r"[^\r\n]+")
 
 
 @dataclass(frozen=True, order=True)
@@ -135,7 +138,8 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
     or listed among its donor's or sample's repository identifiers.
 
     Reads every line, so a malformed file or line, an identifier two rules match, or a
-    repository identifier in a file other than a published table's or tying to two records raises here: reconcile calls this before it
+    repository identifier that is empty or more than one line, in a file other than a published
+    table's, or tying to two records raises here: reconcile calls this before it
     writes anything. Each claim cites its value-map row and carries the line's source and raw
     value, joined by ``entity_identifier``. A repository identifier is one record's by its kind,
     repository and id: the same one in two datasets ties to one record, or raises.
@@ -156,6 +160,11 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
                 raise ValueError(
                     f"{relative_to(path, entity_root)}: carries {entry.field}, a repository's own identifier, in a "
                     f"{envelope.source_type} file; only the repository's published table issues one"
+                )
+            if alias_kind is not None and _ONE_LINE.fullmatch(entry.raw_value) is None:
+                raise ValueError(
+                    f"{relative_to(path, entity_root)}: {entry.field} {entry.raw_value!r} for "
+                    f"{entry.target_key_value!r} is not an identifier: empty, or more than one line"
                 )
             kind = alias_kind or DONOR  # a slot line is a donor's
             got = rules.recognise(entry.target_key_value, dataset, kind)

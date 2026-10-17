@@ -227,6 +227,7 @@ def test_the_bundled_map_agrees_with_the_anvil15_manifests():
     ("datasets", "message"),
     [
         ("  D:\n    anvil_donor: {identifier: x, phenotypic_sex: [y]}\n", "harmonized table"),
+        ("  D:\n    t: {identifier: x}\n", "no table reads a slot"),
         ("  D:\n    t: {identifier: x, phenotypic_sex: []}\n", "non-empty list"),
         ("  D:\n    t: {identifier: x, phenotypic_sex: [y, y]}\n", "lists a column twice"),
         ("  D:\n    t: {identifier: x, phenotypic_sex: [x]}\n", "read as the identifier too"),
@@ -246,8 +247,9 @@ def test_a_table_may_name_only_its_identifier(tmp_path):
     """For the repository's records made from its rows to tie to; whether one does is the check's to say."""
     path = tmp_path / "map.yaml"
     published = "published: {sample: {table: anvil_biosample, source_rows: s, repository_id: i}}\n"
-    path.write_text(f"catalog: anvil15\ndatasets:\n  D:\n    t: {{identifier: x}}\n{published}")
-    ((table,), (sample,)) = (load_entity_map(path).tables, load_entity_map(path).published)
+    tables = "  D:\n    t: {identifier: x}\n    u: {identifier: y, phenotypic_sex: [s]}\n"
+    path.write_text(f"catalog: anvil15\ndatasets:\n{tables}{published}")
+    ((table, _), (sample,)) = (load_entity_map(path).tables, load_entity_map(path).published)
     assert (table.identifier, dict(table.slots)) == ("x", {})
     assert (sample.kind, sample.repository_id) == ("sample", "i")
 
@@ -690,6 +692,15 @@ def test_a_repository_identifier_tying_to_two_records_is_refused_not_chosen(tmp_
     write_entity_lines(root, "D1", DONOR_REPOSITORY_ID, [("u1", "HG00096")])
     write_entity_lines(root, "D2", DONOR_REPOSITORY_ID, [("u1", "HG00097")])
     with pytest.raises(ValueError, match=r"'u1' ties to .* which is not chosen"):
+        gathered(root, tmp_path)
+
+
+@pytest.mark.parametrize("raw", ["", "u1\nu2"])
+def test_a_repository_identifier_empty_or_on_two_lines_is_refused(tmp_path, raw):
+    """It would be no `RepositoryIdentifier.id`, and two empty ones would seem to tie two records."""
+    root = tmp_path / "entity_evidence"
+    write_entity_lines(root, "D1", DONOR_REPOSITORY_ID, [(raw, "HG00096")])
+    with pytest.raises(ValueError, match="is not an identifier: empty, or more than one line"):
         gathered(root, tmp_path)
 
 
