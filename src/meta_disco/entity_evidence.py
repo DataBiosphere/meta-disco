@@ -1,4 +1,4 @@
-"""Entity evidence files: a source saying what it wrote about a donor (#693).
+"""Entity evidence files: a source saying what it wrote about a donor, or its own identifier for a donor or sample (#693, #669).
 
 Where a slot evidence file (``source_evidence``) is keyed by a file's key, an entity file is
 keyed by the identifier the source wrote for a donor (``HG00096``): line 1 is the same
@@ -9,8 +9,10 @@ layout is the slot root's generation layout, so ``discover`` reads it too.
 
 **A line declares nothing** (contract 1.1): the identifier is recognised at reconcile, the
 value translated by the value map, and a line carrying an answer is refused by name.
-:func:`entries` gives each line as a ``source_evidence.EvidenceEntry``, so the value map's
-seeding and review queue read both roots alike.
+:func:`entries` gives each slot line as a ``source_evidence.EvidenceEntry``, so the value
+map's seeding and review queue read both roots alike; :func:`repository_id_lines` gives the
+lines carrying a repository's own identifier (``models.REPOSITORY_ID_FIELDS``), which no
+translation reads.
 """
 
 from __future__ import annotations
@@ -18,7 +20,13 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
-from .models import JOIN_KEY_ENTITY_IDENTIFIER, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA, ClaimSource
+from .models import (
+    JOIN_KEY_ENTITY_IDENTIFIER,
+    REPOSITORY_ID_FIELDS,
+    SOURCE_PUBLISHED_VALUE,
+    SOURCE_REPOSITORY_METADATA,
+    ClaimSource,
+)
 from .schema.classification_model import EntityEvidenceRow, EvidenceFileEnvelope
 from .source_evidence import (
     DEFAULT_SOURCE_EVIDENCE_ROOT,
@@ -87,11 +95,21 @@ def iter_entity_evidence(path: Path) -> Iterator[EntityEvidenceRow]:
 
 
 def entries(path: Path, envelope: EvidenceFileEnvelope | None = None) -> Iterator[EvidenceEntry]:
-    """Every line of one entity file as an ``EvidenceEntry``, one ``ClaimSource`` per column; ``envelope`` where the caller holds it."""
+    """Every slot line of one entity file as an ``EvidenceEntry``, one ``ClaimSource`` per column; ``envelope`` where the caller holds it.
+
+    A line carrying a repository's identifier is not a slot's, and is :func:`repository_id_lines`'.
+    """
     envelope = envelope if envelope is not None else read_entity_envelope(path)
     by_column: dict[str, ClaimSource] = {}
     for row in iter_entity_evidence(path):
+        if row.field in REPOSITORY_ID_FIELDS:
+            continue
         source = by_column.get(row.column)
         if source is None:
             source = by_column[row.column] = claim_source_for(envelope.source, row.column)
         yield EvidenceEntry(row.field, row.target_key_value, row.raw_value, source)
+
+
+def repository_id_lines(path: Path) -> Iterator[EntityEvidenceRow]:
+    """Every line of one entity file carrying a repository's own identifier for a donor or sample (``models.REPOSITORY_ID_FIELDS``)."""
+    return (row for row in iter_entity_evidence(path) if row.field in REPOSITORY_ID_FIELDS)

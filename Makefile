@@ -272,10 +272,11 @@ check-lineage-map:
 import-anvil-lineage:
 	uv run python scripts/import_anvil_lineage.py $(ARGS)
 
-# The AnVIL entity map (#693): which submitter tables give a donor's sex and ancestry, and
-# AnVIL's published anvil_donor. Check it against the manifests on disk, or import every
-# dataset it names, each as a new generation of entity evidence under
-# data/entity_evidence/{anvil,anvil_published}/. Reconcile settles each donor from it. Offline.
+# The AnVIL entity map (#693, #669): which submitter tables give a donor's sex and ancestry,
+# and AnVIL's published anvil_donor and anvil_biosample, whose ids the records they tie to
+# list. Check it against the manifests on disk, or import every dataset it names, each as a
+# new generation of entity evidence under data/entity_evidence/{anvil,anvil_published}/.
+# Reconcile settles each donor from it. Offline.
 check-entity-map:
 	uv run python scripts/import_anvil_entities.py --check
 

@@ -10,11 +10,18 @@ dimensions are settled by. A line whose identifier no rule recognises as a donor
 never guessed; a value no authored row reads makes no claim, and the donors it was written
 for are counted.
 
+A repository's own record of a donor or sample (AnVIL's ``anvil_donor`` and
+``anvil_biosample``, #669) reaches ours through a line carrying its identifier
+(``models.REPOSITORY_ID_FIELDS``), keyed by the identifier of the submitter row it was made
+from: recognised as a donor or a sample by the line's field, it is listed on that record's
+``repository_ids``, never translated. Many tie to one record (a person has an AnVIL donor in
+each dataset that holds them); one tying to two records is refused, never chosen.
+
 A sample record is written for every sample a reconciled file names (the run's sample
-lists), with the donor it was collected from where an identifier rule naming both says so
-(``IdentifierRuleSet.collected_from``). A donor record is written for every donor the
-evidence names and every donor a sample's ``collected_from`` points to, so a join from a
-file to its donors finds a record for each.
+lists) and every sample a repository's identifier ties to, with the donor it was collected
+from where an identifier rule naming both says so (``IdentifierRuleSet.collected_from``). A
+donor record is written for every donor the evidence names and every donor a sample's
+``collected_from`` points to, so a join from a file to its donors finds a record for each.
 
 Nothing here reads or writes a file record: a file reaches its donors through its
 ``samples`` (epic #692, decision 5).
@@ -27,27 +34,62 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from .entity_evidence import entries, read_entity_envelope
-from .models import CONFLICT, DONOR_FIELDS, JOIN_KEY_ENTITY_IDENTIFIER, SOURCE_IDENTIFIER_RULE, SOURCE_PUBLISHED_VALUE
+from .entity_evidence import entries, read_entity_envelope, repository_id_lines
+from .entity_map import REPOSITORY_ID_FIELD
+from .models import (
+    CONFLICT,
+    DONOR_FIELDS,
+    JOIN_KEY_ENTITY_IDENTIFIER,
+    REPOSITORY_IDS,
+    SOURCE_IDENTIFIER_RULE,
+    SOURCE_PUBLISHED_VALUE,
+)
 from .output_utils import relative_to
 from .reconcile_lineage import applies
 from .resolution import NO_EVIDENCE, SlotEvidence, declaration, settle, translate
-from .sample_identity import DONOR, Identifier, IdentifierRuleSet, identifier_order, members_of, most_frequent
+from .sample_identity import (
+    DONOR,
+    SAMPLE,
+    EntityKind,
+    Identifier,
+    IdentifierRuleSet,
+    identifier_order,
+    members_of,
+    most_frequent,
+)
 from .source_evidence import discover
 from .value_map import ValueMap
 
 # How many unrecognised identifiers the report names per table.
 MAX_EXAMPLES = 5
 
+# What a repository identifier line's identifier names, by its field.
+_KIND_OF: dict[str, EntityKind] = {field: kind for kind, field in REPOSITORY_ID_FIELD.items()}
+
+
+@dataclass(frozen=True, order=True)
+class RepositoryId:
+    """A repository's own identifier for a donor or sample, and the dataset and table holding it (the schema's ``RepositoryIdentifier``)."""
+
+    repository: str
+    dataset: str
+    table: str
+    id: str
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "repository": self.repository, "dataset": self.dataset, "table": self.table}
+
 
 @dataclass
 class EntityEvidence:
-    """What the entity evidence said, per recognised donor and slot, and what each file gave: :func:`gather`'s result."""
+    """What the entity evidence said, per recognised donor and slot, the repository identifiers per
+    recognised donor or sample, and what each file gave: :func:`gather`'s result."""
 
     slots: dict[Identifier, dict[str, SlotEvidence]]
     named_in: dict[tuple[str, str], set[Identifier]]
     files: list[dict]
     unrecognised: dict[tuple[str | None, str | None], Counter]
+    repository_ids: dict[tuple[EntityKind, Identifier], set[RepositoryId]]
 
 
 @dataclass
@@ -77,15 +119,20 @@ def select_entity_evidence(entity_root: Path, repository: str, catalog: str | No
 
 
 def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: IdentifierRuleSet) -> EntityEvidence:
-    """Every line of ``paths`` (:func:`select_entity_evidence`), recognised and translated into its donor's slots.
+    """Every line of ``paths`` (:func:`select_entity_evidence`), recognised, and translated into its donor's slots
+    or listed among its donor's or sample's repository identifiers.
 
-    Reads every line, so a malformed file or line, or an identifier two rules match, raises
-    here: reconcile calls this before it writes anything. Each claim cites its value-map row
-    and carries the line's source and raw value, joined by ``entity_identifier``.
+    Reads every line, so a malformed file or line, an identifier two rules match, or a
+    repository identifier tying to two records raises here: reconcile calls this before it
+    writes anything. Each claim cites its value-map row and carries the line's source and raw
+    value, joined by ``entity_identifier``. A repository identifier is one record's by its kind,
+    repository and id: the same one in two datasets ties to one record, or raises.
     """
     slots: dict[Identifier, dict[str, SlotEvidence]] = defaultdict(lambda: defaultdict(SlotEvidence))
     named_in: dict[tuple[str, str], set[Identifier]] = defaultdict(set)
     files, unrecognised = [], defaultdict(Counter)
+    repository_ids: dict[tuple[EntityKind, Identifier], set[RepositoryId]] = defaultdict(set)
+    tied: dict[tuple[EntityKind, str, str], tuple[Path, Identifier]] = {}
     for path in paths:
         envelope = read_entity_envelope(path)
         dataset = envelope.target.dataset
@@ -100,6 +147,24 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
             named_in[(str(dataset), entry.field)].add(got.identifier)
             exact = got.identifier.id == entry.target_key_value  # not where a rule rewrote it (GM19908 -> NA19908)
             translate(slots[got.identifier], entry, envelope.source_type, JOIN_KEY_ENTITY_IDENTIFIER, table, exact)
+        for row in repository_id_lines(path):
+            lines += 1
+            kind = _KIND_OF[row.field]
+            got = rules.recognise(row.target_key_value, dataset, kind)
+            if got is None:
+                misses += 1
+                unrecognised[(dataset, envelope.source.table)][row.target_key_value] += 1
+                continue
+            alias = RepositoryId(envelope.source.repository, str(dataset), str(envelope.source.table), row.raw_value)
+            earlier = tied.setdefault((kind, alias.repository, alias.id), (path, got.identifier))
+            if earlier[1] != got.identifier:
+                raise ValueError(
+                    f"{relative_to(path, entity_root)}: {alias.repository} {kind} {alias.id!r} ties to "
+                    f"{got.identifier.to_dict()} here and to {earlier[1].to_dict()} in "
+                    f"{relative_to(earlier[0], entity_root)}; a repository's identifier names one record, and "
+                    "which is not chosen"
+                )
+            repository_ids[(kind, got.identifier)].add(alias)
         files.append(
             {
                 "path": relative_to(path, entity_root),
@@ -110,7 +175,7 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
                 "unrecognised": misses,
             }
         )
-    return EntityEvidence(slots, named_in, files, unrecognised)
+    return EntityEvidence(slots, named_in, files, unrecognised, repository_ids)
 
 
 def reconcile_entities(
@@ -119,14 +184,18 @@ def reconcile_entities(
     sample_lists: Iterable[dict],
     skipped: list[dict] | None = None,
 ) -> EntityResult:
-    """Settle every donor ``evidence`` names, link every sample ``sample_lists`` hold, and count what was done.
+    """Settle every donor ``evidence`` names, link every sample ``sample_lists`` hold or a repository identifier
+    ties to, list each record's repository identifiers, and count what was done.
 
     ``evidence`` is :func:`gather`'s; ``sample_lists`` are the run's reconciled ``SampleList``
     dicts. A donor a sample's ``collected_from`` points to gets a record, evidence or none.
     """
     slots, named_in, files, unrecognised = evidence.slots, evidence.named_in, evidence.files, evidence.unrecognised
+    repository_ids = evidence.repository_ids
+    named_by_files = {m for entry in sample_lists for m in members_of(entry)}
+    tied_samples = {ident for kind, ident in repository_ids if kind == SAMPLE}
     sample_records, linked = [], Counter()
-    for sample in sorted({m for entry in sample_lists for m in members_of(entry)}, key=identifier_order):
+    for sample in sorted(named_by_files | tied_samples, key=identifier_order):
         record: dict = {"identifier": sample.to_dict()}
         found = rules.collected_from(sample)
         if found is not None:
@@ -136,7 +205,11 @@ def reconcile_entities(
             }
             linked[sample.namespace] += 1
             slots[found.identifier]  # a donor a sample points to has a record, evidence or none
+        _list_repository_ids(record, repository_ids.get((SAMPLE, sample)))
         sample_records.append(record)
+    for kind, ident in repository_ids:
+        if kind == DONOR:
+            slots[ident]  # a donor a repository identifier ties to has a record, slots or none
 
     donors, conflicts = [], []
     settled: dict[Identifier, dict[str, str]] = {}
@@ -153,6 +226,7 @@ def reconcile_entities(
             unreviewed[slot] += bool(said.unreviewed)
             if status == CONFLICT:
                 conflicts.append({"identifier": donor.to_dict(), "slot": slot, "evidence": list(said.claims)})
+        _list_repository_ids(record, repository_ids.get((DONOR, donor)))
         donors.append(record)
 
     # Per dataset and slot: the donors the dataset's lines name, each counted at its overall settled
@@ -172,6 +246,37 @@ def reconcile_entities(
             for (dataset, tbl), c in unrecognised.items()
         ],
         "unreviewed_donors": {slot: n for slot, n in unreviewed.items() if n},
-        "samples": {"total": len(sample_records), "collected_from": dict(linked)},
+        "samples": {
+            "total": len(sample_records),
+            "named_by_files": len(named_by_files),
+            "collected_from": dict(linked),
+        },
+        REPOSITORY_IDS: {kind: _repository_id_counts(repository_ids, kind) for kind in (DONOR, SAMPLE)},
     }
     return EntityResult(donors, sample_records, report)
+
+
+def _list_repository_ids(record: dict, aliases: set[RepositoryId] | None) -> None:
+    """Put ``aliases`` on ``record``, in order, where there are any."""
+    if aliases:
+        record[REPOSITORY_IDS] = [a.to_dict() for a in sorted(aliases)]
+
+
+def _repository_id_counts(repository_ids: dict[tuple[EntityKind, Identifier], set[RepositoryId]], kind: str) -> dict:
+    """The repository identifiers tied to records of ``kind``: the records holding one, the distinct identifiers,
+    the records by how many distinct identifiers each holds, and per dataset its identifiers and the records they tie to."""
+    held = {ident: aliases for (k, ident), aliases in repository_ids.items() if k == kind}
+    per_record = Counter(len({(a.repository, a.id) for a in aliases}) for aliases in held.values())
+    by_dataset: dict[str, dict[str, set]] = defaultdict(lambda: {"ids": set(), "records": set()})
+    for ident, aliases in held.items():
+        for alias in aliases:
+            by_dataset[alias.dataset]["ids"].add((alias.repository, alias.id))
+            by_dataset[alias.dataset]["records"].add(ident)
+    return {
+        "records": len(held),
+        "ids": len({(a.repository, a.id) for aliases in held.values() for a in aliases}),
+        "ids_per_record": {str(n): count for n, count in sorted(per_record.items())},
+        "by_dataset": {
+            dataset: {"ids": len(d["ids"]), "records": len(d["records"])} for dataset, d in sorted(by_dataset.items())
+        },
+    }

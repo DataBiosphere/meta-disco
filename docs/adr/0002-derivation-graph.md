@@ -50,14 +50,19 @@ and a parent not found there is `external` (decision 2). Only sample and donor i
    empty, does not hold for the submitter tables: 1000 Genomes' `pedigree` gives all 3,202 of its
    people a sex and a population, and PRIMED, T2T, T2T_CHRY, HPRC, HPRC_R2 and MAGE give a sex, a
    population or both, mostly for the same people (measured on anvil15, #693).
-2. **A record is keyed by its identifier** (`coriell:HG00096`), not by AnVIL's donor UUID, which is
-   minted again in every snapshot. One record gathers every dataset's rows for one person, so each
-   property is settled once, by the rule a file's dimensions are settled by (`reconcile.settle`).
+2. **A record is keyed by its identifier** (`coriell:HG00096`), not by AnVIL's donor UUID, of which
+   one person has several, one in each dataset that holds them (1000G's and T2T's for `HG00183`). One record
+   gathers every dataset's rows for one person, so each property is settled once, by the rule a
+   file's dimensions are settled by (`reconcile.settle`). *Corrected by #669:* the UUID was first
+   said to be minted again in every snapshot; it is not (`anvil_donor.donor_id` and
+   `anvil_biosample.biosample_id` are the same in prod anvil15 and dev's 1000G snapshot, measured on
+   #692), so each record lists the AnVIL UUIDs that tie to it, many to one, as `repository_ids`.
 3. **A Coriell number keys both a donor and a sample**, the person and their cell line. An identifier
    rule says what its strings name (`names` in `rules/sample_namespaces.yaml`), and a rule naming a
    sample and a donor says the sample was collected from the donor with the same identifier: the
    sample's `collected_from`. `coriell` and `giab` name both; `sra_sample`, `biosample` and T2T_CHRY's
-   `dataset_local` names name samples; `igvf`'s donor accessions name donors. A person's facts (sex,
+   `dataset_local` names name samples; `igvf`'s donor accessions name donors and its sample accessions
+   samples. A person's facts (sex,
    ancestry, family) go on the donor; a sample's (karyotype, tissue, age at collection) on the sample.
    This replaces, for a rule naming both, the sentence below that equal identifiers say nothing about
    whether a sample and a donor are one person. Where a sample's own row names its donor

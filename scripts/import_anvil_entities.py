@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Read AnVIL's donor facts into entity evidence files, through the entity map (#693).
+"""Read AnVIL's donor facts and its donor and biosample identifiers into entity evidence files, through the entity map (#693, #669).
 
 Checks the map against the manifests on disk first and refuses to write if anything
 disagrees, listing every problem. Then writes one generation per dataset under
 ``data/entity_evidence/anvil/<catalog>/<dataset>/<generation>/`` (the submitter tables)
-and ``data/entity_evidence/anvil_published/…`` (AnVIL's ``anvil_donor``), and prints what
-each table produced. Offline: it reads what ``make download`` left on disk. The logic
+and ``data/entity_evidence/anvil_published/…`` (AnVIL's ``anvil_donor`` and
+``anvil_biosample``), and prints what each table produced and, when every dataset is
+imported, the datasets the map leaves out. Offline: it reads what ``make download`` left on disk. The logic
 lives in ``meta_disco.anvil_entities``; reconcile reads the files (``reconcile_entities``).
 
     uv run python scripts/import_anvil_entities.py --check
@@ -17,7 +18,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from meta_disco.anvil_entities import check, describe, import_all
+from meta_disco.anvil_entities import check, describe, import_all, left_out
 from meta_disco.anvil_evidence import chosen_datasets
 from meta_disco.deployments import PROD
 from meta_disco.entity_evidence import DEFAULT_ENTITY_EVIDENCE_ROOT
@@ -27,7 +28,7 @@ from meta_disco.source_evidence import unfinished_imports
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Import AnVIL's donor facts as entity evidence, through the entity map"
+        description="Import AnVIL's donor facts and donor and biosample identifiers as entity evidence, through the entity map"
     )
     parser.add_argument("--catalog", default=None, help="Azul catalog (default: the one the map was authored against)")
     parser.add_argument("--data-dir", type=Path, default=PROD.input_root, help="Directory holding manifest/<catalog>/")
@@ -64,7 +65,8 @@ def main() -> int:
     for partial in unfinished_imports(args.entity_root):
         print(f"Unfinished import, not read (remove it by hand): {partial}", file=sys.stderr)
     imports = import_all(entity_map, args.data_dir, catalog, args.service, args.entity_root, args.dataset)
-    for line in describe(imports):
+    left = left_out(entity_map, args.data_dir, catalog) if args.dataset is None else []
+    for line in describe(imports, left):
         print(line)
     print(f"Wrote {sum(t.written for i in imports for t in i.tables):,} entity lines.")
     return 0

@@ -169,6 +169,8 @@ def test_a_string_is_read_only_as_what_its_rule_names():
     assert rules.recognise("SRS006902", None, DONOR) is None
     assert recognised(rules, "HG00096", None, DONOR) == coriell("HG00096")
     assert rules.in_name("IGVFDO2696EIGV.fastq.gz") == set()
+    assert rules.recognise("IGVFSM9197PTER", None, DONOR) is None
+    assert recognised(rules, "IGVFSM9197PTER", None, SAMPLE) == Identifier("igvf", "IGVFSM9197PTER")
     with pytest.raises(ValueError, match="is not one of"):
         rules.recognise("HG00096", None, "person")  # type: ignore[arg-type]
 
