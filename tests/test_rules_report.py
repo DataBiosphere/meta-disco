@@ -478,5 +478,9 @@ def test_a_donor_record_counts_its_rows_and_the_identifier_rule_that_keys_it(tmp
     assert (rows["phenotypic_sex.male"]["files"], rows["phenotypic_sex.male"]["won"]) == (2, 2)
     assert rows["phenotypic_sex.male"]["datasets"] == {grr.DONOR_RECORDS: 2}
     assert (rows["coriell_hg"]["files"], rows["igvf_donor_accession"]["files"]) == (1, 1)
+    assert rows["coriell_hg"]["reads"].endswith(
+        "names a sample and its donor (the sample is collected from the donor of the same identifier)"
+    )
+    assert rows["igvf_donor_accession"]["reads"].endswith("; names a donor")
     assert data["records"] == len(RECORDS)
     assert list(grr.donor_records(tmp_path / "unreconciled")) == []

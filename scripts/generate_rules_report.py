@@ -508,6 +508,14 @@ def _attributions(record: dict):
     yield from samples.get("named_by") or [] if isinstance(samples, dict) else []
 
 
+def _names(rule) -> str:
+    """What an identifier rule's strings name (#693): a sample, a donor, or both, and for both the link it declares."""
+    names = sorted(str(n) for n in rule.names)
+    if names == ["donor", "sample"]:
+        return "; names a sample and its donor (the sample is collected from the donor of the same identifier)"
+    return f"; names a {names[0]}"
+
+
 def sample_rule_rows() -> list[dict]:
     """The sample rules (#357): ``code_rules.SAMPLE_RULES`` (the file-content readers and the parent's, #668), then each identifier rule."""
     rows = [
@@ -517,7 +525,7 @@ def sample_rule_rows() -> list[dict]:
     rows += [
         {
             "id": rule.id,
-            "reads": f"a string matching {rule.match}" + (f" in {rule.dataset}" if rule.dataset else ""),
+            "reads": f"a string matching {rule.match}" + (f" in {rule.dataset}" if rule.dataset else "") + _names(rule),
             "rationale": rule.rationale,
             "defined_in": SAMPLE_NAMESPACES,
         }
