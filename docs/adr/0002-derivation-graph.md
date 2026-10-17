@@ -51,7 +51,8 @@ and a parent not found there is `external` (decision 2). Only sample and donor i
    people a sex and a population, and PRIMED, T2T, T2T_CHRY, HPRC, HPRC_R2 and MAGE give a sex, a
    population or both, mostly for the same people (measured on anvil15, #693).
 2. **A record is keyed by its identifier** (`coriell:HG00096`), not by AnVIL's donor UUID, of which
-   one person has several, one in each dataset that holds them (1000G's and T2T's for `HG00183`). One record
+   one person has several: an AnVIL donor in each dataset that holds them, under one or more distinct
+   UUIDs (`HG00183`'s PRIMED and T2T donors share one, its 1000G donor has another). One record
    gathers every dataset's rows for one person, so each property is settled once, by the rule a
    file's dimensions are settled by (`reconcile.settle`). *Corrected by #669:* the UUID was first
    said to be minted again in every snapshot; it is not (`anvil_donor.donor_id` and

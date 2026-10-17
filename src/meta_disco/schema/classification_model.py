@@ -2097,7 +2097,7 @@ class DonorRecord(ConfiguredBaseModel):
     identifier: EntityIdentifier = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord', 'SampleRecord']} })
     phenotypic_sex: PhenotypicSexClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
     genetic_ancestry: GeneticAncestryClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
-    repository_ids: Optional[list[RepositoryIdentifier]] = Field(default=None, description="""Every identifier a repository gave a record of its own for this donor (#669), AnVIL's `donor_id`s: a person has a donor in each dataset that holds them, so several. Absent where none ties to the donor.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord', 'SampleRecord']} })
+    repository_ids: Optional[list[RepositoryIdentifier]] = Field(default=None, description="""Every identifier a repository gave a record of its own for this donor (#669), AnVIL's `donor_id`s: a person has an AnVIL donor in each dataset that holds them, and the datasets give them one or more distinct ids (PRIMED's and T2T's are one). Absent where none ties to the donor.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord', 'SampleRecord']} })
 
 
 class RepositoryIdentifier(ConfiguredBaseModel):

@@ -5,8 +5,8 @@ Checks the map against the manifests on disk first and refuses to write if anyth
 disagrees, listing every problem. Then writes one generation per dataset under
 ``data/entity_evidence/anvil/<catalog>/<dataset>/<generation>/`` (the submitter tables)
 and ``data/entity_evidence/anvil_published/…`` (AnVIL's ``anvil_donor`` and
-``anvil_biosample``), and prints what each table produced and, when every dataset is
-imported, the datasets the map leaves out. Offline: it reads what ``make download`` left on disk. The logic
+``anvil_biosample``), and prints what each table produced. Checking or importing every
+dataset, it also prints the datasets the map leaves out, whose records tie to nothing. Offline: it reads what ``make download`` left on disk. The logic
 lives in ``meta_disco.anvil_entities``; reconcile reads the files (``reconcile_entities``).
 
     uv run python scripts/import_anvil_entities.py --check
@@ -18,7 +18,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from meta_disco.anvil_entities import check, describe, import_all, left_out
+from meta_disco.anvil_entities import check, describe, describe_left_out, import_all, left_out
 from meta_disco.anvil_evidence import chosen_datasets
 from meta_disco.deployments import PROD
 from meta_disco.entity_evidence import DEFAULT_ENTITY_EVIDENCE_ROOT
@@ -59,14 +59,16 @@ def main() -> int:
     checked = chosen_datasets(entity_map.datasets(), args.dataset)
     tables = sum(1 for table in entity_map.tables if table.dataset in checked)
     print(f"Entity map checked against {catalog}: {tables} tables across {len(checked)} dataset(s).")
+    if args.dataset is None:
+        for line in describe_left_out(left_out(entity_map, args.data_dir, catalog)):
+            print(line)
     if args.check:
         return 0
 
     for partial in unfinished_imports(args.entity_root):
         print(f"Unfinished import, not read (remove it by hand): {partial}", file=sys.stderr)
     imports = import_all(entity_map, args.data_dir, catalog, args.service, args.entity_root, args.dataset)
-    left = left_out(entity_map, args.data_dir, catalog) if args.dataset is None else []
-    for line in describe(imports, left):
+    for line in describe(imports):
         print(line)
     print(f"Wrote {sum(t.written for i in imports for t in i.tables):,} entity lines.")
     return 0

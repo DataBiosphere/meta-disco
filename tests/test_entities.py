@@ -14,6 +14,7 @@ import pytest
 import yaml
 
 from meta_disco import anvil_entities as ae
+from meta_disco.anvil_evidence import EVIDENCE_DIRS
 from meta_disco.entity_evidence import (
     entries,
     iter_entity_evidence,
@@ -56,6 +57,7 @@ from meta_disco.source_evidence import (
     EvidenceFileSource,
     EvidenceTarget,
     discover,
+    generation_dir,
     write_evidence_file,
 )
 from meta_disco.value_map import review, seed
@@ -247,7 +249,7 @@ def test_a_table_may_name_only_its_identifier(tmp_path):
     path.write_text(f"catalog: anvil15\ndatasets:\n  D:\n    t: {{identifier: x}}\n{published}")
     ((table,), (sample,)) = (load_entity_map(path).tables, load_entity_map(path).published)
     assert (table.identifier, dict(table.slots)) == ("x", {})
-    assert (sample.kind, sample.repository_id_field) == ("sample", SAMPLE_REPOSITORY_ID)
+    assert (sample.kind, sample.repository_id) == ("sample", "i")
 
 
 @pytest.mark.parametrize(
@@ -290,6 +292,17 @@ def test_the_check_names_every_problem(tmp_path, entity_map):
         f"{G1K}/sample: no row of this type in the manifest",
         f"{G1K}/anvil_donor: donors made from 'participant', which the map does not name",
         f"{R2}: not a dataset the anvil15 sidecar names",
+    ]
+
+
+def test_the_check_names_a_published_column_no_row_fills(tmp_path, entity_map):
+    """A misnamed repository_id or source_rows column would otherwise import no identifier, silently."""
+    rows = [pedigree("HG00096", 1, "GBR", "EUR", "p1"), g1k_sample("HG00096", "q1")]
+    biosample_without_id = ("anvil_biosample", {"source_datarepo_row_ids": ["sample:q1"]})
+    write_dataset(tmp_path / "m", G1K, [*rows, biosample_without_id, ("anvil_donor", {"donor_id": "d1"})])
+    assert ae.check(entity_map, tmp_path / "m", CATALOG, [G1K]) == [
+        f"{G1K}/anvil_donor: column 'source_datarepo_row_ids' holds a value on no row",
+        f"{G1K}/anvil_biosample: column 'biosample_id' holds a value on no row",
     ]
 
 
@@ -344,8 +357,10 @@ def test_a_line_is_a_cell_as_written_keyed_by_the_identifier_as_written(imported
     # Not recognised here: an identifier no rule knows is still written, and counted at reconcile.
     assert {line["target_key_value"] for line in got} == {"HG00096", "HG02300", "NOT_A_DONOR"}
     (g1k, _) = imported
-    # The sample table reads no slot, so it writes no file.
-    (table, published, _) = g1k.tables
+    # The sample table reads no slot: it writes no file, and is read for identifiers only.
+    (table, sample, published, _) = g1k.tables
+    assert (sample.table, sample.path, sample.rows, sample.no_identifier) == ("sample", None, 1, 0)
+    assert "  sample: 1 rows, read for identifiers only" in ae.describe([g1k])
     assert table.null_cells == {"population": 3, "superpopulation": 3, "sex": 1}
     # 1000 Genomes' donors carry no published sex: their one line is AnVIL's donor_id.
     assert published.rows == 1 and published.written == 1
@@ -432,7 +447,7 @@ def envelope(
     dataset: str | None = "D",
 ) -> EvidenceFileEnvelope:
     return EvidenceFileEnvelope(
-        source=EvidenceFileSource(repository="anvil", dataset="D", table="t", url="https://example.org"),
+        source=EvidenceFileSource(repository="anvil", dataset=dataset or "D", table="t", url="https://example.org"),
         source_type=ImporterSourceTypeEnum(source_type),
         source_version="anvil15",
         source_key="id",
@@ -652,38 +667,46 @@ def test_every_repository_identifier_is_listed_on_the_one_record_it_ties_to(impo
     }
 
 
-def write_repository_ids(root: Path, dataset: str, field: str, ties: list[tuple[str, str]]) -> None:
-    """One published entity file in ``dataset`` whose lines tie each repository identifier to an identifier string."""
-    directory = root / "anvil_published" / CATALOG / dataset / STAMP
+def write_entity_lines(
+    root: Path, dataset: str, field: str, lines: list[tuple[str, str]], source_type: str = SOURCE_PUBLISHED_VALUE
+) -> None:
+    """One entity file of ``source_type`` in ``dataset``, a line per ``(raw_value, identifier string)`` for ``field``."""
+    directory = generation_dir(root, EVIDENCE_DIRS[source_type], CATALOG, dataset, STAMP)
     directory.mkdir(parents=True)
     rows = [
-        EntityEvidenceRow(field=field, target_key_value=ident, raw_value=rid, column="id", identifier_column="x")
-        for rid, ident in ties
+        EntityEvidenceRow(field=field, target_key_value=ident, raw_value=raw, column="c", identifier_column="x")
+        for raw, ident in lines
     ]
-    built = envelope(source_type=SOURCE_PUBLISHED_VALUE, dataset=dataset)
-    built.source.dataset = dataset
-    write_entity_file(directory / "t.ndjson", built, rows)
+    write_entity_file(directory / "t.ndjson", envelope(source_type=source_type, dataset=dataset), rows)
 
 
-def gathered(root: Path, tmp_path: Path):
+def gathered(root: Path, tmp_path: Path, table: str = TABLE):
     paths, _ = select_entity_evidence(root, "anvil", CATALOG)
-    return gather(paths, root, load(tmp_path, TABLE), identifier_rules())
+    return gather(paths, root, load(tmp_path, table), identifier_rules())
 
 
 def test_a_repository_identifier_tying_to_two_records_is_refused_not_chosen(tmp_path):
     root = tmp_path / "entity_evidence"
-    write_repository_ids(root, "D1", DONOR_REPOSITORY_ID, [("u1", "HG00096")])
-    write_repository_ids(root, "D2", DONOR_REPOSITORY_ID, [("u1", "HG00097")])
+    write_entity_lines(root, "D1", DONOR_REPOSITORY_ID, [("u1", "HG00096")])
+    write_entity_lines(root, "D2", DONOR_REPOSITORY_ID, [("u1", "HG00097")])
     with pytest.raises(ValueError, match=r"'u1' ties to .* which is not chosen"):
+        gathered(root, tmp_path)
+
+
+def test_a_repository_identifier_outside_a_published_table_is_refused(tmp_path):
+    """Only the repository's own table issues its identifiers; a submitter table's line claiming one is refused."""
+    root = tmp_path / "entity_evidence"
+    write_entity_lines(root, "D1", DONOR_REPOSITORY_ID, [("u1", "HG00096")], SOURCE_REPOSITORY_METADATA)
+    with pytest.raises(ValueError, match="only the repository's published table issues one"):
         gathered(root, tmp_path)
 
 
 def test_one_repository_identifier_in_two_datasets_tying_to_one_record_is_listed_for_each(tmp_path):
     """PRIMED and T2T give a person the same AnVIL donor_id; a GM and an NA name one Coriell sample."""
     root = tmp_path / "entity_evidence"
-    write_repository_ids(root, "D1", DONOR_REPOSITORY_ID, [("u1", "HG00096")])
-    write_repository_ids(root, "D2", DONOR_REPOSITORY_ID, [("u1", "HG00096")])
-    write_repository_ids(root, "D3", SAMPLE_REPOSITORY_ID, [("b1", "GM19908"), ("b2", "NA19908")])
+    write_entity_lines(root, "D1", DONOR_REPOSITORY_ID, [("u1", "HG00096")])
+    write_entity_lines(root, "D2", DONOR_REPOSITORY_ID, [("u1", "HG00096")])
+    write_entity_lines(root, "D3", SAMPLE_REPOSITORY_ID, [("b1", "GM19908"), ("b2", "NA19908")])
     result = reconcile_entities(gathered(root, tmp_path), identifier_rules(), [])
     assert [(r["dataset"], r["id"]) for r in by_id(result.donors)["HG00096"][REPOSITORY_IDS]] == [
         ("D1", "u1"),
@@ -696,7 +719,7 @@ def test_one_repository_identifier_in_two_datasets_tying_to_one_record_is_listed
 def test_a_repository_identifier_naming_no_recognised_identifier_of_its_kind_is_counted(tmp_path):
     """A sample line is recognised as a sample: a donor accession is not one, and is counted, never a record."""
     root = tmp_path / "entity_evidence"
-    write_repository_ids(root, "D1", SAMPLE_REPOSITORY_ID, [("b1", "IGVFDO2696EIGV"), ("b2", "IGVFSM9197PTER")])
+    write_entity_lines(root, "D1", SAMPLE_REPOSITORY_ID, [("b1", "IGVFDO2696EIGV"), ("b2", "IGVFSM9197PTER")])
     result = reconcile_entities(gathered(root, tmp_path), identifier_rules(), [])
     (sample,) = result.samples
     assert sample["identifier"] == {"id": "IGVFSM9197PTER", "namespace": "igvf"}
@@ -708,9 +731,12 @@ def test_a_repository_identifier_naming_no_recognised_identifier_of_its_kind_is_
 
 def test_a_dataset_the_map_leaves_out_is_listed_with_its_records(imported, tmp_path, entity_map):
     write_dataset(tmp_path / "m", "AnVIL_ENCORE_293T", [donor(["donor:x"], None, "e1"), biosample([], "e2")])
-    (left,) = ae.left_out(entity_map, tmp_path / "m", CATALOG)
+    write_dataset(tmp_path / "m", "ANVIL_nhp_dGTEx_V1", [])
+    (nhp, left) = ae.left_out(entity_map, tmp_path / "m", CATALOG)
     assert (left.dataset, left.records) == ("AnVIL_ENCORE_293T", {"anvil_donor": 1, "anvil_biosample": 1})
-    assert ae.describe([], [left]) == [
+    assert nhp.records == {"anvil_donor": 0, "anvil_biosample": 0}
+    # A dataset with no published record has none to tie, and is not listed.
+    assert ae.describe_left_out([nhp, left]) == [
         "AnVIL_ENCORE_293T: not in the entity map, so none of its records tie (1 anvil_donor, 1 anvil_biosample)"
     ]
 
@@ -754,10 +780,7 @@ def test_a_reviewed_no_op_value_is_not_unreviewed(imported, tmp_path):
     noop = TABLE + (
         "  - id: genetic_ancestry.asl\n    match: {slot: genetic_ancestry, value: ASL}\n    declares: {}\n    reason: r\n"
     )
-    root = tmp_path / "entity_evidence"
-    paths, _ = select_entity_evidence(root, "anvil", CATALOG)
-    rules = identifier_rules()
-    result = reconcile_entities(gather(paths, root, load(tmp_path, noop), rules), rules, [])
+    result = reconcile_entities(gathered(tmp_path / "entity_evidence", tmp_path, noop), identifier_rules(), [])
     assert "genetic_ancestry" not in result.report["unreviewed_donors"]
     assert by_id(result.donors)["HG06807"]["genetic_ancestry"]["status"] == NOT_CLASSIFIED
 
@@ -766,10 +789,7 @@ def test_a_published_value_no_row_reads_is_kept_as_unmapped_and_challenges_the_r
     """As on a file (contract 6.10): the published value is on the record, and beside a declaration it is a conflict."""
     without_male = TABLE.replace("  - id: phenotypic_sex.male\n    match: {slot: phenotypic_sex, value: male}\n", "")
     without_male = without_male.replace("    declares: {phenotypic_sex: Male}\n    reason: test\n", "", 1)
-    root = tmp_path / "entity_evidence"
-    paths, _ = select_entity_evidence(root, "anvil", CATALOG)
-    rules = identifier_rules()
-    result = reconcile_entities(gather(paths, root, load(tmp_path, without_male), rules), rules, [])
+    result = reconcile_entities(gathered(tmp_path / "entity_evidence", tmp_path, without_male), identifier_rules(), [])
     sex = by_id(result.donors)["HG00096"]["phenotypic_sex"]
     assert sex["status"] == CONFLICT
     (unmapped,) = [c for c in sex["evidence"] if c.get("claim_state") == "unmapped"]
@@ -819,18 +839,9 @@ def test_a_failed_published_write_leaves_neither_kind_of_the_new_generation(
 def test_a_claim_joined_through_a_rewritten_identifier_is_not_an_exact_match(tmp_path):
     """`GM19908` reaches donor `NA19908` through the Coriell rule's rewrite; `NA19908` itself matches exactly."""
     root = tmp_path / "entity_evidence"
-    directory = root / "anvil" / CATALOG / "D" / STAMP
-    directory.mkdir(parents=True)
-    rows = [
-        EntityEvidenceRow(
-            field="phenotypic_sex", target_key_value=v, raw_value="male", column="sex", identifier_column="id"
-        )
-        for v in ("GM19908", "NA19908")
-    ]
-    write_entity_file(directory / "t.ndjson", envelope(), rows)
-    paths, _ = select_entity_evidence(root, "anvil", CATALOG)
-    rules = identifier_rules()
-    result = reconcile_entities(gather(paths, root, load(tmp_path, TABLE), rules), rules, [])
+    lines = [("male", "GM19908"), ("male", "NA19908")]
+    write_entity_lines(root, "D", "phenotypic_sex", lines, SOURCE_REPOSITORY_METADATA)
+    result = reconcile_entities(gathered(root, tmp_path), identifier_rules(), [])
     (donor,) = result.donors
     assert donor["identifier"] == {"id": "NA19908", "namespace": "coriell"}
     assert sorted(c["match_exact"] for c in donor["phenotypic_sex"]["evidence"]) == [False, True]

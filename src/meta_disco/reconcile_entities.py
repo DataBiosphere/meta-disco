@@ -15,7 +15,8 @@ A repository's own record of a donor or sample (AnVIL's ``anvil_donor`` and
 (``models.REPOSITORY_ID_FIELDS``), keyed by the identifier of the submitter row it was made
 from: recognised as a donor or a sample by the line's field, it is listed on that record's
 ``repository_ids``, never translated. Many tie to one record (a person has an AnVIL donor in
-each dataset that holds them); one tying to two records is refused, never chosen.
+each dataset that holds them, under one or more distinct ids); one tying to two records is
+refused, never chosen.
 
 A sample record is written for every sample a reconciled file names (the run's sample
 lists) and every sample a repository's identifier ties to, with the donor it was collected
@@ -31,15 +32,15 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from .entity_evidence import entries, read_entity_envelope, repository_id_lines
-from .entity_map import REPOSITORY_ID_FIELD
+from .entity_evidence import entries, read_entity_envelope
 from .models import (
     CONFLICT,
     DONOR_FIELDS,
     JOIN_KEY_ENTITY_IDENTIFIER,
+    REPOSITORY_ID_FIELDS,
     REPOSITORY_IDS,
     SOURCE_IDENTIFIER_RULE,
     SOURCE_PUBLISHED_VALUE,
@@ -49,6 +50,7 @@ from .reconcile_lineage import applies
 from .resolution import NO_EVIDENCE, SlotEvidence, declaration, settle, translate
 from .sample_identity import (
     DONOR,
+    KIND_OF_REPOSITORY_ID,
     SAMPLE,
     EntityKind,
     Identifier,
@@ -63,21 +65,31 @@ from .value_map import ValueMap
 # How many unrecognised identifiers the report names per table.
 MAX_EXAMPLES = 5
 
-# What a repository identifier line's identifier names, by its field.
-_KIND_OF: dict[str, EntityKind] = {field: kind for kind, field in REPOSITORY_ID_FIELD.items()}
+# Every field an entity line may name, for :func:`gather`'s one read of each file.
+_ENTITY_FIELDS = (*DONOR_FIELDS, *REPOSITORY_ID_FIELDS)
 
 
 @dataclass(frozen=True, order=True)
 class RepositoryId:
-    """A repository's own identifier for a donor or sample, and the dataset and table holding it (the schema's ``RepositoryIdentifier``)."""
+    """A repository's own identifier for a donor or sample, and the dataset and table holding it (the schema's ``RepositoryIdentifier``).
+
+    A dataclass and not the generated model: it is hashed into a record's set and sorted, and
+    ``to_dict`` is the generated model's shape, held to it by the tests' ``DonorRecord`` and
+    ``SampleRecord`` checks.
+    """
 
     repository: str
     dataset: str
     table: str
     id: str
 
+    @property
+    def key(self) -> tuple[str, str]:
+        """What makes it one identifier: its repository and id, whichever dataset holds it."""
+        return self.repository, self.id
+
     def to_dict(self) -> dict:
-        return {"id": self.id, "repository": self.repository, "dataset": self.dataset, "table": self.table}
+        return asdict(self)
 
 
 @dataclass
@@ -123,7 +135,7 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
     or listed among its donor's or sample's repository identifiers.
 
     Reads every line, so a malformed file or line, an identifier two rules match, or a
-    repository identifier tying to two records raises here: reconcile calls this before it
+    repository identifier in a file other than a published table's or tying to two records raises here: reconcile calls this before it
     writes anything. Each claim cites its value-map row and carries the line's source and raw
     value, joined by ``entity_identifier``. A repository identifier is one record's by its kind,
     repository and id: the same one in two datasets ties to one record, or raises.
@@ -132,39 +144,42 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
     named_in: dict[tuple[str, str], set[Identifier]] = defaultdict(set)
     files, unrecognised = [], defaultdict(Counter)
     repository_ids: dict[tuple[EntityKind, Identifier], set[RepositoryId]] = defaultdict(set)
-    tied: dict[tuple[EntityKind, str, str], tuple[Path, Identifier]] = {}
+    tied: dict[tuple[EntityKind, str, str], tuple[Identifier, Path]] = {}
     for path in paths:
         envelope = read_entity_envelope(path)
         dataset = envelope.target.dataset
         lines = misses = 0
-        for entry in entries(path, envelope):
+        for entry in entries(path, envelope, _ENTITY_FIELDS):
             lines += 1
-            got = rules.recognise(entry.target_key_value, dataset, DONOR)
+            alias_kind = KIND_OF_REPOSITORY_ID.get(entry.field)
+            if alias_kind is not None and envelope.source_type != SOURCE_PUBLISHED_VALUE:
+                raise ValueError(
+                    f"{relative_to(path, entity_root)}: carries {entry.field}, a repository's own identifier, in a "
+                    f"{envelope.source_type} file; only the repository's published table issues one"
+                )
+            kind = alias_kind or DONOR  # a slot line is a donor's
+            got = rules.recognise(entry.target_key_value, dataset, kind)
             if got is None:
                 misses += 1
                 unrecognised[(dataset, envelope.source.table)][entry.target_key_value] += 1
                 continue
+            if alias_kind is not None:
+                alias = RepositoryId(
+                    envelope.source.repository, str(dataset), str(envelope.source.table), entry.raw_value
+                )
+                earlier, earlier_path = tied.setdefault((kind, *alias.key), (got.identifier, path))
+                if earlier != got.identifier:
+                    raise ValueError(
+                        f"{relative_to(path, entity_root)}: {alias.repository} {kind} {alias.id!r} ties to "
+                        f"{got.identifier.to_dict()} here and to {earlier.to_dict()} on an earlier line of "
+                        f"{relative_to(earlier_path, entity_root)}; a repository's identifier names one record, "
+                        "and which is not chosen"
+                    )
+                repository_ids[(kind, got.identifier)].add(alias)
+                continue
             named_in[(str(dataset), entry.field)].add(got.identifier)
             exact = got.identifier.id == entry.target_key_value  # not where a rule rewrote it (GM19908 -> NA19908)
             translate(slots[got.identifier], entry, envelope.source_type, JOIN_KEY_ENTITY_IDENTIFIER, table, exact)
-        for row in repository_id_lines(path):
-            lines += 1
-            kind = _KIND_OF[row.field]
-            got = rules.recognise(row.target_key_value, dataset, kind)
-            if got is None:
-                misses += 1
-                unrecognised[(dataset, envelope.source.table)][row.target_key_value] += 1
-                continue
-            alias = RepositoryId(envelope.source.repository, str(dataset), str(envelope.source.table), row.raw_value)
-            earlier = tied.setdefault((kind, alias.repository, alias.id), (path, got.identifier))
-            if earlier[1] != got.identifier:
-                raise ValueError(
-                    f"{relative_to(path, entity_root)}: {alias.repository} {kind} {alias.id!r} ties to "
-                    f"{got.identifier.to_dict()} here and to {earlier[1].to_dict()} in "
-                    f"{relative_to(earlier[0], entity_root)}; a repository's identifier names one record, and "
-                    "which is not chosen"
-                )
-            repository_ids[(kind, got.identifier)].add(alias)
         files.append(
             {
                 "path": relative_to(path, entity_root),
@@ -262,21 +277,22 @@ def _list_repository_ids(record: dict, aliases: set[RepositoryId] | None) -> Non
         record[REPOSITORY_IDS] = [a.to_dict() for a in sorted(aliases)]
 
 
-def _repository_id_counts(repository_ids: dict[tuple[EntityKind, Identifier], set[RepositoryId]], kind: str) -> dict:
+def _repository_id_counts(
+    repository_ids: dict[tuple[EntityKind, Identifier], set[RepositoryId]], kind: EntityKind
+) -> dict:
     """The repository identifiers tied to records of ``kind``: the records holding one, the distinct identifiers,
     the records by how many distinct identifiers each holds, and per dataset its identifiers and the records they tie to."""
     held = {ident: aliases for (k, ident), aliases in repository_ids.items() if k == kind}
-    per_record = Counter(len({(a.repository, a.id) for a in aliases}) for aliases in held.values())
-    by_dataset: dict[str, dict[str, set]] = defaultdict(lambda: {"ids": set(), "records": set()})
+    per_record = Counter(len({a.key for a in aliases}) for aliases in held.values())
+    ids_in: dict[str, set[tuple[str, str]]] = defaultdict(set)
+    records_in: dict[str, set[Identifier]] = defaultdict(set)
     for ident, aliases in held.items():
         for alias in aliases:
-            by_dataset[alias.dataset]["ids"].add((alias.repository, alias.id))
-            by_dataset[alias.dataset]["records"].add(ident)
+            ids_in[alias.dataset].add(alias.key)
+            records_in[alias.dataset].add(ident)
     return {
         "records": len(held),
-        "ids": len({(a.repository, a.id) for aliases in held.values() for a in aliases}),
+        "ids": len({a.key for aliases in held.values() for a in aliases}),
         "ids_per_record": {str(n): count for n, count in sorted(per_record.items())},
-        "by_dataset": {
-            dataset: {"ids": len(d["ids"]), "records": len(d["records"])} for dataset, d in sorted(by_dataset.items())
-        },
+        "by_dataset": {d: {"ids": len(ids_in[d]), "records": len(records_in[d])} for d in sorted(ids_in)},
     }

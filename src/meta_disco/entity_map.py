@@ -24,15 +24,13 @@ from importlib.resources import files
 
 from .azul_manifest import HARMONIZED_PREFIX
 from .lineage_map import expect_keys, expect_mapping, expect_name, map_document
-from .models import DONOR_FIELDS, DONOR_REPOSITORY_ID, SAMPLE_REPOSITORY_ID
-from .sample_identity import DONOR, SAMPLE, EntityKind
+from .models import DONOR_FIELDS
+from .sample_identity import DONOR, REPOSITORY_ID_FIELD, SAMPLE, EntityKind
 from .slot_map import Readable, unique_key_loader
 
 _WHERE = "entity map"
 IDENTIFIER = "identifier"
 _PUBLISHED_KEYS = frozenset({"table", "source_rows", "repository_id"})
-# Each kind of published record, and the entity evidence field its repository identifier is written as.
-REPOSITORY_ID_FIELD: dict[EntityKind, str] = {DONOR: DONOR_REPOSITORY_ID, SAMPLE: SAMPLE_REPOSITORY_ID}
 # The slots a published record of each kind may read: a donor's; a sample has none yet.
 _PUBLISHED_SLOTS: dict[EntityKind, tuple[str, ...]] = {DONOR: DONOR_FIELDS, SAMPLE: ()}
 
@@ -58,11 +56,6 @@ class PublishedEntities:
     source_rows: str
     repository_id: str
     slots: Mapping[str, tuple[str, ...]]
-
-    @property
-    def repository_id_field(self) -> str:
-        """The entity evidence field the repository's identifier is written as."""
-        return REPOSITORY_ID_FIELD[self.kind]
 
 
 @dataclass(frozen=True)
