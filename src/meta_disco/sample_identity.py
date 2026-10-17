@@ -101,7 +101,9 @@ class IdentifierRuleSet:
         """The identifier ``raw`` is in ``dataset``, as the ``entity`` given, or None where no rule naming it matches.
 
         Raises ``ValueError`` where two rules naming ``entity`` match one string: which
-        namespace it is in would then be a choice, and the rules must not leave one.
+        namespace it is in would then be a choice, and the rules must not leave one. Raises too
+        where a rule naming a sample and a donor writes an identifier its own pattern does not
+        match, since :meth:`collected_from` could not find that rule again.
         """
         if entity not in ENTITY_KINDS:
             raise ValueError(f"{entity!r} is not one of {sorted(ENTITY_KINDS)}")
@@ -115,6 +117,12 @@ class IdentifierRuleSet:
             if m is None:
                 continue
             ident = m.expand(rule.write) if rule.write is not None else raw
+            if rule.names == ENTITY_KINDS and rule.match.fullmatch(ident) is None:
+                # `collected_from` finds the rule again by matching the identifier as written.
+                raise ValueError(
+                    f"identifier rule {rule.id!r} writes {raw!r} as {ident!r}, which its own pattern does not match; "
+                    "a rule naming a sample and a donor must accept what it writes, or the sample's donor is lost"
+                )
             found.append(Recognised(Identifier(rule.namespace, ident, rule.dataset), rule.id))
         if len(found) > 1:
             raise ValueError(f"{raw!r} matches {len(found)} identifier rules: {[r.rule_id for r in found]}")

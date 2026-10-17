@@ -219,6 +219,17 @@ def test_a_sample_is_linked_only_by_a_rule_of_its_namespace_and_dataset_naming_b
         assert found.identifier == sample
 
 
+def test_a_rule_naming_both_that_writes_what_it_does_not_accept_is_refused_not_unlinked():
+    """`GM19908` written `NA19908` by a rule matching only `GM` could not be linked to its donor."""
+    rules = load_identifier_rules(
+        rules_text({"id": "a", "match": "^GM(\\d{5})$", "names": "sample, donor", "extra": ", write: 'NA\\1'"})
+    )
+    with pytest.raises(ValueError, match="its own pattern does not match"):
+        rules.recognise("GM19908", None, SAMPLE)
+    only_samples = load_identifier_rules(rules_text({"id": "a", "match": "^GM(\\d{5})$", "extra": ", write: 'NA\\1'"}))
+    assert recognised(only_samples, "GM19908", None) == coriell("NA19908")
+
+
 def test_two_rules_linking_one_sample_are_refused():
     rules = load_identifier_rules(
         rules_text(
