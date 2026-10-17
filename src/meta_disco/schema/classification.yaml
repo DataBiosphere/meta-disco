@@ -650,8 +650,9 @@ classes:
   EntityEvidenceRow:
     description: >-
       One line of an entity evidence file after the envelope (#693): a source saying, about
-      one donor, what it wrote for one of the donor's slots. It reads "about the donor the
-      source names `target_key_value` (read from `identifier_column`), the source wrote
+      one donor, what it wrote for one of the donor's slots, or, about one donor or sample,
+      the repository's own identifier for it (#669). It reads "about the donor (or sample)
+      the source names `target_key_value` (read from `identifier_column`), the source wrote
       `raw_value` in `column`". The envelope is an `EvidenceFileEnvelope` keyed by
       `entity_identifier`; the lines are written under their own root,
       `data/entity_evidence/`, because every reader of `data/source_evidence/` takes each file
@@ -670,14 +671,19 @@ classes:
     attributes:
       field:
         required: true
-        pattern: "^(phenotypic_sex|genetic_ancestry)\\Z"
+        pattern: "^(phenotypic_sex|genetic_ancestry|donor_repository_id|sample_repository_id)\\Z"
         description: >-
-          The donor slot this line speaks to; pinned to `models.DONOR_FIELDS` by
-          `test_the_entity_row_field_pattern_lists_every_donor_field`.
+          The donor slot this line speaks to, or `donor_repository_id` /
+          `sample_repository_id` where `raw_value` is the repository's own identifier for the
+          donor or sample (#669), which reconcile lists on the record and never translates.
+          Pinned to `models.DONOR_FIELDS` and `models.REPOSITORY_ID_FIELDS` by
+          `test_the_entity_row_field_pattern_lists_every_entity_field`.
       target_key_value:
         required: true
         pattern: "^[^\\r\\n]+\\Z"
-        description: The identifier the source wrote for the donor, verbatim.
+        description: >-
+          The identifier the source wrote for the donor, or for the sample on a
+          `sample_repository_id` line, verbatim.
       column:
         required: true
         pattern: "^[^\\r\\n]+\\Z"
@@ -690,9 +696,9 @@ classes:
         pattern: "^[^\\r\\n]+\\Z"
         description: >-
           The table `target_key_value` was read from, where it is not the envelope's: AnVIL's
-          published `anvil_donor` names its donor only through the submitter row it was made
-          from (`source_datarepo_row_ids`), so its lines take the identifier from that row's
-          table.
+          published `anvil_donor` and `anvil_biosample` name their donor or sample only through
+          the submitter row each was made from (`source_datarepo_row_ids`), so their lines take
+          the identifier from that row's table.
 
   EvidenceFileEnvelope:
     description: >-
@@ -1141,6 +1147,42 @@ classes:
         range: GeneticAncestryClassification
         required: true
         inlined: true
+      repository_ids:
+        range: RepositoryIdentifier
+        multivalued: true
+        inlined_as_list: true
+        description: >-
+          Every identifier a repository gave a record of its own for this donor (#669),
+          AnVIL's `donor_id`s: a person has an AnVIL donor in each dataset that holds them,
+          and the datasets give them one or more distinct ids (PRIMED's and T2T's are one).
+          Absent where none ties to the donor.
+
+  RepositoryIdentifier:
+    description: >-
+      A repository's own identifier for a donor or sample (#669): AnVIL's `donor_id` or
+      `biosample_id`, the key of the explorer's donor and biosample pages. It ties to our
+      record through the submitter row AnVIL made its record from (`source_datarepo_row_ids`),
+      read in that row's table's identifier column (`sources/anvil_entity_map.yaml`). Many tie
+      to one record; one tying to two records is refused at reconcile.
+    attributes:
+      id:
+        required: true
+        pattern: "^[^\\r\\n]+\\Z"
+        description: The repository's identifier, as it wrote it.
+      repository:
+        required: true
+        pattern: "^[^\\r\\n]+\\Z"
+        description: The repository that issued it (`anvil`).
+      dataset:
+        required: true
+        pattern: "^[^\\r\\n]+\\Z"
+        description: >-
+          The dataset whose table holds it. The same identifier in two datasets is listed
+          once for each.
+      table:
+        required: true
+        pattern: "^[^\\r\\n]+\\Z"
+        description: The repository's table holding it (`anvil_donor`, `anvil_biosample`).
 
   PhenotypicSexClassification:
     is_a: Classification
@@ -1160,8 +1202,9 @@ classes:
 
   SampleRecord:
     description: >-
-      One sample (#693): every sample a reconciled file names, in
-      `reconciled/samples.ndjson.gz`, with the donor it was collected from where a rule says.
+      One sample (#693): every sample a reconciled file names, and every sample a
+      repository's own sample record ties to (#669), in `reconciled/samples.ndjson.gz`, with
+      the donor it was collected from where a rule says.
     attributes:
       identifier:
         range: EntityIdentifier
@@ -1171,6 +1214,13 @@ classes:
         range: CollectedFrom
         inlined: true
         description: Absent where nothing names the sample's donor.
+      repository_ids:
+        range: RepositoryIdentifier
+        multivalued: true
+        inlined_as_list: true
+        description: >-
+          Every identifier a repository gave a record of its own for this sample (#669),
+          AnVIL's `biosample_id`s. Absent where none ties to the sample.
 
   CollectedFrom:
     description: >-
@@ -2582,8 +2632,9 @@ enums:
         description: An NCBI, EBI or DDBJ BioSample accession (`SAMN`/`SAMEA`/`SAMD`).
       igvf:
         description: >-
-          The IGVF Data Portal's donor accessions (`IGVFDO` and eight capitals or digits, #693),
-          as AnVIL_IGVF_Mouse_R1's `donor` table names its mice.
+          The IGVF Data Portal's donor and sample accessions (`IGVFDO` or `IGVFSM` and eight
+          capitals or digits, #693, #669), as AnVIL_IGVF_Mouse_R1's `donor` and `sample` tables
+          name its mice and their samples.
       dataset_local:
         description: >-
           A name one dataset gives its samples, unique only within it; recognised only by a

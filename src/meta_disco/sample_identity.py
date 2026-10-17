@@ -30,6 +30,7 @@ from typing import Any, Literal
 import yaml
 
 from . import code_rules
+from .models import DONOR_REPOSITORY_ID, SAMPLE_REPOSITORY_ID
 from .schema.classification_model import IdentifierRule, IdentifierRules
 from .slot_map import unique_key_loader
 from .validators.header_extractors import VCFHeader, parse_sam_header
@@ -41,6 +42,10 @@ EntityKind = Literal["sample", "donor"]
 SAMPLE: EntityKind = "sample"
 DONOR: EntityKind = "donor"
 ENTITY_KINDS = frozenset({SAMPLE, DONOR})
+# Each kind, and the entity evidence field a repository's own identifier for one is written as
+# (#669); and back, the kind a repository identifier line's identifier names.
+REPOSITORY_ID_FIELD: dict[EntityKind, str] = {DONOR: DONOR_REPOSITORY_ID, SAMPLE: SAMPLE_REPOSITORY_ID}
+KIND_OF_REPOSITORY_ID: dict[str, EntityKind] = {field: kind for kind, field in REPOSITORY_ID_FIELD.items()}
 
 # Splits a file name into the tokens an accession may be: `NA24695_CTTGTA_L001_R1_001.fastq.gz`
 # gives `NA24695`. A name that runs an accession into other text (`HG02080vCHM13`) gives none.

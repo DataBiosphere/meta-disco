@@ -201,6 +201,14 @@ EVIDENCE_FIELDS = (*CLASSIFICATION_FIELDS, SAMPLES_FIELD)
 DONOR_FIELDS = ("phenotypic_sex", "genetic_ancestry")
 TRANSLATED_FIELDS = (*CLASSIFICATION_FIELDS, *DONOR_FIELDS)
 
+# The entity evidence fields naming a repository's own identifier for a donor or a sample
+# (#669): AnVIL's `donor_id` and `biosample_id`, listed on the record they tie to as
+# `repository_ids`. An alias, not a slot: never translated by the value map, never settled.
+DONOR_REPOSITORY_ID = "donor_repository_id"
+SAMPLE_REPOSITORY_ID = "sample_repository_id"
+REPOSITORY_ID_FIELDS = (DONOR_REPOSITORY_ID, SAMPLE_REPOSITORY_ID)
+REPOSITORY_IDS = "repository_ids"
+
 # The dimensions a record stores as a list (ADR-0003, #654): the schema's slots whose
 # ``value`` is ``multivalued``, held to it by test_output_shape. A claim still declares
 # one value, a string, and resolution runs over strings as for any other dimension;
