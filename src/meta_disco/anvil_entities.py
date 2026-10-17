@@ -23,7 +23,6 @@ Offline: it reads what ``make download`` left on disk.
 
 from __future__ import annotations
 
-import json
 from collections import Counter
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -33,13 +32,14 @@ from .anvil_evidence import EVIDENCE_DIRS, chosen_datasets, verbatim_manifest
 from .azul_manifest import (
     FORMAT_VERBATIM,
     REPOSITORY,
+    cell_as_written,
     iter_verbatim_entities,
     manifest_path,
     sidecar_datasets,
     sidecar_requested_at,
 )
 from .entity_evidence import write_entity_file
-from .entity_map import EntityMap, EntityTable
+from .entity_map import EntityMap, EntityTable, PublishedDonors
 from .models import JOIN_KEY_ENTITY_IDENTIFIER, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
 from .sample_identity import DONOR, identifier_rules
 from .schema.classification_model import EntityEvidenceRow, ImporterSourceTypeEnum, JoinKeyEnum
@@ -129,7 +129,7 @@ def _check_dataset(entity_map: EntityMap, dataset: str, path: Path) -> list[str]
     sources: set[str] = set()
     for kind, row in iter_verbatim_entities(path, {*tables, published.table}):
         if kind == published.table:
-            sources.update(_source_table(s) for s in row.get(published.source_rows) or [])
+            sources.update(table for table, _ in map(_source_row, row.get(published.source_rows) or []))
             continue
         rows[kind] += 1
         seen[kind].update(k for k, v in row.items() if v is not None and v != [])
@@ -160,9 +160,10 @@ def _check_dataset(entity_map: EntityMap, dataset: str, path: Path) -> list[str]
     return problems
 
 
-def _source_table(source_row: object) -> str:
-    """The table a ``<table>:<datarepo_row_id>`` source row names, or the whole value where it names none."""
-    return str(source_row).partition(":")[0]
+def _source_row(value: object) -> tuple[str, str]:
+    """A ``<table>:<datarepo_row_id>`` source row as its table and row id; the row id is empty where it names none."""
+    table, _, row_id = str(value).partition(":")
+    return table, row_id
 
 
 # --- importing ----------------------------------------------------------------
@@ -205,8 +206,9 @@ def import_dataset(
     Each kind is its own generation directory (``anvil/`` and ``anvil_published/``), staged
     and renamed into place whole, as ``anvil_evidence.import_dataset`` stages its own. A
     mapped table that writes no line is the map disagreeing with the catalog and raises.
-    The published table's file is written wherever the dataset has published donors, even
-    with no line: 1000 Genomes' donors carry no published sex, and the empty file says so.
+    The published table's file is written for every dataset, with no line where the dataset
+    has no published donor or none with a value (1000 Genomes' carry no published sex), so a
+    re-import supersedes both kinds and never leaves an older published generation current.
     ``fetched_at`` is the verbatim manifest's request time from the sidecar; ``service`` is
     the Azul service the manifests were pulled from, written as each file's source url.
     """
@@ -231,6 +233,9 @@ def import_dataset(
         )
 
     tables = entity_map.tables_of(dataset)
+    # Each mapped row's identifier by (table, datarepo_row_id), gathered as the tables stream, for
+    # the published donors' source rows.
+    identifiers: dict[tuple[str, str], str] = {}
     results = []
     directory = generation_dir(entity_root, EVIDENCE_DIRS[SOURCE_REPOSITORY_METADATA], catalog, dataset, stamp)
     with staged_generation(directory) as staging:
@@ -239,34 +244,23 @@ def import_dataset(
             result.written = write_entity_file(
                 evidence_file_path(staging, table.table),
                 envelope(SOURCE_REPOSITORY_METADATA, table.table, table.identifier),
-                _table_rows(path, table, result),
+                _table_rows(path, table, result, identifiers),
             )
             if not result.written:
                 raise ValueError(f"{dataset}/{table.table}: no line written; the map disagrees with {catalog} here")
             results.append(result)
 
     published = entity_map.published
-    identifiers = _source_identifiers(path, tables)
-    result = TableImport(table=published.table, path=Path())
-    lines = list(_published_rows(path, entity_map, tables, identifiers, result))
-    if result.rows:
-        directory = generation_dir(entity_root, EVIDENCE_DIRS[SOURCE_PUBLISHED_VALUE], catalog, dataset, stamp)
-        result.path = evidence_file_path(directory, published.table)
-        with staged_generation(directory) as staging:
-            result.written = write_entity_file(
-                evidence_file_path(staging, published.table),
-                envelope(SOURCE_PUBLISHED_VALUE, published.table, published.source_rows),
-                lines,
-            )
-        results.append(result)
+    directory = generation_dir(entity_root, EVIDENCE_DIRS[SOURCE_PUBLISHED_VALUE], catalog, dataset, stamp)
+    result = TableImport(table=published.table, path=evidence_file_path(directory, published.table))
+    with staged_generation(directory) as staging:
+        result.written = write_entity_file(
+            evidence_file_path(staging, published.table),
+            envelope(SOURCE_PUBLISHED_VALUE, published.table, published.source_rows),
+            _published_rows(path, published, tables, identifiers, result),
+        )
+    results.append(result)
     return DatasetImport(dataset=dataset, generation=stamp, tables=results)
-
-
-def _cell(value: object) -> str | None:
-    """A cell as written: a string verbatim, a null or empty list as None, anything else as ``json.dumps`` spells it."""
-    if value is None or value == []:
-        return None
-    return value if isinstance(value, str) else json.dumps(value)
 
 
 def _lines(
@@ -274,7 +268,7 @@ def _lines(
 ) -> Iterator[EntityEvidenceRow]:
     for slot, columns in slots.items():
         for column in columns:
-            raw = _cell(row.get(column))
+            raw = cell_as_written(row.get(column))
             if raw is None:
                 result.null_cells[column] += 1
                 continue
@@ -289,44 +283,34 @@ def _lines(
             )
 
 
-def _table_rows(path: Path, table: EntityTable, result: TableImport) -> Iterator[EntityEvidenceRow]:
-    """Every line one mapped table yields, streamed row by row, counting into ``result``."""
+def _table_rows(
+    path: Path, table: EntityTable, result: TableImport, identifiers: dict[tuple[str, str], str]
+) -> Iterator[EntityEvidenceRow]:
+    """Every line one mapped table yields, streamed row by row, counting into ``result`` and keeping each row's identifier in ``identifiers``."""
     for _type, row in iter_verbatim_entities(path, {table.table}):
         result.rows += 1
         identifier = row.get(table.identifier)
         if not isinstance(identifier, str) or not identifier:
             result.no_identifier += 1
             continue
+        identifiers[(table.table, str(row.get("datarepo_row_id")))] = identifier
         yield from _lines(row, table.slots, identifier, table.identifier, result)
-
-
-def _source_identifiers(path: Path, tables: list[EntityTable]) -> dict[tuple[str, str], str]:
-    """Each mapped table's rows by ``(table, datarepo_row_id)``, to the identifier its row names."""
-    by_name = {t.table: t for t in tables}
-    out = {}
-    for kind, row in iter_verbatim_entities(path, set(by_name)):
-        identifier = row.get(by_name[kind].identifier)
-        if isinstance(identifier, str) and identifier:
-            out[(kind, str(row.get("datarepo_row_id")))] = identifier
-    return out
 
 
 def _published_rows(
     path: Path,
-    entity_map: EntityMap,
+    published: PublishedDonors,
     tables: list[EntityTable],
     identifiers: dict[tuple[str, str], str],
     result: TableImport,
 ) -> Iterator[EntityEvidenceRow]:
     """Every line the published donor table yields, each donor attached through its source rows in ``tables`` (``identifiers``)."""
-    published = entity_map.published
     columns = {t.table: t.identifier for t in tables}
     for _type, row in iter_verbatim_entities(path, {published.table}):
         result.rows += 1
         found: set[tuple[str, str]] = set()
         reached = False
-        for source_row in row.get(published.source_rows) or []:
-            table, _, row_id = str(source_row).partition(":")
+        for table, row_id in map(_source_row, row.get(published.source_rows) or []):
             if table not in columns:
                 continue
             reached = True

@@ -669,6 +669,15 @@ def is_submitter_table(entity_type: str) -> bool:
     return not entity_type.startswith(HARMONIZED_PREFIX)
 
 
+def cell_as_written(value: Any) -> str | None:
+    """A verbatim manifest cell as an evidence line records it (contract 1.4): a string verbatim, the
+    empty string included; null and the empty list as None, since neither observes anything; anything
+    else as its JSON. Shared by the lineage and entity importers."""
+    if value is None or value == []:
+        return None
+    return value if isinstance(value, str) else json.dumps(value)
+
+
 def link_handles(value: Any) -> list[str] | None:
     """The DRS URIs a submitter cell holds, or None where the cell holds no link.
 

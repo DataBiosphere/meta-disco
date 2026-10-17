@@ -48,6 +48,7 @@ from .edges import distinct
 from .models import SOURCE_DERIVATION_INHERITANCE, ClaimSource
 from .reconcile_inherit import PARENT_CONFLICT, Step, parent_first
 from .sample_identity import (
+    SAMPLE,
     Identifier,
     IdentifierRuleSet,
     members_of,
@@ -108,7 +109,7 @@ def from_line(
     elements = list_cell(raw_value)
     members, rule_ids = set(), []
     for element in elements if elements is not None else [raw_value]:
-        got = rules.recognise(element, dataset)
+        got = rules.recognise(element, dataset, SAMPLE)
         if got is None:
             return None
         members.add(got.identifier)

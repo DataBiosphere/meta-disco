@@ -25,7 +25,7 @@ from collections.abc import Callable, Collection, Iterable, Sequence
 from dataclasses import dataclass
 from functools import cache, cached_property, lru_cache
 from importlib.resources import files
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 
@@ -37,8 +37,9 @@ from .validators.header_extractors import VCFHeader, parse_sam_header
 DATASET_LOCAL = "dataset_local"
 
 # What an identifier names (the schema's `entity_kind_enum`, #693).
-SAMPLE = "sample"
-DONOR = "donor"
+EntityKind = Literal["sample", "donor"]
+SAMPLE: EntityKind = "sample"
+DONOR: EntityKind = "donor"
 ENTITY_KINDS = frozenset({SAMPLE, DONOR})
 
 # Splits a file name into the tokens an accession may be: `NA24695_CTTGTA_L001_R1_001.fastq.gz`
@@ -96,8 +97,8 @@ class IdentifierRuleSet:
     def __init__(self, rules: list[_Rule]):
         self._rules = rules
 
-    def recognise(self, raw: str, dataset: str | None, entity: str = SAMPLE) -> Recognised | None:
-        """The identifier ``raw`` is in ``dataset``, as a sample (or the ``entity`` given), or None where no rule naming it matches.
+    def recognise(self, raw: str, dataset: str | None, entity: EntityKind) -> Recognised | None:
+        """The identifier ``raw`` is in ``dataset``, as the ``entity`` given, or None where no rule naming it matches.
 
         Raises ``ValueError`` where two rules naming ``entity`` match one string: which
         namespace it is in would then be a choice, and the rules must not leave one.
@@ -129,7 +130,7 @@ class IdentifierRuleSet:
         for token in _NAME_TOKEN.split(file_name):
             if not token:
                 continue
-            got = self.recognise(token, None)
+            got = self.recognise(token, None, SAMPLE)
             if got is not None:
                 out.add(got.identifier)
         return out
@@ -241,6 +242,11 @@ def identifier_rules() -> IdentifierRuleSet:
 # --- lists and references -----------------------------------------------------
 
 
+def identifier_order(identifier: Identifier) -> tuple[str, str, str]:
+    """The key identifiers sort by: namespace, id, then dataset (absent sorting first)."""
+    return (identifier.namespace, identifier.id, identifier.dataset or "")
+
+
 def _sorted(members: Iterable[Identifier]) -> list[dict]:
     """The distinct members as ``EntityIdentifier`` dicts, in one canonical order.
 
@@ -249,7 +255,7 @@ def _sorted(members: Iterable[Identifier]) -> list[dict]:
     The order is the same: a namespace's identifiers all carry a dataset
     (``dataset_local``) or none.
     """
-    return [m.to_dict() for m in sorted(set(members), key=lambda m: (m.namespace, m.id, m.dataset or ""))]
+    return [m.to_dict() for m in sorted(set(members), key=identifier_order)]
 
 
 def _digest(entries: list[dict]) -> str:
@@ -362,7 +368,7 @@ def _read(
         return HeaderSamples(NO_SAMPLE, rule)
     members, unknown = set(), []
     for raw in raws:
-        got = rules.recognise(raw, dataset)
+        got = rules.recognise(raw, dataset, SAMPLE)
         if got is None:
             unknown.append(raw)
         else:

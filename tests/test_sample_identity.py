@@ -16,10 +16,12 @@ from meta_disco.sample_identity import (
     DONOR,
     NAMED,
     NO_SAMPLE,
+    SAMPLE,
     SAMPLE_MAP_SAMPLES,
     UNREAD,
     UNRECOGNISED,
     VCF_SAMPLES,
+    EntityKind,
     Identifier,
     identifier_rule_declarations,
     identifier_rules,
@@ -60,7 +62,7 @@ def coriell(n: str) -> Identifier:
     ],
 )
 def test_a_recognised_string_is_an_identifier_in_its_namespace(raw, dataset, namespace, ident):
-    got = identifier_rules().recognise(raw, dataset)
+    got = identifier_rules().recognise(raw, dataset, SAMPLE)
     assert got is not None
     assert (got.identifier.namespace, got.identifier.id) == (namespace, ident)
     assert got.rule_id in {r.id for r in identifier_rule_declarations()}
@@ -82,11 +84,11 @@ def test_a_recognised_string_is_an_identifier_in_its_namespace(raw, dataset, nam
     ],
 )
 def test_a_string_no_rule_matches_is_not_a_sample(raw, dataset):
-    assert identifier_rules().recognise(raw, dataset) is None
+    assert identifier_rules().recognise(raw, dataset, SAMPLE) is None
 
 
 def test_a_dataset_local_identifier_carries_its_dataset():
-    got = identifier_rules().recognise("simons_data_sample_1", T2T_CHRY)
+    got = identifier_rules().recognise("simons_data_sample_1", T2T_CHRY, SAMPLE)
     assert got is not None and got.identifier.dataset == T2T_CHRY
     assert got.identifier.to_dict() == {"id": "simons_data_sample_1", "namespace": "dataset_local", "dataset": T2T_CHRY}
 
@@ -150,10 +152,10 @@ def test_two_rules_matching_one_string_is_refused_not_chosen():
         rules_text({"id": "a", "match": "^HG.*$"}, {"id": "b", "ns": "giab", "match": "^HG0.*$"})
     )
     with pytest.raises(ValueError, match="matches 2 identifier rules"):
-        rules.recognise("HG002", None)
+        rules.recognise("HG002", None, SAMPLE)
 
 
-def recognised(rules, raw: str, dataset: str | None, entity: str = "sample") -> Identifier:
+def recognised(rules, raw: str, dataset: str | None, entity: EntityKind = SAMPLE) -> Identifier:
     got = rules.recognise(raw, dataset, entity)
     assert got is not None, raw
     return got.identifier
@@ -162,13 +164,13 @@ def recognised(rules, raw: str, dataset: str | None, entity: str = "sample") -> 
 def test_a_string_is_read_only_as_what_its_rule_names():
     """A donor accession is no file's sample, and a sample accession keys no donor (#693)."""
     rules = identifier_rules()
-    assert rules.recognise("IGVFDO2696EIGV", None) is None
+    assert rules.recognise("IGVFDO2696EIGV", None, SAMPLE) is None
     assert recognised(rules, "IGVFDO2696EIGV", None, DONOR) == Identifier("igvf", "IGVFDO2696EIGV")
     assert rules.recognise("SRS006902", None, DONOR) is None
     assert recognised(rules, "HG00096", None, DONOR) == coriell("HG00096")
     assert rules.in_name("IGVFDO2696EIGV.fastq.gz") == set()
     with pytest.raises(ValueError, match="is not one of"):
-        rules.recognise("HG00096", None, "person")
+        rules.recognise("HG00096", None, "person")  # type: ignore[arg-type]
 
 
 def test_two_rules_naming_different_entities_do_not_compete():
@@ -367,7 +369,7 @@ def test_a_name_is_never_read_by_a_dataset_local_rule():
     rules = load_identifier_rules(
         rules_text({"id": "s", "ns": "dataset_local", "match": "^S\\d$", "extra": ", dataset: D"})
     )
-    assert rules.recognise("S1", "D") is not None
+    assert rules.recognise("S1", "D", SAMPLE) is not None
     assert rules.in_name("S1.bam") == set()
 
 

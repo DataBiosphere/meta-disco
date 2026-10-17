@@ -1,16 +1,23 @@
-"""The resolution rule: one slot's answer from every input's declaration (#432, #473, #571, #693).
-
-Shared by reconcile's file records (``reconcile``) and its donor records
-(``reconcile_entities``), so a donor's slot is settled by the same rule as a file's
-dimension. ``reconcile`` re-exports both functions, where its callers and the docs cite them.
-"""
+"""The resolution rule and the translation of a line into claims, shared by reconcile's file and donor records (#693)."""
 
 from __future__ import annotations
 
 from collections.abc import Set as AbstractSet
+from dataclasses import dataclass, field
 
-from .models import CLASSIFIED, CONFLICT, NOT_APPLICABLE, NOT_CLASSIFIED, settled_value
+from .models import (
+    CLASSIFIED,
+    CONFLICT,
+    NOT_APPLICABLE,
+    NOT_CLASSIFIED,
+    SOURCE_PUBLISHED_VALUE,
+    UNMAPPED,
+    settled_value,
+)
+from .rule_engine import make_claim
 from .schema_vocab import most_specific
+from .source_evidence import EvidenceEntry
+from .value_map import ValueMap, claims_from
 
 
 def declaration(entry: dict, slot: str | None = None) -> str | None:
@@ -76,3 +83,68 @@ def settle(
     if only == NOT_APPLICABLE:
         return NOT_APPLICABLE, None
     return CLASSIFIED, only
+
+
+@dataclass(slots=True)
+class SlotEvidence:
+    """What the sources said about one slot of one record: a file's, or a donor's (#693)."""
+
+    claims: list[dict] = field(default_factory=list)
+    # Source types that spoke to the slot with a value no authored row reads.
+    unreviewed: set[str] = field(default_factory=set)
+    # Source types that spoke to the slot with a value whose authored row declares
+    # nothing for it (`declares: {}`, or declares only other slots): reviewed, no claim.
+    no_claim: set[str] = field(default_factory=set)
+
+
+# The slot evidence of a slot no source spoke to. Shared and never written: every reader
+# only reads it.
+NO_EVIDENCE = SlotEvidence()
+
+
+def translate(
+    record_slots: dict[str, SlotEvidence], entry: EvidenceEntry, source_type: str, join_key: str, table: ValueMap
+) -> set[str]:
+    """Add a matched line's claims to its record's slots, or mark the slot unreviewed by its source type.
+
+    ``source_type`` and ``join_key`` are the line's evidence file's; a record is a file's or,
+    from entity evidence (``reconcile_entities``, #693), a donor's.
+
+    The row is selected here and handed to ``claims_from``, because an authored row
+    declaring nothing (``declares: {}``) yields no claim and is still reviewed.
+
+    A line no authored row reads makes no claim (contract 3.7). From the published source
+    it still moves the slot (to ``conflict`` or ``not_classified``), so what it said is
+    kept in the slot's evidence as an ``unmapped`` entry — its source, raw value and join,
+    and no value, status or rule — and the record shows why on its own (6.10). It declares
+    nothing, so resolution does not read it. Another source's unreviewed value moves
+    nothing, is counted in the report, and is not written to the record.
+
+    Returns the slots the line's claims were made on.
+    """
+    row = table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset)
+    if row is None or not row.authored:
+        said = record_slots[entry.field]
+        said.unreviewed.add(source_type)
+        if source_type != SOURCE_PUBLISHED_VALUE:
+            return set()
+        seen = make_claim(
+            source_type=source_type,
+            state=UNMAPPED,
+            source=entry.source,
+            raw_value=entry.raw_value,
+            join_key=join_key,
+            match_exact=True,
+        )
+        if seen not in said.claims:
+            said.claims.append(seen)
+        return set()
+    if entry.field not in row.declares:
+        record_slots[entry.field].no_claim.add(source_type)
+    claimed = set()
+    for slot, claim in claims_from(entry, source_type, table, join_key=join_key, row=row):
+        claimed.add(slot)
+        existing = record_slots[slot].claims
+        if claim not in existing:
+            existing.append(claim)
+    return claimed

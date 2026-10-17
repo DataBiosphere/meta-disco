@@ -34,7 +34,6 @@ holds each map to AnVIL's published table (``PUBLISHED_TABLE``, contract 7.12), 
 
 from __future__ import annotations
 
-import json
 from collections import Counter
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -47,6 +46,7 @@ from .azul_manifest import (
     PUBLISHED_TABLE,
     REPOSITORY,
     VERBATIM_FILE,
+    cell_as_written,
     iter_verbatim_entities,
     link_handles,
     manifest_path,
@@ -54,7 +54,7 @@ from .azul_manifest import (
     sidecar_requested_at,
 )
 from .models import JOIN_KEY_DRS_URI, SAMPLES_FIELD, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA, ClaimSource
-from .sample_identity import Identifier, IdentifierRuleSet, identifier_rules, name_contradicts
+from .sample_identity import SAMPLE, Identifier, IdentifierRuleSet, identifier_rules, name_contradicts
 from .schema.classification_model import ImporterSourceTypeEnum, JoinKeyEnum
 from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource
 from .source_evidence import (
@@ -323,7 +323,7 @@ def _cell_samples(value: object, dataset: str, rules: IdentifierRuleSet) -> froz
     elements = value if isinstance(value, list) else [value]
     members = set()
     for element in elements:
-        got = rules.recognise(element, dataset) if isinstance(element, str) else None
+        got = rules.recognise(element, dataset, SAMPLE) if isinstance(element, str) else None
         if got is None:
             return None
         members.add(got.identifier)
@@ -504,13 +504,13 @@ def _transcribe(
     what the source wrote.
     """
     if spec.form == SOURCE_CELL:
-        value = row.get(spec.value)
-        if value is None or value == []:
+        raw = cell_as_written(row.get(spec.value))
+        if raw is None:
             if spec.value not in nulls:
                 nulls.add(spec.value)
                 result.null_cells[spec.value] += 1
             return None, None
-        return (value if isinstance(value, str) else json.dumps(value)), spec.value
+        return raw, spec.value
     if spec.form == SOURCE_COLUMN_NAME:
         return spec.value, link_column
     return spec.value, None

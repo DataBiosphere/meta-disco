@@ -32,9 +32,9 @@ from meta_disco.models import (
     SOURCE_PUBLISHED_VALUE,
     SOURCE_REPOSITORY_METADATA,
 )
-from meta_disco.output_utils import DONORS_FILE, RECONCILED_DIR, SAMPLES_FILE, iter_reconciled_entities
+from meta_disco.output_utils import DONORS_FILE, RECONCILED_DIR, SAMPLES_FILE, iter_reconciled_artifact
 from meta_disco.reconcile import ENTITIES_KEY
-from meta_disco.reconcile_entities import reconcile_entities, select_entity_evidence
+from meta_disco.reconcile_entities import gather, reconcile_entities, select_entity_evidence
 from meta_disco.sample_identity import Identifier, identifier_rules, reference, sample_list
 from meta_disco.schema.classification_model import (
     DonorRecord,
@@ -433,7 +433,8 @@ def test_the_seeder_and_the_queue_read_the_entity_root_beside_the_slot_root(impo
 
 def settled(imported_root: Path, tmp_path: Path, sample_lists=()):
     paths, skipped = select_entity_evidence(imported_root, "anvil", CATALOG)
-    return reconcile_entities(paths, imported_root, load(tmp_path, TABLE), identifier_rules(), sample_lists, skipped)
+    rules = identifier_rules()
+    return reconcile_entities(gather(paths, imported_root, load(tmp_path, TABLE), rules), rules, sample_lists, skipped)
 
 
 def by_id(records: list[dict]) -> dict[str, dict]:
@@ -469,7 +470,7 @@ def test_a_value_no_authored_row_reads_leaves_the_slot_unclassified_and_is_count
     result = settled(tmp_path / "entity_evidence", tmp_path)
     ancestry = by_id(result.donors)["HG06807"]["genetic_ancestry"]
     assert (ancestry["status"], ancestry["evidence"]) == (NOT_CLASSIFIED, [])
-    assert result.report["unreviewed_lines"] == {"genetic_ancestry": 1}
+    assert result.report["unreviewed_donors"] == {"genetic_ancestry": 1}
 
 
 def test_an_identifier_no_rule_recognises_as_a_donor_is_counted_never_a_record(imported, tmp_path):
@@ -516,9 +517,9 @@ def test_a_run_writes_donors_and_samples_beside_its_records(imported, tmp_path):
     (tmp_path / "source_evidence").mkdir()
     report = go(run, tmp_path, tmp_path / "source_evidence", load(tmp_path, TABLE))
 
-    donors = by_id(list(iter_reconciled_entities(run, DONORS_FILE)))
+    donors = by_id(list(iter_reconciled_artifact(run, DONORS_FILE)))
     assert donors["HG00096"]["phenotypic_sex"]["value"] == "Male"
-    (sample,) = iter_reconciled_entities(run, SAMPLES_FILE)
+    (sample,) = iter_reconciled_artifact(run, SAMPLES_FILE)
     assert sample["collected_from"]["donor"] == {"id": "HG00096", "namespace": "coriell"}
     assert report[ENTITIES_KEY]["donors"] == len(donors)
     first = json.loads(gzip.decompress((run / RECONCILED_DIR / DONORS_FILE).read_bytes()).splitlines()[0])
@@ -526,5 +527,52 @@ def test_a_run_writes_donors_and_samples_beside_its_records(imported, tmp_path):
 
     # Without evidence the samples and the donors they point to are still written, unsettled.
     go(run, tmp_path, None, load(tmp_path, TABLE))
-    (only,) = iter_reconciled_entities(run, DONORS_FILE)
+    (only,) = iter_reconciled_artifact(run, DONORS_FILE)
     assert only["phenotypic_sex"]["status"] == NOT_CLASSIFIED
+
+
+def test_a_reviewed_no_op_value_is_not_unreviewed(imported, tmp_path):
+    """An authored row declaring nothing (`declares: {}`) reviewed the value: it moves nothing and is not queued."""
+    noop = TABLE + (
+        "  - id: genetic_ancestry.asl\n    match: {slot: genetic_ancestry, value: ASL}\n    declares: {}\n    reason: r\n"
+    )
+    root = tmp_path / "entity_evidence"
+    paths, _ = select_entity_evidence(root, "anvil", CATALOG)
+    rules = identifier_rules()
+    result = reconcile_entities(gather(paths, root, load(tmp_path, noop), rules), rules, [])
+    assert "genetic_ancestry" not in result.report["unreviewed_donors"]
+    assert by_id(result.donors)["HG06807"]["genetic_ancestry"]["status"] == NOT_CLASSIFIED
+
+
+def test_a_published_value_no_row_reads_is_kept_as_unmapped_and_challenges_the_rest(imported, tmp_path):
+    """As on a file (contract 6.10): the published value is on the record, and beside a declaration it is a conflict."""
+    without_male = TABLE.replace("  - id: phenotypic_sex.male\n    match: {slot: phenotypic_sex, value: male}\n", "")
+    without_male = without_male.replace("    declares: {phenotypic_sex: Male}\n    reason: test\n", "", 1)
+    root = tmp_path / "entity_evidence"
+    paths, _ = select_entity_evidence(root, "anvil", CATALOG)
+    rules = identifier_rules()
+    result = reconcile_entities(gather(paths, root, load(tmp_path, without_male), rules), rules, [])
+    sex = by_id(result.donors)["HG00096"]["phenotypic_sex"]
+    assert sex["status"] == CONFLICT
+    (unmapped,) = [c for c in sex["evidence"] if c.get("claim_state") == "unmapped"]
+    assert (unmapped["source_type"], unmapped["raw_value"]) == (SOURCE_PUBLISHED_VALUE, "Male")
+
+
+def test_a_dataset_with_no_published_donor_still_writes_its_published_file(tmp_path, entity_map):
+    """So a re-import supersedes both kinds, never leaving an older published generation current."""
+    write_dataset(tmp_path / "m", G1K, [pedigree("HG00096", 1, "GBR", "EUR", "p1")])
+    (run,) = ae.import_all(
+        entity_map, tmp_path / "m", CATALOG, SERVICE, tmp_path / "entity_evidence", datasets=[G1K], generation=STAMP
+    )
+    assert lines(tmp_path / "entity_evidence", "anvil_published", G1K, "anvil_donor") == []
+    assert run.tables[-1].rows == 0
+
+
+def test_every_reconciled_files_envelope_names_the_entity_files_read(imported, tmp_path):
+    run = tmp_path / "output" / "20261016_000000"
+    write_run(run, [record(1)])
+    (tmp_path / "source_evidence").mkdir()
+    go(run, tmp_path, tmp_path / "source_evidence", load(tmp_path, TABLE))
+    first = json.loads(gzip.decompress((run / RECONCILED_DIR / DONORS_FILE).read_bytes()).splitlines()[0])
+    named = {(e["dataset"], e["table"], e["source_type"]) for e in first["reconcile"]["entity_evidence"]}
+    assert (R2, "anvil_donor", SOURCE_PUBLISHED_VALUE) in named and len(named) == 4

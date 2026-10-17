@@ -1,47 +1,33 @@
 """Entity evidence files: a source saying what it wrote about a donor (#693).
 
-A slot evidence file (``source_evidence``) says what a source wrote about one of a
-file's dimensions, keyed by a file's key. An entity evidence file says what a source wrote
-about one of a donor's slots (``models.DONOR_FIELDS``), keyed by the identifier the source
-wrote for the donor (``HG00096``). The envelope on line 1 is the same
-``EvidenceFileEnvelope``, keyed by ``entity_identifier``; every later line is an
-``EntityEvidenceRow``, the class the schema declares and gen-pydantic emits, used as it is.
+Where a slot evidence file (``source_evidence``) is keyed by a file's key, an entity file is
+keyed by the identifier the source wrote for a donor (``HG00096``): line 1 is the same
+``EvidenceFileEnvelope`` with ``target_key: entity_identifier``, every later line an
+``EntityEvidenceRow``. The files go under their own root, ``data/entity_evidence/``, because
+every reader of ``data/source_evidence/`` takes each file there as a file's slot lines; the
+layout is the slot root's generation layout, so ``discover`` reads it too.
 
-**A separate root.** Entity files go under ``data/entity_evidence/``, never under
-``data/source_evidence/``: every reader of the slot root reads each file there as a file's
-slot lines, and an entity line is not one. The layout under the root is the slot root's
-generation layout (``source_evidence.generation_dir``), so ``discover`` finds the newest
-generation per dataset here too.
-
-**A line declares nothing** (contract 1.1). ``target_key_value`` is the identifier as the
-source wrote it, recognised through ``rules/sample_namespaces.yaml`` at reconcile, in the
-envelope's target dataset; ``raw_value`` is the value as written, which the value map
-translates. A line carrying an answer is refused by name, as ``source_evidence`` refuses
-one on a slot line.
-
-:func:`entries` gives each line as a ``source_evidence.EvidenceEntry``, the shape the value
-map's seeding and review queue read a slot line in, so they read both roots alike.
+**A line declares nothing** (contract 1.1): the identifier is recognised at reconcile, the
+value translated by the value map, and a line carrying an answer is refused by name.
+:func:`entries` gives each line as a ``source_evidence.EvidenceEntry``, so the value map's
+seeding and review queue read both roots alike.
 """
 
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable, Iterator
 from pathlib import Path
-
-from pydantic import ValidationError
 
 from .models import JOIN_KEY_ENTITY_IDENTIFIER, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA, ClaimSource
 from .schema.classification_model import EntityEvidenceRow, EvidenceFileEnvelope
 from .source_evidence import (
     DEFAULT_SOURCE_EVIDENCE_ROOT,
-    EVIDENCE_FILE_SUFFIX,
     EvidenceEntry,
     claim_source_for,
-    decode_line,
+    iter_model_rows,
     parse_iso_datetime,
     read_envelope_from,
-    write_ndjson,
+    write_model_rows,
 )
 
 DEFAULT_ENTITY_EVIDENCE_ROOT = DEFAULT_SOURCE_EVIDENCE_ROOT.parent / "entity_evidence"
@@ -62,6 +48,11 @@ _REFUSED_LINE_KEYS = {
 }
 
 
+def entity_root_beside(evidence_root: Path) -> Path:
+    """The entity evidence root beside a slot evidence root (``data/entity_evidence`` beside ``data/source_evidence``)."""
+    return evidence_root.parent / DEFAULT_ENTITY_EVIDENCE_ROOT.name
+
+
 def _check_envelope(envelope: EvidenceFileEnvelope, where: str) -> None:
     parse_iso_datetime(envelope.fetched_at, "envelope fetched_at", where)
     if envelope.source_type not in ENTITY_SOURCE_TYPES:
@@ -77,23 +68,8 @@ def _check_envelope(envelope: EvidenceFileEnvelope, where: str) -> None:
 
 
 def write_entity_file(path: Path, envelope: EvidenceFileEnvelope, rows: Iterable[EntityEvidenceRow]) -> int:
-    """Write one entity file, streaming; return the number of lines after the envelope.
-
-    Written through ``source_evidence.write_ndjson``, the slot writer's own path: to a
-    temporary name, renamed into place only once every row is out. The envelope is checked
-    before anything is written, so this cannot write a file :func:`iter_entity_evidence`
-    refuses.
-    """
-    if path.suffix != EVIDENCE_FILE_SUFFIX:
-        raise ValueError(f"{path.name}: an entity file must end in {EVIDENCE_FILE_SUFFIX}, or discover never finds it")
-    _check_envelope(envelope, "entity file envelope")
-    return write_ndjson(path, envelope, (_line(row, f"{path.name} row {n}") for n, row in enumerate(rows, start=1)))
-
-
-def _line(row: EntityEvidenceRow, where: str) -> dict:
-    if not isinstance(row, EntityEvidenceRow):
-        raise ValueError(f"{where}: is a {type(row).__name__}, not an EntityEvidenceRow")
-    return row.model_dump(exclude_none=True)
+    """Write one entity file, streaming, its envelope checked first; return how many lines."""
+    return write_model_rows(path, envelope, rows, EntityEvidenceRow, _check_envelope)
 
 
 def read_entity_envelope(path: Path) -> EvidenceFileEnvelope:
@@ -105,55 +81,17 @@ def read_entity_envelope(path: Path) -> EvidenceFileEnvelope:
 
 
 def iter_entity_evidence(path: Path) -> Iterator[EntityEvidenceRow]:
-    """Every line of one entity file after the envelope, in file order, streamed.
-
-    A blank line is passed over. Any other line that will not parse, carries an answer
-    (:data:`_REFUSED_LINE_KEYS`) or carries a member ``EntityEvidenceRow`` does not have
-    raises ``ValueError`` naming the file and line.
-    """
-    with path.open("rb") as f:
-        envelope = read_envelope_from(path, f)
-        _check_envelope(envelope, f"{path.name} line 1")
-        for n, raw in enumerate(f, start=2):
-            where = f"{path.name} line {n}"
-            line = decode_line(raw, where)
-            if line.isspace():
-                continue
-            try:
-                block = json.loads(line)
-            except (ValueError, RecursionError) as exc:
-                raise ValueError(f"{where}: not JSON: {exc!r}") from None
-            if not isinstance(block, dict):
-                raise ValueError(f"{where}: is {type(block).__name__}, not an object")
-            refused = next((key for key in sorted(block) if key in _REFUSED_LINE_KEYS), None)
-            if refused is not None:
-                raise ValueError(f"{where}: carries {refused!r} — {_REFUSED_LINE_KEYS[refused]}")
-            try:
-                yield EntityEvidenceRow.model_validate(block)
-            except ValidationError as exc:
-                faults = "; ".join(
-                    f"{' '.join(str(p) for p in e['loc']) or 'line'}: "
-                    f"{'unknown member' if e['type'] == 'extra_forbidden' else e['msg']}"
-                    for e in exc.errors()
-                )
-                raise ValueError(f"{where}: {faults}") from None
+    """Every line of one entity file after the envelope, streamed; ``ValueError`` naming the line that
+    will not parse or carries an answer (:data:`_REFUSED_LINE_KEYS`)."""
+    return iter_model_rows(path, EntityEvidenceRow, _REFUSED_LINE_KEYS, _check_envelope)
 
 
-def claim_source(envelope: EvidenceFileEnvelope, row: EntityEvidenceRow) -> ClaimSource:
-    """The ``ClaimSource`` a claim from ``row`` carries: the envelope's source and the row's column."""
-    return claim_source_for(envelope.source, row.column)
-
-
-def entries(path: Path) -> Iterator[EvidenceEntry]:
-    """Every line of one entity file as an ``EvidenceEntry``, for a reader of both evidence roots.
-
-    ``target_key_value`` is the identifier as the source wrote it; the source carries the
-    line's column.
-    """
-    envelope = read_entity_envelope(path)
+def entries(path: Path, envelope: EvidenceFileEnvelope | None = None) -> Iterator[EvidenceEntry]:
+    """Every line of one entity file as an ``EvidenceEntry``, one ``ClaimSource`` per column; ``envelope`` where the caller holds it."""
+    envelope = envelope if envelope is not None else read_entity_envelope(path)
     by_column: dict[str, ClaimSource] = {}
     for row in iter_entity_evidence(path):
         source = by_column.get(row.column)
         if source is None:
-            source = by_column[row.column] = claim_source(envelope, row)
+            source = by_column[row.column] = claim_source_for(envelope.source, row.column)
         yield EvidenceEntry(row.field, row.target_key_value, row.raw_value, source)

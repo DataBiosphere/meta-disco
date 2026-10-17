@@ -74,8 +74,9 @@ OUTPUT_MD5SUM_FIELD = "md5sum"
 # The ``join_key_enum`` terms an evidence line can be matched to an output row by, and
 # the row field each is read from (#432). The schema's terms are the input's spellings,
 # so the one rename above applies here too. The rest of ``models.JOIN_KEYS`` (today
-# ``file_path``) are not fields of an output row, and ``reconcile.select_evidence``
-# refuses a slot-evidence file it selects for the run that is keyed by one.
+# ``file_path``, and ``entity_identifier``, a donor's key, #693) are not fields of an output
+# row, and ``reconcile.select_evidence`` refuses a slot-evidence file it selects for the run
+# that is keyed by one.
 JOIN_KEY_OUTPUT_FIELDS = {
     "file_id": "file_id",
     "entry_id": "entry_id",

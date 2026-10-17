@@ -67,6 +67,7 @@ def render_html(
     mappings: list[MappingLine] | None = None,
     read: Iterable[str] = (),
     lineage: activity_map.Review | None = None,
+    entity_root: Path | None = None,
 ) -> str:
     """The queue as a static page: ``template`` with its placeholder replaced by the groups' tables.
 
@@ -74,7 +75,7 @@ def render_html(
     passes through ``html.escape`` here, so none renders as markup; no script runs on the page.
     """
     esc = html.escape
-    parts = [f'<p class="note">{esc(queue_intro(entries, evidence_root, datasets))}</p>']
+    parts = [f'<p class="note">{esc(queue_intro(entries, evidence_root, datasets, entity_root))}</p>']
     for label, description, group in queue_groups(entries, read):
         parts.append(f"<h2>{esc(label)}: {esc(description)}</h2>")
         if not group:
@@ -107,6 +108,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--evidence-root", type=Path, default=DEFAULT_SOURCE_EVIDENCE_ROOT)
     parser.add_argument("--lineage-root", type=Path, default=DEFAULT_LINEAGE_EVIDENCE_ROOT)
     parser.add_argument(
+        "--entity-root",
+        type=Path,
+        default=None,
+        help="Entity evidence (default: entity_evidence beside the evidence root)",
+    )
+    parser.add_argument(
         "--activity-map", type=Path, default=None, help="Activity map (default: the bundled activity_map.yaml)"
     )
     parser.add_argument("--dataset", action="append", help="Only this dataset's evidence (repeatable)")
@@ -114,16 +121,25 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--html", type=Path, default=PROJECT_ROOT / "docs" / "review-queue.html")
     args = parser.parse_args(argv)
     table_path = args.table if args.table is not None else Path(str(default_value_map_resource()))
-    found = review(args.evidence_root, load_value_map(table_path), args.dataset)
+    found = review(args.evidence_root, load_value_map(table_path), args.dataset, args.entity_root)
     entries = found.queue
     lineage = activity_map.review(
         activity_map.load_activity_map(args.activity_map), args.lineage_root, args.evidence_root, args.dataset
     )
-    markdown = render_queue(entries, args.evidence_root, args.dataset, found.mappings, found.source_types)
+    markdown = render_queue(
+        entries, args.evidence_root, args.dataset, found.mappings, found.source_types, args.entity_root
+    )
     section = activity_map.render_section(lineage.queue, lineage.mappings, args.dataset)
     args.markdown.write_text(markdown + "\n".join(section) + "\n")
     page = render_html(
-        entries, args.evidence_root, TEMPLATE.read_text(), args.dataset, found.mappings, found.source_types, lineage
+        entries,
+        args.evidence_root,
+        TEMPLATE.read_text(),
+        args.dataset,
+        found.mappings,
+        found.source_types,
+        lineage,
+        args.entity_root,
     )
     args.html.write_text(page)
     print(f"Review queue -> {args.markdown}, {args.html}")

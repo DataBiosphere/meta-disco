@@ -269,21 +269,18 @@ def iter_reconciled_records(run_dir: Path):
 def iter_reconciled_sample_lists(run_dir: Path):
     """Yield each sample list (a ``SampleList`` dict) in ``run_dir/reconciled/``'s ``SAMPLE_LISTS_FILE`` (#357).
 
-    Read as :func:`iter_reconciled_records` reads a records file: line 1 the envelope,
-    checked and skipped. Raises FileNotFoundError when the file is absent: a run
-    reconciled before #357 has none, and reading nothing would pass for one whose files
-    name no sample.
+    Raises FileNotFoundError when the file is absent: a run reconciled before #357 has none,
+    and reading nothing would pass for one whose files name no sample.
     """
-    path = run_dir / RECONCILED_DIR / SAMPLE_LISTS_FILE
-    if not path.exists():
-        raise FileNotFoundError(f"No {SAMPLE_LISTS_FILE} in {run_dir / RECONCILED_DIR}. Run 'make reconcile' first.")
-    yield from _artifact_lines(path)
+    yield from iter_reconciled_artifact(run_dir, SAMPLE_LISTS_FILE)
 
 
-def iter_reconciled_entities(run_dir: Path, name: str):
-    """Yield each record of ``run_dir/reconciled/``'s donor or sample file (``DONORS_FILE`` or ``SAMPLES_FILE``, #693).
+def iter_reconciled_artifact(run_dir: Path, name: str):
+    """Yield each line after the envelope of one reconciled artifact file, ``run_dir/reconciled/<name>``.
 
-    Read as :func:`iter_reconciled_sample_lists` reads its file; FileNotFoundError when absent.
+    For the files beside the records: ``SAMPLE_LISTS_FILE``, ``DONORS_FILE``, ``SAMPLES_FILE``
+    (#693). Line 1 is the envelope, checked and skipped. Raises FileNotFoundError when the
+    file is absent.
     """
     path = run_dir / RECONCILED_DIR / name
     if not path.exists():

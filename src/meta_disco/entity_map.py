@@ -1,32 +1,14 @@
 """The entity map: which of a source's tables say what about a donor (#693).
 
-The slot map (``slot_map``) says where a raw value for one of a *file's* dimensions comes
-from, keyed by a file-link column. This map says where a raw value for one of a *donor's*
-slots (``models.DONOR_FIELDS``) comes from, keyed by the column naming the donor — rows
-such as 1000 Genomes' ``pedigree`` have no file-link column to key them by. It is read by
-``anvil_entities``, which writes each cell as an ``EntityEvidenceRow``. Like the slot map
-it holds no vocabulary and maps structure, never meaning::
+The slot map keys a raw value for a *file's* dimension by a file-link column; this map keys a
+raw value for a *donor's* slot (``models.DONOR_FIELDS``) by the column naming the donor, since
+rows such as 1000 Genomes' ``pedigree`` have no file-link column. ``anvil_entities`` reads it.
+It maps structure, never meaning; the shape is ``sources/anvil_entity_map.yaml``'s.
 
-    datasets:
-      ANVIL_1000G_high_coverage_2019:
-        pedigree:
-          identifier: pedigree_id
-          phenotypic_sex: [sex]
-          genetic_ancestry: [population, superpopulation]
-    published:
-      table: anvil_donor
-      source_rows: source_datarepo_row_ids
-      phenotypic_sex: [phenotypic_sex]
-
-**Per table**: ``identifier``, the column naming the donor, and per slot the columns whose
-cells it reads, at least one slot. A table of AnVIL's harmonized ``anvil_*`` data is not a
-submitter table, and is refused under ``datasets``.
-
-**``published``**: what the repository publishes for a donor, read in every dataset the map
-names. Its ``table`` is AnVIL's donor table; ``source_rows`` its column naming the submitter
-rows each donor was made from (``<table>:<datarepo_row_id>``), whose table's ``identifier``
-column above names the donor.
-
+Per table: ``identifier`` and per slot its columns, at least one slot; a harmonized
+``anvil_*`` table is refused there. ``published``: the repository's donor table, read in
+every dataset the map names, each donor attached to an identifier through its
+``source_rows`` (``<table>:<datarepo_row_id>``) and that table's ``identifier`` column.
 No ``notes`` member, for the slot map's reason.
 """
 

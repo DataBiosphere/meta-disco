@@ -68,7 +68,7 @@ from .activity_map import ActivityMap, load_activity_map
 from .azul_manifest import REPOSITORY as ANVIL_REPOSITORY
 from .deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS
 from .edges import LineageStep, StepConflict, generic_only, merge_steps, misfits
-from .entity_evidence import DEFAULT_ENTITY_EVIDENCE_ROOT
+from .entity_evidence import entity_root_beside
 from .inputs import load_envelope
 from .lineage_evidence import DEFAULT_LINEAGE_EVIDENCE_ROOT
 from .models import (
@@ -107,7 +107,7 @@ from .output_utils import (
 )
 from .producers import PRODUCERS
 from .provenance import code_identity
-from .reconcile_entities import reconcile_entities, select_entity_evidence
+from .reconcile_entities import gather, reconcile_entities, select_entity_evidence
 from .reconcile_inherit import (
     REFERENCE_ASSEMBLY,
     InheritanceCycle,
@@ -124,9 +124,10 @@ from .reconcile_lineage import Carrier, Locator, PendingLineage, applies, resolv
 from .reconcile_samples import Named, from_line
 from .record_keys import PUBLISHED_TABLES, RecordKey, is_key_value, record_key
 from .records import JOIN_KEY_OUTPUT_FIELDS, SAMPLE_OUTCOMES_KEY, STEP_OUTCOMES_KEY, UNRECOGNISED_SAMPLES_KEY
+from .resolution import NO_EVIDENCE, SlotEvidence, translate
 from .resolution import declaration as declaration  # re-exported: the resolution rule
 from .resolution import settle as settle
-from .rule_engine import CONFLICT_MARKER, make_claim
+from .rule_engine import CONFLICT_MARKER
 from .run_lineage_map import RunLineageMap, load_run_lineage_map
 from .sample_identity import identifier_rules, most_frequent
 from .schema.classification_model import EvidenceFileEnvelope
@@ -141,7 +142,7 @@ from .source_evidence import (
     report_evidence_files,
     require_one_published_source,
 )
-from .value_map import ValueMap, claims_from, load_value_map
+from .value_map import ValueMap, load_value_map
 
 # The per-slot instruction to the indexer (#432, second 2026-09-22 amendment).
 USE_META_DISCO = "meta_disco"
@@ -411,23 +412,6 @@ def select_evidence(
     return applicable, skipped
 
 
-@dataclass(slots=True)
-class SlotEvidence:
-    """What the sources said about one slot of one file."""
-
-    claims: list[dict] = field(default_factory=list)
-    # Source types that spoke to the slot with a value no authored row reads.
-    unreviewed: set[str] = field(default_factory=set)
-    # Source types that spoke to the slot with a value whose authored row declares
-    # nothing for it (`declares: {}`, or declares only other slots): reviewed, no claim.
-    no_claim: set[str] = field(default_factory=set)
-
-
-# The slot evidence of a slot no source spoke to. Shared and never written: every reader
-# only reads it.
-NO_EVIDENCE = SlotEvidence()
-
-
 @dataclass
 class Joined:
     """The join's result: per record identity, per slot, what the sources said."""
@@ -619,7 +603,7 @@ def join(
                     else:
                         samples[found[0]].append(got)
                     continue
-                for slot in _translate(slots[found[0]], entry, ev, table):
+                for slot in translate(slots[found[0]], entry, ev.source_type, ev.target_key, table):
                     coverage[ev.source_type].add((ev.dataset, slot))
 
     for ev in evidence:
@@ -673,51 +657,6 @@ def _carriers(run_dir: Path, key: RecordKey, wanted: set[_Key]) -> dict[_Key, li
                 data_type = (record.get("classifications") or {}).get("data_type") or {}
                 found[at].append(Carrier(identity, str(record.get("file_name") or ""), data_type.get("value")))
     return found
-
-
-def _translate(
-    record_slots: dict[str, SlotEvidence], entry: EvidenceEntry, ev: EvidenceFile, table: ValueMap
-) -> set[str]:
-    """Add a matched line's claims to its record's slots, or mark the slot unreviewed by its source type.
-
-    The row is selected here and handed to ``claims_from``, because an authored row
-    declaring nothing (``declares: {}``) yields no claim and is still reviewed.
-
-    A line no authored row reads makes no claim (contract 3.7). From the published source
-    it still moves the slot (to ``conflict`` or ``not_classified``), so what it said is
-    kept in the slot's evidence as an ``unmapped`` entry — its source, raw value and join,
-    and no value, status or rule — and the record shows why on its own (6.10). It declares
-    nothing, so resolution does not read it. Another source's unreviewed value moves
-    nothing, is counted in the report, and is not written to the record.
-
-    Returns the slots the line's claims were made on.
-    """
-    row = table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset)
-    if row is None or not row.authored:
-        said = record_slots[entry.field]
-        said.unreviewed.add(ev.source_type)
-        if ev.source_type != SOURCE_PUBLISHED_VALUE:
-            return set()
-        seen = make_claim(
-            source_type=ev.source_type,
-            state=UNMAPPED,
-            source=entry.source,
-            raw_value=entry.raw_value,
-            join_key=ev.target_key,
-            match_exact=True,
-        )
-        if seen not in said.claims:
-            said.claims.append(seen)
-        return set()
-    if entry.field not in row.declares:
-        record_slots[entry.field].no_claim.add(ev.source_type)
-    claimed = set()
-    for slot, claim in claims_from(entry, ev.source_type, table, join_key=ev.target_key, row=row):
-        claimed.add(slot)
-        existing = record_slots[slot].claims
-        if claim not in existing:
-            existing.append(claim)
-    return claimed
 
 
 # --- the record ---------------------------------------------------------------------
@@ -1232,7 +1171,8 @@ def reconcile_run(
     clock — the evidence report printed on the way in shows file ages, and nothing
     written does — so the same run, evidence, lineage, translation table, activity map and
     input paths, reconciled by the same code, write the same bytes (criterion 16); line 1's
-    ``reconciled_by`` names the commit (not a dirty tree's edits). Both tables' sha256 are in the envelope
+    ``reconciled_by`` names the commit (not a dirty tree's edits), and it lists the slot evidence, lineage
+    and entity evidence files read. Both tables' sha256 are in the envelope
     and the report. The report echoes the input path as given and evidence paths
     relative to ``evidence_root``.
 
@@ -1290,9 +1230,11 @@ def reconcile_run(
     table = table if table is not None else load_value_map()
     activity_table = activity_table if activity_table is not None else load_activity_map()
 
+    rules = identifier_rules()
     if evidence_root is None:
         applicable, skipped = [], []
         pending = PendingLineage()
+        entity_root, entity_paths, entity_skipped = Path(), [], []
     else:
         statuses = report_evidence_files(evidence_root)
         require_one_published_source(statuses, PUBLISHED_TABLES)
@@ -1305,6 +1247,11 @@ def reconcile_run(
         except ValueError as exc:
             raise ReconcileError(str(exc)) from None
         pending = translate_lineage(lineage_root, evidence_root, repository, catalog, activity_table, run_map)
+        if entity_root is None:
+            entity_root = entity_root_beside(evidence_root)
+        entity_paths, entity_skipped = select_entity_evidence(entity_root, repository, catalog)
+    # Every entity line is read and recognised here, before anything is written (#693).
+    entity_evidence = gather(entity_paths, entity_root, table, rules)
     joined = join(applicable, run_dir, key, table, extra=pending.wanted)
     lineage = resolve_lineage(pending, joined.carriers)
     report = Report(
@@ -1325,6 +1272,9 @@ def reconcile_run(
         "value_map_sha256": table.digest,
         "activity_map_sha256": activity_table.digest,
         "lineage_files": lineage.files,
+        "entity_evidence": [
+            {k: f[k] for k in ("path", "source_type", "dataset", "table")} for f in entity_evidence.files
+        ],
         "classified_by": classified_by(provenance),
         "reconciled_by": reconciled_by,
     }
@@ -1355,7 +1305,7 @@ def reconcile_run(
     # The first pass: each record's own settled answers and samples, and each child's step;
     # and the sample lists inference's records point to (#357).
     graph = _Graph()
-    samples = reconcile_samples.SampleReport(identifier_rules())
+    samples = reconcile_samples.SampleReport(rules)
     seen: set[str] = set()
     inference_lists: dict[str, dict] = {}
     for _, records, lists in iter_run_file_contents(run_dir):
@@ -1393,15 +1343,7 @@ def reconcile_run(
         write_reconciled_file(staging / reconciled_name(fname), header, reconciled_rows(records))
     run_lists = samples.sorted_lists()
     write_reconciled_file(staging / SAMPLE_LISTS_FILE, header, run_lists)
-    if evidence_root is None:
-        entity_root, entity_paths, entity_skipped = Path(), [], []
-    else:
-        if entity_root is None:
-            entity_root = evidence_root.parent / DEFAULT_ENTITY_EVIDENCE_ROOT.name
-        entity_paths, entity_skipped = select_entity_evidence(entity_root, repository, catalog)
-    entities = reconcile_entities(
-        entity_paths, entity_root, table, identifier_rules(), run_lists, skipped=entity_skipped
-    )
+    entities = reconcile_entities(entity_evidence, rules, run_lists, skipped=entity_skipped)
     write_reconciled_file(staging / DONORS_FILE, header, entities.donors)
     write_reconciled_file(staging / SAMPLES_FILE, header, entities.samples)
 

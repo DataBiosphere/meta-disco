@@ -152,7 +152,7 @@ JOIN_KEY_FILE_NAME = "file_name"
 JOIN_KEY_FILE_ID = "file_id"
 JOIN_KEY_ENTRY_ID = "entry_id"
 # A donor's or sample's identifier as the source wrote it (#693): the key of an entity
-# evidence file and of the claims made from it, never a file's. `FILE_JOIN_KEYS` are the rest.
+# evidence file and of the claims made from it, never a file's (`source_evidence.require_file_key`).
 JOIN_KEY_ENTITY_IDENTIFIER = "entity_identifier"
 JOIN_KEYS = frozenset(
     {
@@ -165,7 +165,6 @@ JOIN_KEYS = frozenset(
         JOIN_KEY_ENTITY_IDENTIFIER,
     }
 )
-FILE_JOIN_KEYS = JOIN_KEYS - {JOIN_KEY_ENTITY_IDENTIFIER}
 
 # The three vocabularies above are validated at runtime against these in-code
 # frozensets — the idiom STATUS_LABELS and reference_builds' NAME_SOURCE_* already

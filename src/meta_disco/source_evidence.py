@@ -118,15 +118,15 @@ import json
 import os
 import re
 import shutil
-from collections.abc import Collection, Iterable, Iterator, Mapping
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any, BinaryIO, TypeVar
 from uuid import uuid4
 
-from pydantic import TypeAdapter, ValidationError
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from .models import (
     CLASSIFICATION_FIELDS,
@@ -336,6 +336,9 @@ def require_scoped_target(envelope: EvidenceFileEnvelope, where: str) -> None:
             "a bare file name is non-unique on 69% of the corpus and matches no single row"
         )
 
+
+# A row class of a file read by `iter_model_rows`: `LineageRow`, `EntityEvidenceRow`.
+ModelT = TypeVar("ModelT", bound=BaseModel)
 
 # Built once: pydantic compiles a validator per adapter.
 _DATETIME = TypeAdapter(datetime)
@@ -550,8 +553,8 @@ def write_evidence_file(path: Path, envelope: EvidenceFileEnvelope, entries: Ite
 def write_ndjson(path: Path, envelope: EvidenceFileEnvelope, lines: Iterable[dict]) -> int:
     """Write ``envelope`` on line 1 and each of ``lines`` after it, atomically; return how many lines.
 
-    The one write path for an evidence file of either kind (``write_evidence_file``, and
-    ``lineage_evidence.write_lineage_file`` for #583): the caller checks its own lines as
+    The one write path for an evidence file of any kind (``write_evidence_file``, and
+    :func:`write_model_rows` for lineage, #583, and entity files, #693): the caller checks its own lines as
     it yields them, and this owns the file. Null envelope members are omitted, not
     written out: a source either has a dataset or does not, and the schema reads an
     absent one the same way.
@@ -1211,13 +1214,87 @@ def _check_entry(where: str, field: Any, target_key_value: Any, raw_value: Any) 
         )
 
 
+def write_model_rows(
+    path: Path,
+    envelope: EvidenceFileEnvelope,
+    rows: Iterable[BaseModel],
+    model: type[BaseModel],
+    check_envelope: Callable[[EvidenceFileEnvelope, str], None],
+    check_row: Callable[[Any, EvidenceFileEnvelope, str], None] | None = None,
+) -> int:
+    """Write a file whose lines are ``model`` rows (``lineage_evidence``, ``entity_evidence``), streaming; return how many.
+
+    ``check_envelope`` runs before anything is written and ``check_row`` on each row as it
+    is written, so the writer cannot emit a file :func:`iter_model_rows` refuses; the write
+    itself is :func:`write_ndjson`'s.
+    """
+    if path.suffix != EVIDENCE_FILE_SUFFIX:
+        raise ValueError(
+            f"{path.name}: an evidence file must end in {EVIDENCE_FILE_SUFFIX}, or discover never finds it"
+        )
+    check_envelope(envelope, "evidence file envelope")
+
+    def line(row: BaseModel, where: str) -> dict:
+        if not isinstance(row, model):
+            raise ValueError(f"{where}: is a {type(row).__name__}, not a {model.__name__}")
+        if check_row is not None:
+            check_row(row, envelope, where)
+        return row.model_dump(exclude_none=True)
+
+    return write_ndjson(path, envelope, (line(row, f"{path.name} row {n}") for n, row in enumerate(rows, start=1)))
+
+
+def iter_model_rows(
+    path: Path,
+    model: type[ModelT],
+    refused: Mapping[str, str],
+    check_envelope: Callable[[EvidenceFileEnvelope, str], None],
+    check_row: Callable[[ModelT, EvidenceFileEnvelope, str], None] | None = None,
+) -> Iterator[ModelT]:
+    """Every ``model`` row of one file after its envelope, in file order, streamed.
+
+    A blank line is passed over. Any other line that will not parse, carries a member of
+    ``refused`` (each with why it may not), carries a member ``model`` does not have, or
+    fails ``check_row`` raises ``ValueError`` naming the file and line.
+    """
+    with path.open("rb") as f:
+        envelope = read_envelope_from(path, f)
+        check_envelope(envelope, f"{path.name} line 1")
+        for n, raw in enumerate(f, start=2):
+            where = f"{path.name} line {n}"
+            line = decode_line(raw, where)
+            if line.isspace():
+                continue
+            try:
+                block = json.loads(line)
+            except (ValueError, RecursionError) as exc:
+                raise ValueError(f"{where}: not JSON: {exc!r}") from None
+            if not isinstance(block, dict):
+                raise ValueError(f"{where}: is {type(block).__name__}, not an object")
+            found = next((key for key in sorted(block) if key in refused), None)
+            if found is not None:
+                raise ValueError(f"{where}: carries {found!r} — {refused[found]}")
+            try:
+                row = model.model_validate(block)
+            except ValidationError as exc:
+                faults = "; ".join(
+                    f"{' '.join(str(p) for p in e['loc']) or 'line'}: "
+                    f"{'unknown member' if e['type'] == 'extra_forbidden' else e['msg']}"
+                    for e in exc.errors()
+                )
+                raise ValueError(f"{where}: {faults}") from None
+            if check_row is not None:
+                check_row(row, envelope, where)
+            yield row
+
+
 def read_envelope_from(path: Path, f: BinaryIO) -> EvidenceFileEnvelope:
     """Consume line 1 of an open evidence file as its envelope.
 
     The one place an evidence file's first line is turned into provenance, shared by
     :func:`read_envelope` (which wants only that), :func:`iter_evidence` (which
-    reads on from there) and ``lineage_evidence.iter_lineage`` (a lineage file has the
-    same envelope, #583), so a file with no first line is refused in the same words
+    reads on from there) and :func:`iter_model_rows` (a lineage or entity file has the
+    same envelope, #583, #693), so a file with no first line is refused in the same words
     whichever reads it. ``f`` is a byte handle for the reason :func:`iter_evidence` opens one:
     a decode failure is reported as a malformed line, not raised from inside a file
     iterator.

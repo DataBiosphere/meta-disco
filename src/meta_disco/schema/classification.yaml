@@ -1465,7 +1465,8 @@ slots:
     range: string
   join_key:
     description: >-
-      Which key attached this claim to our file. Recorded per claim rather than
+      Which key attached this claim to our record: a file's, or for a donor's slot the
+      identifier the source wrote (`entity_identifier`, #693). Recorded per claim rather than
       per source because identity is the risky step and sources publish different
       keys: md5 collides on 1.72% of the corpus's rows and the HPRC catalog publishes
       only file names (#390). Absent on a claim our own inference produced, which

@@ -52,7 +52,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import sys
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from functools import cached_property
 from importlib.resources import files
@@ -60,7 +60,7 @@ from pathlib import Path
 
 import yaml
 
-from .entity_evidence import DEFAULT_ENTITY_EVIDENCE_ROOT, read_entity_envelope
+from .entity_evidence import entity_root_beside, read_entity_envelope
 from .entity_evidence import entries as entity_entries
 from .manifest_survey import name_tokens
 from .models import (
@@ -422,22 +422,14 @@ def claims_from(
 # --- evidence walks -----------------------------------------------------------------
 
 
-def entity_root_beside(evidence_root: Path) -> Path:
-    """The entity evidence root beside a slot evidence root (``data/entity_evidence`` beside ``data/source_evidence``)."""
-    return evidence_root.parent / DEFAULT_ENTITY_EVIDENCE_ROOT.name
-
-
 @dataclass(frozen=True)
 class _EvidenceFile:
-    """One current evidence file of either root: where it is, its envelope, and how its lines are read."""
+    """One current evidence file of either root: where it is, its envelope, and its lines."""
 
     path: Path
     root: Path
     envelope: EvidenceFileEnvelope
-    entity: bool
-
-    def entries(self) -> Iterator[EvidenceEntry]:
-        return entity_entries(self.path) if self.entity else iter_evidence(self.path)
+    entries: Callable[[], Iterator[EvidenceEntry]]
 
 
 def _current_files(
@@ -450,8 +442,12 @@ def _current_files(
     external source (ENA's, #606) names the dataset its lines are about only as its target.
     """
     entity_root = entity_root if entity_root is not None else entity_root_beside(evidence_root)
-    found = [_EvidenceFile(p, evidence_root, read_envelope(p), False) for p in discover(evidence_root)]
-    found += [_EvidenceFile(p, entity_root, read_entity_envelope(p), True) for p in discover(entity_root)]
+    found = [
+        _EvidenceFile(p, evidence_root, read_envelope(p), lambda p=p: iter_evidence(p)) for p in discover(evidence_root)
+    ]
+    for p in discover(entity_root):
+        envelope = read_entity_envelope(p)
+        found.append(_EvidenceFile(p, entity_root, envelope, lambda p=p, e=envelope: entity_entries(p, e)))
     if datasets is None:
         return found
     wanted = set(datasets)
@@ -497,9 +493,9 @@ def seed(
     text = table_path.read_text(encoding="utf-8")
     table = load_value_map(table_path)
     seen: dict[tuple[str, Key], _Seen] = {}
-    paths = _current_files(evidence_root, datasets, entity_root)
+    evidence_files = _current_files(evidence_root, datasets, entity_root)
     lines_scanned = 0
-    for found_file in paths:
+    for found_file in evidence_files:
         where = generation_name(found_file.root, found_file.path)
         for entry in found_file.entries():
             lines_scanned += 1
@@ -513,7 +509,7 @@ def seed(
             else:
                 seen[key].add(spelling, where)
     if not seen:
-        return SeedResult(len(paths), lines_scanned, ())
+        return SeedResult(len(evidence_files), lines_scanned, ())
     ids = {row.id for row in table.rows}
     indent = row_indent(text)
     new_text = open_rows(text, _WHERE, not table.rows)
@@ -534,7 +530,7 @@ def seed(
         len(table.rows) + len(added),
         _WHERE,
     )
-    return SeedResult(len(paths), lines_scanned, tuple(added))
+    return SeedResult(len(evidence_files), lines_scanned, tuple(added))
 
 
 def _fresh_id(candidate: str, key: Key, taken: set[str]) -> str:
@@ -743,9 +739,16 @@ def queue_groups(entries: list[QueueEntry], read: Iterable[str] = ()) -> list[tu
     return groups
 
 
-def queue_intro(entries: list[QueueEntry], evidence_root: Path, datasets: Iterable[str] | None = None) -> str:
+def queue_intro(
+    entries: list[QueueEntry],
+    evidence_root: Path,
+    datasets: Iterable[str] | None = None,
+    entity_root: Path | None = None,
+) -> str:
     """The sentence above the queue, in plain text; each renderer marks it up. It names the datasets
-    when the queue was limited to some, so a partial queue cannot pass for the whole one."""
+    when the queue was limited to some, so a partial queue cannot pass for the whole one, and the two
+    roots read, the entity root by default the one beside ``evidence_root``."""
+    entity_root = entity_root if entity_root is not None else entity_root_beside(evidence_root)
     scope = f" for {', '.join(sorted(datasets))} only" if datasets else ""
     return (
         "Source values the slot map or the entity map routed to a slot but that no authored translation rule "
@@ -754,7 +757,7 @@ def queue_intro(entries: list[QueueEntry], evidence_root: Path, datasets: Iterab
         "seeded rule that matches it, or — where none does. For a donor's slot (phenotypic_sex, "
         "genetic_ancestry), files counts donors, each dataset's identifiers apart. "
         f"{len(entries):,} listed, from evidence{scope} under {_shown_root(evidence_root)} and "
-        f"{_shown_root(entity_root_beside(evidence_root))}."
+        f"{_shown_root(entity_root)}."
     )
 
 
@@ -786,6 +789,7 @@ def render_queue(
     datasets: Iterable[str] | None = None,
     mappings: list[MappingLine] | None = None,
     read: Iterable[str] = (),
+    entity_root: Path | None = None,
 ) -> str:
     """The queue as markdown, one section per source type (:func:`queue_groups`, with the
     source types ``read``), then the authored mappings when given.
@@ -793,7 +797,7 @@ def render_queue(
     A catalog cell is a code span (:func:`md_code`), so no value renders as markup or a
     link; an empty one stays empty.
     """
-    lines = ["# Review queue", "", queue_intro(entries, evidence_root, datasets)]
+    lines = ["# Review queue", "", queue_intro(entries, evidence_root, datasets, entity_root)]
     for label, description, group in queue_groups(entries, read):
         lines += ["", f"## {label}: {description}", ""]
         if not group:
@@ -822,6 +826,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--table", type=Path, default=None, help="Table file (default: the bundled value_map.yaml)")
     parser.add_argument("--evidence-root", type=Path, default=DEFAULT_SOURCE_EVIDENCE_ROOT)
+    parser.add_argument(
+        "--entity-root",
+        type=Path,
+        default=None,
+        help="Entity evidence (default: entity_evidence beside the evidence root)",
+    )
     parser.add_argument("--dataset", action="append", help="Only this dataset's evidence (repeatable)")
     parser.add_argument("--output", type=Path, default=None, help="queue: write the markdown here instead of stdout")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -831,7 +841,7 @@ def main(argv: list[str] | None = None) -> int:
 
     table_path = args.table if args.table is not None else Path(str(default_value_map_resource()))
     if args.command == "seed":
-        result = seed(table_path, args.evidence_root, args.dataset)
+        result = seed(table_path, args.evidence_root, args.dataset, args.entity_root)
         print(
             f"Scanned {result.files_scanned} evidence files, {result.lines_scanned:,} lines; "
             f"added {len(result.rows_added)} seeded rows to {table_path}",
@@ -840,9 +850,11 @@ def main(argv: list[str] | None = None) -> int:
         for id in result.rows_added:
             print(f"  {id}", file=sys.stderr)
         return 0
-    found = review(args.evidence_root, load_value_map(table_path), args.dataset)
+    found = review(args.evidence_root, load_value_map(table_path), args.dataset, args.entity_root)
     entries = found.queue
-    report = render_queue(entries, args.evidence_root, args.dataset, found.mappings, found.source_types)
+    report = render_queue(
+        entries, args.evidence_root, args.dataset, found.mappings, found.source_types, args.entity_root
+    )
     if args.output is not None:
         args.output.write_text(report)
         print(f"Wrote {args.output}", file=sys.stderr)
