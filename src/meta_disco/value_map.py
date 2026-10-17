@@ -385,7 +385,12 @@ def _declares(node: yaml.Node | None, at: str, authored: bool) -> Mapping[str, s
 
 
 def claims_from(
-    entry: EvidenceEntry, source_type: str, table: ValueMap, join_key: str | None = None, row: Row | None = None
+    entry: EvidenceEntry,
+    source_type: str,
+    table: ValueMap,
+    join_key: str | None = None,
+    row: Row | None = None,
+    match_exact: bool = True,
 ) -> list[tuple[str, dict]]:
     """The claims one evidence line makes: ``(slot, claim)`` per declared pair of its selected row, else ``[]``.
 
@@ -393,8 +398,9 @@ def claims_from(
     value and the line's ``ClaimSource``, so two claims on one slot from two cells of
     one file stay distinguishable (4.8). Nothing here compares, merges or ranks: that
     is reconcile's (#432). ``source_type`` is the envelope's, which the line does not carry.
-    ``join_key`` is the key the line was matched to a file by; when given, the claim
-    records it with ``match_exact`` true, since the join is an equality lookup. ``row``
+    ``join_key`` is the key the line was matched to a record by; when given, the claim
+    records it with ``match_exact``: true for an equality lookup, false where the key was
+    rewritten to match (a donor identifier an identifier rule rewrote, #693). ``row``
     is the row ``table.select`` already chose for this line, for a caller that selected
     it itself; it is selected here otherwise.
     """
@@ -413,7 +419,7 @@ def claims_from(
             source=entry.source,
             raw_value=entry.raw_value,
             join_key=join_key,
-            match_exact=True if join_key is not None else None,
+            match_exact=match_exact if join_key is not None else None,
         )
         claims.append((slot, claim))
     return claims

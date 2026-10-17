@@ -103,12 +103,18 @@ NO_EVIDENCE = SlotEvidence()
 
 
 def translate(
-    record_slots: dict[str, SlotEvidence], entry: EvidenceEntry, source_type: str, join_key: str, table: ValueMap
+    record_slots: dict[str, SlotEvidence],
+    entry: EvidenceEntry,
+    source_type: str,
+    join_key: str,
+    table: ValueMap,
+    match_exact: bool = True,
 ) -> set[str]:
     """Add a matched line's claims to its record's slots, or mark the slot unreviewed by its source type.
 
     ``source_type`` and ``join_key`` are the line's evidence file's; a record is a file's or,
-    from entity evidence (``reconcile_entities``, #693), a donor's.
+    from entity evidence (``reconcile_entities``, #693), a donor's. ``match_exact`` is whether
+    the line's key equalled the record's as written; false where an identifier rule rewrote it.
 
     The row is selected here and handed to ``claims_from``, because an authored row
     declaring nothing (``declares: {}``) yields no claim and is still reviewed.
@@ -134,7 +140,7 @@ def translate(
             source=entry.source,
             raw_value=entry.raw_value,
             join_key=join_key,
-            match_exact=True,
+            match_exact=match_exact,
         )
         if seen not in said.claims:
             said.claims.append(seen)
@@ -142,7 +148,7 @@ def translate(
     if entry.field not in row.declares:
         record_slots[entry.field].no_claim.add(source_type)
     claimed = set()
-    for slot, claim in claims_from(entry, source_type, table, join_key=join_key, row=row):
+    for slot, claim in claims_from(entry, source_type, table, join_key=join_key, row=row, match_exact=match_exact):
         claimed.add(slot)
         existing = record_slots[slot].claims
         if claim not in existing:

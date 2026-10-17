@@ -98,7 +98,8 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
                 unrecognised[(dataset, envelope.source.table)][entry.target_key_value] += 1
                 continue
             named_in[(str(dataset), entry.field)].add(got.identifier)
-            translate(slots[got.identifier], entry, envelope.source_type, JOIN_KEY_ENTITY_IDENTIFIER, table)
+            exact = got.identifier.id == entry.target_key_value  # not where a rule rewrote it (GM19908 -> NA19908)
+            translate(slots[got.identifier], entry, envelope.source_type, JOIN_KEY_ENTITY_IDENTIFIER, table, exact)
         files.append(
             {
                 "path": relative_to(path, entity_root),

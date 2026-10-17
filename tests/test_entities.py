@@ -576,3 +576,41 @@ def test_every_reconciled_files_envelope_names_the_entity_files_read(imported, t
     first = json.loads(gzip.decompress((run / RECONCILED_DIR / DONORS_FILE).read_bytes()).splitlines()[0])
     named = {(e["dataset"], e["table"], e["source_type"]) for e in first["reconcile"]["entity_evidence"]}
     assert (R2, "anvil_donor", SOURCE_PUBLISHED_VALUE) in named and len(named) == 4
+
+
+def test_a_failed_published_write_leaves_neither_kind_of_the_new_generation(
+    imported, tmp_path, entity_map, monkeypatch
+):
+    """The submitter generation never becomes current beside an older published one."""
+    root = tmp_path / "entity_evidence"
+    before = sorted(discover(root))
+
+    def broken(*args, **kwargs):
+        raise OSError("disk full")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(ae, "_published_rows", broken)
+    with pytest.raises(OSError, match="disk full"):
+        ae.import_all(entity_map, tmp_path / "m", CATALOG, SERVICE, root, datasets=[R2], generation="20261017T000000Z")
+    assert sorted(discover(root)) == before
+    assert not list(root.rglob("*.partial"))
+
+
+def test_a_claim_joined_through_a_rewritten_identifier_is_not_an_exact_match(tmp_path):
+    """`GM19908` reaches donor `NA19908` through the Coriell rule's rewrite; `NA19908` itself matches exactly."""
+    root = tmp_path / "entity_evidence"
+    directory = root / "anvil" / CATALOG / "D" / STAMP
+    directory.mkdir(parents=True)
+    rows = [
+        EntityEvidenceRow(
+            field="phenotypic_sex", target_key_value=v, raw_value="male", column="sex", identifier_column="id"
+        )
+        for v in ("GM19908", "NA19908")
+    ]
+    write_entity_file(directory / "t.ndjson", envelope(), rows)
+    paths, _ = select_entity_evidence(root, "anvil", CATALOG)
+    rules = identifier_rules()
+    result = reconcile_entities(gather(paths, root, load(tmp_path, TABLE), rules), rules, [])
+    (donor,) = result.donors
+    assert donor["identifier"] == {"id": "NA19908", "namespace": "coriell"}
+    assert sorted(c["match_exact"] for c in donor["phenotypic_sex"]["evidence"]) == [False, True]

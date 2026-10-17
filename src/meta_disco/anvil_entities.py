@@ -204,7 +204,8 @@ def import_dataset(
     """Write one generation of entity files for one dataset: the submitter tables', then the published table's.
 
     Each kind is its own generation directory (``anvil/`` and ``anvil_published/``), staged
-    and renamed into place whole, as ``anvil_evidence.import_dataset`` stages its own. A
+    together and renamed into place only once both are written: a failure while writing
+    either removes both, so the two kinds of a dataset are always from one import. A
     mapped table that writes no line is the map disagreeing with the catalog and raises.
     The published table's file is written for every dataset, with no line where the dataset
     has no published donor or none with a value (1000 Genomes' carry no published sex), so a
@@ -237,8 +238,12 @@ def import_dataset(
     # the published donors' source rows.
     identifiers: dict[tuple[str, str], str] = {}
     results = []
+    published = entity_map.published
     directory = generation_dir(entity_root, EVIDENCE_DIRS[SOURCE_REPOSITORY_METADATA], catalog, dataset, stamp)
-    with staged_generation(directory) as staging:
+    published_dir = generation_dir(entity_root, EVIDENCE_DIRS[SOURCE_PUBLISHED_VALUE], catalog, dataset, stamp)
+    # Both kinds staged together: a failure in either removes both, so a submitter generation
+    # never becomes current beside an older published one.
+    with staged_generation(directory) as staging, staged_generation(published_dir) as published_staging:
         for table in tables:
             result = TableImport(table=table.table, path=evidence_file_path(directory, table.table))
             result.written = write_entity_file(
@@ -249,17 +254,13 @@ def import_dataset(
             if not result.written:
                 raise ValueError(f"{dataset}/{table.table}: no line written; the map disagrees with {catalog} here")
             results.append(result)
-
-    published = entity_map.published
-    directory = generation_dir(entity_root, EVIDENCE_DIRS[SOURCE_PUBLISHED_VALUE], catalog, dataset, stamp)
-    result = TableImport(table=published.table, path=evidence_file_path(directory, published.table))
-    with staged_generation(directory) as staging:
+        result = TableImport(table=published.table, path=evidence_file_path(published_dir, published.table))
         result.written = write_entity_file(
-            evidence_file_path(staging, published.table),
+            evidence_file_path(published_staging, published.table),
             envelope(SOURCE_PUBLISHED_VALUE, published.table, published.source_rows),
             _published_rows(path, published, tables, identifiers, result),
         )
-    results.append(result)
+        results.append(result)
     return DatasetImport(dataset=dataset, generation=stamp, tables=results)
 
 
