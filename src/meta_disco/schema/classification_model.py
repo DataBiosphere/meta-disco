@@ -95,10 +95,14 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
                            'prefix_reference': 'http://edamontology.org/'},
                   'EFO': {'prefix_prefix': 'EFO',
                           'prefix_reference': 'http://www.ebi.ac.uk/efo/EFO_'},
+                  'HANCESTRO': {'prefix_prefix': 'HANCESTRO',
+                                'prefix_reference': 'http://purl.obolibrary.org/obo/HANCESTRO_'},
                   'MODAL': {'prefix_prefix': 'MODAL',
                             'prefix_reference': 'https://datamodel.terra.bio/BioCoreTerms#'},
                   'OBI': {'prefix_prefix': 'OBI',
                           'prefix_reference': 'http://purl.obolibrary.org/obo/OBI_'},
+                  'PATO': {'prefix_prefix': 'PATO',
+                           'prefix_reference': 'http://purl.obolibrary.org/obo/PATO_'},
                   'SO': {'prefix_prefix': 'SO',
                          'prefix_reference': 'http://purl.obolibrary.org/obo/SO_'},
                   'TerraCore': {'prefix_prefix': 'TerraCore',
@@ -376,6 +380,158 @@ class VariantOriginEnum(str, Enum):
     """
 
 
+class PhenotypicSexEnum(str, Enum):
+    """
+    A donor's phenotypic sex (#693), in AnVIL's values: AnVIL's published `anvil_donor.phenotypic_sex` writes `Female` and `Male`, and its data model's coding system for the slot is PATO's phenotypic sex (PATO:0001894), whose children are the `meaning`s. A value no source writes is not listed; one is added when a source does.
+    """
+    Female = "Female"
+    Male = "Male"
+
+
+class GeneticAncestryEnum(str, Enum):
+    """
+    A donor's genetic ancestry (#693), as AnVIL's data model suggests: HANCESTRO terms. The values are 1000 Genomes' population codes, as its tables and the datasets built on it write them, each under its superpopulation by `is_a` as HANCESTRO places it; `meaning` is the HANCESTRO term and `description` its label (HANCESTRO 2025-10-14). A record holds the most specific term its evidence supports (`GBR` beside `EUR` is `GBR`), as the assay tree does; a consumer that filters on a superpopulation walks `is_a`. Other populations (SGDP's, #559; HPRC_R2's `ASL`, which HANCESTRO has no term for) are not values yet, and their names wait in the review queue.
+    """
+    AFR = "AFR"
+    """
+    African (AFR) reference superpopulation (1KGP)
+    """
+    AMR = "AMR"
+    """
+    American (AMR) reference superpopulation (1KGP)
+    """
+    EAS = "EAS"
+    """
+    East Asian (EAS) reference superpopulation (1KGP)
+    """
+    EUR = "EUR"
+    """
+    European (EUR) reference superpopulation (1KGP)
+    """
+    SAS = "SAS"
+    """
+    South Asian (SAS) reference superpopulation (1KGP)
+    """
+    ACB = "ACB"
+    """
+    African Caribbean in Barbados (1KGP)
+    """
+    ASW = "ASW"
+    """
+    African Ancestry in Southwest US (1KGP)
+    """
+    BEB = "BEB"
+    """
+    Bengali in Bangladesh (1KGP)
+    """
+    CDX = "CDX"
+    """
+    Chinese Dai in Xishuangbanna, China (1KGP)
+    """
+    CEU = "CEU"
+    """
+    Utah residents (CEPH) with Northern and Western European ancestry (1KGP)
+    """
+    CHB = "CHB"
+    """
+    Han Chinese in Beijing, China (1KGP)
+    """
+    CHS = "CHS"
+    """
+    Han Chinese South (1KGP)
+    """
+    CLM = "CLM"
+    """
+    Colombian in Medellin, Colombia (1KGP)
+    """
+    ESN = "ESN"
+    """
+    Esan in Nigeria (1KGP)
+    """
+    FIN = "FIN"
+    """
+    Finnish in Finland (1KGP)
+    """
+    GBR = "GBR"
+    """
+    British in England and Scotland (1KGP)
+    """
+    GIH = "GIH"
+    """
+    Gujarati Indians in Houston, TX (1KGP)
+    """
+    GWD = "GWD"
+    """
+    Gambian in Western Division, The Gambia - Mandinka (GGVP). HANCESTRO's term for 1000 Genomes' GWD is the Gambian Genome Variation Project's, whose samples 1000 Genomes sequenced; its synonym is `GWD` and its parent the AFR superpopulation
+    """
+    IBS = "IBS"
+    """
+    Iberian populations in Spain (1KGP)
+    """
+    ITU = "ITU"
+    """
+    Indian Telugu in the UK (1KGP)
+    """
+    JPT = "JPT"
+    """
+    Japanese in Tokyo, Japan (1KGP)
+    """
+    KHV = "KHV"
+    """
+    Kinh in Ho Chi Minh City, Vietnam (1KGP)
+    """
+    LWK = "LWK"
+    """
+    Luhya in Webuye, Kenya (1KGP)
+    """
+    MSL = "MSL"
+    """
+    Mende in Sierra Leone (1KGP)
+    """
+    MXL = "MXL"
+    """
+    Mexican Ancestry in Los Angeles, California (1KGP)
+    """
+    PEL = "PEL"
+    """
+    Peruvian in Lima, Peru (1KGP)
+    """
+    PJL = "PJL"
+    """
+    Punjabi in Lahore, Pakistan (1KGP)
+    """
+    PUR = "PUR"
+    """
+    Puerto Rican in Puerto Rico (1KGP)
+    """
+    STU = "STU"
+    """
+    Sri Lankan Tamil in the UK (1KGP)
+    """
+    TSI = "TSI"
+    """
+    Toscani in Italy (1KGP)
+    """
+    YRI = "YRI"
+    """
+    Yoruba in Ibadan, Nigeria (1KGP)
+    """
+
+
+class EntityKindEnum(str, Enum):
+    """
+    What an identifier names (#693): a sample, the material a file's data was read from, or a donor, the person or animal it was collected from. An identifier rule declares which (`IdentifierRule.names`).
+    """
+    sample = "sample"
+    """
+    A sample, as a file's `samples` names it.
+    """
+    donor = "donor"
+    """
+    A donor, as a `DonorRecord` is keyed.
+    """
+
+
 class ClassificationStatusEnum(str, Enum):
     """
     Why a field has (or lacks) a value. Replaces sentinel values that were previously smuggled into each dimension enum (not_applicable / not_classified). See issues #56, #88.
@@ -635,6 +791,10 @@ class SourceTypeEnum(str, Enum):
     """
     A human curator's decision, recorded deliberately rather than inferred.
     """
+    identifier_rule = "identifier_rule"
+    """
+    One of our identifier rules (`rules/sample_namespaces.yaml`), from the identifier alone (#693): a rule naming a sample and a donor with one string says the sample was collected from the donor with the same identifier.
+    """
 
 
 class ImporterSourceTypeEnum(str, Enum):
@@ -714,6 +874,10 @@ Measured on the AnVIL corpus, 708,088 records. The keys differ enormously in how
     """
     Bare file name, and often the only key a catalog publishes. The weakest: present on every record but non-unique on 69.4%. Collisions are wildly per-dataset — 2 rows in 16,271 within `AnVIL_HPRC_R2`, against 99.3% within `ANVIL_1000G_PRIMED_data_model` — so it is usable only with a dataset scope, which is what `EvidenceTarget.dataset` is for.
     """
+    entity_identifier = "entity_identifier"
+    """
+    A donor's or sample's identifier as the source wrote it (`HG00096`), the key of an entity evidence file (`EntityEvidenceRow`, #693) and of the claims made from it. Never a file's key: a slot or lineage evidence file keyed by it is refused. Read through `rules/sample_namespaces.yaml` at reconcile, in the envelope's target dataset.
+    """
 
 
 class LineageParentKeyEnum(str, Enum):
@@ -753,6 +917,10 @@ class IdentifierNamespaceEnum(str, Enum):
     biosample = "biosample"
     """
     An NCBI, EBI or DDBJ BioSample accession (`SAMN`/`SAMEA`/`SAMD`).
+    """
+    igvf = "igvf"
+    """
+    The IGVF Data Portal's donor accessions (`IGVFDO` and eight capitals or digits, #693), as AnVIL_IGVF_Mouse_R1's `donor` table names its mice.
     """
     dataset_local = "dataset_local"
     """
@@ -1085,7 +1253,7 @@ Carried on the claim and not only on the evidence file's envelope because it is 
                        'EntityIdentifier',
                        'IdentifierRule']} })
     table: Optional[str] = Field(default=None, description="""The table or file within the source that the claim came from, e.g. an AnVIL verbatim manifest table name. Null when the source is a single undivided file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceFileSource']} })
-    column: Optional[str] = Field(default=None, description="""The column within that table the raw value was read from. Null when the source has no column structure.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceRow']} })
+    column: Optional[str] = Field(default=None, description="""The column within that table the raw value was read from. Null when the source has no column structure.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceRow', 'EntityEvidenceRow']} })
 
     @field_validator('name')
     def pattern_name(cls, v):
@@ -1312,11 +1480,11 @@ class EvidenceRow(ConfiguredBaseModel):
                                       'required': True}}})
 
     raw_value: str = Field(default=..., description="""What the source wrote, verbatim (contract 1.4) — not casefolded, trimmed, corrected or suppressed. The same slot an `Evidence` claim carries beside its mapped value; on a row it is the whole content, because a row maps nothing.
-No pattern and no enum, deliberately: a source's spellings are its own, a value our vocabulary has no word for is the review queue's input rather than an error (contract 3.7), and an empty cell is something the source published, whose meaning is a rule's to decide.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'Evidence']} })
+No pattern and no enum, deliberately: a source's spellings are its own, a value our vocabulary has no word for is the review queue's input rather than an error (contract 3.7), and an empty cell is something the source published, whose meaning is a rule's to decide.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'EntityEvidenceRow', 'Evidence']} })
     field: str = Field(default=..., description="""The slot this row speaks to, spelled `field` on the wire and in the code (contract 2.1). One of the eight classification dimensions, or `samples` (#357): which sample a submitter table says the file's data comes from, read through `rules/sample_namespaces.yaml` and never the value map.
-Pinned by pattern rather than by an enum because the dimension names are slot *names* in this schema and not a vocabulary it declares; `test_the_row_field_pattern_lists_every_dimension` holds it to `models.EVIDENCE_FIELDS`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow']} })
-    target_key_value: str = Field(default=..., description="""The value to match against the envelope's `target_key`, already in the target's value space — the importer owns the mapping between its own key and the target's. Empty is refused: a row with nothing to match on can attach to no file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'LineageRow']} })
-    column: Optional[str] = Field(default=None, description="""The column the raw value was read from. The one member of the source that varies within a file — repository, dataset, table and url are on the envelope — and absent for a source whose table has no columns to name.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceRow']} })
+Pinned by pattern rather than by an enum because the dimension names are slot *names* in this schema and not a vocabulary it declares; `test_the_row_field_pattern_lists_every_dimension` holds it to `models.EVIDENCE_FIELDS`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'EntityEvidenceRow']} })
+    target_key_value: str = Field(default=..., description="""The value to match against the envelope's `target_key`, already in the target's value space — the importer owns the mapping between its own key and the target's. Empty is refused: a row with nothing to match on can attach to no file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'LineageRow', 'EntityEvidenceRow']} })
+    column: Optional[str] = Field(default=None, description="""The column the raw value was read from. The one member of the source that varies within a file — repository, dataset, table and url are on the envelope — and absent for a source whose table has no columns to name.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceRow', 'EntityEvidenceRow']} })
 
     @field_validator('field')
     def pattern_field(cls, v):
@@ -1367,7 +1535,7 @@ class LineageRow(ConfiguredBaseModel):
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
-    target_key_value: str = Field(default=..., description="""The child, as the envelope's `target_key` names it: AnVIL's `file_id` for `anvil_activity`, the DRS URI for a submitter table.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'LineageRow']} })
+    target_key_value: str = Field(default=..., description="""The child, as the envelope's `target_key` names it: AnVIL's `file_id` for `anvil_activity`, the DRS URI for a submitter table.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'LineageRow', 'EntityEvidenceRow']} })
     parent: Optional[str] = Field(default=None, description="""The parent, in the form `parent_key_type` names. Written whether or not it is one of the dataset's files: reconcile (#577) will report a parent outside the dataset, and dropping it here would hide it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
     parent_key_type: Optional[LineageParentKeyEnum] = Field(default=None, description="""Which kind of value `parent` is. Named `_type` because `ActivityInput.parent_key` is a value, the parent's record key.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
     parent_source_identifier: Optional[str] = Field(default=None, description="""The source's own identifier for the parent, where the source named the parent by one (IGVF's `derived_from` accessions, or the ENA run whose reads a T2T_CHRY CRAM holds), kept beside the locator the importer found for it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow']} })
@@ -1483,6 +1651,90 @@ class LineageRow(ConfiguredBaseModel):
         return v
 
 
+class EntityEvidenceRow(ConfiguredBaseModel):
+    """
+    One line of an entity evidence file after the envelope (#693): a source saying, about one donor, what it wrote for one of the donor's slots. It reads \"about the donor the source names `target_key_value` (read from `identifier_column`), the source wrote `raw_value` in `column`\". The envelope is an `EvidenceFileEnvelope` keyed by `entity_identifier`; the lines are written under their own root, `data/entity_evidence/`, because every reader of `data/source_evidence/` takes each file there as a file's slot lines.
+    **It declares nothing**, as an `EvidenceRow` declares nothing: the identifier is the string as written, recognised through `rules/sample_namespaces.yaml` at reconcile, and the value is the value map's to translate. `entity_evidence` refuses an answer on a line by name.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'raw_value': {'description': 'What the source wrote, verbatim, '
+                                                     'as on an `EvidenceRow`.',
+                                      'name': 'raw_value',
+                                      'required': True}}})
+
+    raw_value: str = Field(default=..., description="""What the source wrote, verbatim, as on an `EvidenceRow`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'EntityEvidenceRow', 'Evidence']} })
+    field: str = Field(default=..., description="""The donor slot this line speaks to; pinned to `models.DONOR_FIELDS` by `test_the_entity_row_field_pattern_lists_every_donor_field`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'EntityEvidenceRow']} })
+    target_key_value: str = Field(default=..., description="""The identifier the source wrote for the donor, verbatim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'LineageRow', 'EntityEvidenceRow']} })
+    column: str = Field(default=..., description="""The column `raw_value` was read from.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceRow', 'EntityEvidenceRow']} })
+    identifier_column: str = Field(default=..., description="""The column `target_key_value` was read from.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EntityEvidenceRow']} })
+    identifier_table: Optional[str] = Field(default=None, description="""The table `target_key_value` was read from, where it is not the envelope's: AnVIL's published `anvil_donor` names its donor only through the submitter row it was made from (`source_datarepo_row_ids`), so its lines take the identifier from that row's table.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EntityEvidenceRow']} })
+
+    @field_validator('field')
+    def pattern_field(cls, v):
+        pattern=re.compile(r"^(phenotypic_sex|genetic_ancestry)\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid field format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid field format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('target_key_value')
+    def pattern_target_key_value(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid target_key_value format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid target_key_value format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('column')
+    def pattern_column(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid column format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid column format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('identifier_column')
+    def pattern_identifier_column(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid identifier_column format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid identifier_column format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('identifier_table')
+    def pattern_identifier_table(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid identifier_table format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid identifier_table format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+
 class EvidenceFileEnvelope(ConfiguredBaseModel):
     """
     What an evidence file records once, for every row in it (issue #401, amended by #421). An importer runs out of band from classification — when a catalog refreshes, with network — and writes an evidence file of `EvidenceRow`s; a run reads it and reports this provenance, so that what a run found, and how old it was, is on the record. Inference reads each file's envelope and none of its rows; the reconcile stage (#432) reads the rows and joins them to the run's records.
@@ -1583,8 +1835,8 @@ class Evidence(ConfiguredBaseModel):
     competing_values: Optional[list[str]] = Field(default=None, description="""On a `conflict` marker, the disagreeing top-tier values that made the field ambiguous. Absent on claims and on the `not_classified` marker.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
     source_type: Optional[SourceTypeEnum] = Field(default=None, description="""Kind of source that produced this claim (provenance, #90; populated on every claim by #392) — see `source_type_enum` for the kinds. Absent on a synthetic marker and on the note left by a failed fetch or input contract, neither of which is a claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
     source: Optional[ClaimSource] = Field(default=None, description="""The external source that produced this claim, for a claim that is not from one of our rules. Absent on a rule or content claim, which carries `rule_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
-    raw_value: Optional[str] = Field(default=None, description="""What the source actually said, before mapping — `Revio` beside a mapped `PACBIO`. The mapping is the reviewable decision, and storing only the mapped value makes it unauditable. Also present on an `unmapped` or `no_vocabulary_term` claim, where it is the whole content of the claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'Evidence']} })
-    join_key: Optional[JoinKeyEnum] = Field(default=None, description="""Which key attached this claim to our file. Recorded per claim rather than per source because identity is the risky step and sources publish different keys: md5 collides on 1.72% of the corpus's rows and the HPRC catalog publishes only file names (#390). Absent on a claim our own inference produced, which was never joined to anything.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
+    raw_value: Optional[str] = Field(default=None, description="""What the source actually said, before mapping — `Revio` beside a mapped `PACBIO`. The mapping is the reviewable decision, and storing only the mapped value makes it unauditable. Also present on an `unmapped` or `no_vocabulary_term` claim, where it is the whole content of the claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'EntityEvidenceRow', 'Evidence']} })
+    join_key: Optional[JoinKeyEnum] = Field(default=None, description="""Which key attached this claim to our record: a file's, or for a donor's slot the identifier the source wrote (`entity_identifier`, #693). Recorded per claim rather than per source because identity is the risky step and sources publish different keys: md5 collides on 1.72% of the corpus's rows and the HPRC catalog publishes only file names (#390). Absent on a claim our own inference produced, which was never joined to anything.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
     match_exact: Optional[bool] = Field(default=None, description="""Whether the join on `join_key` was an exact match rather than a normalized or partial one. Absent whenever `join_key` is.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence']} })
     activity: Optional[ActivityTypeEnum] = Field(default=None, description="""The kind of step that made the file (`activity_type_enum`); what passes from each input role is declared per term in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'GeneratedBy', 'Attribution']} })
     parent_role: Optional[str] = Field(default=None, description="""On an inherited claim (contract 4.9, #571), or an inherited sample attribution (#668): the input role of the step whose parents gave the claim or the samples, a role its `activity` declares in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
@@ -1598,7 +1850,10 @@ class GeneratedBy(ConfiguredBaseModel):
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
     activity: ActivityTypeEnum = Field(default=..., description="""The kind of step that made the file (`activity_type_enum`); what passes from each input role is declared per term in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'GeneratedBy', 'Attribution']} })
-    named_by: list[Attribution] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityInput', 'SampleReference']} })
+    named_by: list[Attribution] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy',
+                       'ActivityInput',
+                       'SampleReference',
+                       'CollectedFrom']} })
     inputs: list[ActivityInput] = Field(default=..., description="""The inputs the step used, each in one of the roles its activity declares.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityDeclaration']} })
 
 
@@ -1613,7 +1868,10 @@ class ActivityInput(ConfiguredBaseModel):
     parent_key: Optional[str] = Field(default=None, description="""The parent's record key (`record_keys.SOURCE_RECORD_KEYS`: AnVIL's `file_id`, HPRC's URL hash in `md5sum`), set only when the parent resolves to exactly one record of the child's dataset (ADR-0002 decision 2), or of the dataset an input's `parent_dataset` names under that decision's declared exception (#594). Named for the key rather than `parent_file_id` because HPRC's key is not a `file_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
     parent_kind: Optional[ParentKindEnum] = Field(default=None, description="""The kind of file the parent is.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
     role: str = Field(default=..., description="""One of the roles its activity declares in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput', 'InputRole']} })
-    named_by: list[Attribution] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityInput', 'SampleReference']} })
+    named_by: list[Attribution] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy',
+                       'ActivityInput',
+                       'SampleReference',
+                       'CollectedFrom']} })
     parent_dataset: Optional[str] = Field(default=None, description="""The dataset `parent_key`'s record is in, where it is not the child's own: only an input resolved through the run lineage map's declared exception (#594, ADR-0002 decision 2), such as a T2T_CHRY CRAM's reads in ANVIL_T2T. Absent on every input whose parent is in the child's dataset.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow', 'ActivityInput']} })
 
     @field_validator('parent_dataset')
@@ -1665,13 +1923,16 @@ class Attribution(ConfiguredBaseModel):
 
 class SampleReference(ConfiguredBaseModel):
     """
-    Which samples a file's data comes from (#357): the run's sample list it points to, how many members that list has, and every source that named it. A sample is an identifier, not a record (ADR-0002 decision 1), and a joint VCF names thousands, so the members are written as a `SampleList` and each file points to one: once in each producer file that points to it (`sample_lists`), and once across the run in the reconciled `sample_lists.ndjson.gz`.
+    Which samples a file's data comes from (#357): the run's sample list it points to, how many members that list has, and every source that named it. A joint VCF names thousands of samples, so the members are written as a `SampleList` and each file points to one: once in each producer file that points to it (`sample_lists`), and once across the run in the reconciled `sample_lists.ndjson.gz`.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
     list_id: str = Field(default=..., description="""The `SampleList` this file points to: a digest of its sorted members, so two files naming the same samples point to the same list.""", json_schema_extra = { "linkml_meta": {'domain_of': ['SampleReference', 'SampleList']} })
     count: int = Field(default=..., description="""How many members the list has.""", ge=1, json_schema_extra = { "linkml_meta": {'domain_of': ['SampleReference']} })
-    named_by: list[Attribution] = Field(default=..., description="""Every source that named these samples: the file's own content, a header or a sample map's rows (`code_rules.SAMPLE_RULES`), a submitter-table column, the file's parent across a step that passes samples (#668), or each of them where they agree.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityInput', 'SampleReference']} })
+    named_by: list[Attribution] = Field(default=..., description="""Every source that named these samples: the file's own content, a header or a sample map's rows (`code_rules.SAMPLE_RULES`), a submitter-table column, the file's parent across a step that passes samples (#668), or each of them where they agree.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy',
+                       'ActivityInput',
+                       'SampleReference',
+                       'CollectedFrom']} })
 
     @field_validator('list_id')
     def pattern_list_id(cls, v):
@@ -1792,7 +2053,8 @@ class IdentifierRule(ConfiguredBaseModel):
                        'EvidenceTarget',
                        'EntityIdentifier',
                        'IdentifierRule']} })
-    rationale: str = Field(default=..., description="""Why a string matching the pattern names one sample in this namespace.""", json_schema_extra = { "linkml_meta": {'domain_of': ['IdentifierRule']} })
+    names: list[EntityKindEnum] = Field(default=..., description="""What a string the rule recognises names: a sample, a donor, or both (#693). A rule naming both says one string is a sample and the donor it was collected from, as a Coriell number names a cell line and the person it came from; the sample's `collected_from` is then that donor. A file's samples are read only through rules naming `sample`, and a donor's identifier only through rules naming `donor`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['IdentifierRule']} })
+    rationale: str = Field(default=..., description="""Why a string matching the pattern names one sample or donor in this namespace.""", json_schema_extra = { "linkml_meta": {'domain_of': ['IdentifierRule']} })
 
     @field_validator('id')
     def pattern_id(cls, v):
@@ -1819,6 +2081,70 @@ class IdentifierRule(ConfiguredBaseModel):
             err_msg = f"Invalid dataset format: {v}"
             raise ValueError(err_msg)
         return v
+
+
+class DonorRecord(ConfiguredBaseModel):
+    """
+    One donor (#693, ADR-0002 decision 1 as amended): the person or animal samples were collected from, keyed by its identifier, so one record gathers what every dataset's tables say about one person, and each property is settled once, by the rule a file's dimensions are settled by (`reconcile.settle`). Reconcile writes one per donor that entity evidence names or a sample's `collected_from` points to, in `reconciled/donors.ndjson.gz`. A file reaches its donors through its `samples` and each sample's `collected_from`; no donor property is copied onto a file (epic #692, decision 5).
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    identifier: EntityIdentifier = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord', 'SampleRecord']} })
+    phenotypic_sex: PhenotypicSexClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
+    genetic_ancestry: GeneticAncestryClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
+
+
+class PhenotypicSexClassification(Classification):
+    """
+    A donor's phenotypic sex, settled from every source that states it (#693).
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'value': {'name': 'value', 'range': 'phenotypic_sex_enum'}}})
+
+    value: Optional[PhenotypicSexEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    inferred: Optional[InferredConclusion] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+
+
+class GeneticAncestryClassification(Classification):
+    """
+    A donor's genetic ancestry, settled from every source that states it (#693): the most specific term the sources support, where they nest.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'value': {'name': 'value', 'range': 'genetic_ancestry_enum'}}})
+
+    value: Optional[GeneticAncestryEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    inferred: Optional[InferredConclusion] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+
+
+class SampleRecord(ConfiguredBaseModel):
+    """
+    One sample (#693): every sample a reconciled file names, in `reconciled/samples.ndjson.gz`, with the donor it was collected from where a rule says.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    identifier: EntityIdentifier = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord', 'SampleRecord']} })
+    collected_from: Optional[CollectedFrom] = Field(default=None, description="""Absent where nothing names the sample's donor.""", json_schema_extra = { "linkml_meta": {'domain_of': ['SampleRecord']} })
+
+
+class CollectedFrom(ConfiguredBaseModel):
+    """
+    The donor a sample was collected from, and every source that said so (#693). Today the one source is an identifier rule naming both a sample and a donor (`IdentifierRule.names`), cited by its id with `source_type: identifier_rule`.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    donor: EntityIdentifier = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['CollectedFrom']} })
+    named_by: list[Attribution] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy',
+                       'ActivityInput',
+                       'SampleReference',
+                       'CollectedFrom']} })
 
 
 class ActivityDeclarations(ConfiguredBaseModel):
@@ -1897,6 +2223,7 @@ EvidenceFileSource.model_rebuild()
 EvidenceTarget.model_rebuild()
 EvidenceRow.model_rebuild()
 LineageRow.model_rebuild()
+EntityEvidenceRow.model_rebuild()
 EvidenceFileEnvelope.model_rebuild()
 Evidence.model_rebuild()
 GeneratedBy.model_rebuild()
@@ -1907,6 +2234,11 @@ SampleList.model_rebuild()
 EntityIdentifier.model_rebuild()
 IdentifierRules.model_rebuild()
 IdentifierRule.model_rebuild()
+DonorRecord.model_rebuild()
+PhenotypicSexClassification.model_rebuild()
+GeneticAncestryClassification.model_rebuild()
+SampleRecord.model_rebuild()
+CollectedFrom.model_rebuild()
 ActivityDeclarations.model_rebuild()
 ActivityDeclaration.model_rebuild()
 ActivityEnd.model_rebuild()

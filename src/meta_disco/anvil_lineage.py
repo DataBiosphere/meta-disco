@@ -31,7 +31,6 @@ in the slot root's layout: ``anvil/<catalog>/<dataset>/<generation>/<table>.ndjs
 
 from __future__ import annotations
 
-import json
 from collections import Counter, defaultdict
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -44,6 +43,7 @@ from .azul_manifest import (
     FORMAT_VERBATIM,
     REPOSITORY,
     VERBATIM_FILE,
+    cell_as_written,
     iter_verbatim_entities,
     link_handles,
     manifest_path,
@@ -136,18 +136,9 @@ def cell_values(value: Any, locator: bool) -> list[str] | None:
     return list(items) if all(isinstance(i, str) and i for i in items) else []
 
 
-def _raw(value: Any) -> str | None:
-    """A step cell as a line records it: a string verbatim, the empty string included; null
-    and the empty list omitted, as the slot importer omits them (``anvil_evidence._transcribe``),
-    since neither observes anything; anything else as its JSON."""
-    if value is None or value == []:
-        return None
-    return value if isinstance(value, str) else json.dumps(value)
-
-
 def _identifier(value: Any) -> str | None:
-    """A step's id as a line records it: ``_raw``'s, but the empty string is no id and is omitted."""
-    raw = _raw(value)
+    """A step's id as a line records it: ``azul_manifest.cell_as_written``'s, but the empty string is no id and is omitted."""
+    raw = cell_as_written(value)
     return raw or None
 
 
@@ -367,7 +358,7 @@ def _table_rows(
             parents = _values(row, link.parent_column, link.parent_key_type == JOIN_KEY_DRS_URI, read, result)
             if not children or not parents:
                 continue
-            raw_activity = None if link.raw_activity_cell is None else _raw(row.get(link.raw_activity_cell))
+            raw_activity = None if link.raw_activity_cell is None else cell_as_written(row.get(link.raw_activity_cell))
             activity_id = None if link.activity_id_cell is None else _identifier(row.get(link.activity_id_cell))
             for child in children:
                 if not files.has(link.child_key, child):

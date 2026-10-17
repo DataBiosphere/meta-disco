@@ -14,7 +14,13 @@ import pytest
 import yaml
 
 from meta_disco import code_rules
-from meta_disco.models import CLASSIFICATION_FIELDS, JOIN_KEY_DRS_URI, NOT_APPLICABLE, SOURCE_REPOSITORY_METADATA
+from meta_disco.models import (
+    CLASSIFICATION_FIELDS,
+    JOIN_KEY_DRS_URI,
+    NOT_APPLICABLE,
+    SOURCE_REPOSITORY_METADATA,
+    TRANSLATED_FIELDS,
+)
 from meta_disco.rule_loader import get_unified_rules
 from meta_disco.schema_vocab import dimension_values
 from meta_disco.source_evidence import (
@@ -828,15 +834,18 @@ def test_two_rows_keyed_alike_are_refused_by_the_table_itself(tmp_path):
 def test_ac26_nothing_but_reconcile_imports_the_table():
     """Inference output is unchanged because no classification code reaches the module: the argument the
     issue allows in place of a corpus diff, made checkable over every module and script but the table's own.
-    The reconcile stage is the table's one reader in a run (#432), and it writes its own artifact, never
-    inference's; the review-queue report (#524) and the rules report (#572) read it too, and each writes only its
-    two report files."""
+    The reconcile stage is the table's one reader in a run (#432), its file records through `reconcile` and its
+    donor records through `reconcile_entities` (#693), each line translated by `resolution`, and it writes its own
+    artifact, never inference's; the
+    review-queue report (#524) and the rules report (#572) read it too, and each writes only its two report files."""
     sources = [*Path("src/meta_disco").rglob("*.py"), *Path("scripts").rglob("*.py")]
     importers = sorted(str(p) for p in sources if p.name != "value_map.py" and "value_map" in imported_segments(p))
     assert importers == [
         "scripts/generate_review_queue.py",
         "scripts/generate_rules_report.py",
         "src/meta_disco/reconcile.py",
+        "src/meta_disco/reconcile_entities.py",
+        "src/meta_disco/resolution.py",
     ], importers
 
 
@@ -866,7 +875,7 @@ def test_ac27_the_seeder_and_the_queue_read_every_line_through_iter_evidence(emp
 
 def test_the_normalizer_cannot_merge_two_terms_of_any_slot():
     """Contract 3.5's binding half: casefold-and-strip keeps every slot's terms distinct."""
-    for slot in CLASSIFICATION_FIELDS:
+    for slot in TRANSLATED_FIELDS:
         terms = dimension_values(slot)
         assert len({normalize(t) for t in terms}) == len(terms), slot
     assert normalize(" WGS ") == "wgs" and normalize("WES") == "wes"

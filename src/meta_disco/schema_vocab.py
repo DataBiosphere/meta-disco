@@ -15,12 +15,15 @@ from importlib.resources import files
 
 import yaml
 
-from .models import CLASSIFICATION_FIELDS
+from .models import CLASSIFICATION_FIELDS, DONOR_FIELDS
 
 # Classification field -> the enum that defines its permissible values. By
 # convention each dimension's enum is named ``<field>_enum`` in the schema, so
 # this derives from the single source of truth rather than re-listing the fields.
 DIMENSION_ENUMS = {field: f"{field}_enum" for field in CLASSIFICATION_FIELDS}
+# Every field whose values are a vocabulary of the schema's, named the same way: the
+# dimensions and a donor's slots (#693). The lookups below take any of them.
+VOCABULARY_ENUMS = {**DIMENSION_ENUMS, **{field: f"{field}_enum" for field in DONOR_FIELDS}}
 
 # The enum defining the permissible per-field ``status`` values (epic #116's
 # sentinel→status split): classified / not_applicable / not_classified / conflict.
@@ -97,15 +100,15 @@ def _load_enums() -> dict[str, frozenset[str]]:
 
 
 def dimension_values(field: str) -> frozenset[str]:
-    """Return the permissible values for a classification dimension field.
+    """Return the permissible values for a classification dimension field, or a donor's slot (#693).
 
     Raises ValueError for an unrecognized field, and KeyError (with the schema
     path) if the schema is missing the expected ``<field>_enum`` — so schema/rule
     drift fails with a diagnosable message rather than a bare lookup error.
     """
-    if field not in DIMENSION_ENUMS:
-        raise ValueError(f"Unknown classification dimension {field!r}; expected one of {sorted(DIMENSION_ENUMS)}")
-    enum_name = DIMENSION_ENUMS[field]
+    if field not in VOCABULARY_ENUMS:
+        raise ValueError(f"Unknown classification dimension {field!r}; expected one of {sorted(VOCABULARY_ENUMS)}")
+    enum_name = VOCABULARY_ENUMS[field]
     enums = _load_enums()
     if enum_name not in enums:
         raise KeyError(f"Schema at {default_schema_path()} is missing enum {enum_name!r} for dimension {field!r}")
@@ -116,7 +119,7 @@ def _term_spec(field: str, value: str) -> dict:
     """A dimension term's schema spec (``is_a``, ``meaning``, ...); ValueError for a value outside the vocabulary."""
     if not value_in_vocabulary(field, value):
         raise ValueError(f"{value!r} is not a {field} term")
-    return _load_schema_enums()[DIMENSION_ENUMS[field]][value] or {}
+    return _load_schema_enums()[VOCABULARY_ENUMS[field]][value] or {}
 
 
 def value_ancestors(field: str, value: str) -> tuple[str, ...]:
@@ -133,7 +136,7 @@ def value_ancestors(field: str, value: str) -> tuple[str, ...]:
     field or a missing enum.
     """
     _term_spec(field, value)  # validates the field and value first
-    return _ancestors(_load_schema_enums()[DIMENSION_ENUMS[field]], value, field)
+    return _ancestors(_load_schema_enums()[VOCABULARY_ENUMS[field]], value, field)
 
 
 def top_term(field: str, value: str) -> str | None:

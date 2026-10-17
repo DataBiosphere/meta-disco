@@ -199,6 +199,10 @@ REPORT_FILE = "reconcile_report.json"
 # The run's sample lists (#357), written beside the records in their line format: each
 # distinct list a reconciled record's ``samples`` points to, once.
 SAMPLE_LISTS_FILE = "sample_lists.ndjson.gz"
+# The donor and sample records (#693, `reconcile_entities`), written beside the records in
+# their line format: a `DonorRecord` or `SampleRecord` per line.
+DONORS_FILE = "donors.ndjson.gz"
+SAMPLES_FILE = "samples.ndjson.gz"
 # The gzip level. On a run's BAM file, 6 measured nearly as small as 9 (25x vs 26x), and 9
 # took 1.6-1.7 times as long to write; 1 was faster still but compressed only 14x.
 RECONCILED_GZIP_LEVEL = 6
@@ -236,15 +240,20 @@ def iter_reconciled_records(run_dir: Path):
     :func:`iter_records` skips one a run did not write.
     Raises FileNotFoundError when the run has no reconciled artifact at all — reading
     nothing would pass for a run with no coverage. Raises ValueError, before any record is
-    yielded, when the artifact holds a name other than the reconciled names, ``REPORT_FILE``
-    and ``SAMPLE_LISTS_FILE`` (dot-files aside), such as an uncompressed ``.ndjson`` written before
+    yielded, when the artifact holds a name other than the reconciled names, ``REPORT_FILE``,
+    ``SAMPLE_LISTS_FILE``, ``DONORS_FILE`` and ``SAMPLES_FILE`` (dot-files aside), such as an uncompressed ``.ndjson`` written before
     #554, whose records this reader would otherwise skip as unwritten; and, when it is
     reached, on a file that is not gzip or is cut short.
     """
     directory = run_dir / RECONCILED_DIR
     if not directory.is_dir():
         raise FileNotFoundError(f"No reconciled artifact in {run_dir}. Run 'make reconcile' first.")
-    expected = {reconciled_name(fname) for fname in CLASSIFICATION_FILES} | {REPORT_FILE, SAMPLE_LISTS_FILE}
+    expected = {reconciled_name(fname) for fname in CLASSIFICATION_FILES} | {
+        REPORT_FILE,
+        SAMPLE_LISTS_FILE,
+        DONORS_FILE,
+        SAMPLES_FILE,
+    }
     unexpected = sorted(p.name for p in directory.iterdir() if not p.name.startswith(".") and p.name not in expected)
     if unexpected:
         raise ValueError(
@@ -260,14 +269,22 @@ def iter_reconciled_records(run_dir: Path):
 def iter_reconciled_sample_lists(run_dir: Path):
     """Yield each sample list (a ``SampleList`` dict) in ``run_dir/reconciled/``'s ``SAMPLE_LISTS_FILE`` (#357).
 
-    Read as :func:`iter_reconciled_records` reads a records file: line 1 the envelope,
-    checked and skipped. Raises FileNotFoundError when the file is absent: a run
-    reconciled before #357 has none, and reading nothing would pass for one whose files
-    name no sample.
+    Raises FileNotFoundError when the file is absent: a run reconciled before #357 has none,
+    and reading nothing would pass for one whose files name no sample.
     """
-    path = run_dir / RECONCILED_DIR / SAMPLE_LISTS_FILE
+    yield from iter_reconciled_artifact(run_dir, SAMPLE_LISTS_FILE)
+
+
+def iter_reconciled_artifact(run_dir: Path, name: str):
+    """Yield each line after the envelope of one reconciled artifact file, ``run_dir/reconciled/<name>``.
+
+    For the files beside the records: ``SAMPLE_LISTS_FILE``, ``DONORS_FILE``, ``SAMPLES_FILE``
+    (#693). Line 1 is the envelope, checked and skipped. Raises FileNotFoundError when the
+    file is absent.
+    """
+    path = run_dir / RECONCILED_DIR / name
     if not path.exists():
-        raise FileNotFoundError(f"No {SAMPLE_LISTS_FILE} in {run_dir / RECONCILED_DIR}. Run 'make reconcile' first.")
+        raise FileNotFoundError(f"No {name} in {run_dir / RECONCILED_DIR}. Run 'make reconcile' first.")
     yield from _artifact_lines(path)
 
 

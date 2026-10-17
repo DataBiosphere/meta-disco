@@ -60,7 +60,6 @@ import shutil
 import sys
 from collections import Counter, defaultdict
 from collections.abc import Iterable
-from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -69,6 +68,7 @@ from .activity_map import ActivityMap, load_activity_map
 from .azul_manifest import REPOSITORY as ANVIL_REPOSITORY
 from .deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS
 from .edges import LineageStep, StepConflict, generic_only, merge_steps, misfits
+from .entity_evidence import entity_root_beside
 from .inputs import load_envelope
 from .lineage_evidence import DEFAULT_LINEAGE_EVIDENCE_ROOT
 from .models import (
@@ -91,9 +91,11 @@ from .models import (
 )
 from .output_utils import (
     CLASSIFICATION_FILES,
+    DONORS_FILE,
     RECONCILED_DIR,
     REPORT_FILE,
     SAMPLE_LISTS_FILE,
+    SAMPLES_FILE,
     find_latest_run,
     iter_records,
     iter_run_file_contents,
@@ -105,6 +107,7 @@ from .output_utils import (
 )
 from .producers import PRODUCERS
 from .provenance import code_identity
+from .reconcile_entities import gather, reconcile_entities, select_entity_evidence
 from .reconcile_inherit import (
     REFERENCE_ASSEMBLY,
     InheritanceCycle,
@@ -121,7 +124,10 @@ from .reconcile_lineage import Carrier, Locator, PendingLineage, applies, resolv
 from .reconcile_samples import Named, from_line
 from .record_keys import PUBLISHED_TABLES, RecordKey, is_key_value, record_key
 from .records import JOIN_KEY_OUTPUT_FIELDS, SAMPLE_OUTCOMES_KEY, STEP_OUTCOMES_KEY, UNRECOGNISED_SAMPLES_KEY
-from .rule_engine import CONFLICT_MARKER, make_claim
+from .resolution import NO_EVIDENCE, SlotEvidence, translate
+from .resolution import declaration as declaration  # re-exported: the resolution rule
+from .resolution import settle as settle
+from .rule_engine import CONFLICT_MARKER
 from .run_lineage_map import RunLineageMap, load_run_lineage_map
 from .sample_identity import identifier_rules, most_frequent
 from .schema.classification_model import EvidenceFileEnvelope
@@ -136,7 +142,7 @@ from .source_evidence import (
     report_evidence_files,
     require_one_published_source,
 )
-from .value_map import ValueMap, claims_from, load_value_map
+from .value_map import ValueMap, load_value_map
 
 # The per-slot instruction to the indexer (#432, second 2026-09-22 amendment).
 USE_META_DISCO = "meta_disco"
@@ -238,28 +244,15 @@ def published_slots(repository: str) -> frozenset[str]:
 MAX_EXAMPLES = 5
 
 
+# The report's block for the donor and sample records (#693, `reconcile_entities`).
+ENTITIES_KEY = "entities"
+
+
 class ReconcileError(Exception):
     """A refusal: the inputs cannot be reconciled as given, and nothing was written."""
 
 
 # --- resolution ---------------------------------------------------------------------
-
-
-def declaration(entry: dict, slot: str | None = None) -> str | None:
-    """What a claim, or inference's conclusion, declares for resolution: a value, ``not_applicable``, or None.
-
-    Reads ``value`` then ``status``. ``not_classified`` declares no answer (4.6) and
-    ``conflict`` is not a declaration, so both are None, like a claim declaring nothing.
-    A conclusion carries a value only when it is ``classified`` (the schema's rule), so
-    one function serves both. Given the ``slot``, a record's stored value is read as
-    resolution reads it (``models.settled_value``): pass it for an entry read off a record,
-    as a reconciled slot's ``inferred`` is.
-    """
-    if entry.get("value") is not None:
-        return entry["value"] if slot is None else settled_value(slot, entry["value"])
-    if entry.get("status") == NOT_APPLICABLE:
-        return NOT_APPLICABLE
-    return None
 
 
 def inferred_of(slot: str, entry: dict) -> dict:
@@ -297,54 +290,6 @@ def own_inputs(inferred: dict, source_claims: Iterable[dict]) -> tuple[bool, fro
     if (own := declaration(inferred)) is not None:
         declared.add(own)
     return inferred["status"] == CONFLICT, frozenset(declared)
-
-
-def settle(
-    slot: str, inference_conflict: bool, declared: AbstractSet[str], mixed: bool, published_unreviewed: bool
-) -> tuple[str, str | None]:
-    """One slot's ``(status, value)`` from every input's declaration: the whole resolution rule.
-
-    ``declared`` holds each input's declaration (a value or ``not_applicable``: inference's,
-    every source's, every inherited one's); ``mixed`` whether an inherited declaration is
-    the state ``mixed``. In order:
-
-    1. Inference itself concluded ``conflict``: the conflict stands, whatever a source
-       says — agreeing with one of two disagreeing rules is not resolving them, which 4.7
-       reserves for a curator rule (open question 1, decided 2026-09-22).
-    2. The declarations differ — two values, or a value beside ``not_applicable`` (4.6):
-       ``conflict``, unless the values nest in the slot's ``is_a`` hierarchy
-       (:func:`~.schema_vocab.most_specific`, #473): ``CHM13`` beside
-       ``T2T-CHM13v2.0`` is one answer at two levels of detail, and the deepest is
-       the value (4.4).
-    3. An inherited ``mixed`` beside any declaration: ``conflict``, since one value
-       contradicts a lineage that has none, and ``not_applicable`` stands for the values
-       it would contradict (4.9). Alone it declares nothing, and the slot goes on.
-    4. The published source spoke with a value no authored row reads (unreviewed): a
-       ``conflict`` if any other input declared something, else ``not_classified`` —
-       missing work, not a challenge.
-    5. One value: ``classified``. Otherwise ``not_applicable`` if anyone declared it, and
-       ``not_classified`` if nobody declared anything. ``not_classified`` never conflicts
-       and yields to ``not_applicable`` (4.6).
-
-    ``value`` is null unless the status is ``classified``.
-    """
-    if inference_conflict:
-        return CONFLICT, None
-    if len(declared) > 1:
-        deepest = most_specific(slot, declared)
-        if deepest is None:
-            return CONFLICT, None
-        declared = {deepest}
-    if mixed and declared:
-        return CONFLICT, None
-    if published_unreviewed:
-        return (CONFLICT, None) if declared else (NOT_CLASSIFIED, None)
-    if not declared:
-        return NOT_CLASSIFIED, None
-    (only,) = declared
-    if only == NOT_APPLICABLE:
-        return NOT_APPLICABLE, None
-    return CLASSIFIED, only
 
 
 def use_for(status: str) -> str:
@@ -465,23 +410,6 @@ def select_evidence(
             )
         applicable.append(EvidenceFile(status.path, envelope))
     return applicable, skipped
-
-
-@dataclass(slots=True)
-class SlotEvidence:
-    """What the sources said about one slot of one file."""
-
-    claims: list[dict] = field(default_factory=list)
-    # Source types that spoke to the slot with a value no authored row reads.
-    unreviewed: set[str] = field(default_factory=set)
-    # Source types that spoke to the slot with a value whose authored row declares
-    # nothing for it (`declares: {}`, or declares only other slots): reviewed, no claim.
-    no_claim: set[str] = field(default_factory=set)
-
-
-# The slot evidence of a slot no source spoke to. Shared and never written: every reader
-# only reads it.
-NO_EVIDENCE = SlotEvidence()
 
 
 @dataclass
@@ -675,7 +603,7 @@ def join(
                     else:
                         samples[found[0]].append(got)
                     continue
-                for slot in _translate(slots[found[0]], entry, ev, table):
+                for slot in translate(slots[found[0]], entry, ev.source_type, ev.target_key, table):
                     coverage[ev.source_type].add((ev.dataset, slot))
 
     for ev in evidence:
@@ -729,51 +657,6 @@ def _carriers(run_dir: Path, key: RecordKey, wanted: set[_Key]) -> dict[_Key, li
                 data_type = (record.get("classifications") or {}).get("data_type") or {}
                 found[at].append(Carrier(identity, str(record.get("file_name") or ""), data_type.get("value")))
     return found
-
-
-def _translate(
-    record_slots: dict[str, SlotEvidence], entry: EvidenceEntry, ev: EvidenceFile, table: ValueMap
-) -> set[str]:
-    """Add a matched line's claims to its record's slots, or mark the slot unreviewed by its source type.
-
-    The row is selected here and handed to ``claims_from``, because an authored row
-    declaring nothing (``declares: {}``) yields no claim and is still reviewed.
-
-    A line no authored row reads makes no claim (contract 3.7). From the published source
-    it still moves the slot (to ``conflict`` or ``not_classified``), so what it said is
-    kept in the slot's evidence as an ``unmapped`` entry — its source, raw value and join,
-    and no value, status or rule — and the record shows why on its own (6.10). It declares
-    nothing, so resolution does not read it. Another source's unreviewed value moves
-    nothing, is counted in the report, and is not written to the record.
-
-    Returns the slots the line's claims were made on.
-    """
-    row = table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset)
-    if row is None or not row.authored:
-        said = record_slots[entry.field]
-        said.unreviewed.add(ev.source_type)
-        if ev.source_type != SOURCE_PUBLISHED_VALUE:
-            return set()
-        seen = make_claim(
-            source_type=ev.source_type,
-            state=UNMAPPED,
-            source=entry.source,
-            raw_value=entry.raw_value,
-            join_key=ev.target_key,
-            match_exact=True,
-        )
-        if seen not in said.claims:
-            said.claims.append(seen)
-        return set()
-    if entry.field not in row.declares:
-        record_slots[entry.field].no_claim.add(ev.source_type)
-    claimed = set()
-    for slot, claim in claims_from(entry, ev.source_type, table, join_key=ev.target_key, row=row):
-        claimed.add(slot)
-        existing = record_slots[slot].claims
-        if claim not in existing:
-            existing.append(claim)
-    return claimed
 
 
 # --- the record ---------------------------------------------------------------------
@@ -1277,6 +1160,7 @@ def reconcile_run(
     lineage_root: Path | None = None,
     activity_table: ActivityMap | None = None,
     run_lineage_map: RunLineageMap | None = None,
+    entity_root: Path | None = None,
 ) -> dict:
     """Reconcile one stored run into ``<run>/reconciled/`` and return its report; ``evidence_root=None`` excludes all evidence.
 
@@ -1287,9 +1171,10 @@ def reconcile_run(
     clock — the evidence report printed on the way in shows file ages, and nothing
     written does — so the same run, evidence, lineage, translation table, activity map and
     input paths, reconciled by the same code, write the same bytes (criterion 16); line 1's
-    ``reconciled_by`` names the commit (not a dirty tree's edits). Both tables' sha256 are in the envelope
-    and the report. The report echoes the input path as given and evidence paths
-    relative to ``evidence_root``.
+    ``reconciled_by`` names the commit (not a dirty tree's edits), and it lists the slot evidence, lineage
+    and entity evidence files read. Both tables' sha256 are in the envelope
+    and the report. The report echoes the input path as given, evidence paths
+    relative to ``evidence_root`` and entity evidence paths relative to the entity root.
 
     Refuses, before reading evidence, an input whose ``repository`` or ``catalog`` is not
     what a run file records (:func:`require_run_input`, #404).
@@ -1304,6 +1189,14 @@ def reconcile_run(
     ``run_lineage_map`` (the bundled run lineage map by default, #594) declares it; a run
     holding a child dataset of that map but not the dataset its reads are in is refused
     (``RunLineageMap.require_in_run``).
+
+    Donors and samples (#693, :mod:`reconcile_entities`): the entity evidence under
+    ``entity_root``, by default the ``entity_evidence`` directory beside ``evidence_root``,
+    settles each donor's slots into ``donors.ndjson.gz``, and every sample the reconciled
+    files name is written to ``samples.ndjson.gz`` with the donor it was collected from where
+    an identifier rule says. ``evidence_root=None`` excludes the entity evidence too: the
+    samples and the donors they point to are still written, each donor's slots
+    ``not_classified``.
 
     Inheritance (#571, :mod:`reconcile_inherit`) needs every parent's answer before its
     child is written, and the records come file by file, so inheritance reads the run twice,
@@ -1337,9 +1230,11 @@ def reconcile_run(
     table = table if table is not None else load_value_map()
     activity_table = activity_table if activity_table is not None else load_activity_map()
 
+    rules = identifier_rules()
     if evidence_root is None:
         applicable, skipped = [], []
         pending = PendingLineage()
+        entity_root, entity_paths, entity_skipped = Path(), [], []
     else:
         statuses = report_evidence_files(evidence_root)
         require_one_published_source(statuses, PUBLISHED_TABLES)
@@ -1352,6 +1247,11 @@ def reconcile_run(
         except ValueError as exc:
             raise ReconcileError(str(exc)) from None
         pending = translate_lineage(lineage_root, evidence_root, repository, catalog, activity_table, run_map)
+        if entity_root is None:
+            entity_root = entity_root_beside(evidence_root)
+        entity_paths, entity_skipped = select_entity_evidence(entity_root, repository, catalog)
+    # Every entity line is read and recognised here, before anything is written (#693).
+    entity_evidence = gather(entity_paths, entity_root, table, rules)
     joined = join(applicable, run_dir, key, table, extra=pending.wanted)
     lineage = resolve_lineage(pending, joined.carriers)
     report = Report(
@@ -1372,6 +1272,9 @@ def reconcile_run(
         "value_map_sha256": table.digest,
         "activity_map_sha256": activity_table.digest,
         "lineage_files": lineage.files,
+        "entity_evidence": [
+            {k: f[k] for k in ("path", "source_type", "dataset", "table")} for f in entity_evidence.files
+        ],
         "classified_by": classified_by(provenance),
         "reconciled_by": reconciled_by,
     }
@@ -1402,7 +1305,7 @@ def reconcile_run(
     # The first pass: each record's own settled answers and samples, and each child's step;
     # and the sample lists inference's records point to (#357).
     graph = _Graph()
-    samples = reconcile_samples.SampleReport(identifier_rules())
+    samples = reconcile_samples.SampleReport(rules)
     seen: set[str] = set()
     inference_lists: dict[str, dict] = {}
     for _, records, lists in iter_run_file_contents(run_dir):
@@ -1438,7 +1341,11 @@ def reconcile_run(
     staging.mkdir()
     for fname, records in iter_run_files(run_dir, strict=True):
         write_reconciled_file(staging / reconciled_name(fname), header, reconciled_rows(records))
-    write_reconciled_file(staging / SAMPLE_LISTS_FILE, header, samples.sorted_lists())
+    run_lists = samples.sorted_lists()
+    write_reconciled_file(staging / SAMPLE_LISTS_FILE, header, run_lists)
+    entities = reconcile_entities(entity_evidence, rules, run_lists, skipped=entity_skipped)
+    write_reconciled_file(staging / DONORS_FILE, header, entities.donors)
+    write_reconciled_file(staging / SAMPLES_FILE, header, entities.samples)
 
     full_report = {
         **header,
@@ -1446,6 +1353,7 @@ def reconcile_run(
         "skipped_evidence": [{**s, "path": relative_to(s["path"], root)} for s in skipped],
         **report.to_dict(),
         SAMPLES_FIELD: samples.to_dict(header_samples(files_metadata), joined.unrecognised_samples),
+        ENTITIES_KEY: entities.report,
     }
     (staging / REPORT_FILE).write_text(json.dumps(full_report, indent=2, sort_keys=True) + "\n")
     # Swap by renames: the earlier artifact is moved aside, the new one moved in, and only
@@ -1516,9 +1424,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Lineage evidence (default: lineage_evidence beside the evidence root)",
     )
     parser.add_argument(
+        "--entity-root",
+        type=Path,
+        default=None,
+        help="Entity evidence, the donors' (default: entity_evidence beside the evidence root)",
+    )
+    parser.add_argument(
         "--no-evidence",
         action="store_true",
-        help="Exclude all source evidence and lineage (--lineage-root is then not read): the reconciled "
+        help="Exclude all source evidence, lineage and entity evidence (--lineage-root and --entity-root are "
+        "then not read): the reconciled "
         "artifact concludes what inference did, plus what inheritance carries across the steps inference "
         "wrote (6.6)",
     )
@@ -1533,7 +1448,11 @@ def main(argv: list[str] | None = None) -> int:
         run_dir = args.run or find_latest_run(Path("output/anvil"))
         metadata = args.metadata or DEPLOYMENTS[args.deployment].input_file
         report = reconcile_run(
-            run_dir, metadata, None if args.no_evidence else args.evidence_root, lineage_root=args.lineage_root
+            run_dir,
+            metadata,
+            None if args.no_evidence else args.evidence_root,
+            lineage_root=args.lineage_root,
+            entity_root=args.entity_root,
         )
     except (ReconcileError, ValueError, FileNotFoundError) as exc:
         print(f"reconcile refused: {exc}", file=sys.stderr)

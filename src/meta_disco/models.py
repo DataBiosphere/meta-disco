@@ -60,6 +60,10 @@ SOURCE_PUBLISHED_VALUE = "published_value"
 # file is, so it has no place in SOURCE_PRECEDENCE and makes no claim.
 SOURCE_REPOSITORY_ACTIVITY = "repository_activity"
 SOURCE_WRANGLER_ANNOTATION = "wrangler_annotation"
+# One of our identifier rules, from the identifier alone (#693): a rule naming a sample and a
+# donor with one string says the sample was collected from that donor. It names a link, never
+# a claim, so it has no place in SOURCE_PRECEDENCE.
+SOURCE_IDENTIFIER_RULE = "identifier_rule"
 # The importer sources in the order a delivered value is credited to them, each with its
 # short name in the reports: what the repository publishes, then what its submitters
 # wrote, then other catalogs. Reconcile attributes by it and the review queue groups by it.
@@ -118,6 +122,7 @@ SOURCE_TYPES = frozenset(
         SOURCE_REPOSITORY_ACTIVITY,
         SOURCE_PUBLISHED_VALUE,
         SOURCE_WRANGLER_ANNOTATION,
+        SOURCE_IDENTIFIER_RULE,
     }
 )
 
@@ -146,6 +151,9 @@ JOIN_KEY_DRS_URI = "drs_uri"
 JOIN_KEY_FILE_NAME = "file_name"
 JOIN_KEY_FILE_ID = "file_id"
 JOIN_KEY_ENTRY_ID = "entry_id"
+# A donor's or sample's identifier as the source wrote it (#693): the key of an entity
+# evidence file and of the claims made from it, never a file's (`source_evidence.require_file_key`).
+JOIN_KEY_ENTITY_IDENTIFIER = "entity_identifier"
 JOIN_KEYS = frozenset(
     {
         JOIN_KEY_FILE_PATH,
@@ -154,6 +162,7 @@ JOIN_KEYS = frozenset(
         JOIN_KEY_FILE_NAME,
         JOIN_KEY_FILE_ID,
         JOIN_KEY_ENTRY_ID,
+        JOIN_KEY_ENTITY_IDENTIFIER,
     }
 )
 
@@ -184,6 +193,13 @@ CLASSIFICATION_FIELDS = (
 # value is read through `rules/sample_namespaces.yaml`, never the value map.
 SAMPLES_FIELD = "samples"
 EVIDENCE_FIELDS = (*CLASSIFICATION_FIELDS, SAMPLES_FIELD)
+
+# A donor's slots (#693): settled as a file's dimensions are, but on a `DonorRecord`, from
+# entity evidence (`entity_evidence`). Not dimensions of a file: no rule, tier or file
+# evidence names one. The value map translates them as it does the dimensions
+# (`TRANSLATED_FIELDS`).
+DONOR_FIELDS = ("phenotypic_sex", "genetic_ancestry")
+TRANSLATED_FIELDS = (*CLASSIFICATION_FIELDS, *DONOR_FIELDS)
 
 # The dimensions a record stores as a list (ADR-0003, #654): the schema's slots whose
 # ``value`` is ``multivalued``, held to it by test_output_shape. A claim still declares

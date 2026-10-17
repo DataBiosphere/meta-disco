@@ -13,12 +13,15 @@ from meta_disco.pipeline import ClassifyPipeline
 from meta_disco.records import SAMPLE_LISTS_KEY, SAMPLE_OUTCOMES_KEY, UNRECOGNISED_SAMPLES_KEY
 from meta_disco.sample_identity import (
     BAM_SAMPLES,
+    DONOR,
     NAMED,
     NO_SAMPLE,
+    SAMPLE,
     SAMPLE_MAP_SAMPLES,
     UNREAD,
     UNRECOGNISED,
     VCF_SAMPLES,
+    EntityKind,
     Identifier,
     identifier_rule_declarations,
     identifier_rules,
@@ -59,7 +62,7 @@ def coriell(n: str) -> Identifier:
     ],
 )
 def test_a_recognised_string_is_an_identifier_in_its_namespace(raw, dataset, namespace, ident):
-    got = identifier_rules().recognise(raw, dataset)
+    got = identifier_rules().recognise(raw, dataset, SAMPLE)
     assert got is not None
     assert (got.identifier.namespace, got.identifier.id) == (namespace, ident)
     assert got.rule_id in {r.id for r in identifier_rule_declarations()}
@@ -81,11 +84,11 @@ def test_a_recognised_string_is_an_identifier_in_its_namespace(raw, dataset, nam
     ],
 )
 def test_a_string_no_rule_matches_is_not_a_sample(raw, dataset):
-    assert identifier_rules().recognise(raw, dataset) is None
+    assert identifier_rules().recognise(raw, dataset, SAMPLE) is None
 
 
 def test_a_dataset_local_identifier_carries_its_dataset():
-    got = identifier_rules().recognise("simons_data_sample_1", T2T_CHRY)
+    got = identifier_rules().recognise("simons_data_sample_1", T2T_CHRY, SAMPLE)
     assert got is not None and got.identifier.dataset == T2T_CHRY
     assert got.identifier.to_dict() == {"id": "simons_data_sample_1", "namespace": "dataset_local", "dataset": T2T_CHRY}
 
@@ -103,12 +106,19 @@ def test_a_name_gives_the_identifiers_its_tokens_are():
 
 # --- the loader ----------------------------------------------------------------------
 
-RULE = "  - {{id: {id}, namespace: {ns}, match: '{match}'{extra}, rationale: r}}\n"
+RULE = "  - {{id: {id}, namespace: {ns}, match: '{match}', names: [{names}]{extra}, rationale: r}}\n"
 
 
 def rules_text(*rules: dict) -> str:
     return "rules:\n" + "".join(
-        RULE.format(id=r["id"], ns=r.get("ns", "coriell"), match=r["match"], extra=r.get("extra", "")) for r in rules
+        RULE.format(
+            id=r["id"],
+            ns=r.get("ns", "coriell"),
+            match=r["match"],
+            names=r.get("names", "sample"),
+            extra=r.get("extra", ""),
+        )
+        for r in rules
     )
 
 
@@ -127,6 +137,9 @@ def rules_text(*rules: dict) -> str:
         (({"id": "a", "match": "^(A)$", "extra": r", write: 'X\10'"},), "not literal text"),
         (({"id": "a", "match": "^(A)$", "extra": ', write: "X\\nY"'},), "not literal text"),
         (({"id": "a.b", "match": "^A$"},), "a.b"),
+        (({"id": "a", "match": "^A$", "names": ""},), "must name a sample, a donor or both"),
+        (({"id": "a", "match": "^A$", "names": "sample, sample"},), "must name a sample, a donor or both"),
+        (({"id": "a", "match": "^A$", "names": "person"},), "names"),
     ],
 )
 def test_the_loader_refuses_what_the_model_cannot(rules, message):
@@ -139,7 +152,98 @@ def test_two_rules_matching_one_string_is_refused_not_chosen():
         rules_text({"id": "a", "match": "^HG.*$"}, {"id": "b", "ns": "giab", "match": "^HG0.*$"})
     )
     with pytest.raises(ValueError, match="matches 2 identifier rules"):
-        rules.recognise("HG002", None)
+        rules.recognise("HG002", None, SAMPLE)
+
+
+def recognised(rules, raw: str, dataset: str | None, entity: EntityKind = SAMPLE) -> Identifier:
+    got = rules.recognise(raw, dataset, entity)
+    assert got is not None, raw
+    return got.identifier
+
+
+def test_a_string_is_read_only_as_what_its_rule_names():
+    """A donor accession is no file's sample, and a sample accession keys no donor (#693)."""
+    rules = identifier_rules()
+    assert rules.recognise("IGVFDO2696EIGV", None, SAMPLE) is None
+    assert recognised(rules, "IGVFDO2696EIGV", None, DONOR) == Identifier("igvf", "IGVFDO2696EIGV")
+    assert rules.recognise("SRS006902", None, DONOR) is None
+    assert recognised(rules, "HG00096", None, DONOR) == coriell("HG00096")
+    assert rules.in_name("IGVFDO2696EIGV.fastq.gz") == set()
+    with pytest.raises(ValueError, match="is not one of"):
+        rules.recognise("HG00096", None, "person")  # type: ignore[arg-type]
+
+
+def test_two_rules_naming_different_entities_do_not_compete():
+    rules = load_identifier_rules(
+        rules_text({"id": "s", "match": "^X\\d$"}, {"id": "d", "ns": "giab", "match": "^X\\d$", "names": "donor"})
+    )
+    assert recognised(rules, "X1", None) == coriell("X1")
+    assert recognised(rules, "X1", None, DONOR) == Identifier("giab", "X1")
+
+
+def test_a_sample_is_collected_from_the_donor_its_rule_names_with_the_same_identifier():
+    """Decision 3 of epic #692: a Coriell number is the cell line and the person it came from."""
+    rules = identifier_rules()
+    found = rules.collected_from(recognised(rules, "GM19908", None))
+    assert found is not None
+    assert (found.identifier, found.rule_id) == (coriell("NA19908"), "coriell_cell_line_or_dna")
+    giab = rules.collected_from(Identifier("giab", "HG002"))
+    assert giab is not None and giab.identifier == Identifier("giab", "HG002")
+    assert rules.collected_from(Identifier("sra_sample", "SRS006902")) is None
+    assert rules.collected_from(recognised(rules, "simons_data_sample_1", T2T_CHRY)) is None
+
+
+@pytest.mark.parametrize(
+    ("sample", "expected"),
+    [
+        # Only a rule of the sample's own namespace links it, not one matching the same string in another.
+        (Identifier("coriell", "X1"), ("coriell", "a")),
+        # A dataset_local rule links only its own dataset's samples.
+        (Identifier("dataset_local", "S1", "D"), ("dataset_local", "l")),
+        (Identifier("dataset_local", "S1", "E"), None),
+        # A rule naming donors alone links nothing.
+        (Identifier("giab", "X1"), None),
+    ],
+)
+def test_a_sample_is_linked_only_by_a_rule_of_its_namespace_and_dataset_naming_both(sample, expected):
+    rules = load_identifier_rules(
+        rules_text(
+            {"id": "a", "match": "^X\\d$", "names": "sample, donor"},
+            {"id": "g", "ns": "giab", "match": "^X\\d$", "names": "donor"},
+            {"id": "l", "ns": "dataset_local", "match": "^S\\d$", "names": "sample, donor", "extra": ", dataset: D"},
+        )
+    )
+    found = rules.collected_from(sample)
+    assert (None if found is None else (found.identifier.namespace, found.rule_id)) == expected
+    if found is not None:
+        assert found.identifier == sample
+
+
+def test_a_rule_naming_both_that_writes_what_it_does_not_accept_is_refused_not_unlinked():
+    """`GM19908` written `NA19908` by a rule matching only `GM` could not be linked to its donor."""
+    rules = load_identifier_rules(
+        rules_text({"id": "a", "match": "^GM(\\d{5})$", "names": "sample, donor", "extra": ", write: 'NA\\1'"})
+    )
+    with pytest.raises(ValueError, match="its own pattern does not match"):
+        rules.recognise("GM19908", None, SAMPLE)
+    only_samples = load_identifier_rules(rules_text({"id": "a", "match": "^GM(\\d{5})$", "extra": ", write: 'NA\\1'"}))
+    assert recognised(only_samples, "GM19908", None) == coriell("NA19908")
+
+
+def test_two_rules_linking_one_sample_are_refused():
+    rules = load_identifier_rules(
+        rules_text(
+            {"id": "a", "match": "^X\\d$", "names": "sample, donor"},
+            {"id": "b", "match": "^X1$", "names": "sample, donor"},
+        )
+    )
+    with pytest.raises(ValueError, match="matches 2 identifier rules"):
+        rules.collected_from(coriell("X1"))
+
+
+def test_a_rule_naming_only_samples_links_no_donor():
+    rules = load_identifier_rules(rules_text({"id": "s", "match": "^X\\d$"}))
+    assert rules.collected_from(coriell("X1")) is None
 
 
 def test_no_identifier_rule_id_is_a_code_rule_or_marker_id():
@@ -313,7 +417,7 @@ def test_a_name_is_never_read_by_a_dataset_local_rule():
     rules = load_identifier_rules(
         rules_text({"id": "s", "ns": "dataset_local", "match": "^S\\d$", "extra": ", dataset: D"})
     )
-    assert rules.recognise("S1", "D") is not None
+    assert rules.recognise("S1", "D", SAMPLE) is not None
     assert rules.in_name("S1.bam") == set()
 
 

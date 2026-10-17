@@ -11,6 +11,7 @@ from meta_disco.activity_map import load_activity_map
 from meta_disco.models import SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
 from meta_disco.output_utils import (
     CLASSIFICATION_FILES,
+    DONORS_FILE,
     RECONCILED_DIR,
     iter_reconciled_records,
     reconciled_name,
@@ -454,3 +455,32 @@ def test_every_caller_rule_is_counted_in_the_caller_table():
     caller_rules = [r for r in code_rules.CODE_RULES if r.id.startswith(("vcf_", "tar_")) and "caller" in r.id]
     assert len(caller_rules) == 12
     assert {r.id: r.sets[0] for r in caller_rules} == grr.CALLER_RULES
+
+
+def test_a_donor_record_counts_its_rows_and_the_identifier_rule_that_keys_it(tmp_path):
+    """The donor rows (#693) fire on donor records, which no file record carries."""
+    run_dir = reconciled_run(tmp_path)
+    claim = {"rule_id": "phenotypic_sex.male", "value": "Male", "source_type": SOURCE_REPOSITORY_METADATA}
+    donor = {
+        "identifier": {"id": "HG00096", "namespace": "coriell"},
+        "phenotypic_sex": {"value": "Male", "status": "classified", "evidence": [claim]},
+        "genetic_ancestry": {"value": None, "status": "not_classified", "evidence": []},
+    }
+    mouse = {**donor, "identifier": {"id": "IGVFDO2696EIGV", "namespace": "igvf"}}
+    write_reconciled_file(run_dir / RECONCILED_DIR / DONORS_FILE, {"catalog": "t"}, [donor, mouse])
+    rules, value_map = rule_files(tmp_path)
+    value_map.write_text(
+        VALUE_MAP + '  - id: "phenotypic_sex.male"\n    match: {slot: phenotypic_sex, value: "male"}\n'
+        "    declares: {phenotypic_sex: Male}\n    reason: r\n"
+    )
+    data = grr.build(rules, value_map, iter_reconciled_records(run_dir), run_dir, donors=grr.donor_records(run_dir))
+    rows = by_id(data) | {r["id"]: r for r in data["sample_rules"]}
+    assert (rows["phenotypic_sex.male"]["files"], rows["phenotypic_sex.male"]["won"]) == (2, 2)
+    assert rows["phenotypic_sex.male"]["datasets"] == {grr.DONOR_RECORDS: 2}
+    assert (rows["coriell_hg"]["files"], rows["igvf_donor_accession"]["files"]) == (1, 1)
+    assert rows["coriell_hg"]["reads"].endswith(
+        "names a sample and its donor (the sample is collected from the donor of the same identifier)"
+    )
+    assert rows["igvf_donor_accession"]["reads"].endswith("; names a donor")
+    assert data["records"] == len(RECORDS)
+    assert list(grr.donor_records(tmp_path / "unreconciled")) == []

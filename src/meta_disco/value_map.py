@@ -37,9 +37,11 @@ alternates included, cannot load; two rows with different keys declaring one slo
 since whether they collide depends on which cells a file has (4.8).
 
 **Inference never reads this module**; the reconcile stage (#432) reads it through
-:func:`claims_from`, and writes its own artifact. The seeder and the review queue read evidence
-files through ``source_evidence.iter_evidence``, one line at a time (#374), never a run's
-output. **The seeder appends and never rewrites**: it adds one seeded row per ``(slot,
+:func:`claims_from`, and writes its own artifact. A row's slot is one of a file's dimensions
+or one of a donor's slots (``models.TRANSLATED_FIELDS``, #693). The seeder and the review
+queue read evidence files through ``source_evidence.iter_evidence``, and a donor's from the
+entity evidence root beside it through ``entity_evidence.entries``, one line at a time
+(#374), never a run's output. **The seeder appends and never rewrites**: it adds one seeded row per ``(slot,
 key)`` no row selects for, after the last row, so an authored row is untouched
 byte for byte; the result is written beside the table and renamed over it only once it
 loads, so a failure leaves the table as it was.
@@ -50,7 +52,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import sys
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from functools import cached_property
 from importlib.resources import files
@@ -58,14 +60,17 @@ from pathlib import Path
 
 import yaml
 
+from .entity_evidence import entity_root_beside, read_entity_envelope
+from .entity_evidence import entries as entity_entries
 from .manifest_survey import name_tokens
 from .models import (
     AUTHORABLE_STATUSES,
-    CLASSIFICATION_FIELDS,
+    DONOR_FIELDS,
     SOURCE_EXTERNAL_GROUND_TRUTH,
     SOURCE_PRECEDENCE,
     SOURCE_PUBLISHED_VALUE,
     SOURCE_REPOSITORY_METADATA,
+    TRANSLATED_FIELDS,
     required_str,
 )
 from .rule_engine import make_claim
@@ -74,6 +79,7 @@ from .slot_map import NO_NOTES, NOTES
 from .source_evidence import (
     DEFAULT_SOURCE_EVIDENCE_ROOT,
     EvidenceEntry,
+    EvidenceFileEnvelope,
     discover,
     iter_evidence,
     list_cell,
@@ -108,7 +114,7 @@ _REFUSED_ROW_KEYS = {
     "column": "a row is slot and value only; which column a value comes from is the slot map's (contract 3.4)",
     NOTES: NO_NOTES,
 }
-_FIELDS = frozenset(CLASSIFICATION_FIELDS)
+_FIELDS = frozenset(TRANSLATED_FIELDS)
 _WHERE = "value map"
 
 
@@ -298,6 +304,12 @@ def _row(node: yaml.Node, n: int) -> Row:
     scope = _scope(entries["scope"], at) if "scope" in entries else None
     reason = read_reason(entries["reason"], at) if "reason" in entries else None
     declares = _declares(entries.get("declares"), at, reason is not None)
+    crossing = sorted(d for d in declares if (d in DONOR_FIELDS) != (slot in DONOR_FIELDS))
+    if crossing:
+        raise ValueError(
+            f"{at}: matches {slot!r} and declares {crossing[0]!r} — a donor's slot and a file's are read from "
+            "different evidence, so a row declares only slots of the kind it matches (#693)"
+        )
     seeded_from = read_seeded_from(entries["seeded_from"], at) if "seeded_from" in entries else ()
     return Row(id, slot, value, alternates, scope, declares, reason, seeded_from)
 
@@ -373,7 +385,12 @@ def _declares(node: yaml.Node | None, at: str, authored: bool) -> Mapping[str, s
 
 
 def claims_from(
-    entry: EvidenceEntry, source_type: str, table: ValueMap, join_key: str | None = None, row: Row | None = None
+    entry: EvidenceEntry,
+    source_type: str,
+    table: ValueMap,
+    join_key: str | None = None,
+    row: Row | None = None,
+    match_exact: bool = True,
 ) -> list[tuple[str, dict]]:
     """The claims one evidence line makes: ``(slot, claim)`` per declared pair of its selected row, else ``[]``.
 
@@ -381,8 +398,9 @@ def claims_from(
     value and the line's ``ClaimSource``, so two claims on one slot from two cells of
     one file stay distinguishable (4.8). Nothing here compares, merges or ranks: that
     is reconcile's (#432). ``source_type`` is the envelope's, which the line does not carry.
-    ``join_key`` is the key the line was matched to a file by; when given, the claim
-    records it with ``match_exact`` true, since the join is an equality lookup. ``row``
+    ``join_key`` is the key the line was matched to a record by; when given, the claim
+    records it with ``match_exact``: true for an equality lookup, false where the key was
+    rewritten to match (a donor identifier an identifier rule rewrote, #693). ``row``
     is the row ``table.select`` already chose for this line, for a caller that selected
     it itself; it is selected here otherwise.
     """
@@ -401,7 +419,7 @@ def claims_from(
             source=entry.source,
             raw_value=entry.raw_value,
             join_key=join_key,
-            match_exact=True if join_key is not None else None,
+            match_exact=match_exact if join_key is not None else None,
         )
         claims.append((slot, claim))
     return claims
@@ -410,17 +428,36 @@ def claims_from(
 # --- evidence walks -----------------------------------------------------------------
 
 
-def _current_paths(evidence_root: Path, datasets: Iterable[str] | None) -> list[Path]:
-    """Every current evidence file, restricted to the envelopes whose target is one of ``datasets`` when given.
+@dataclass(frozen=True)
+class _EvidenceFile:
+    """One current evidence file of either root: where it is, its envelope, and its lines."""
 
+    path: Path
+    root: Path
+    envelope: EvidenceFileEnvelope
+    entries: Callable[[], Iterator[EvidenceEntry]]
+
+
+def _current_files(
+    evidence_root: Path, datasets: Iterable[str] | None, entity_root: Path | None = None
+) -> list[_EvidenceFile]:
+    """Every current evidence file of the slot root and the entity root, restricted to the envelopes whose target is one of ``datasets`` when given.
+
+    The entity root is ``entity_root``, or the one beside ``evidence_root`` (:func:`entity_root_beside`).
     The target's dataset, not the source's: the two are one for AnVIL's own tables, and an
     external source (ENA's, #606) names the dataset its lines are about only as its target.
     """
-    paths = discover(evidence_root)
+    entity_root = entity_root if entity_root is not None else entity_root_beside(evidence_root)
+    found = [
+        _EvidenceFile(p, evidence_root, read_envelope(p), lambda p=p: iter_evidence(p)) for p in discover(evidence_root)
+    ]
+    for p in discover(entity_root):
+        envelope = read_entity_envelope(p)
+        found.append(_EvidenceFile(p, entity_root, envelope, lambda p=p, e=envelope: entity_entries(p, e)))
     if datasets is None:
-        return paths
+        return found
     wanted = set(datasets)
-    return [p for p in paths if read_envelope(p).target.dataset in wanted]
+    return [f for f in found if f.envelope.target.dataset in wanted]
 
 
 @dataclass(frozen=True)
@@ -445,7 +482,9 @@ class _Seen:
             self.seeded_from.append(where)
 
 
-def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None = None) -> SeedResult:
+def seed(
+    table_path: Path, evidence_root: Path, datasets: Iterable[str] | None = None, entity_root: Path | None = None
+) -> SeedResult:
     """Append one seeded row per ``(slot, key)`` the evidence carries and no row selects for.
 
     "Selects" is :meth:`ValueMap.select` with the line's provenance (3.7), so a row scoped
@@ -454,16 +493,17 @@ def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None =
     carried it did (a list cell as a list), lists every other spelling of the same key
     as an alternate, and records the generation directories it was seen in. A rerun
     over the same evidence adds nothing. The table is replaced only once the result
-    loads; otherwise it is left as it was and this raises.
+    loads; otherwise it is left as it was and this raises. The entity evidence is read too
+    (:func:`_current_files`).
     """
     text = table_path.read_text(encoding="utf-8")
     table = load_value_map(table_path)
     seen: dict[tuple[str, Key], _Seen] = {}
-    paths = _current_paths(evidence_root, datasets)
+    evidence_files = _current_files(evidence_root, datasets, entity_root)
     lines_scanned = 0
-    for path in paths:
-        where = generation_name(evidence_root, path)
-        for entry in iter_evidence(path):
+    for found_file in evidence_files:
+        where = generation_name(found_file.root, found_file.path)
+        for entry in found_file.entries():
             lines_scanned += 1
             if table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset) is not None:
                 continue
@@ -475,7 +515,7 @@ def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None =
             else:
                 seen[key].add(spelling, where)
     if not seen:
-        return SeedResult(len(paths), lines_scanned, ())
+        return SeedResult(len(evidence_files), lines_scanned, ())
     ids = {row.id for row in table.rows}
     indent = row_indent(text)
     new_text = open_rows(text, _WHERE, not table.rows)
@@ -496,7 +536,7 @@ def seed(table_path: Path, evidence_root: Path, datasets: Iterable[str] | None =
         len(table.rows) + len(added),
         _WHERE,
     )
-    return SeedResult(len(paths), lines_scanned, tuple(added))
+    return SeedResult(len(evidence_files), lines_scanned, tuple(added))
 
 
 def _fresh_id(candidate: str, key: Key, taken: set[str]) -> str:
@@ -556,12 +596,16 @@ class Review:
     """The source types whose evidence the pass read, whether or not any of it is queued."""
 
 
-def review_queue(evidence_root: Path, table: ValueMap, datasets: Iterable[str] | None = None) -> list[QueueEntry]:
+def review_queue(
+    evidence_root: Path, table: ValueMap, datasets: Iterable[str] | None = None, entity_root: Path | None = None
+) -> list[QueueEntry]:
     """The queue alone: :func:`review`'s ``queue``."""
-    return review(evidence_root, table, datasets).queue
+    return review(evidence_root, table, datasets, entity_root).queue
 
 
-def review(evidence_root: Path, table: ValueMap, datasets: Iterable[str] | None = None) -> Review:
+def review(
+    evidence_root: Path, table: ValueMap, datasets: Iterable[str] | None = None, entity_root: Path | None = None
+) -> Review:
     """Every evidence value whose selected row is not authored, grouped by provenance and slot, most files first;
     and every authored row with the files it matched, per source type, most files first (0 where it matched none).
 
@@ -572,19 +616,22 @@ def review(evidence_root: Path, table: ValueMap, datasets: Iterable[str] | None 
     contributing to a line or a rule's source type, so a file seen through two evidence files
     (two catalog versions of a dataset, or two tables a rule matches in) is counted once. The
     sets are held for the whole pass, which costs memory in proportion to the evidence lines.
+    The entity evidence is read too (:func:`_current_files`), and for a donor's slot a
+    "file" is a donor: the identifier string the line names, within its target dataset, so a
+    donor two datasets name is counted in each.
     """
     targets: dict[_Group, set[_Target]] = {}
     row_ids: dict[_Group, str | None] = {}
     matched: dict[str, dict[str, set[_Target]]] = {r.id: {} for r in table.rows if r.authored}
     read: set[str] = set()
-    for path in _current_paths(evidence_root, datasets):
-        envelope = read_envelope(path)
+    for found_file in _current_files(evidence_root, datasets, entity_root):
+        envelope = found_file.envelope
         source_type = envelope.source_type
         read.add(source_type)
         # A join key is unique within its target system and dataset, not across them (a
         # file_md5sum or file_name can repeat), so a file's identity carries both.
         scope = (envelope.target.system, envelope.target.dataset)
-        for entry in iter_evidence(path):
+        for entry in found_file.entries():
             target = (*scope, entry.target_key_value)
             row = table.select(entry.field, entry.raw_value, entry.source.name, entry.source.dataset)
             if row is not None and row.authored:
@@ -669,15 +716,15 @@ MAPPING_COLUMNS = (
 MAPPINGS_HEADING = "Authored mappings: what each translation rule declares"
 MAPPINGS_INTRO = (
     "Every authored translation rule, by slot and most files first: the source values it matches in that "
-    "slot, wherever the slot map found them, and what it declares. "
+    "slot, wherever the slot map or the entity map found them, and what it declares. "
     "Files are those it matched in the same evidence as the queue above, per kind of source; a row that "
     "matched nothing shows 0."
 )
 
 
 def by_slot(items, slot_of) -> list[tuple[str, list]]:
-    """``items`` split by slot, in CLASSIFICATION_FIELDS order, each keeping its order; empty slots left out."""
-    return [(slot, group) for slot in CLASSIFICATION_FIELDS if (group := [i for i in items if slot_of(i) == slot])]
+    """``items`` split by slot, in TRANSLATED_FIELDS order, each keeping its order; empty slots left out."""
+    return [(slot, group) for slot in TRANSLATED_FIELDS if (group := [i for i in items if slot_of(i) == slot])]
 
 
 def queue_groups(entries: list[QueueEntry], read: Iterable[str] = ()) -> list[tuple[str, str, list[QueueEntry]]]:
@@ -698,16 +745,25 @@ def queue_groups(entries: list[QueueEntry], read: Iterable[str] = ()) -> list[tu
     return groups
 
 
-def queue_intro(entries: list[QueueEntry], evidence_root: Path, datasets: Iterable[str] | None = None) -> str:
+def queue_intro(
+    entries: list[QueueEntry],
+    evidence_root: Path,
+    datasets: Iterable[str] | None = None,
+    entity_root: Path | None = None,
+) -> str:
     """The sentence above the queue, in plain text; each renderer marks it up. It names the datasets
-    when the queue was limited to some, so a partial queue cannot pass for the whole one."""
+    when the queue was limited to some, so a partial queue cannot pass for the whole one, and the two
+    roots read, the entity root by default the one beside ``evidence_root``."""
+    entity_root = entity_root if entity_root is not None else entity_root_beside(evidence_root)
     scope = f" for {', '.join(sorted(datasets))} only" if datasets else ""
     return (
-        "Source values the slot map routed to a slot but that no authored translation rule reads yet, so "
-        "they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per "
-        'source, dataset, table and column it was found in; "rule it would use" names the seeded rule '
-        f"that matches it, or — where none does. {len(entries):,} listed, from evidence{scope} under "
-        f"{_shown_root(evidence_root)}."
+        "Source values the slot map or the entity map routed to a slot but that no authored translation rule "
+        "reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is "
+        'listed once per source, dataset, table and column it was found in; "rule it would use" names the '
+        "seeded rule that matches it, or — where none does. For a donor's slot (phenotypic_sex, "
+        "genetic_ancestry), files counts donors, each dataset's identifiers apart. "
+        f"{len(entries):,} listed, from evidence{scope} under {_shown_root(evidence_root)} and "
+        f"{_shown_root(entity_root)}."
     )
 
 
@@ -739,6 +795,7 @@ def render_queue(
     datasets: Iterable[str] | None = None,
     mappings: list[MappingLine] | None = None,
     read: Iterable[str] = (),
+    entity_root: Path | None = None,
 ) -> str:
     """The queue as markdown, one section per source type (:func:`queue_groups`, with the
     source types ``read``), then the authored mappings when given.
@@ -746,7 +803,7 @@ def render_queue(
     A catalog cell is a code span (:func:`md_code`), so no value renders as markup or a
     link; an empty one stays empty.
     """
-    lines = ["# Review queue", "", queue_intro(entries, evidence_root, datasets)]
+    lines = ["# Review queue", "", queue_intro(entries, evidence_root, datasets, entity_root)]
     for label, description, group in queue_groups(entries, read):
         lines += ["", f"## {label}: {description}", ""]
         if not group:
@@ -775,6 +832,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--table", type=Path, default=None, help="Table file (default: the bundled value_map.yaml)")
     parser.add_argument("--evidence-root", type=Path, default=DEFAULT_SOURCE_EVIDENCE_ROOT)
+    parser.add_argument(
+        "--entity-root",
+        type=Path,
+        default=None,
+        help="Entity evidence (default: entity_evidence beside the evidence root)",
+    )
     parser.add_argument("--dataset", action="append", help="Only this dataset's evidence (repeatable)")
     parser.add_argument("--output", type=Path, default=None, help="queue: write the markdown here instead of stdout")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -784,7 +847,7 @@ def main(argv: list[str] | None = None) -> int:
 
     table_path = args.table if args.table is not None else Path(str(default_value_map_resource()))
     if args.command == "seed":
-        result = seed(table_path, args.evidence_root, args.dataset)
+        result = seed(table_path, args.evidence_root, args.dataset, args.entity_root)
         print(
             f"Scanned {result.files_scanned} evidence files, {result.lines_scanned:,} lines; "
             f"added {len(result.rows_added)} seeded rows to {table_path}",
@@ -793,9 +856,11 @@ def main(argv: list[str] | None = None) -> int:
         for id in result.rows_added:
             print(f"  {id}", file=sys.stderr)
         return 0
-    found = review(args.evidence_root, load_value_map(table_path), args.dataset)
+    found = review(args.evidence_root, load_value_map(table_path), args.dataset, args.entity_root)
     entries = found.queue
-    report = render_queue(entries, args.evidence_root, args.dataset, found.mappings, found.source_types)
+    report = render_queue(
+        entries, args.evidence_root, args.dataset, found.mappings, found.source_types, args.entity_root
+    )
     if args.output is not None:
         args.output.write_text(report)
         print(f"Wrote {args.output}", file=sys.stderr)

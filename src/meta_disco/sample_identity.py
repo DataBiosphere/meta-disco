@@ -1,10 +1,12 @@
-"""Which samples a file's data comes from, as identifiers (#357, ADR-0002 decision 1).
+"""Which samples a file's data comes from, and which donor a sample was collected from, as identifiers (#357, #693).
 
 A source names a sample with a string: a BAM's ``@RG SM``, a VCF's sample column, a
 submitter table's cell. ``rules/sample_namespaces.yaml`` (the schema's
-``IdentifierRules``) says which strings are identifiers and in which namespace; a string
-no rule matches is not a sample, and is counted rather than guessed. A ``dataset_local``
-rule applies only in the dataset it names, and its identifiers carry that dataset.
+``IdentifierRules``) says which strings are identifiers, in which namespace, and whether
+each names a sample, a donor or both; a string no rule matches is not a sample, and is
+counted rather than guessed. A ``dataset_local`` rule applies only in the dataset it names,
+and its identifiers carry that dataset. A rule naming both says the sample was collected
+from the donor with the same identifier (:meth:`IdentifierRuleSet.collected_from`).
 
 A file points to a **sample list** rather than listing members: a joint VCF names 3,202
 samples, and 31,000 T2T windows name the same 3,202. A list is identified by a digest of
@@ -23,7 +25,7 @@ from collections.abc import Callable, Collection, Iterable, Sequence
 from dataclasses import dataclass
 from functools import cache, cached_property, lru_cache
 from importlib.resources import files
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 
@@ -33,6 +35,12 @@ from .slot_map import unique_key_loader
 from .validators.header_extractors import VCFHeader, parse_sam_header
 
 DATASET_LOCAL = "dataset_local"
+
+# What an identifier names (the schema's `entity_kind_enum`, #693).
+EntityKind = Literal["sample", "donor"]
+SAMPLE: EntityKind = "sample"
+DONOR: EntityKind = "donor"
+ENTITY_KINDS = frozenset({SAMPLE, DONOR})
 
 # Splits a file name into the tokens an accession may be: `NA24695_CTTGTA_L001_R1_001.fastq.gz`
 # gives `NA24695`. A name that runs an accession into other text (`HG02080vCHM13`) gives none.
@@ -80,6 +88,7 @@ class _Rule:
     match: re.Pattern
     write: str | None
     dataset: str | None
+    names: frozenset[str]
 
 
 class IdentifierRuleSet:
@@ -88,20 +97,32 @@ class IdentifierRuleSet:
     def __init__(self, rules: list[_Rule]):
         self._rules = rules
 
-    def recognise(self, raw: str, dataset: str | None) -> Recognised | None:
-        """The identifier ``raw`` is in ``dataset``, or None where no rule matches.
+    def recognise(self, raw: str, dataset: str | None, entity: EntityKind) -> Recognised | None:
+        """The identifier ``raw`` is in ``dataset``, as the ``entity`` given, or None where no rule naming it matches.
 
-        Raises ``ValueError`` where two rules match one string: which namespace it is in
-        would then be a choice, and the rules must not leave one.
+        Raises ``ValueError`` where two rules naming ``entity`` match one string: which
+        namespace it is in would then be a choice, and the rules must not leave one. Raises too
+        where a rule naming a sample and a donor writes an identifier its own pattern does not
+        match, since :meth:`collected_from` could not find that rule again.
         """
+        if entity not in ENTITY_KINDS:
+            raise ValueError(f"{entity!r} is not one of {sorted(ENTITY_KINDS)}")
         found = []
         for rule in self._rules:
+            if entity not in rule.names:
+                continue
             if rule.dataset is not None and rule.dataset != dataset:
                 continue
             m = rule.match.fullmatch(raw)
             if m is None:
                 continue
             ident = m.expand(rule.write) if rule.write is not None else raw
+            if rule.names == ENTITY_KINDS and rule.match.fullmatch(ident) is None:
+                # `collected_from` finds the rule again by matching the identifier as written.
+                raise ValueError(
+                    f"identifier rule {rule.id!r} writes {raw!r} as {ident!r}, which its own pattern does not match; "
+                    "a rule naming a sample and a donor must accept what it writes, or the sample's donor is lost"
+                )
             found.append(Recognised(Identifier(rule.namespace, ident, rule.dataset), rule.id))
         if len(found) > 1:
             raise ValueError(f"{raw!r} matches {len(found)} identifier rules: {[r.rule_id for r in found]}")
@@ -117,10 +138,31 @@ class IdentifierRuleSet:
         for token in _NAME_TOKEN.split(file_name):
             if not token:
                 continue
-            got = self.recognise(token, None)
+            got = self.recognise(token, None, SAMPLE)
             if got is not None:
                 out.add(got.identifier)
         return out
+
+    def collected_from(self, sample: Identifier) -> Recognised | None:
+        """The donor ``sample`` was collected from, by a rule naming both in its namespace, or None.
+
+        A rule naming a sample and a donor with one string says the sample was collected
+        from the donor of the same identifier (#693): ``coriell:HG00096``, the cell line, is
+        from ``coriell:HG00096``, the person. The rule is the one whose pattern the
+        identifier as written matches, so ``NA19908`` (written from ``GM19908``) is found
+        by the rule that wrote it. Raises ``ValueError`` where two such rules match.
+        """
+        found = [
+            Recognised(sample, rule.id)
+            for rule in self._rules
+            if rule.names == ENTITY_KINDS
+            and rule.namespace == sample.namespace
+            and rule.dataset == sample.dataset
+            and rule.match.fullmatch(sample.id) is not None
+        ]
+        if len(found) > 1:
+            raise ValueError(f"{sample!r} matches {len(found)} identifier rules: {[r.rule_id for r in found]}")
+        return found[0] if found else None
 
     def in_name_one(self, file_name: str) -> Identifier | None:
         """The one identifier ``file_name`` names, or None where it names none or several (a trio's file)."""
@@ -147,8 +189,8 @@ def load_identifier_rules(text: str | None = None) -> IdentifierRuleSet:
     """The rules from ``text`` or the bundled file; ``ValueError`` when invalid.
 
     The generated model checks the shape; here, what it cannot: rule ids unique, a
-    ``dataset`` exactly on the ``dataset_local`` rules, each pattern a regular expression
-    and each ``write`` template valid for it.
+    ``dataset`` exactly on the ``dataset_local`` rules, ``names`` non-empty and without
+    repeats, each pattern a regular expression and each ``write`` template valid for it.
     """
     return _rule_set(_document(text))
 
@@ -177,7 +219,12 @@ def _rule_set(document: IdentifierRules) -> IdentifierRuleSet:
             groups = {int(g) for g in re.findall(r"\\(\d)", rule.write)}
             if any(g > pattern.groups for g in groups):
                 raise ValueError(f"identifier rule {rule.id!r}: write {rule.write!r} names a group match lacks")
-        rules.append(_Rule(rule.id, namespace, pattern, rule.write, rule.dataset))
+        names = [str(n) for n in rule.names]
+        if not names or len(set(names)) != len(names):
+            raise ValueError(
+                f"identifier rule {rule.id!r}: names {names} must name a sample, a donor or both, once each"
+            )
+        rules.append(_Rule(rule.id, namespace, pattern, rule.write, rule.dataset, frozenset(names)))
     return IdentifierRuleSet(rules)
 
 
@@ -203,6 +250,11 @@ def identifier_rules() -> IdentifierRuleSet:
 # --- lists and references -----------------------------------------------------
 
 
+def identifier_order(identifier: Identifier) -> tuple[str, str, str]:
+    """The key identifiers sort by: namespace, id, then dataset (absent sorting first)."""
+    return (identifier.namespace, identifier.id, identifier.dataset or "")
+
+
 def _sorted(members: Iterable[Identifier]) -> list[dict]:
     """The distinct members as ``EntityIdentifier`` dicts, in one canonical order.
 
@@ -211,7 +263,7 @@ def _sorted(members: Iterable[Identifier]) -> list[dict]:
     The order is the same: a namespace's identifiers all carry a dataset
     (``dataset_local``) or none.
     """
-    return [m.to_dict() for m in sorted(set(members), key=lambda m: (m.namespace, m.id, m.dataset or ""))]
+    return [m.to_dict() for m in sorted(set(members), key=identifier_order)]
 
 
 def _digest(entries: list[dict]) -> str:
@@ -324,7 +376,7 @@ def _read(
         return HeaderSamples(NO_SAMPLE, rule)
     members, unknown = set(), []
     for raw in raws:
-        got = rules.recognise(raw, dataset)
+        got = rules.recognise(raw, dataset, SAMPLE)
         if got is None:
             unknown.append(raw)
         else:
