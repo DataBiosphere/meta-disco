@@ -429,8 +429,8 @@ evidence}` entry — plus the controlled vocabulary:
     per table the identifier column and each slot's columns (none, for a table AnVIL's
     biosamples are made from), and per kind AnVIL's published `anvil_donor` and
     `anvil_biosample`, each record attached to an identifier through its
-    `source_datarepo_row_ids`. **AnVIL's own `donor_id` and `biosample_id`** (#669), stable
-    across snapshots and several per person, are lines of their own
+    `source_datarepo_row_ids`. **AnVIL's own `donor_id` and `biosample_id`** (#669), the same in
+    prod anvil15 and dev's 1000G snapshot (#692) and often several per person, are lines of their own
     (`models.REPOSITORY_ID_FIELDS`), never translated: reconcile lists each on the one record
     it ties to, as `repository_ids` (many to one), and refuses one tying to two records. The value
     map translates both kinds of slot (`models.TRANSLATED_FIELDS`), a row declaring only slots of

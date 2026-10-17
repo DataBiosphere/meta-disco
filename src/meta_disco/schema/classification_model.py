@@ -2097,12 +2097,12 @@ class DonorRecord(ConfiguredBaseModel):
     identifier: EntityIdentifier = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord', 'SampleRecord']} })
     phenotypic_sex: PhenotypicSexClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
     genetic_ancestry: GeneticAncestryClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
-    repository_ids: Optional[list[RepositoryIdentifier]] = Field(default=None, description="""Every identifier a repository gave a record of its own for this donor (#669), AnVIL's `donor_id`s: a person has an AnVIL donor in each dataset that holds them, and the datasets give them one or more distinct ids (PRIMED's and T2T's are one). Absent where none ties to the donor.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord', 'SampleRecord']} })
+    repository_ids: Optional[list[RepositoryIdentifier]] = Field(default=None, description="""Every identifier a repository gave a record of its own for this donor (#669), AnVIL's `donor_id`s: a person has an AnVIL donor in each dataset whose donors are made from a row naming them, and the datasets give them one or more distinct ids (PRIMED's and T2T's are one). Absent where none ties to the donor.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord', 'SampleRecord']} })
 
 
 class RepositoryIdentifier(ConfiguredBaseModel):
     """
-    A repository's own identifier for a donor or sample (#669): AnVIL's `donor_id` or `biosample_id`, the key of the explorer's donor and biosample pages. It ties to our record through the submitter row AnVIL made its record from (`source_datarepo_row_ids`), read in that row's table's identifier column (`sources/anvil_entity_map.yaml`). Many tie to one record; one tying to two records is refused at reconcile.
+    A repository's own identifier for a donor or sample (#669): AnVIL's `donor_id` or `biosample_id`, the key of the explorer's donor and biosample pages. It ties to our record through the submitter row AnVIL made its record from (`source_datarepo_row_ids`), read in that row's table's identifier column (`sources/anvil_entity_map.yaml`). Many may tie to one record; one tying to two records is refused at reconcile, and an AnVIL record whose source rows name two identifier strings is counted and skipped at import. A UUID can be both a donor's and a sample's: a tie is per kind.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 

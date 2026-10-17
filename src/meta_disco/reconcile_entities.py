@@ -14,9 +14,9 @@ A repository's own record of a donor or sample (AnVIL's ``anvil_donor`` and
 ``anvil_biosample``, #669) reaches ours through a line carrying its identifier
 (``models.REPOSITORY_ID_FIELDS``), keyed by the identifier of the submitter row it was made
 from: recognised as a donor or a sample by the line's field, it is listed on that record's
-``repository_ids``, never translated. Many tie to one record (a person has an AnVIL donor in
-each dataset that holds them, under one or more distinct ids); one tying to two records is
-refused, never chosen.
+``repository_ids``, never translated. Many may tie to one record (a person has an AnVIL donor
+in each dataset whose donors are made from a row naming them, under one or more distinct
+ids); one tying to two records is refused, never chosen.
 
 A sample record is written for every sample a reconciled file names (the run's sample
 lists) and every sample a repository's identifier ties to, with the donor it was collected

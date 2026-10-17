@@ -15,6 +15,7 @@ import yaml
 
 from meta_disco import anvil_entities as ae
 from meta_disco.anvil_evidence import EVIDENCE_DIRS
+from meta_disco.azul_manifest import FORMAT_VERBATIM, manifest_path
 from meta_disco.entity_evidence import (
     entries,
     iter_entity_evidence,
@@ -230,7 +231,7 @@ def test_the_bundled_map_agrees_with_the_anvil15_manifests():
         ("  D:\n    t: {identifier: x}\n", "no table reads a slot"),
         ("  D:\n    t: {identifier: x, phenotypic_sex: []}\n", "non-empty list"),
         ("  D:\n    t: {identifier: x, phenotypic_sex: [y, y]}\n", "lists a column twice"),
-        ("  D:\n    t: {identifier: x, phenotypic_sex: [x]}\n", "read as the identifier too"),
+        ("  D:\n    t: {identifier: x, phenotypic_sex: [x]}\n", "read as the identifier"),
         ("  D:\n    t: {identifier: x, data_type: [y]}\n", "keys are"),
         ("  D:\n    t: {phenotypic_sex: [y]}\n", "keys are"),
     ],
@@ -406,6 +407,15 @@ def test_a_published_donor_takes_the_identifier_of_the_row_it_was_made_from(impo
     published = r2.tables[-2]
     assert published.table == "anvil_donor"
     assert (published.unmapped, published.unresolved, published.ambiguous) == (1, 1, 0)
+
+
+def test_a_record_made_from_two_mapped_tables_naming_one_identifier_names_the_first_table(tmp_path, entity_map):
+    """As NIA CARD's biosamples, made from its `sample` and `subject` rows: one line, from the table first by name."""
+    rows = [pedigree("HG00096", 1, "GBR", "EUR", "p1"), g1k_sample("HG00096", "q1")]
+    write_dataset(tmp_path / "m", G1K, [*rows, biosample(["sample:q1", "pedigree:p1"], "b1")])
+    ae.import_all(entity_map, tmp_path / "m", CATALOG, SERVICE, tmp_path / "ev", datasets=[G1K], generation=STAMP)
+    (line,) = lines(tmp_path / "ev", "anvil_published", G1K, "anvil_biosample")
+    assert (line["identifier_table"], line["identifier_column"]) == ("pedigree", "pedigree_id")
 
 
 def test_a_published_sample_takes_the_identifier_of_the_row_it_was_made_from(imported, tmp_path):
@@ -695,7 +705,7 @@ def test_a_repository_identifier_tying_to_two_records_is_refused_not_chosen(tmp_
         gathered(root, tmp_path)
 
 
-@pytest.mark.parametrize("raw", ["", "u1\nu2"])
+@pytest.mark.parametrize("raw", ["", "u1\nu2", "u1\ru2"])
 def test_a_repository_identifier_empty_or_on_two_lines_is_refused(tmp_path, raw):
     """It would be no `RepositoryIdentifier.id`, and two empty ones would seem to tie two records."""
     root = tmp_path / "entity_evidence"
@@ -725,6 +735,18 @@ def test_one_repository_identifier_in_two_datasets_tying_to_one_record_is_listed
     ]
     assert [r["id"] for r in by_id(result.samples)["NA19908"][REPOSITORY_IDS]] == ["b1", "b2"]
     assert result.report[REPOSITORY_IDS]["donor"]["ids_per_record"] == {"1": 1}
+    # One identifier, listed twice: the report counts it once.
+    assert result.report[REPOSITORY_IDS]["donor"]["ids"] == 1
+
+
+def test_one_uuid_as_a_donor_id_and_a_sample_id_ties_once_per_kind(tmp_path):
+    """AnVIL gives a donor and a biosample made from one row key the same UUID (PRIMED's HG00183): no refusal."""
+    root = tmp_path / "entity_evidence"
+    write_entity_lines(root, "D1", DONOR_REPOSITORY_ID, [("u1", "HG00096")])
+    write_entity_lines(root, "D2", SAMPLE_REPOSITORY_ID, [("u1", "IGVFSM9197PTER")])
+    result = reconcile_entities(gathered(root, tmp_path), identifier_rules(), [])
+    assert [r["id"] for r in by_id(result.donors)["HG00096"][REPOSITORY_IDS]] == ["u1"]
+    assert [r["id"] for r in by_id(result.samples)["IGVFSM9197PTER"][REPOSITORY_IDS]] == ["u1"]
 
 
 def test_a_repository_identifier_naming_no_recognised_identifier_of_its_kind_is_counted(tmp_path):
@@ -743,12 +765,16 @@ def test_a_repository_identifier_naming_no_recognised_identifier_of_its_kind_is_
 def test_a_dataset_the_map_leaves_out_is_listed_with_its_records(imported, tmp_path, entity_map):
     write_dataset(tmp_path / "m", "AnVIL_ENCORE_293T", [donor(["donor:x"], None, "e1"), biosample([], "e2")])
     write_dataset(tmp_path / "m", "ANVIL_nhp_dGTEx_V1", [])
-    (nhp, left) = ae.left_out(entity_map, tmp_path / "m", CATALOG)
+    write_dataset(tmp_path / "m", "AnVIL_Elsewhere", [])
+    manifest_path(tmp_path / "m", CATALOG, "AnVIL_Elsewhere", FORMAT_VERBATIM).unlink()
+    (nhp, left, gone) = ae.left_out(entity_map, tmp_path / "m", CATALOG)
     assert (left.dataset, left.records) == ("AnVIL_ENCORE_293T", {"anvil_donor": 1, "anvil_biosample": 1})
     assert nhp.records == {"anvil_donor": 0, "anvil_biosample": 0}
-    # A dataset with no published record has none to tie, and is not listed.
-    assert ae.describe_left_out([nhp, left]) == [
-        "AnVIL_ENCORE_293T: not in the entity map, so none of its records tie (1 anvil_donor, 1 anvil_biosample)"
+    assert (gone.dataset, gone.records) == ("AnVIL_Elsewhere", {})
+    # A dataset with no published record has none to tie, and is not listed; one not on disk is.
+    assert ae.describe_left_out([nhp, left, gone]) == [
+        "AnVIL_ENCORE_293T: not in the entity map, so none of its records tie (1 anvil_donor, 1 anvil_biosample)",
+        "AnVIL_Elsewhere: not in the entity map, so none of its records tie (not on disk)",
     ]
 
 

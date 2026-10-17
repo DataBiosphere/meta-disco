@@ -58,7 +58,7 @@ datasets:
       identifier: participant_id
       phenotypic_sex: [sex]
       genetic_ancestry: [subpopulation]
-    # HPRC's samples, keyed by the Coriell or GIAB name.
+    # HPRC's samples, keyed by the Coriell or GIAB name (56 of 57; `mHomSap3`, no rule's, is not).
     sample:
       identifier: sample_id
   AnVIL_HPRC_R2:
@@ -83,7 +83,7 @@ datasets:
       identifier: kgp_sample_id
       genetic_ancestry: [population]
     # MAGE's sequencing libraries: `kgp_sample_id`, the Coriell number of the sample the
-    # library was made from (its `coriell_id` is the cell line, `GM`, for the same number).
+    # library was made from (its `coriell_id` is the same number, `GM`-prefixed on 278 of 779).
     sequencing_library:
       identifier: kgp_sample_id
   ANVIL_NIA_CARD_Coriell_Cell_Lines_Open:
@@ -107,8 +107,9 @@ datasets:
 # What AnVIL itself publishes for a donor and a sample, in every dataset above: its own
 # record of each, attached to an identifier through the submitter row AnVIL made it from (its
 # `source_rows` column, `<table>:<datarepo_row_id>`), read in that table's identifier column;
-# `repository_id`, AnVIL's own identifier for the record, stable across snapshots (#669), which
-# the record it ties to lists; and for a donor, its slots' columns.
+# `repository_id`, AnVIL's own identifier for the record (the same in prod anvil15 and dev's
+# 1000G snapshot, measured on #692), which the record it ties to lists (#669); and for a donor,
+# its slots' columns.
 published:
   donor:
     table: anvil_donor

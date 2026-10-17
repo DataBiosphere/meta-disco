@@ -425,7 +425,8 @@ class EvidenceEntry:
     ``field`` is one of ``CLASSIFICATION_FIELDS`` — the slot, spelled ``field`` on the
     wire and in the code (contract 2.1) — or ``samples`` (#357), which a submitter table
     states the same way; or, for a line of an entity evidence file read through
-    ``entity_evidence.entries`` (#693), a donor's slot, keyed by the donor's identifier. ``target_key_value`` is the value to match
+    ``entity_evidence.entries`` (#693), a donor's slot keyed by the donor's identifier, or a
+    repository's own identifier for a donor or sample keyed by theirs (#669). ``target_key_value`` is the value to match
     on, already in the target's value space: the importer owns the mapping between
     its own key and the target's, and any transform needed to get there, so the run
     performs equality lookup only. The key *names* are on the envelope, because they

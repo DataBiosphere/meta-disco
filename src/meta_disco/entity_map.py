@@ -108,8 +108,8 @@ def load_entity_map(source: Readable | None = None) -> EntityMap:
     for dataset in document["datasets"]:
         if not any(t.slots for t in tables if t.dataset == dataset):
             raise ValueError(
-                f"{_WHERE} {dataset}: no table reads a slot, so its submitter generation would be empty, "
-                "and an empty generation never supersedes an earlier one"
+                f"{_WHERE} {dataset}: no table reads a slot, so the import would write no submitter "
+                "generation, and the import writes both generations of a dataset or neither"
             )
     return EntityMap(catalog=document["catalog"], tables=tuple(tables), published=published)
 
@@ -160,6 +160,8 @@ def _slots(entry: dict, at: str, taken: set[str]) -> dict[str, tuple[str, ...]]:
         if len(set(names)) != len(names):
             raise ValueError(f"{at} {slot}: lists a column twice")
         if clash := sorted(set(names) & taken):
-            raise ValueError(f"{at} {slot}: column {clash[0]!r} is read as the identifier too")
+            raise ValueError(
+                f"{at} {slot}: column {clash[0]!r} is read as the identifier (or source rows, or repository id) too"
+            )
         slots[slot] = names
     return slots
