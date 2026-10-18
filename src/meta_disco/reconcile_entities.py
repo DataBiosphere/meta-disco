@@ -218,6 +218,8 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
                 repository_ids[(kind, got.identifier)].add(alias)
                 continue
             exact = got.identifier.id == entry.target_key_value  # not where a rule rewrote it (GM19908 -> NA19908)
+            # The donor the line names counts toward its dataset's slot, whatever the line's value gives.
+            named_in[(str(dataset), entry.field)].add(got.identifier)
             if entry.field in FAMILY_FIELDS:
                 record_slots = slots[got.identifier]  # a donor a line names has a record, as a translated line's does
                 where = (dataset, envelope.source.table)
@@ -231,12 +233,10 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
                 if claim is None:
                     unrecognised_parents[where][entry.raw_value] += 1
                     continue
-                named_in[(str(dataset), entry.field)].add(got.identifier)
                 said = record_slots[entry.field].claims
                 if claim not in said:
                     said.append(claim)
                 continue
-            named_in[(str(dataset), entry.field)].add(got.identifier)
             translate(slots[got.identifier], entry, envelope.source_type, JOIN_KEY_ENTITY_IDENTIFIER, table, exact)
         files.append(
             {

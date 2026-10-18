@@ -1037,6 +1037,18 @@ def test_a_ped_unknown_parent_makes_no_claim_and_is_counted_apart(tmp_path):
     assert family["parents_named"] == 0
 
 
+def test_a_datasets_family_counts_name_every_donor_its_lines_speak_about(tmp_path):
+    """A `0` or an unrecognised parent still names its donor, counted not_classified, as a translated slot's is."""
+    root = tmp_path / "entity_evidence"
+    family_lines(root, "D", "mother", [("NA12892", "NA12878"), ("0", "HG00096"), ("mHomSap2", "HG00097")])
+    family_lines(root, "E", "family_id", [("", "HG00096")])
+    by_dataset = reconcile_entities(gathered(root, tmp_path), identifier_rules(), []).report["by_dataset"]
+    assert by_dataset == {
+        "D": {"mother": {"donors": 3, CLASSIFIED: 1, NOT_CLASSIFIED: 2}},
+        "E": {"family_id": {"donors": 1, NOT_CLASSIFIED: 1}},
+    }
+
+
 def test_two_sources_naming_different_parents_are_a_conflict_and_agreeing_ones_are_each_kept(tmp_path):
     """HPRC names HG002's mother HG004; HPRC_R2 names NA24695."""
     root = tmp_path / "entity_evidence"
