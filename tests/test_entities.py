@@ -1052,6 +1052,14 @@ def test_two_sources_naming_different_parents_are_a_conflict_and_agreeing_ones_a
     assert sorted(c["raw_value"] for c in conflict["evidence"]) == ["HG004", "NA24695"]
 
 
+@pytest.mark.parametrize("written", ["not_applicable", "not_classified"])
+def test_a_family_id_spelling_a_status_is_still_the_family_id_as_written(tmp_path, written):
+    root = tmp_path / "entity_evidence"
+    family_lines(root, "D", "family_id", [(written, "HG01106")])
+    family = by_id(reconcile_entities(gathered(root, tmp_path), identifier_rules(), []).donors)["HG01106"]["family_id"]
+    assert (family["status"], family["value"]) == (CLASSIFIED, written)
+
+
 @pytest.mark.parametrize("blank", ["", "  "])
 def test_a_blank_family_id_names_no_family_and_is_counted(tmp_path, blank):
     """An empty cell is written as the source wrote it; it would otherwise settle as a family `""`, or conflict."""

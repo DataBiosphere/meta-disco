@@ -282,12 +282,15 @@ def _family_claim(
 def _settle_slot(slot: str, said: SlotEvidence) -> tuple[str, str | dict | None]:
     """One donor slot's ``(status, value)`` from its claims' declarations, by :func:`reconcile.settle`.
 
-    A parent's claims declare an identifier, which resolution compares by its canonical spelling
-    (:func:`declaration`) and the record stores as the dict.
+    A family slot's answer is settled as its JSON spelling and stored decoded: a parent's claims
+    declare an identifier, which :func:`declaration` already spells so, and a family id is quoted
+    here, so one written ``not_applicable`` stays the source's string, never the status.
     """
     declared = {d for d in map(declaration, said.claims) if d is not None}
+    if slot == FAMILY_ID:
+        declared = {json.dumps(d) for d in declared}
     status, value = settle(slot, False, declared, False, SOURCE_PUBLISHED_VALUE in said.unreviewed)
-    return status, json.loads(value) if value is not None and slot in PARENT_FIELDS else value
+    return status, json.loads(value) if value is not None and slot in FAMILY_FIELDS else value
 
 
 def _parents(slots: dict[Identifier, dict[str, SlotEvidence]]) -> set[Identifier]:
