@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 
@@ -15,9 +16,14 @@ from .models import (
     settled_value,
 )
 from .rule_engine import make_claim
-from .schema_vocab import VOCABULARY_ENUMS, most_specific
+from .schema_vocab import most_specific
 from .source_evidence import EvidenceEntry
 from .value_map import ValueMap, claims_from
+
+
+def identifier_key(identifier: dict) -> str:
+    """An ``EntityIdentifier`` dict's canonical JSON spelling: equal exactly when the identifiers are."""
+    return json.dumps(identifier, sort_keys=True)
 
 
 def declaration(entry: dict, slot: str | None = None) -> str | None:
@@ -29,7 +35,12 @@ def declaration(entry: dict, slot: str | None = None) -> str | None:
     one function serves both. Given the ``slot``, a record's stored value is read as
     resolution reads it (``models.settled_value``): pass it for an entry read off a record,
     as a reconciled slot's ``inferred`` is.
+
+    A donor's parent claim declares an identifier, a dict (#582): it is read as its canonical
+    JSON spelling (:func:`identifier_key`), so every declaration is a string resolution can compare.
     """
+    if isinstance(entry.get("value"), dict):
+        return identifier_key(entry["value"])
     if entry.get("value") is not None:
         return entry["value"] if slot is None else settled_value(slot, entry["value"])
     if entry.get("status") == NOT_APPLICABLE:
@@ -70,7 +81,7 @@ def settle(
     if inference_conflict:
         return CONFLICT, None
     if len(declared) > 1:
-        deepest = most_specific(slot, declared) if slot in VOCABULARY_ENUMS else None
+        deepest = most_specific(slot, declared)
         if deepest is None:
             return CONFLICT, None
         declared = {deepest}

@@ -7,6 +7,8 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from pydantic import ValidationError
+
 from .file_name import FileName, Format
 from .models import (
     AUTHORABLE_STATUSES,
@@ -35,6 +37,7 @@ from .models import (
     stored_value,
 )
 from .rule_loader import UnifiedRule, get_unified_rules
+from .schema.classification_model import EntityIdentifier, IdentifierNamespaceEnum
 
 if TYPE_CHECKING:
     from .validators.header_extractors import SAMHeader, VCFHeader
@@ -145,12 +148,16 @@ class ExtendedFileInfo:
 
 
 def _is_identifier(value: object) -> bool:
-    """Whether ``value`` has an ``EntityIdentifier``'s shape: string ``id`` and ``namespace``, and a string ``dataset`` or none."""
-    return (
-        isinstance(value, dict)
-        and {"id", "namespace"} <= value.keys() <= {"id", "namespace", "dataset"}
-        and all(isinstance(v, str) for v in value.values())
-    )
+    """Whether ``value`` is an ``EntityIdentifier`` dict: the generated model's fields, none null, and
+    the schema's two class rules the generator drops, a ``dataset`` exactly when the namespace is
+    ``dataset_local``."""
+    if not isinstance(value, dict) or None in value.values():
+        return False
+    try:
+        EntityIdentifier.model_validate(value)
+    except ValidationError:
+        return False
+    return ("dataset" in value) == (value["namespace"] == IdentifierNamespaceEnum.dataset_local.value)
 
 
 def make_claim(

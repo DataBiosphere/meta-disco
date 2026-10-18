@@ -25,15 +25,13 @@ from importlib.resources import files
 
 from .azul_manifest import HARMONIZED_PREFIX
 from .lineage_map import expect_keys, expect_mapping, expect_name, map_document
-from .models import DONOR_FIELDS, FAMILY_FIELDS
+from .models import DONOR_FIELDS, DONOR_SLOTS
 from .sample_identity import DONOR, REPOSITORY_ID_FIELD, SAMPLE, EntityKind
 from .slot_map import Readable, unique_key_loader
 
 _WHERE = "entity map"
 IDENTIFIER = "identifier"
 _PUBLISHED_KEYS = frozenset({"table", "source_rows", "repository_id"})
-# The slots a submitter table may read: a donor's, and its family's.
-_TABLE_SLOTS = (*DONOR_FIELDS, *FAMILY_FIELDS)
 # The slots a published record of each kind may read: a donor's, but not its family, which AnVIL's
 # model has no field for; a sample has none yet.
 _PUBLISHED_SLOTS: dict[EntityKind, tuple[str, ...]] = {DONOR: DONOR_FIELDS, SAMPLE: ()}
@@ -104,9 +102,9 @@ def load_entity_map(source: Readable | None = None) -> EntityMap:
             at = f"{_WHERE} {dataset}/{table}"
             if str(table).startswith(HARMONIZED_PREFIX):
                 raise ValueError(f"{at}: a harmonized table is the repository's, not a submitter's; see `published`")
-            expect_keys(entry, {IDENTIFIER}, {IDENTIFIER, *_TABLE_SLOTS}, at)
+            expect_keys(entry, {IDENTIFIER}, {IDENTIFIER, *DONOR_SLOTS}, at)
             identifier = expect_name(entry[IDENTIFIER], f"{at} identifier")
-            slots = _slots(entry, at, {identifier}, _TABLE_SLOTS)
+            slots = _slots(entry, at, {identifier}, DONOR_SLOTS)
             tables.append(EntityTable(dataset=dataset, table=str(table), identifier=identifier, slots=slots))
     published = _published(document["published"])
     for dataset in document["datasets"]:

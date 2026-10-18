@@ -598,7 +598,16 @@ class TestMakeClaim:
 
     @pytest.mark.parametrize(
         "value",
-        [7, {"id": "NA12892"}, {"id": "NA12892", "namespace": "coriell", "extra": "x"}, {"id": 1, "namespace": "c"}],
+        [
+            7,
+            {"id": "NA12892"},
+            {"id": "NA12892", "namespace": "coriell", "extra": "x"},
+            {"id": 1, "namespace": "coriell"},
+            {"id": "NA12892", "namespace": "not_a_namespace"},
+            {"id": "NA12892", "namespace": "coriell", "dataset": None},
+            {"id": "NA12892", "namespace": "coriell", "dataset": "D"},
+            {"id": "S1", "namespace": "dataset_local"},
+        ],
     )
     def test_rejects_a_value_neither_a_string_nor_an_entity_identifier(self, value):
         with pytest.raises(ValueError, match="neither a string nor an EntityIdentifier"):

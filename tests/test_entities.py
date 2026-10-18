@@ -1052,6 +1052,24 @@ def test_two_sources_naming_different_parents_are_a_conflict_and_agreeing_ones_a
     assert sorted(c["raw_value"] for c in conflict["evidence"]) == ["HG004", "NA24695"]
 
 
+@pytest.mark.parametrize("blank", ["", "  "])
+def test_a_blank_family_id_names_no_family_and_is_counted(tmp_path, blank):
+    """An empty cell is written as the source wrote it; it would otherwise settle as a family `""`, or conflict."""
+    root = tmp_path / "entity_evidence"
+    family_lines(root, "D", "family_id", [(blank, "HG01106")])
+    family_lines(root, "E", "family_id", [("PR25", "HG01106")])
+    result = reconcile_entities(gathered(root, tmp_path), identifier_rules(), [])
+    family = by_id(result.donors)["HG01106"]["family_id"]
+    assert (family["status"], family["value"], len(family["evidence"])) == (CLASSIFIED, "PR25", 1)
+    assert result.report["family"]["blank_family_id_lines"] == [{"dataset": "D", "table": "t", "lines": 1}]
+
+
+def test_two_values_of_a_family_slot_do_not_nest_and_an_unknown_field_still_raises():
+    assert most_specific("family_id", {"PR25", "1463"}) is None
+    with pytest.raises(ValueError, match="Unknown classification dimension"):
+        most_specific("reference_asembly", {"GRCh38", "GRCh37"})
+
+
 def test_a_family_id_is_the_answer_as_written_and_two_ids_conflict(tmp_path):
     root = tmp_path / "entity_evidence"
     family_lines(root, "D", "family_id", [("PR25", "HG01106"), ("1463", "NA12878")])
