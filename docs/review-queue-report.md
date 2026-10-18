@@ -1,6 +1,6 @@
 # Review queue
 
-Source values the slot map or the entity map routed to a slot but that no authored translation rule reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per source, dataset, table and column it was found in; "rule it would use" names the seeded rule that matches it, or — where none does. For a donor's slot (phenotypic_sex, genetic_ancestry), files counts donors, each dataset's identifiers apart. 25 listed, from evidence under data/source_evidence and data/entity_evidence.
+Source values the slot map or the entity map routed to a slot but that no authored translation rule reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per source, dataset, table and column it was found in; "rule it would use" names the seeded rule that matches it, or — where none does. For a donor's slot (phenotypic_sex, genetic_ancestry, organism_type, reported_ethnicity), files counts donors, and for a sample's slot (biosample_type), samples, each dataset's identifiers apart. 27 listed, from evidence under data/source_evidence and data/entity_evidence.
 
 ## Published: the catalog's published columns
 
@@ -9,6 +9,13 @@ Source values the slot map or the entity map routed to a slot but that no author
 | files | raw value | source | dataset | table | column | rule it would use |
 | --- | --- | --- | --- | --- | --- | --- |
 | 220 | `'["GRCm39"]'` | `anvil` | `AnVIL_IGVF_Mouse_R1` | `anvil_file` | `reference_assembly` | — |
+
+### biosample_type
+
+| files | raw value | source | dataset | table | column | rule it would use |
+| --- | --- | --- | --- | --- | --- | --- |
+| 282 | `'Tissue, Unknown'` | `anvil` | `AnVIL_IGVF_Mouse_R1` | `anvil_biosample` | `biosample_type` | — |
+| 3 | `'Blood'` | `anvil` | `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` | `anvil_biosample` | `biosample_type` | — |
 
 ## Submitter: the submitter tables
 
@@ -199,6 +206,28 @@ Every authored translation rule, by slot and most files first: the source values
 | 313 | 0 | 313 | 0 | genetic_ancestry.cdx | `any` | `'CDX' · 'CDX \| EAS'` | genetic_ancestry: CDX | 1000 Genomes' population code, the term itself (HANCESTRO:0752); PRIMED's `population_label` writes it with its superpopulation, `CDX \| EAS`, which the term sits under. |
 | 311 | 0 | 311 | 0 | genetic_ancestry.gbr | `any` | `'GBR' · 'GBR \| EUR'` | genetic_ancestry: GBR | 1000 Genomes' population code, the term itself (HANCESTRO:0765); PRIMED's `population_label` writes it with its superpopulation, `GBR \| EUR`, which the term sits under. |
 | 257 | 0 | 257 | 0 | genetic_ancestry.asw | `any` | `'ASW' · 'ASW \| AFR'` | genetic_ancestry: ASW | 1000 Genomes' population code, the term itself (HANCESTRO:0659); PRIMED's `population_label` writes it with its superpopulation, `ASW \| AFR`, which the term sits under. |
+
+### organism_type
+
+| files | published | submitter | external | rule | scope | matches | declares | reason |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 9,656 | 9,656 | 0 | 0 | organism_type.human | `any` | `'Human'` | organism_type: Human | The term itself, as AnVIL's `anvil_donor.organism_type` writes it. |
+| 183 | 183 | 0 | 0 | organism_type.mouse | `any` | `'Mouse'` | organism_type: Mouse | The term itself, as AnVIL's `anvil_donor.organism_type` writes it; every Mouse donor in anvil15 is IGVF's, whose donors are laboratory mice (Mus musculus). |
+
+### reported_ethnicity
+
+| files | published | submitter | external | rule | scope | matches | declares | reason |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2 | 1 | 1 | 0 | reported_ethnicity.black_or_african_american | `any` | `'Black or African American'` | reported_ethnicity: Black or African American | The term itself, as AnVIL's `anvil_donor.reported_ethnicity` writes it, and NIA_CARD's `subject.race_ethnicity` it is made from. |
+| 2 | 1 | 1 | 0 | reported_ethnicity.hispanic_or_latino | `any` | `'Hispanic or Latino'` | reported_ethnicity: Hispanic or Latino | The term itself, as AnVIL's `anvil_donor.reported_ethnicity` writes it, and NIA_CARD's `subject.race_ethnicity` it is made from. |
+| 2 | 1 | 1 | 0 | reported_ethnicity.white | `any` | `'White'` | reported_ethnicity: White | The term itself, as AnVIL's `anvil_donor.reported_ethnicity` writes it, and NIA_CARD's `subject.race_ethnicity` it is made from. |
+
+### biosample_type
+
+| files | published | submitter | external | rule | scope | matches | declares | reason |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1,518 | 1,518 | 0 | 0 | biosample_type.tissue | `any` | `'Tissue'` | biosample_type: Tissue | The term itself, as AnVIL's `anvil_biosample.biosample_type` writes it. |
+| 365 | 365 | 0 | 0 | biosample_type.unknown | `any` | `'Unknown'` | nothing (reviewed, no claim) | AnVIL's `Unknown` names no type: reviewed, and no claim. On anvil15 it is every filled HPRC_R2 biosample's (230 of 234; 4 are null) and 135 of IGVF's. |
 
 ## Lineage: what each step is (the activity map)
 
