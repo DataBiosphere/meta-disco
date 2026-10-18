@@ -41,9 +41,12 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     given its lines (`source_evidence.iter_evidence`).
     A **donor's slots** (#693, #582) are imported as entity evidence, keyed by the donor's identifier
     rather than a file's key (`entity_evidence`), and settled on its `DonorRecord` by 4.x's resolution.
-    `phenotypic_sex` and `genetic_ancestry` are translated by rows, as a dimension is. A donor's family
-    (`models.FAMILY_FIELDS`) never is: `mother` and `father` are read through the identifier rules, as
-    `samples` is, and `family_id` is taken as written.
+    `phenotypic_sex`, `genetic_ancestry`, `organism_type` and `reported_ethnicity` are translated by rows,
+    as a dimension is. A donor's family (`models.FAMILY_FIELDS`) never is: `mother` and `father` are read
+    through the identifier rules, as `samples` is, and `family_id` is taken as written. A **sample's slots**
+    (#699, `models.SAMPLE_SLOTS`), from the repository's own record of the sample, are settled the same
+    way on its `SampleRecord`: `biosample_type` translated by rows, `anatomical_site` taken as written
+    until its values are mapped to an ontology (#702).
     The importer names **both ends of the key correspondence** — `source_key` as the source publishes it,
     `target_key` as one of ours — and writes the value already in our space (#401). Evidence is attached to a
     **file** only at the join (6.7), which is what makes an unmatched or ambiguous row representable rather
@@ -147,8 +150,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 
 3.3 A claim that declares a value declares a term in **that slot's** vocabulary, or it is not a claim.
     The vocabularies are per slot, and a term of one slot is not a term of another. The one exception is a
-    donor's family (2.1), which has no vocabulary: a parent's claim declares the parent's identifier, and a
-    family id's the source's string as written.
+    record slot with no vocabulary (2.1): a parent's claim declares the parent's identifier, and a family
+    id's or an anatomical site's the source's string as written.
 
 3.4 A rule that maps imported evidence matches on `(slot, raw_value)`, normalized per 3.5, and may
     condition on provenance — on `(source, dataset)`, and no finer. Table and column belong to the slot map

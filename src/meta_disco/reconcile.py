@@ -125,8 +125,11 @@ from .reconcile_samples import Named, from_line
 from .record_keys import PUBLISHED_TABLES, RecordKey, is_key_value, record_key
 from .records import JOIN_KEY_OUTPUT_FIELDS, SAMPLE_OUTCOMES_KEY, STEP_OUTCOMES_KEY, UNRECOGNISED_SAMPLES_KEY
 from .resolution import NO_EVIDENCE, SlotEvidence, translate
+from .resolution import USE_META_DISCO as USE_META_DISCO
+from .resolution import USE_PUBLISHED as USE_PUBLISHED
 from .resolution import declaration as declaration  # re-exported: the resolution rule
 from .resolution import settle as settle
+from .resolution import use_for as use_for
 from .rule_engine import CONFLICT_MARKER
 from .run_lineage_map import RunLineageMap, load_run_lineage_map
 from .sample_identity import identifier_rules, most_frequent
@@ -143,10 +146,6 @@ from .source_evidence import (
     require_one_published_source,
 )
 from .value_map import ValueMap, load_value_map
-
-# The per-slot instruction to the indexer (#432, second 2026-09-22 amendment).
-USE_META_DISCO = "meta_disco"
-USE_PUBLISHED = "published"
 
 INFERENCE = "inference"
 
@@ -290,16 +289,6 @@ def own_inputs(inferred: dict, source_claims: Iterable[dict]) -> tuple[bool, fro
     if (own := declaration(inferred)) is not None:
         declared.add(own)
     return inferred["status"] == CONFLICT, frozenset(declared)
-
-
-def use_for(status: str) -> str:
-    """Take meta-disco's answer where it has one; keep the published value where it does not.
-
-    ``classified`` and ``not_applicable`` are answers. ``conflict`` and ``not_classified``
-    are not, and the indexer keeps what the repository already publishes — the not-worse
-    path, until curator rules (#397) answer conflicts.
-    """
-    return USE_META_DISCO if status in (CLASSIFIED, NOT_APPLICABLE) else USE_PUBLISHED
 
 
 def is_harmonized(claim: dict) -> bool:

@@ -113,7 +113,7 @@ def test_a_sample_rule_says_what_it_reads_and_why(rule):
 @pytest.mark.parametrize("rule", code_rules.ENTITY_RULES, ids=lambda r: r.id)
 def test_an_entity_rule_says_what_it_reads_sets_and_why(rule):
     assert rule.rationale.strip() and rule.reads.strip()
-    assert rule.sets and set(rule.sets) <= {*models.DONOR_FIELDS, *models.FAMILY_FIELDS}
+    assert rule.sets and set(rule.sets) <= {*models.DONOR_SLOTS, *models.SAMPLE_SLOTS}
     assert rule.source_type in SOURCE_TYPES
 
 

@@ -38,8 +38,8 @@ since whether they collide depends on which cells a file has (4.8).
 
 **Inference never reads this module**; the reconcile stage (#432) reads it through
 :func:`claims_from`, and writes its own artifact. A row's slot is one of a file's dimensions
-or one of a donor's slots (``models.TRANSLATED_FIELDS``, #693). The seeder and the review
-queue read evidence files through ``source_evidence.iter_evidence``, and a donor's from the
+or one of a donor's or a sample's slots (``models.TRANSLATED_FIELDS``, #693, #699). The seeder and the review
+queue read evidence files through ``source_evidence.iter_evidence``, and a donor's or sample's from the
 entity evidence root beside it through ``entity_evidence.entries``, one line at a time
 (#374), never a run's output. **The seeder appends and never rewrites**: it adds one seeded row per ``(slot,
 key)`` no row selects for, after the last row, so an authored row is untouched
@@ -66,6 +66,7 @@ from .manifest_survey import name_tokens
 from .models import (
     AUTHORABLE_STATUSES,
     DONOR_FIELDS,
+    SAMPLE_FIELDS,
     SOURCE_EXTERNAL_GROUND_TRUTH,
     SOURCE_PRECEDENCE,
     SOURCE_PUBLISHED_VALUE,
@@ -304,14 +305,19 @@ def _row(node: yaml.Node, n: int) -> Row:
     scope = _scope(entries["scope"], at) if "scope" in entries else None
     reason = read_reason(entries["reason"], at) if "reason" in entries else None
     declares = _declares(entries.get("declares"), at, reason is not None)
-    crossing = sorted(d for d in declares if (d in DONOR_FIELDS) != (slot in DONOR_FIELDS))
+    crossing = sorted(d for d in declares if _kind(d) != _kind(slot))
     if crossing:
         raise ValueError(
-            f"{at}: matches {slot!r} and declares {crossing[0]!r} — a donor's slot and a file's are read from "
-            "different evidence, so a row declares only slots of the kind it matches (#693)"
+            f"{at}: matches {slot!r} and declares {crossing[0]!r} — a file's, a donor's and a sample's slots are "
+            "read from different evidence, so a row declares only slots of the kind it matches (#693, #699)"
         )
     seeded_from = read_seeded_from(entries["seeded_from"], at) if "seeded_from" in entries else ()
     return Row(id, slot, value, alternates, scope, declares, reason, seeded_from)
+
+
+def _kind(slot: str) -> str:
+    """Whose slot ``slot`` is: a donor's, a sample's, or a file's."""
+    return "donor" if slot in DONOR_FIELDS else "sample" if slot in SAMPLE_FIELDS else "file"
 
 
 def _match(node: yaml.Node, at: str) -> tuple[str, str | tuple[str, ...], tuple[str | tuple[str, ...], ...]]:

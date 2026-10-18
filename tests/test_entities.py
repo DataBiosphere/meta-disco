@@ -31,6 +31,7 @@ from meta_disco.models import (
     CONFLICT,
     DONOR_FIELDS,
     DONOR_REPOSITORY_ID,
+    DONOR_SLOTS,
     FAMILY_FIELDS,
     JOIN_KEY_DRS_URI,
     JOIN_KEY_ENTITY_IDENTIFIER,
@@ -38,12 +39,13 @@ from meta_disco.models import (
     REPOSITORY_ID_FIELDS,
     REPOSITORY_IDS,
     SAMPLE_REPOSITORY_ID,
+    SAMPLE_SLOTS,
     SOURCE_IDENTIFIER_RULE,
     SOURCE_PUBLISHED_VALUE,
     SOURCE_REPOSITORY_METADATA,
 )
 from meta_disco.output_utils import DONORS_FILE, RECONCILED_DIR, SAMPLES_FILE, iter_reconciled_artifact
-from meta_disco.reconcile import ENTITIES_KEY, reconcile_run
+from meta_disco.reconcile import ENTITIES_KEY, USE_META_DISCO, USE_PUBLISHED, reconcile_run, use_for
 from meta_disco.reconcile_entities import gather, reconcile_entities, select_entity_evidence
 from meta_disco.sample_identity import Identifier, identifier_rules, reference, sample_list
 from meta_disco.schema.classification_model import (
@@ -73,6 +75,8 @@ from tests.test_reconcile import go, record, write_input
 from tests.test_value_map import load
 
 STAMP = "20261016T000000Z"
+# A record slot no evidence speaks to.
+UNSETTLED = {"value": None, "status": NOT_CLASSIFIED, "use": "published", "evidence": []}
 G1K = "ANVIL_1000G_high_coverage_2019"
 R2 = "AnVIL_HPRC_R2"
 
@@ -218,7 +222,8 @@ def test_the_bundled_map_loads_and_reads_only_donor_slots():
     entity_map = load_entity_map()
     assert entity_map.catalog == "anvil15"
     assert {slot for t in entity_map.tables for slot in t.slots} <= {*DONOR_FIELDS, *FAMILY_FIELDS}
-    assert {slot for p in entity_map.published for slot in p.slots} <= set(DONOR_FIELDS)
+    by_kind = {p.kind: set(p.slots) for p in entity_map.published}
+    assert by_kind["donor"] <= set(DONOR_FIELDS) and by_kind["sample"] <= set(SAMPLE_SLOTS)
     assert [(p.kind, p.table, p.repository_id) for p in entity_map.published] == [
         ("donor", "anvil_donor", "donor_id"),
         ("sample", "anvil_biosample", "biosample_id"),
@@ -239,6 +244,7 @@ def test_the_bundled_map_agrees_with_the_anvil15_manifests():
         ("  D:\n    t: {identifier: x, phenotypic_sex: [y, y]}\n", "lists a column twice"),
         ("  D:\n    t: {identifier: x, phenotypic_sex: [x]}\n", "read as the identifier"),
         ("  D:\n    t: {identifier: x, data_type: [y]}\n", "keys are"),
+        ("  D:\n    t: {identifier: x, phenotypic_sex: [y], anatomical_site: [z]}\n", "keys are"),
         ("  D:\n    t: {phenotypic_sex: [y]}\n", "keys are"),
     ],
 )
@@ -269,6 +275,8 @@ def test_a_table_may_name_only_its_identifier(tmp_path):
         ("{donor: {table: t, source_rows: s}}", "keys are"),
         ("{sample: {table: t, source_rows: s, repository_id: i, phenotypic_sex: [p]}}", "keys are"),
         ("{donor: {table: t, source_rows: s, repository_id: i, mother: [m]}}", "keys are"),
+        ("{donor: {table: t, source_rows: s, repository_id: i, biosample_type: [b]}}", "keys are"),
+        ("{sample: {table: t, source_rows: s, repository_id: i, organism_type: [o]}}", "keys are"),
         ("{donor: {table: t, source_rows: s, repository_id: s}}", "source rows and the repository identifier"),
         ("{donor: {table: t, source_rows: s, repository_id: i, phenotypic_sex: [i]}}", "read as the identifier"),
         (
@@ -532,7 +540,7 @@ def test_the_entity_row_field_pattern_lists_every_entity_field():
     pattern = schema["classes"]["EntityEvidenceRow"]["attributes"]["field"]["pattern"]
     match = re.fullmatch(r"\^\((.*)\)\\Z", pattern)
     assert match is not None, pattern
-    assert set(match.group(1).split("|")) == {*DONOR_FIELDS, *FAMILY_FIELDS, *REPOSITORY_ID_FIELDS}
+    assert set(match.group(1).split("|")) == {*DONOR_FIELDS, *FAMILY_FIELDS, *SAMPLE_SLOTS, *REPOSITORY_ID_FIELDS}
 
 
 # --- the vocabulary and the value map ------------------------------------------------
@@ -557,6 +565,12 @@ def test_a_row_declares_only_slots_of_the_kind_it_matches(tmp_path):
             tmp_path,
             "rows:\n  - id: platform.m\n    match: {slot: platform, value: m}\n"
             "    declares: {phenotypic_sex: Male}\n    reason: r\n",
+        )
+    with pytest.raises(ValueError, match="declares only slots of the kind it matches"):
+        load(
+            tmp_path,
+            "rows:\n  - id: biosample_type.m\n    match: {slot: biosample_type, value: m}\n"
+            "    declares: {organism_type: Human}\n    reason: r\n",
         )
 
 
@@ -640,9 +654,15 @@ def test_a_sample_is_collected_from_its_same_identifier_donor_which_then_has_a_r
     assert "collected_from" not in samples["SRS1"]
     # A donor no evidence names still has a record, so the join from the sample finds one.
     na12878 = by_id(result.donors)["NA12878"]
-    assert na12878["phenotypic_sex"] == {"value": None, "status": NOT_CLASSIFIED, "evidence": []}
+    assert na12878["phenotypic_sex"] == UNSETTLED
     # HG02300 is named by no file, only by AnVIL's biosample, and has a record too.
-    assert result.report["samples"] == {"total": 4, "named_by_files": 3, "collected_from": {"coriell": 3}}
+    assert result.report["samples"] == {
+        "total": 4,
+        "named_by_files": 3,
+        "collected_from": {"coriell": 3},
+        "statuses": {slot: {NOT_CLASSIFIED: 4} for slot in SAMPLE_SLOTS},
+        "unknown_site_lines": [],
+    }
     for sample in result.samples:
         SampleRecord(**sample)
 
@@ -664,6 +684,8 @@ def test_every_repository_identifier_is_listed_on_the_one_record_it_ties_to(impo
             "donor": {"id": "HG02300", "namespace": "coriell"},
             "named_by": [{"source_type": SOURCE_IDENTIFIER_RULE, "rule_id": "coriell_hg"}],
         },
+        "biosample_type": UNSETTLED,
+        "anatomical_site": UNSETTLED,
         REPOSITORY_IDS: [{"id": "r2-b2", "repository": "anvil", "dataset": R2, "table": "anvil_biosample"}],
     }
     for donor_record in result.donors:
@@ -899,7 +921,7 @@ def test_the_report_counts_each_slot_overall_and_by_the_datasets_naming_its_dono
     assert report["statuses"] == {
         "phenotypic_sex": {CLASSIFIED: 2, CONFLICT: 1},
         "genetic_ancestry": {CLASSIFIED: 1, NOT_CLASSIFIED: 2},
-        **{slot: {NOT_CLASSIFIED: 3} for slot in FAMILY_FIELDS},
+        **{slot: {NOT_CLASSIFIED: 3} for slot in ("organism_type", "reported_ethnicity", *FAMILY_FIELDS)},
     }
     assert report["by_dataset"] == {
         G1K: {
@@ -1021,7 +1043,7 @@ def test_each_parent_named_has_a_record_of_its_own(tmp_path):
     family_lines(root, "E", "mother", [("NA12878", "NA12877")])
     result = reconcile_entities(gathered(root, tmp_path), identifier_rules(), [])
     assert [d["identifier"]["id"] for d in result.donors] == ["NA12877", "NA12878", "NA12892"]
-    assert by_id(result.donors)["NA12892"]["mother"] == {"value": None, "status": NOT_CLASSIFIED, "evidence": []}
+    assert by_id(result.donors)["NA12892"]["mother"] == UNSETTLED
     # NA12878 is a parent with a claim of its own (its mother); NA12892 has none.
     assert result.report["family"]["parents_named"] == 2
     assert result.report["family"]["parents_with_no_claims"] == 1
@@ -1032,7 +1054,7 @@ def test_a_ped_unknown_parent_makes_no_claim_and_is_counted_apart(tmp_path):
     family_lines(root, "D", "mother", [("0", "HG00096"), ("mHomSap2", "HG00097")])
     result = reconcile_entities(gathered(root, tmp_path), identifier_rules(), [])
     for child in ("HG00096", "HG00097"):
-        assert by_id(result.donors)[child]["mother"] == {"value": None, "status": NOT_CLASSIFIED, "evidence": []}
+        assert by_id(result.donors)[child]["mother"] == UNSETTLED
     assert [d["identifier"]["id"] for d in result.donors] == ["HG00096", "HG00097"]
     family = result.report["family"]
     assert family["unknown_parent_lines"] == [{"dataset": "D", "table": "t", "lines": 1}]
@@ -1280,4 +1302,103 @@ def test_the_check_names_a_parent_column_most_of_whose_values_are_no_donor(tmp_p
     assert problems == [
         f"{G1K}/pedigree: 1 of 1 values of parent column 'motherid' are not a donor any identifier rule "
         "recognises (e.g. ['NA12892.final.cram'])"
+    ]
+
+
+# --- AnVIL's own attributes of a donor and a sample (#699) -----------------------------
+
+ATTRIBUTE_TABLE = """rows:
+  - id: organism_type.human
+    match: {slot: organism_type, value: Human}
+    declares: {organism_type: Human}
+    reason: test
+  - id: organism_type.mouse
+    match: {slot: organism_type, value: Mouse}
+    declares: {organism_type: Mouse}
+    reason: test
+  - id: biosample_type.tissue
+    match: {slot: biosample_type, value: Tissue}
+    declares: {biosample_type: Tissue}
+    reason: test
+  - id: biosample_type.unknown
+    match: {slot: biosample_type, value: Unknown}
+    declares: {}
+    reason: test
+"""
+
+
+def attribute_result(root: Path, tmp_path: Path):
+    return reconcile_entities(gathered(root, tmp_path, ATTRIBUTE_TABLE), identifier_rules(), [])
+
+
+def test_a_samples_published_attributes_settle_on_its_record(tmp_path):
+    root = tmp_path / "entity_evidence"
+    write_entity_lines(root, "D", "biosample_type", [("Tissue", "IGVFSM9197PTER"), ("Unknown", "IGVFSM0000AAAA")])
+    write_entity_lines(
+        root, "E", "anatomical_site", [("Brain, Heart", "IGVFSM9197PTER"), ("Unknown", "IGVFSM0000AAAA")]
+    )
+    result = attribute_result(root, tmp_path)
+    samples = by_id(result.samples)
+    pooled = samples["IGVFSM9197PTER"]
+    assert (pooled["biosample_type"]["value"], pooled["biosample_type"]["use"]) == ("Tissue", USE_META_DISCO)
+    site = pooled["anatomical_site"]
+    assert (site["status"], site["value"]) == (CLASSIFIED, "Brain, Heart")
+    assert {c["rule_id"] for c in site["evidence"]} == {code_rules.ANATOMICAL_SITE_AS_WRITTEN.id}
+    # AnVIL's `Unknown`: reviewed and no claim for the type, no claim and counted for the site.
+    assert samples["IGVFSM0000AAAA"]["biosample_type"] == UNSETTLED
+    assert samples["IGVFSM0000AAAA"]["anatomical_site"] == UNSETTLED
+    assert result.report["samples"]["unknown_site_lines"] == [{"dataset": "E", "table": "t", "lines": 1}]
+    assert result.report["samples"]["statuses"]["biosample_type"] == {CLASSIFIED: 1, NOT_CLASSIFIED: 1}
+    assert result.report["by_dataset"]["D"] == {"biosample_type": {"samples": 2, CLASSIFIED: 1, NOT_CLASSIFIED: 1}}
+    assert result.donors == []
+    for sample_record in result.samples:
+        SampleRecord(**sample_record)
+
+
+def test_a_site_spelled_like_a_status_is_still_the_site_as_written(tmp_path):
+    root = tmp_path / "entity_evidence"
+    write_entity_lines(root, "D", "anatomical_site", [("not_applicable", "IGVFSM9197PTER")])
+    site = by_id(attribute_result(root, tmp_path).samples)["IGVFSM9197PTER"]["anatomical_site"]
+    assert (site["status"], site["value"]) == (CLASSIFIED, "not_applicable")
+
+
+def test_two_of_a_persons_anvil_records_disagreeing_are_a_conflict_the_explorer_shows_as_published(tmp_path):
+    """`use: published` on a record slot: show what the repository's rows say, which the evidence holds."""
+    root = tmp_path / "entity_evidence"
+    write_entity_lines(root, "D", "organism_type", [("Human", "HG00096"), ("Human", "HG00097")])
+    write_entity_lines(root, "E", "organism_type", [("Mouse", "HG00096")])
+    result = attribute_result(root, tmp_path)
+    donors = by_id(result.donors)
+    organism = donors["HG00096"]["organism_type"]
+    assert (organism["status"], organism["value"], organism["use"]) == (CONFLICT, None, USE_PUBLISHED)
+    assert sorted((c["source"]["dataset"], c["raw_value"]) for c in organism["evidence"]) == [
+        ("D", "Human"),
+        ("E", "Mouse"),
+    ]
+    assert (donors["HG00097"]["organism_type"]["value"], donors["HG00097"]["organism_type"]["use"]) == (
+        "Human",
+        USE_META_DISCO,
+    )
+    assert [(c["identifier"]["id"], c["slot"]) for c in result.report["conflicts"]] == [("HG00096", "organism_type")]
+    for donor_record in result.donors:
+        DonorRecord(**donor_record)
+
+
+def test_every_donor_and_sample_slot_carries_use(imported, tmp_path):
+    result = settled(tmp_path / "entity_evidence", tmp_path)
+    for donor in result.donors:
+        assert {slot: donor[slot]["use"] == use_for(donor[slot]["status"]) for slot in DONOR_SLOTS} == dict.fromkeys(
+            DONOR_SLOTS, True
+        )
+    for sample in result.samples:
+        assert all(sample[slot]["use"] == use_for(sample[slot]["status"]) for slot in SAMPLE_SLOTS)
+
+
+def test_a_sample_conflict_is_listed_with_the_sample_conflicts(tmp_path):
+    root = tmp_path / "entity_evidence"
+    write_entity_lines(root, "D", "anatomical_site", [("Brain", "IGVFSM9197PTER")])
+    write_entity_lines(root, "E", "anatomical_site", [("Heart", "IGVFSM9197PTER")])
+    result = attribute_result(root, tmp_path)
+    assert [(c["identifier"]["id"], c["slot"]) for c in result.report["conflicts"]] == [
+        ("IGVFSM9197PTER", "anatomical_site")
     ]

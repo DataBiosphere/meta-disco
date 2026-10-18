@@ -202,6 +202,54 @@ rows:
     reason: >-
       1000 Genomes' population code, the term itself (HANCESTRO:0668); PRIMED's
       `population_label` writes it with its superpopulation, `YRI | AFR`, which the term sits under.
+  # --- organism_type (#699): a donor's slot, from AnVIL's published donor ----------
+  - id: "organism_type.human"
+    match: {slot: organism_type, value: "Human"}
+    declares: {organism_type: Human}
+    reason: The term itself, as AnVIL's `anvil_donor.organism_type` writes it.
+  - id: "organism_type.mouse"
+    match: {slot: organism_type, value: "Mouse"}
+    declares: {organism_type: Mouse}
+    reason: >-
+      The term itself, as AnVIL's `anvil_donor.organism_type` writes it; every Mouse donor in
+      anvil15 is IGVF's, whose donors are laboratory mice (Mus musculus).
+  # --- reported_ethnicity (#699): a donor's slot, from AnVIL's published donor -----
+  - id: "reported_ethnicity.black_or_african_american"
+    match: {slot: reported_ethnicity, value: "Black or African American"}
+    declares: {reported_ethnicity: Black or African American}
+    reason: The term itself, as AnVIL's `anvil_donor.reported_ethnicity` writes it (NIA_CARD).
+  - id: "reported_ethnicity.hispanic_or_latino"
+    match: {slot: reported_ethnicity, value: "Hispanic or Latino"}
+    declares: {reported_ethnicity: Hispanic or Latino}
+    reason: The term itself, as AnVIL's `anvil_donor.reported_ethnicity` writes it (NIA_CARD).
+  - id: "reported_ethnicity.white"
+    match: {slot: reported_ethnicity, value: "White"}
+    declares: {reported_ethnicity: White}
+    reason: The term itself, as AnVIL's `anvil_donor.reported_ethnicity` writes it (NIA_CARD).
+  # --- biosample_type (#699): a sample's slot, from AnVIL's published biosample ----
+  - id: "biosample_type.tissue"
+    match: {slot: biosample_type, value: "Tissue"}
+    declares: {biosample_type: Tissue}
+    reason: The term itself, as AnVIL's `anvil_biosample.biosample_type` writes it.
+  - id: "biosample_type.blood"
+    match: {slot: biosample_type, value: "Blood"}
+    declares: {biosample_type: Blood}
+    reason: The term itself, as AnVIL's `anvil_biosample.biosample_type` writes it.
+  - id: "biosample_type.unknown"
+    match: {slot: biosample_type, value: "Unknown"}
+    declares: {}
+    reason: >-
+      AnVIL's `Unknown` names no type: reviewed, and no claim. On anvil15 it is every HPRC_R2
+      biosample's (230) and 135 of IGVF's.
+  - id: "biosample_type.tissue_unknown"
+    match: {slot: biosample_type, value: "Tissue, Unknown"}
+    scope: {source: anvil, dataset: AnVIL_IGVF_Mouse_R1}
+    declares: {biosample_type: Tissue}
+    reason: >-
+      AnVIL's join of IGVF's own `sample.biosample_type`, `['multiplexed sample', 'tissue/organ']`,
+      on IGVF's 282 pooled samples (`MultiplexedSample`): pools of tissue pieces from many mice,
+      so every member is a tissue; `multiplexed sample` has no AnVIL term and became `Unknown`.
+      Scoped to IGVF, whose rows show it.
   # --- assay_type -----------------------------------------------------------------
   - id: "assay_type.hi_c"
     match: {slot: assay_type, value: "Hi-C", alternates: ["hic"]}

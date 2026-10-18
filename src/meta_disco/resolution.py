@@ -20,6 +20,21 @@ from .schema_vocab import most_specific
 from .source_evidence import EvidenceEntry
 from .value_map import ValueMap, claims_from
 
+# The per-slot instruction to the indexer (#432, second 2026-09-22 amendment), on a file's
+# reconciled slot and on a donor's or sample's (#699).
+USE_META_DISCO = "meta_disco"
+USE_PUBLISHED = "published"
+
+
+def use_for(status: str) -> str:
+    """Take meta-disco's answer where it has one; keep the published value where it does not.
+
+    ``classified`` and ``not_applicable`` are answers. ``conflict`` and ``not_classified``
+    are not, and the indexer keeps what the repository already publishes — the not-worse
+    path, until curator rules (#397) answer conflicts.
+    """
+    return USE_META_DISCO if status in (CLASSIFIED, NOT_APPLICABLE) else USE_PUBLISHED
+
 
 def identifier_key(identifier: dict) -> str:
     """An ``EntityIdentifier`` dict's canonical JSON spelling: equal exactly when the identifiers are."""

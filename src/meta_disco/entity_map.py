@@ -13,7 +13,8 @@ serves one is ``anvil_entities.check``'s to say, against the manifests. A harmon
 repository's own table of that kind, read in every dataset the map names: its column of
 source rows (``<table>:<datarepo_row_id>``), through which each record is attached to an
 identifier in that table's ``identifier`` column; its column holding the repository's own
-identifier for the record (``repository_id``, #669); and, for donors, each slot's columns.
+identifier for the record (``repository_id``, #669); and each slot's columns, a donor's
+(``models.DONOR_FIELDS``) or a sample's (``models.SAMPLE_SLOTS``, #699).
 No ``notes`` member, for the slot map's reason.
 """
 
@@ -25,7 +26,7 @@ from importlib.resources import files
 
 from .azul_manifest import HARMONIZED_PREFIX
 from .lineage_map import expect_keys, expect_mapping, expect_name, map_document
-from .models import DONOR_FIELDS, DONOR_SLOTS
+from .models import DONOR_FIELDS, DONOR_SLOTS, SAMPLE_SLOTS
 from .sample_identity import DONOR, REPOSITORY_ID_FIELD, SAMPLE, EntityKind
 from .slot_map import Readable, unique_key_loader
 
@@ -33,8 +34,8 @@ _WHERE = "entity map"
 IDENTIFIER = "identifier"
 _PUBLISHED_KEYS = frozenset({"table", "source_rows", "repository_id"})
 # The slots a published record of each kind may read: a donor's, but not its family, which AnVIL's
-# model has no field for; a sample has none yet.
-_PUBLISHED_SLOTS: dict[EntityKind, tuple[str, ...]] = {DONOR: DONOR_FIELDS, SAMPLE: ()}
+# model has no field for; and a sample's (#699).
+_PUBLISHED_SLOTS: dict[EntityKind, tuple[str, ...]] = {DONOR: DONOR_FIELDS, SAMPLE: SAMPLE_SLOTS}
 
 _UniqueKeyLoader = unique_key_loader(_WHERE)
 
@@ -85,10 +86,11 @@ def default_entity_map_resource():
 def load_entity_map(source: Readable | None = None) -> EntityMap:
     """Load and check an entity map, the bundled one by default; ``ValueError`` naming where it is wrong.
 
-    Checked here: the shape, each slot one of ``DONOR_FIELDS`` (or, on a table, ``FAMILY_FIELDS``) with a non-empty list of
+    Checked here: the shape, each slot one of ``DONOR_FIELDS`` (or, on a table, ``FAMILY_FIELDS``;
+    on the published samples, ``SAMPLE_SLOTS``) with a non-empty list of
     distinct columns, no column read both as the identifier (or a published table's source
-    rows or repository identifier) and as a slot's, a slot only on a table or on the published
-    donors, at least one table per dataset reading a slot, and no harmonized table under
+    rows or repository identifier) and as a slot's, a slot only on a table or on a published
+    kind, at least one table per dataset reading a slot, and no harmonized table under
     ``datasets``. Whether the columns exist and hold
     what the map says, and whether a table reading no slot serves a published table, is
     ``anvil_entities.check``'s, against the manifests.

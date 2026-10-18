@@ -136,15 +136,23 @@ datasets:
 # record of each, attached to an identifier through the submitter row AnVIL made it from (its
 # `source_rows` column, `<table>:<datarepo_row_id>`), read in that table's identifier column;
 # `repository_id`, AnVIL's own identifier for the record (the same in prod anvil15 and dev's
-# 1000G snapshot, measured on #692), which the record it ties to lists (#669); and for a donor,
-# its slots' columns.
+# 1000G snapshot, measured on #692), which the record it ties to lists (#669); and each
+# slot's columns (#699), AnVIL's own column of that name. Measured on anvil15, 2026-10-18:
+# `organism_type` on 9,842 of 10,086 donors (Human, Mouse), `reported_ethnicity` on 3 (NIA_CARD),
+# `genetic_ancestry` on none; `biosample_type` and `anatomical_site` on 2,168 of 17,181
+# biosamples (IGVF, HPRC_R2, NIA_CARD), `Unknown` on most of HPRC_R2's and NIA_CARD's sites.
 published:
   donor:
     table: anvil_donor
     source_rows: source_datarepo_row_ids
     repository_id: donor_id
     phenotypic_sex: [phenotypic_sex]
+    genetic_ancestry: [genetic_ancestry]
+    organism_type: [organism_type]
+    reported_ethnicity: [reported_ethnicity]
   sample:
     table: anvil_biosample
     source_rows: source_datarepo_row_ids
     repository_id: biosample_id
+    biosample_type: [biosample_type]
+    anatomical_site: [anatomical_site]

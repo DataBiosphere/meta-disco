@@ -13,6 +13,7 @@ from meta_disco.output_utils import (
     CLASSIFICATION_FILES,
     DONORS_FILE,
     RECONCILED_DIR,
+    SAMPLES_FILE,
     iter_reconciled_records,
     reconciled_name,
     write_reconciled_file,
@@ -509,3 +510,27 @@ def test_a_donor_records_family_claims_count_the_rules_they_cite(tmp_path):
     assert rows[code_rules.FAMILY_ID_AS_WRITTEN.id]["files"] == 1
     assert rows["coriell_hg"]["claims"] == 1
     assert not {u["id"] for u in data["undeclared"]} & set(rows)
+
+
+def test_a_sample_records_slots_count_the_rules_they_cite(tmp_path):
+    """A biosample row (#699) fires on sample records, under their own dataset label."""
+    run_dir = reconciled_run(tmp_path)
+    claim = {"rule_id": "biosample_type.tissue", "value": "Tissue", "source_type": "published_value"}
+    site = {"rule_id": code_rules.ANATOMICAL_SITE_AS_WRITTEN.id, "value": "Brain", "source_type": "published_value"}
+    sample = {
+        "identifier": {"id": "IGVFSM9197PTER", "namespace": "igvf"},
+        "biosample_type": {"value": "Tissue", "status": "classified", "use": "meta_disco", "evidence": [claim]},
+        "anatomical_site": {"value": "Brain", "status": "classified", "use": "meta_disco", "evidence": [site]},
+    }
+    write_reconciled_file(run_dir / RECONCILED_DIR / SAMPLES_FILE, {"catalog": "t"}, [sample])
+    rules, value_map = rule_files(tmp_path)
+    value_map.write_text(
+        VALUE_MAP + '  - id: "biosample_type.tissue"\n    match: {slot: biosample_type, value: "Tissue"}\n'
+        "    declares: {biosample_type: Tissue}\n    reason: r\n"
+    )
+    data = grr.build(rules, value_map, iter_reconciled_records(run_dir), run_dir, samples=grr.sample_records(run_dir))
+    rows = by_id(data) | {r["id"]: r for r in data["sample_rules"]}
+    assert (rows["biosample_type.tissue"]["files"], rows["biosample_type.tissue"]["won"]) == (1, 1)
+    assert rows["biosample_type.tissue"]["datasets"] == {grr.SAMPLE_RECORDS: 1}
+    assert rows[code_rules.ANATOMICAL_SITE_AS_WRITTEN.id]["files"] == 1
+    assert data["records"] == len(RECORDS)

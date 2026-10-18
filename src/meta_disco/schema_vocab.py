@@ -15,15 +15,15 @@ from importlib.resources import files
 
 import yaml
 
-from .models import CLASSIFICATION_FIELDS, DONOR_FIELDS, FAMILY_FIELDS
+from .models import CLASSIFICATION_FIELDS, DONOR_FIELDS, SAMPLE_FIELDS, UNTRANSLATED_SLOTS
 
 # Classification field -> the enum that defines its permissible values. By
 # convention each dimension's enum is named ``<field>_enum`` in the schema, so
 # this derives from the single source of truth rather than re-listing the fields.
 DIMENSION_ENUMS = {field: f"{field}_enum" for field in CLASSIFICATION_FIELDS}
 # Every field whose values are a vocabulary of the schema's, named the same way: the
-# dimensions and a donor's slots (#693). The lookups below take any of them.
-VOCABULARY_ENUMS = {**DIMENSION_ENUMS, **{field: f"{field}_enum" for field in DONOR_FIELDS}}
+# dimensions, a donor's slots (#693) and a sample's translated ones (#699). The lookups below take any of them.
+VOCABULARY_ENUMS = {**DIMENSION_ENUMS, **{field: f"{field}_enum" for field in (*DONOR_FIELDS, *SAMPLE_FIELDS)}}
 
 # The enum defining the permissible per-field ``status`` values (epic #116's
 # sentinel→status split): classified / not_applicable / not_classified / conflict.
@@ -194,14 +194,15 @@ def most_specific(field: str, values: Iterable[str]) -> str | None:
     ``T2T-CHM13v2.0`` are both true of a v2.0 file — so the deepest is the answer
     (#473). Two siblings (``T2T-CHM13v1.0`` beside ``T2T-CHM13v2.0``) do not nest,
     and neither does anything outside the vocabulary (``not_applicable``) beside a
-    different value, nor two values of a donor's family slot, which has no vocabulary (#582). A
+    different value, nor two values of a record slot with no vocabulary (a donor's family, #582; a
+    sample's anatomical site, #699). A
     single value is returned as it is, in the vocabulary or not; two values of any other field
     outside ``VOCABULARY_ENUMS`` raise as ``dimension_values`` does.
     """
     distinct = set(values)
     if len(distinct) == 1:
         return next(iter(distinct))
-    if field in FAMILY_FIELDS:
+    if field in UNTRANSLATED_SLOTS:
         return None
     if not all(value_in_vocabulary(field, v) for v in distinct):
         return None

@@ -12,7 +12,8 @@ value translated by the value map, and a line carrying an answer is refused by n
 :func:`entries` gives the lines naming the fields asked for, each as a
 ``source_evidence.EvidenceEntry``, so the value map's seeding and review queue read both roots alike. Like
 ``source_evidence.iter_evidence``, it yields by default only the lines the value map
-translates, a donor's slots: a line carrying a
+translates, a donor's slots and a sample's translated ones (#699): a family line (#582), a sample's
+site, and a line carrying a
 repository's own identifier for a donor or sample (``models.REPOSITORY_ID_FIELDS``, #669)
 goes only to a reader that asks for it, which today is reconcile.
 """
@@ -25,6 +26,7 @@ from pathlib import Path
 from .models import (
     DONOR_FIELDS,
     JOIN_KEY_ENTITY_IDENTIFIER,
+    SAMPLE_FIELDS,
     SOURCE_PUBLISHED_VALUE,
     SOURCE_REPOSITORY_METADATA,
     ClaimSource,
@@ -97,7 +99,7 @@ def iter_entity_evidence(path: Path) -> Iterator[EntityEvidenceRow]:
 
 
 def entries(
-    path: Path, envelope: EvidenceFileEnvelope | None = None, fields: Collection[str] = DONOR_FIELDS
+    path: Path, envelope: EvidenceFileEnvelope | None = None, fields: Collection[str] = (*DONOR_FIELDS, *SAMPLE_FIELDS)
 ) -> Iterator[EvidenceEntry]:
     """Every line of one entity file naming one of ``fields``, as an ``EvidenceEntry``, one ``ClaimSource`` per column;
     ``envelope`` where the caller holds it. Every line is still checked, whichever field it names."""

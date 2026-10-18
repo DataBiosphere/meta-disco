@@ -46,11 +46,13 @@ from dataclasses import dataclass
 
 from . import activities
 from .models import (
+    ANATOMICAL_SITE,
     FAMILY_ID,
     SOURCE_CONTENT_READ,
     SOURCE_CONTIG_DETECTION,
     SOURCE_DERIVATION_INHERITANCE,
     SOURCE_FILENAME_RULE,
+    SOURCE_PUBLISHED_VALUE,
     SOURCE_REPOSITORY_METADATA,
 )
 
@@ -811,7 +813,20 @@ FAMILY_ID_AS_WRITTEN = EntityRule(
     ),
 )
 
-ENTITY_RULES = (FAMILY_ID_AS_WRITTEN,)
+ANATOMICAL_SITE_AS_WRITTEN = EntityRule(
+    id="anatomical_site_as_written",
+    module=RECONCILE_ENTITIES,
+    source_type=SOURCE_PUBLISHED_VALUE,
+    reads="the repository's own record of a sample: AnVIL's `anvil_biosample.anatomical_site`",
+    sets=(ANATOMICAL_SITE,),
+    rationale=(
+        "AnVIL's sites are not yet mapped to an ontology (#702), so the string is the answer as AnVIL wrote "
+        "it; its `Unknown` names no site and makes no claim. A pooled sample's site is AnVIL's join of its "
+        "members' (`Brain, Heart`), kept as one string until #702 makes the slot a list."
+    ),
+)
+
+ENTITY_RULES = (FAMILY_ID_AS_WRITTEN, ANATOMICAL_SITE_AS_WRITTEN)
 
 FETCH_FAILED = CodeMarker(
     id="fetch_failed",

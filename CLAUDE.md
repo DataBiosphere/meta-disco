@@ -138,6 +138,9 @@ evidence}` entry — plus the controlled vocabulary:
 - **phenotypic_sex_enum** and **genetic_ancestry_enum**: a donor's slots (#693), AnVIL's
   `Female`/`Male` (PATO `meaning`s) and 1000 Genomes' population codes as a HANCESTRO `is_a`
   tree (`GBR` under `EUR`), on a `DonorRecord`, never on a file
+- **organism_type_enum**, **reported_ethnicity_enum** and **biosample_type_enum** (#699): AnVIL's
+  values for its donors' and biosamples' fields (`Human`/`Mouse` with NCBITaxon `meaning`s; the census
+  categories, with none; `Tissue`/`Blood`), on a `DonorRecord` or `SampleRecord`
 - also **platform_enum**
 
 `status` is required on every dimension; `value` is null unless status is `classified`.
@@ -415,7 +418,7 @@ evidence}` entry — plus the controlled vocabulary:
     disagreeing pair is counted in the report's samples block.
   - **Donors and samples are records keyed by their identifier** (#693, ADR-0002 decision 1 as
     amended): reconcile (`reconcile_entities`) writes `reconciled/donors.ndjson.gz`, a
-    `DonorRecord` per donor with `phenotypic_sex` and `genetic_ancestry` (`models.DONOR_FIELDS`)
+    `DonorRecord` per donor with `phenotypic_sex`, `genetic_ancestry` and more (`models.DONOR_FIELDS`)
     settled by `reconcile.settle` (now in `resolution`, re-exported), and
     `reconciled/samples.ndjson.gz`, a `SampleRecord` per sample a reconciled file names or an
     AnVIL biosample ties to, with its `collected_from` donor where an identifier rule naming both
@@ -440,7 +443,12 @@ evidence}` entry — plus the controlled vocabulary:
     `rules/sample_namespaces.yaml` and its claim declares the parent's `EntityIdentifier` (the one
     claim value that is not a string), citing that identifier rule; PED's `0` makes no claim and is
     counted; a family id is taken as written (`code_rules.FAMILY_ID_AS_WRITTEN`, an `ENTITY_RULES`
-    entry). Every parent named gets a donor record. No donor value is copied onto a file record.
+    entry). Every parent named gets a donor record. **AnVIL's own donor and biosample records** (#699) are
+    a source for each field they fill: a donor's `organism_type` and `reported_ethnicity`, translated, and
+    a sample's `biosample_type`, translated, and `anatomical_site`, as written (`models.SAMPLE_SLOTS`),
+    settled on the `SampleRecord`. Every donor and sample slot carries `use` (`resolution.use_for`, which
+    `reconcile` re-exports); `published` means show what AnVIL's rows say, which the slot's evidence holds.
+    No donor value is copied onto a file record.
   - **A producer is declared once**, in `producers.PRODUCERS` — the thirteen writers of a
     run's `*_classifications.json` files. Add one there, never to a second list:
     `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,

@@ -49,6 +49,7 @@ from pathlib import Path
 from . import code_rules
 from .entity_evidence import entries, read_entity_envelope
 from .models import (
+    ANATOMICAL_SITE,
     CONFLICT,
     DONOR_SLOTS,
     FAMILY_FIELDS,
@@ -57,13 +58,17 @@ from .models import (
     PARENT_FIELDS,
     REPOSITORY_ID_FIELDS,
     REPOSITORY_IDS,
+    SAMPLE_FIELDS,
+    SAMPLE_SLOTS,
     SOURCE_IDENTIFIER_RULE,
     SOURCE_PUBLISHED_VALUE,
     UNKNOWN_PARENT,
+    UNKNOWN_SITE,
+    UNTRANSLATED_SLOTS,
 )
 from .output_utils import relative_to
 from .reconcile_lineage import applies
-from .resolution import NO_EVIDENCE, SlotEvidence, declaration, settle, translate
+from .resolution import NO_EVIDENCE, SlotEvidence, declaration, settle, translate, use_for
 from .rule_engine import make_claim
 from .sample_identity import (
     DONOR,
@@ -83,7 +88,7 @@ from .value_map import ValueMap
 MAX_EXAMPLES = 5
 
 # Every field an entity line may name, for :func:`gather`'s one read of each file.
-_ENTITY_FIELDS = (*DONOR_SLOTS, *REPOSITORY_ID_FIELDS)
+_ENTITY_FIELDS = (*DONOR_SLOTS, *SAMPLE_SLOTS, *REPOSITORY_ID_FIELDS)
 # What a repository identifier must be to be listed: the schema's `RepositoryIdentifier.id` pattern.
 _ONE_LINE = re.compile(r"[^\r\n]+")
 
@@ -116,18 +121,22 @@ class EntityEvidence:
     """What the entity evidence said, per recognised donor and slot, the repository identifiers per
     recognised donor or sample, and what each file gave: :func:`gather`'s result.
 
-    ``unknown_parents`` counts the parent lines writing :data:`models.UNKNOWN_PARENT`, ``blank_family_ids``
-    the family-id lines writing an empty or blank string, and ``unrecognised_parents`` the parent
-    strings no rule recognises, each per dataset and table.
+    ``sample_slots`` is the samples' (#699), as ``slots`` is the donors'. ``unknown_parents`` counts the
+    parent lines writing :data:`models.UNKNOWN_PARENT`, ``blank_family_ids`` the family-id lines writing
+    an empty or blank string, ``unknown_sites`` the site lines writing :data:`models.UNKNOWN_SITE` or a
+    blank string, and ``unrecognised_parents`` the parent strings no rule recognises, each per dataset
+    and table.
     """
 
     slots: dict[Identifier, dict[str, SlotEvidence]]
+    sample_slots: dict[Identifier, dict[str, SlotEvidence]]
     named_in: dict[tuple[str, str], set[Identifier]]
     files: list[dict]
     unrecognised: dict[tuple[str | None, str | None], Counter]
     repository_ids: dict[tuple[EntityKind, Identifier], set[RepositoryId]]
     unknown_parents: Counter
     blank_family_ids: Counter
+    unknown_sites: Counter
     unrecognised_parents: dict[tuple[str | None, str | None], Counter]
 
 
@@ -170,12 +179,14 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
     repository and id: the same one in two datasets ties to one record, or raises.
     """
     slots: dict[Identifier, dict[str, SlotEvidence]] = defaultdict(lambda: defaultdict(SlotEvidence))
+    sample_slots: dict[Identifier, dict[str, SlotEvidence]] = defaultdict(lambda: defaultdict(SlotEvidence))
     named_in: dict[tuple[str, str], set[Identifier]] = defaultdict(set)
     files, unrecognised = [], defaultdict(Counter)
     repository_ids: dict[tuple[EntityKind, Identifier], set[RepositoryId]] = defaultdict(set)
     tied: dict[tuple[EntityKind, str, str], tuple[Identifier, Path]] = {}
     unknown_parents: Counter = Counter()
     blank_family_ids: Counter = Counter()
+    unknown_sites: Counter = Counter()
     unrecognised_parents: dict[tuple[str | None, str | None], Counter] = defaultdict(Counter)
     for path in paths:
         envelope = read_entity_envelope(path)
@@ -199,7 +210,7 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
                     f"{relative_to(path, entity_root)}: {entry.field} {entry.raw_value!r} for "
                     f"{entry.target_key_value!r} is not an identifier: empty, or more than one line"
                 )
-            kind = alias_kind or DONOR  # a slot line is a donor's
+            kind = alias_kind or (SAMPLE if entry.field in SAMPLE_SLOTS else DONOR)  # whose slot the line names
             got = rules.recognise(entry.target_key_value, dataset, kind)
             if got is None:
                 misses += 1
@@ -220,8 +231,22 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
                 repository_ids[(kind, got.identifier)].add(alias)
                 continue
             exact = got.identifier.id == entry.target_key_value  # not where a rule rewrote it (GM19908 -> NA19908)
-            # The donor the line names counts toward its dataset's slot, whatever the line's value gives.
+            # The donor or sample the line names counts toward its dataset's slot, whatever the line's value gives.
             named_in[(str(dataset), entry.field)].add(got.identifier)
+            if entry.field == ANATOMICAL_SITE:
+                record_slots = sample_slots[got.identifier]  # a sample a line names has its slots, as a donor does
+                if entry.raw_value.strip() in ("", UNKNOWN_SITE):
+                    unknown_sites[(dataset, envelope.source.table)] += 1  # names no site
+                    continue
+                claim = _as_written(entry, envelope.source_type, code_rules.ANATOMICAL_SITE_AS_WRITTEN.id, exact)
+                if claim not in record_slots[entry.field].claims:
+                    record_slots[entry.field].claims.append(claim)
+                continue
+            if entry.field in SAMPLE_FIELDS:
+                translate(
+                    sample_slots[got.identifier], entry, envelope.source_type, JOIN_KEY_ENTITY_IDENTIFIER, table, exact
+                )
+                continue
             if entry.field in FAMILY_FIELDS:
                 record_slots = slots[got.identifier]  # a donor a line names has a record, as a translated line's does
                 where = (dataset, envelope.source.table)
@@ -251,7 +276,16 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
             }
         )
     return EntityEvidence(
-        slots, named_in, files, unrecognised, repository_ids, unknown_parents, blank_family_ids, unrecognised_parents
+        slots,
+        sample_slots,
+        named_in,
+        files,
+        unrecognised,
+        repository_ids,
+        unknown_parents,
+        blank_family_ids,
+        unknown_sites,
+        unrecognised_parents,
     )
 
 
@@ -264,16 +298,21 @@ def _family_claim(
     identifier and cites the rule that recognised it. A family id is the answer as written.
     """
     if entry.field == FAMILY_ID:
-        rule_id, value = code_rules.FAMILY_ID_AS_WRITTEN.id, entry.raw_value
-    else:
-        recognised = rules.recognise(entry.raw_value, dataset, DONOR)
-        if recognised is None:
-            return None
-        rule_id, value = recognised.rule_id, recognised.identifier.to_dict()
+        return _as_written(entry, source_type, code_rules.FAMILY_ID_AS_WRITTEN.id, exact)
+    recognised = rules.recognise(entry.raw_value, dataset, DONOR)
+    if recognised is None:
+        return None
+    return _as_written(entry, source_type, recognised.rule_id, exact, recognised.identifier.to_dict())
+
+
+def _as_written(
+    entry: EvidenceEntry, source_type: str, rule_id: str, exact: bool, value: str | dict | None = None
+) -> dict:
+    """The claim an untranslated line makes: ``value`` (the line's raw value unless given), citing ``rule_id``."""
     return make_claim(
         source_type=source_type,
         rule_id=rule_id,
-        value=value,
+        value=entry.raw_value if value is None else value,
         source=entry.source,
         raw_value=entry.raw_value,
         join_key=JOIN_KEY_ENTITY_IDENTIFIER,
@@ -281,18 +320,22 @@ def _family_claim(
     )
 
 
-def _settle_slot(slot: str, said: SlotEvidence) -> tuple[str, str | dict | None]:
-    """One donor slot's ``(status, value)`` from its claims' declarations, by :func:`reconcile.settle`.
+def _settle_slot(slot: str, said: SlotEvidence) -> dict:
+    """One donor or sample slot from its claims' declarations, by :func:`reconcile.settle`: its value,
+    status, ``use`` (:func:`reconcile.use_for`, #699) and evidence.
 
-    A family slot's answer is settled as its JSON spelling and stored decoded: a parent's claims
-    declare an identifier, which :func:`declaration` already spells so, and a family id is quoted
-    here, so one written ``not_applicable`` stays the source's string, never the status.
+    A slot with no vocabulary (``models.UNTRANSLATED_SLOTS``) has its answer settled as its JSON spelling
+    and stored decoded: a parent's claims declare an identifier, which :func:`declaration` already spells
+    so, and a string as written is quoted here, so one written ``not_applicable`` stays the source's
+    string, never the status.
     """
     declared = {d for d in map(declaration, said.claims) if d is not None}
-    if slot == FAMILY_ID:
+    if slot in UNTRANSLATED_SLOTS and slot not in PARENT_FIELDS:
         declared = {json.dumps(d) for d in declared}
     status, value = settle(slot, False, declared, False, SOURCE_PUBLISHED_VALUE in said.unreviewed)
-    return status, json.loads(value) if value is not None and slot in FAMILY_FIELDS else value
+    if value is not None and slot in UNTRANSLATED_SLOTS:
+        value = json.loads(value)
+    return {"value": value, "status": status, "use": use_for(status), "evidence": list(said.claims)}
 
 
 def _parents(slots: dict[Identifier, dict[str, SlotEvidence]]) -> set[Identifier]:
@@ -324,8 +367,10 @@ def reconcile_entities(
     repository_ids = evidence.repository_ids
     named_by_files = {m for entry in sample_lists for m in members_of(entry)}
     tied_samples = {ident for kind, ident in repository_ids if kind == SAMPLE}
-    sample_records, linked = [], Counter()
-    for sample in sorted(named_by_files | tied_samples, key=identifier_order):
+    sample_slots = evidence.sample_slots
+    sample_records, linked, conflicts = [], Counter(), []
+    sample_settled: dict[Identifier, dict[str, str]] = {}
+    for sample in sorted(named_by_files | tied_samples | set(sample_slots), key=identifier_order):
         record: dict = {"identifier": sample.to_dict()}
         found = rules.collected_from(sample)
         if found is not None:
@@ -335,6 +380,12 @@ def reconcile_entities(
             }
             linked[sample.namespace] += 1
             slots[found.identifier]  # a donor a sample points to has a record, evidence or none
+        sample_settled[sample] = {}
+        for slot in SAMPLE_SLOTS:
+            record[slot] = _settle_slot(slot, sample_slots.get(sample, {}).get(slot, NO_EVIDENCE))
+            sample_settled[sample][slot] = record[slot]["status"]
+            if record[slot]["status"] == CONFLICT:
+                conflicts.append({"identifier": sample.to_dict(), "slot": slot, "evidence": record[slot]["evidence"]})
         _list_repository_ids(record, repository_ids.get((SAMPLE, sample)))
         sample_records.append(record)
     for kind, ident in repository_ids:
@@ -344,7 +395,7 @@ def reconcile_entities(
     for parent in parents:
         slots[parent]  # a donor named as a parent has a record, slots or none
 
-    donors, conflicts = [], []
+    donors = []
     settled: dict[Identifier, dict[str, str]] = {}
     unreviewed: Counter = Counter()
     for donor in sorted(slots, key=identifier_order):
@@ -352,20 +403,25 @@ def reconcile_entities(
         settled[donor] = {}
         for slot in DONOR_SLOTS:
             said = slots[donor].get(slot, NO_EVIDENCE)
-            status, value = _settle_slot(slot, said)
-            record[slot] = {"value": value, "status": status, "evidence": list(said.claims)}
-            settled[donor][slot] = status
+            record[slot] = _settle_slot(slot, said)
+            settled[donor][slot] = record[slot]["status"]
             unreviewed[slot] += bool(said.unreviewed)
-            if status == CONFLICT:
-                conflicts.append({"identifier": donor.to_dict(), "slot": slot, "evidence": list(said.claims)})
+            if record[slot]["status"] == CONFLICT:
+                conflicts.append({"identifier": donor.to_dict(), "slot": slot, "evidence": record[slot]["evidence"]})
         _list_repository_ids(record, repository_ids.get((DONOR, donor)))
         donors.append(record)
 
-    # Per dataset and slot: the donors the dataset's lines name, each counted at its overall settled
-    # status, so a dataset agreeing with a conflicted donor still shows the conflict.
+    # Per dataset and slot: the donors (or samples) the dataset's lines name, each counted at its overall
+    # settled status, so a dataset agreeing with a conflicted record still shows the conflict.
     by_dataset: dict[str, dict[str, dict]] = defaultdict(dict)
     for (dataset, slot), named in named_in.items():
-        by_dataset[dataset][slot] = {"donors": len(named), **Counter(settled[d][slot] for d in named)}
+        if slot in SAMPLE_SLOTS:
+            by_dataset[dataset][slot] = {"samples": len(named), **Counter(sample_settled[s][slot] for s in named)}
+        else:
+            by_dataset[dataset][slot] = {"donors": len(named), **Counter(settled[d][slot] for d in named)}
+    for sample_slots_of in sample_slots.values():
+        for slot, said in sample_slots_of.items():
+            unreviewed[slot] += bool(said.unreviewed)
     report = {
         "files": files,
         "skipped_files": skipped or [],
@@ -386,6 +442,8 @@ def reconcile_entities(
             "total": len(sample_records),
             "named_by_files": len(named_by_files),
             "collected_from": dict(linked),
+            "statuses": {slot: dict(Counter(s[slot] for s in sample_settled.values())) for slot in SAMPLE_SLOTS},
+            "unknown_site_lines": _lines_per_table(evidence.unknown_sites),
         },
         REPOSITORY_IDS: {kind: _repository_id_counts(repository_ids, kind) for kind in (DONOR, SAMPLE)},
     }
