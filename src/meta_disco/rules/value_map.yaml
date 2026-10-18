@@ -227,13 +227,12 @@ rows:
     declares: {reported_ethnicity: White}
     reason: The term itself, as AnVIL's `anvil_donor.reported_ethnicity` writes it, and NIA_CARD's `subject.race_ethnicity` it is made from.
   # --- biosample_type (#699): a sample's slot, from AnVIL's published biosample ----
+  # Left unreviewed on purpose, so a record defers to AnVIL (`use: published`) and keeps its value:
+  # `Tissue, Unknown`, IGVF's 282 pools, 4 of which also hold primary cells (#705); and `Blood`,
+  # NIA_CARD's 3 Coriell samples, whose record is the cell line, not blood (#706).
   - id: "biosample_type.tissue"
     match: {slot: biosample_type, value: "Tissue"}
     declares: {biosample_type: Tissue}
-    reason: The term itself, as AnVIL's `anvil_biosample.biosample_type` writes it.
-  - id: "biosample_type.blood"
-    match: {slot: biosample_type, value: "Blood"}
-    declares: {biosample_type: Blood}
     reason: The term itself, as AnVIL's `anvil_biosample.biosample_type` writes it.
   - id: "biosample_type.unknown"
     match: {slot: biosample_type, value: "Unknown"}
@@ -241,15 +240,6 @@ rows:
     reason: >-
       AnVIL's `Unknown` names no type: reviewed, and no claim. On anvil15 it is every filled
       HPRC_R2 biosample's (230 of 234; 4 are null) and 135 of IGVF's.
-  - id: "biosample_type.tissue_unknown"
-    match: {slot: biosample_type, value: "Tissue, Unknown"}
-    scope: {source: anvil, dataset: AnVIL_IGVF_Mouse_R1}
-    declares: {biosample_type: Tissue}
-    reason: >-
-      AnVIL's join of IGVF's own `sample.biosample_type`, `['multiplexed sample', 'tissue/organ']`,
-      on IGVF's 282 pooled samples (`MultiplexedSample`): pools of tissue pieces from many mice,
-      so every member is a tissue; `multiplexed sample` has no AnVIL term and became `Unknown`.
-      Scoped to IGVF, whose rows show it.
   # --- assay_type -----------------------------------------------------------------
   - id: "assay_type.hi_c"
     match: {slot: assay_type, value: "Hi-C", alternates: ["hic"]}

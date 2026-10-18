@@ -140,7 +140,7 @@ evidence}` entry — plus the controlled vocabulary:
   tree (`GBR` under `EUR`), on a `DonorRecord`, never on a file
 - **organism_type_enum**, **reported_ethnicity_enum** and **biosample_type_enum** (#699): AnVIL's
   values for its donors' and biosamples' fields (`Human`/`Mouse` with NCBITaxon `meaning`s; the census
-  categories, with none; `Tissue`/`Blood`), on a `DonorRecord` or `SampleRecord`
+  categories, with none; `Tissue`), on a `DonorRecord` or `SampleRecord`
 - also **platform_enum**
 
 `status` is required on every dimension; `value` is null unless status is `classified`.

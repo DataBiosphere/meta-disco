@@ -415,9 +415,8 @@ class ReportedEthnicityEnum(str, Enum):
 
 class BiosampleTypeEnum(str, Enum):
     """
-    What kind of material a sample is (#699), in AnVIL's values for `anvil_biosample.biosample_type`. AnVIL's `Unknown` is no value. A value no source writes is not listed.
+    What kind of material a sample is (#699), in AnVIL's values for `anvil_biosample.biosample_type`. AnVIL's `Unknown` is no value. A value no authored translation row reads is not listed: AnVIL's `Blood` is on three Coriell samples, whose record is the cell line (#706), and its `Tissue, Unknown` on IGVF's pools (#705).
     """
-    Blood = "Blood"
     Tissue = "Tissue"
 
 

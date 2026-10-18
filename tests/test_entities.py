@@ -1413,10 +1413,14 @@ def test_a_sample_conflict_is_listed_with_the_sample_conflicts(tmp_path):
 
 def test_a_samples_unreviewed_value_is_counted_with_the_samples_never_the_donors(tmp_path):
     root = tmp_path / "entity_evidence"
-    write_entity_lines(root, "D", "biosample_type", [("Cell line", "IGVFSM9197PTER")])
-    report = attribute_result(root, tmp_path).report
-    assert report["samples"]["unreviewed"] == {"biosample_type": 1}
-    assert report["unreviewed_donors"] == {}
+    write_entity_lines(root, "D", "biosample_type", [("Tissue, Unknown", "IGVFSM9197PTER")])
+    result = attribute_result(root, tmp_path)
+    assert result.report["samples"]["unreviewed"] == {"biosample_type": 1}
+    assert result.report["unreviewed_donors"] == {}
+    # No opinion of ours: the slot defers to AnVIL, whose value the evidence keeps for a reader to show.
+    slot = by_id(result.samples)["IGVFSM9197PTER"]["biosample_type"]
+    assert (slot["status"], slot["value"], slot["use"]) == (NOT_CLASSIFIED, None, USE_PUBLISHED)
+    assert [(c.get("claim_state"), c["raw_value"]) for c in slot["evidence"]] == [("unmapped", "Tissue, Unknown")]
 
 
 PUBLISHED_ATTRIBUTE_MAP = f"""
