@@ -412,10 +412,6 @@ class SampleReport:
             }
         return {"lists": len(self.lists), "by_dataset": by_dataset}
 
-    def keep(self, entry: dict) -> None:
-        """Write the ``SampleList`` ``entry`` with the run's lists, as one an external list names (#710): no record settles to it."""
-        self.lists.setdefault(entry["list_id"], entry)
-
     def sorted_lists(self) -> list[dict]:
         """The run's lists in id order, as the artifact writes them."""
         return sorted_lists(self.lists)

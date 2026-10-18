@@ -80,6 +80,7 @@ from meta_disco.models import DONOR_SLOTS, MIXED, SAMPLE_SLOTS, SAMPLES_FIELD, S
 from meta_disco.output_utils import (
     DONORS_FILE,
     EXTERNAL_LISTS_FILE,
+    RECONCILED_DIR,
     RUN_DIR_FORMAT,
     SAMPLES_FILE,
     find_latest_run,
@@ -176,7 +177,9 @@ EDGE_RULES_NOTE = (
     "the parent from the file's own name, or from the command line in its header that made it (#609), and only "
     "where exactly one file of the dataset carries that name. The "
     "activity-map rows (#584) translate what a source table says about a step, and reconcile resolves the "
-    "parent that table names (#577). Counted by the inputs of the reconciled `generated_by` that cite them."
+    "parent that table names (#577). One code rule is reconcile's: the members of a sample map held outside AnVIL "
+    "for a dataset (#710). Counted by the inputs of the reconciled `generated_by` that cite them, and of the "
+    "external lists' steps."
 )
 SAMPLE_RULES_NOTE = (
     "Rules that say which samples a file's data comes from, rather than giving a field an answer (#357). The code "
@@ -433,7 +436,7 @@ def donor_records(run_dir: Path):
 def external_list_records(run_dir: Path):
     """A run's external lists (#710) in the shape :func:`tally` reads, counted under :data:`EXTERNAL_LISTS`, not as files:
     each list's step and samples, which cite the external sample map rules. Nothing for a run reconciled before #710."""
-    if not (run_dir / "reconciled" / EXTERNAL_LISTS_FILE).exists():
+    if not (run_dir / RECONCILED_DIR / EXTERNAL_LISTS_FILE).exists():
         return
     for row in iter_reconciled_artifact(run_dir, EXTERNAL_LISTS_FILE):
         record = {"dataset_title": EXTERNAL_LISTS, "classifications": {}, _ENTITY: True}

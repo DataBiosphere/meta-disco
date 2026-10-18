@@ -1737,7 +1737,8 @@ slots:
     description: >-
       On an inherited claim (contract 4.9, #571), or an inherited sample attribution (#668):
       the record keys of the parents, in that role, whose settled answers or samples gave
-      it — each one's record in the same run.
+      it — each one's record in the same run, or, for a list held outside AnVIL for the
+      dataset (#710), its address, its line in the reconciled `external_lists.ndjson.gz`.
     multivalued: true
 
 # =============================================================================

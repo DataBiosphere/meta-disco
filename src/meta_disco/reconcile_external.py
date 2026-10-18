@@ -4,9 +4,8 @@
 lineage line may name, as a workspace tar's parent, a sample map declared in
 ``sources/external_files.yaml`` (``external_lineage`` writes such lines). That map is no file
 of the run, so reconcile holds it itself. For each map a line names that is declared for the
-line's dataset (``ExternalFiles.by_ref``), the cached copy (``external_files.read_text``; a
-missing or changed copy refuses the run) is read as a catalog map is
-(``cohort_steps.parse_sample_map``), and gives:
+line's dataset (``ExternalFiles.by_ref``), the cached copy is read as a catalog map is
+(``external_files.read_sample_map``; a missing or changed copy refuses the run), and gives:
 
 - **a carrier** (:func:`carriers`), so the tar's line resolves to it, as an input whose
   ``parent_ref`` is the map's address;
@@ -17,10 +16,8 @@ missing or changed copy refuses the run) is read as a catalog map is
 - **its samples**, the rows' first column read through the identifier rules, all or none
   (``sample_identity.EXTERNAL_SAMPLE_MAP_SAMPLES``).
 
-Reconcile holds each in its graph under the map's address, beside the run's records, so a
-tar's values are read through it (``reconcile_inherit``) and its samples pass across it
-(``reconcile_samples``); each is written once, to ``reconciled/external_lists.ndjson.gz``
-(an ``ExternalList`` per line), never as a record.
+Reconcile holds each in its graph under the map's address, so a tar reads its values and
+samples through it, and writes each once to ``reconciled/external_lists.ndjson.gz``.
 """
 
 from __future__ import annotations
@@ -31,16 +28,15 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from . import activities, code_rules, edges
-from .cohort_steps import parse_sample_map
-from .external_files import ExternalFile, ExternalFileError, ExternalFiles, read_text
+from .edges import PARENT_REF
+from .external_files import ExternalFile, ExternalFiles, read_sample_map
 from .models import NOT_CLASSIFIED
-from .reconcile_lineage import EXTERNAL_REF, Carrier, Locator
+from .reconcile_lineage import Carrier, Locator
 from .record_keys import RecordKey
 from .sample_identity import EXTERNAL_SAMPLE_MAP_SAMPLES, HeaderSamples
 
 # The run record field a member is looked up by: the row's path's base name.
 MEMBER_FIELD = "file_name"
-# What a list is, as a carrier's data type.
 LIST_DATA_TYPE = "sample_map"
 
 
@@ -65,9 +61,7 @@ def read_lists(named: Iterable[tuple[str, str]], declared: ExternalFiles, root: 
         file = declared.by_ref(dataset, ref)
         if file is None:
             continue
-        rows = parse_sample_map(read_text(file, root))
-        if rows is None:
-            raise ExternalFileError(f"{file.ref}: not a sample map (rows of a sample and a VCF path)")
+        rows = read_sample_map(file, root)
         names = tuple(PurePosixPath(path).name for _, path in rows)
         found.append(ExternalList(file, names, EXTERNAL_SAMPLE_MAP_SAMPLES.read(rows, dataset)))
     return found
@@ -80,9 +74,7 @@ def member_locators(lists: Iterable[ExternalList]) -> set[Locator]:
 
 def carriers(lists: Iterable[ExternalList]) -> dict[Locator, list[Carrier]]:
     """Each list as the one carrier of its address in its dataset, so a lineage line naming it resolves."""
-    return {
-        (EXTERNAL_REF, x.file.dataset, x.file.ref): [Carrier(x.file.ref, x.file.name, LIST_DATA_TYPE)] for x in lists
-    }
+    return {(PARENT_REF, x.file.dataset, x.file.ref): [Carrier(x.file.ref, x.file.name, LIST_DATA_TYPE)] for x in lists}
 
 
 @dataclass(frozen=True)
@@ -95,14 +87,15 @@ class Held:
     unresolved: int
     several: int
 
-    def row(self) -> dict:
-        """The list's ``ExternalList`` line."""
+    def row(self, written: set[str]) -> dict:
+        """The list's ``ExternalList`` line; its samples only where their list is among ``written``, the run's sample lists."""
         file = self.list.file
         row: dict = {"ref": file.ref, "dataset": file.dataset, "file_name": file.name, "sha256": file.sha256}
         if self.step is not None:
             row["generated_by"] = self.step
-        if "samples" in self.record:
-            row["samples"] = self.record["samples"]
+        reference = self.list.samples.reference()
+        if reference is not None and reference["list_id"] in written:
+            row["samples"] = reference
         return row
 
 
@@ -151,5 +144,5 @@ def report(held: Iterable[Held]) -> dict:
         counts["rows"] += len(h.list.names)
         counts["rows_not_in_dataset"] += h.unresolved
         counts["rows_several_match"] += h.several
-        counts["samples_named"] += "samples" in h.record
+        counts["samples_named"] += h.list.samples.sample_list is not None
     return {dataset: dict(sorted(counts.items())) for dataset, counts in sorted(block.items())}

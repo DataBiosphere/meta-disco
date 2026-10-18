@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+import requests
 
 from meta_disco import code_rules
 from meta_disco import external_lineage as xl
@@ -27,6 +28,7 @@ from meta_disco.lineage_evidence import iter_lineage, read_lineage_envelope, wri
 from meta_disco.models import SOURCE_EXTERNAL_GROUND_TRUTH
 from meta_disco.output_utils import (
     EXTERNAL_LISTS_FILE,
+    SAMPLES_FILE,
     iter_reconciled_artifact,
     iter_reconciled_records,
     iter_reconciled_sample_lists,
@@ -55,14 +57,14 @@ def declaration(sha: str = SHA, extra: str = "") -> str:
 catalog: anvil15
 datasets:
   C:
-    - host: github
-      repository: o/r
-      commit: {COMMIT}
-      directory: maps
-      sample_maps:
-        chr1_sample_map.tsv:
-          sha256: {sha}
-          named_as: [{MAP_PATH}]
+    host: github
+    repository: o/r
+    commit: {COMMIT}
+    directory: maps
+    sample_maps:
+      chr1_sample_map.tsv:
+        sha256: {sha}
+        named_as: [{MAP_PATH}]
 {extra}"""
 
 
@@ -93,7 +95,7 @@ def test_a_declared_file_is_addressed_by_its_commit_and_kept_under_its_dataset_f
     assert file.ref == REF
     assert file.url == f"https://raw.githubusercontent.com/o/r/{COMMIT}/maps/chr1_sample_map.tsv"
     assert file.cache_path(tmp_path) == tmp_path / "C" / "github" / "o" / "r" / COMMIT / "maps" / "chr1_sample_map.tsv"
-    assert declared.named("C", MAP_PATH) is file and declared.named("C", OTHER_MAP_PATH) is None
+    assert declared.entries[0].named(MAP_PATH) is file and declared.entries[0].named(OTHER_MAP_PATH) is None
     # A file is held for its dataset alone.
     assert declared.by_ref("C", REF) is file and declared.by_ref("OTHER", REF) is None
 
@@ -105,11 +107,12 @@ def test_a_declared_file_is_addressed_by_its_commit_and_kept_under_its_dataset_f
         (declaration().replace(COMMIT, "abc123"), "full 40-character commit"),
         (declaration(sha="xyz"), "64 lowercase hex"),
         (declaration().replace("repository: o/r", "repository: r"), "owner/name"),
+        (declaration().replace("repository: o/r", "repository: o/.."), "'..'"),
+        (declaration().replace("directory: maps", "directory: maps/../.."), "'..'"),
+        (declaration().replace("  C:\n", "  ../x:\n"), "one directory name"),
         (declaration().replace("chr1_sample_map.tsv:", "chr1.tsv:"), "_sample_map.tsv"),
         (
-            declaration(
-                extra=f"        chr2_sample_map.tsv:\n          sha256: {SHA}\n          named_as: [{MAP_PATH}]\n"
-            ),
+            declaration(extra=f"      chr2_sample_map.tsv:\n        sha256: {SHA}\n        named_as: [{MAP_PATH}]\n"),
             "also named for chr1_sample_map.tsv",
         ),
     ],
@@ -452,3 +455,48 @@ def test_a_map_not_declared_for_the_tars_dataset_is_counted_and_gives_nothing(tm
 def test_reconcile_refuses_a_declared_map_missing_from_the_cache(tmp_path, declared):
     with pytest.raises(ReconcileError, match="fetch-external-files"):
         reconcile(tmp_path, declared, run_rows(*BOTH), [tar_line()], external_root=tmp_path / "nowhere")
+
+
+def test_a_callset_read_is_tried_again_only_where_the_connection_failed(monkeypatch):
+    calls: list[str] = []
+
+    def fails(cause):
+        def fetch(md5, member):
+            calls.append(member)
+            if cause is None:
+                raise FetchError("HTTP 404 from AnVIL S3 mirror range request")
+            raise FetchError("tar member: ConnectionError") from cause
+
+        return fetch
+
+    monkeypatch.setattr(xl.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(xl, "fetch_tar_member", fails(requests.ConnectionError("reset")))
+    with pytest.raises(FetchError):
+        xl.read_callset(md5("t1"))
+    assert calls == [xl.CALLSET_MEMBER] * xl.ATTEMPTS
+    calls.clear()
+    monkeypatch.setattr(xl, "fetch_tar_member", fails(None))
+    with pytest.raises(FetchError, match="404"):
+        xl.read_callset(md5("t1"))
+    assert calls == [xl.CALLSET_MEMBER]
+
+
+def test_kept_inputs_naming_a_sample_set_they_do_not_hold_are_refused(tmp_path, declared, importing):
+    first = run_import(tmp_path, declared, importing)
+    path = first.directory / f"{xl.TABLE}.inputs.json"
+    document = json.loads(path.read_text())
+    document["sample_sets"] = {}
+    path.write_text(json.dumps(document))
+    with pytest.raises(ValueError, match="does not hold"):
+        xl.load_inputs([path])
+
+
+def test_a_maps_samples_no_reconciled_file_settles_to_are_not_written(tmp_path, declared, cached):
+    """The line's tar is not in the run, so no file settles to the map's samples: no list, no sample records."""
+    gvcfs_only = run_rows(*BOTH)[1:]
+    run_dir, _, report = reconcile(tmp_path, declared, gvcfs_only, [tar_line()])
+    assert report["lineage"]["sources"][SOURCE_EXTERNAL_GROUND_TRUTH]["C"]["child_not_in_run"] == 1
+    assert list(iter_reconciled_sample_lists(run_dir)) == []
+    assert list(iter_reconciled_artifact(run_dir, SAMPLES_FILE)) == []
+    (listed,) = iter_reconciled_artifact(run_dir, EXTERNAL_LISTS_FILE)
+    assert "samples" not in listed and "generated_by" in listed

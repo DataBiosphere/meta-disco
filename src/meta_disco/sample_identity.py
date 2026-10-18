@@ -412,5 +412,4 @@ def _sample_map_strings(rows: Sequence[tuple[str, str]] | None) -> list[str]:
 BAM_SAMPLES = SampleReader(code_rules.BAM_READ_GROUP_SAMPLES, _read_group_strings)
 VCF_SAMPLES = SampleReader(code_rules.VCF_SAMPLE_COLUMNS, _sample_column_strings)
 SAMPLE_MAP_SAMPLES = SampleReader(code_rules.SAMPLE_MAP_ROWS, _sample_map_strings)
-# A sample map held outside AnVIL for a dataset (#710), read at reconcile.
 EXTERNAL_SAMPLE_MAP_SAMPLES = SampleReader(code_rules.EXTERNAL_SAMPLE_MAP_ROWS, _sample_map_strings)

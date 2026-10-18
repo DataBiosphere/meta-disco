@@ -384,7 +384,8 @@ evidence}` entry — plus the controlled vocabulary:
     activity declares. What each role passes is `rules/activities.yaml`'s to say, read
     through `meta_disco.activities` and trusted by its readers; a term may take its
     declaration from an abstract parent, and no step names an abstract term (#610). Inference
-    states six (`code_rules.EDGE_RULES`): two from the child's own name through
+    states six of `code_rules.EDGE_RULES`'s seven (the seventh is reconcile's, an external sample map's
+    members, #710): two from the child's own name through
     `meta_disco.edges`, the index producer's `IndexActivity` and the catch-all's
     `ChecksumActivity` for a `.md5`, two from a VCF's header through
     `meta_disco.producer_steps` (#609, #610): the end of the header's data flow (ADR-0002

@@ -694,14 +694,16 @@ def _fetch_suffix(md5sum: str, length: int, *, url: str | None, timeout: int = 6
             if found is None:
                 raise FetchError(f"suffix range from {source} with no Content-Range start")
             start = found
-        body = b""
+        chunks: list[bytes] = []
+        size = 0
         for chunk in resp.iter_content(chunk_size=65536):
-            body += chunk
-            if len(body) > length:
+            chunks.append(chunk)
+            size += len(chunk)
+            if size > length:
                 raise FetchError(
                     f"HTTP {resp.status_code} from {source} suffix range request past {length} bytes (Range ignored)"
                 )
-        return body, start
+        return b"".join(chunks), start
 
 
 def _member_in_window(data: bytes, base: int, member: str) -> tuple[int, int, bytes] | None:

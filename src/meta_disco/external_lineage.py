@@ -30,18 +30,19 @@ import json
 import time
 from collections import Counter
 from collections.abc import Callable, Iterable
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+import requests
+
 from .anvil_evidence import verbatim_manifest
-from .azul_manifest import REPOSITORY, VERBATIM_FILE, iter_verbatim_entities, sidecar_datasets
-from .cohort_steps import parse_sample_map, parse_tar_head, sample_name_map
+from .azul_manifest import REPOSITORY, sidecar_datasets
+from .cohort_steps import NO_VCF_HEADER, VCF_HEADER_UNREADABLE, parse_tar_head, sample_name_map
 from .deployments import Deployment
+from .ena_lineage import CatalogFile, Progress, catalog_files, in_parallel
 from .evidence import TarEvidence, TarHead
-from .exclusions import MD5_RE
-from .external_files import Entry, ExternalFile, ExternalFiles, read_text
+from .external_files import Entry, ExternalFile, ExternalFiles, read_sample_map
 from .fetchers import FetchError, fetch_tar_member
 from .lineage_evidence import write_lineage_file
 from .models import JOIN_KEY_FILE_ID, SOURCE_EXTERNAL_GROUND_TRUTH
@@ -98,8 +99,6 @@ OUTCOMES = (
     SAMPLES_DIFFER,
 )
 
-Progress = Callable[[str], None]
-
 
 def _silent(_message: str) -> None:
     pass
@@ -119,13 +118,11 @@ def check(declared: ExternalFiles, deployment: Deployment, manifest_root: Path, 
     problems = []
     if declared.catalog != deployment.catalog:
         problems.append(f"external files: authored against {declared.catalog}, not {deployment.catalog}")
-    named = sidecar_datasets(manifest_root, declared.catalog)
+    _, problems_with_manifests = manifests(declared, manifest_root)
+    problems += problems_with_manifests
     for entry in declared.entries:
         if entry.dataset not in deployment.snapshots:
             problems.append(f"{entry.dataset}: not a dataset the {deployment.name} deployment declares")
-        path = verbatim_manifest(manifest_root, declared.catalog, entry.dataset, named)
-        if isinstance(path, str):
-            problems.append(path)
         for file in entry.sample_maps:
             try:
                 map_samples(file, external_root)
@@ -134,15 +131,27 @@ def check(declared: ExternalFiles, deployment: Deployment, manifest_root: Path, 
     return problems
 
 
+def manifests(declared: ExternalFiles, manifest_root: Path) -> tuple[dict[str, Path], list[str]]:
+    """Each declared dataset's verbatim manifest, and why any cannot be read (``anvil_evidence.verbatim_manifest``)."""
+    named = sidecar_datasets(manifest_root, declared.catalog)
+    paths: dict[str, Path] = {}
+    problems: list[str] = []
+    for entry in declared.entries:
+        path = verbatim_manifest(manifest_root, declared.catalog, entry.dataset, named)
+        if isinstance(path, str):
+            problems.append(path)
+        else:
+            paths[entry.dataset] = path
+    return paths, problems
+
+
 def map_samples(file: ExternalFile, external_root: Path) -> list[str]:
     """The sample of each row of a declared sample map, in row order, from the cache.
 
-    ``ExternalFileError`` where it is not cached or has changed (``external_files.read_text``);
-    ``ValueError`` where it is no sample map (``cohort_steps.parse_sample_map``) or names a sample twice.
+    ``ExternalFileError`` where ``external_files.read_sample_map`` refuses it; ``ValueError``
+    where it names a sample twice.
     """
-    rows = parse_sample_map(read_text(file, external_root))
-    if rows is None:
-        raise ValueError(f"{file.ref}: not a sample map (rows of a sample and a VCF path)")
+    rows = read_sample_map(file, external_root)
     samples = [sample for sample, _ in rows]
     if len(set(samples)) != len(samples):
         raise ValueError(f"{file.ref}: names a sample in two rows")
@@ -150,8 +159,15 @@ def map_samples(file: ExternalFile, external_root: Path) -> list[str]:
 
 
 def sample_set_id(samples: Iterable[str]) -> str:
-    """The id of a set of sample names: the first 16 hex of the sha256 of the distinct names, sorted, one per line."""
-    return hashlib.sha256("\n".join(sorted(set(samples))).encode("utf-8")).hexdigest()[:16]
+    """The id of a set of sample names: the first 16 hex of the sha256 of the distinct names, sorted, one per line.
+
+    Not a ``sample_identity.list_id``, which digests recognised identifiers: these are the names as written.
+    """
+    return _set_id(sorted(set(samples)))
+
+
+def _set_id(distinct: list[str]) -> str:
+    return hashlib.sha256("\n".join(distinct).encode("utf-8")).hexdigest()[:16]
 
 
 def callset_samples(text: str) -> list[str]:
@@ -175,15 +191,6 @@ def callset_samples(text: str) -> list[str]:
 
 
 # --- reading what the importer reads ---------------------------------------------------
-
-
-@dataclass(frozen=True)
-class CatalogTar:
-    """A tar of a dataset, as its ``anvil_file`` entity gives it."""
-
-    file_id: str
-    file_name: str
-    md5: str | None
 
 
 @dataclass
@@ -216,20 +223,16 @@ class Inputs:
     sample_sets: dict[str, list[str]] = field(default_factory=dict)
 
 
-def catalog_tars(path: Path) -> list[CatalogTar]:
-    """A dataset's tars, from its verbatim manifest's ``anvil_file`` entities, once each by ``file_id``."""
-    found: dict[str, CatalogTar] = {}
-    for _table, value in iter_verbatim_entities(path, {VERBATIM_FILE}):
-        file_id, name, md5 = value.get("file_id"), value.get("file_name"), value.get("file_md5sum")
-        if isinstance(file_id, str) and isinstance(name, str) and name.lower().endswith(TAR_SUFFIX):
-            # Only a well-formed md5 is an identity (#376): it is the S3 key a tar is read by, and the cache's.
-            found.setdefault(
-                file_id, CatalogTar(file_id, name, md5 if isinstance(md5, str) and MD5_RE.match(md5) else None)
-            )
+def catalog_tars(path: Path) -> list[CatalogFile]:
+    """A dataset's tars, from its verbatim manifest (``ena_lineage.catalog_files``), once each by ``file_id``."""
+    found: dict[str, CatalogFile] = {}
+    for _value, file in catalog_files(path):
+        if file.file_name.lower().endswith(TAR_SUFFIX):
+            found.setdefault(file.file_id, file)
     return list(found.values())
 
 
-def named_map(tar: CatalogTar, evidence_dir: Path) -> tuple[str | None, str | None]:
+def named_map(tar: CatalogFile, evidence_dir: Path) -> tuple[str | None, str | None]:
     """The map path a tar's cached ``vcfheader.vcf`` names, or None and the tar's outcome.
 
     The header comes from the tar producer's cache: :data:`NO_HEADER` where it holds none,
@@ -239,22 +242,26 @@ def named_map(tar: CatalogTar, evidence_dir: Path) -> tuple[str | None, str | No
     cached = TarEvidence.load(evidence_dir, tar.md5) if tar.md5 is not None else None
     if cached is None:
         return None, NO_HEADER
-    head = parse_tar_head(TarHead(cached.member_names, cached.vcf_header))
-    if not head.is_workspace:
+    named, why = sample_name_map(parse_tar_head(TarHead(cached.member_names, cached.vcf_header)), tar.file_name)
+    if named is not None:
+        return named, None
+    if why is None:
         return None, NOT_A_WORKSPACE
-    if head.header is None:
-        return None, NO_HEADER
-    named, _why = sample_name_map(head, tar.file_name)
-    return (named, None) if named is not None else (None, NO_IMPORT)
+    return None, NO_HEADER if why in (NO_VCF_HEADER, VCF_HEADER_UNREADABLE) else NO_IMPORT
 
 
-def read_callset(md5: str, member: str = CALLSET_MEMBER) -> str | None:
-    """A tar's ``callset.json`` text (``fetchers.fetch_tar_member``), tried :data:`ATTEMPTS` times in all on ``FetchError``."""
+def read_callset(md5: str) -> str | None:
+    """A tar's ``callset.json`` text (``fetchers.fetch_tar_member``), tried :data:`ATTEMPTS` times in all where the connection fails.
+
+    A failed read caused by a ``requests`` exception (a dropped connection, a body cut off) is
+    tried again; any other ``FetchError`` (an HTTP status) raises at once, as
+    ``ena_lineage.read_stats`` does.
+    """
     for attempt in range(1, ATTEMPTS + 1):
         try:
-            return fetch_tar_member(md5, member)
-        except FetchError:
-            if attempt == ATTEMPTS:
+            return fetch_tar_member(md5, CALLSET_MEMBER)
+        except FetchError as exc:
+            if attempt == ATTEMPTS or not isinstance(exc.__cause__, requests.RequestException):
                 raise
             time.sleep(attempt)
     raise AssertionError("ATTEMPTS is at least 1")
@@ -288,17 +295,11 @@ def import_all(
 
     ``stored`` (by dataset) re-imports from kept inputs instead of the network, and must hold
     every dataset. Raises before writing anything if a dataset's verbatim manifest cannot be
-    read, a declared map is not cached or has changed, or a dataset has no kept inputs.
+    read, a declared map is not cached or has changed, or a dataset has no kept inputs. Each
+    dataset's generation is written as it is imported, so one :func:`import_dataset` refuses
+    leaves the datasets before it written.
     """
-    named = sidecar_datasets(manifest_root, declared.catalog)
-    paths: dict[str, Path] = {}
-    problems = []
-    for entry in declared.entries:
-        path = verbatim_manifest(manifest_root, declared.catalog, entry.dataset, named)
-        if isinstance(path, str):
-            problems.append(path)
-        else:
-            paths[entry.dataset] = path
+    paths, problems = manifests(declared, manifest_root)
     if problems:
         raise ValueError("; ".join(problems))
     if stored is not None:
@@ -352,13 +353,13 @@ def import_dataset(
             f"{catalog}/{entry.dataset} at {entry.commit}"
         )
     inputs = stored or Inputs(catalog, entry.dataset, entry.commit, datetime.now(timezone.utc))
-    to_check: list[tuple[CatalogTar, ExternalFile, str]] = []
+    to_check: list[tuple[CatalogFile, ExternalFile, str]] = []
     for tar in catalog_tars(manifest):
         path, outcome = named_map(tar, evidence_dir)
         if path is None:
             result.outcomes[outcome] += 1
             continue
-        file = next((f for f in entry.sample_maps if path in f.named_as), None)
+        file = entry.named(path)
         if file is None:
             result.outcomes[MAP_NOT_DECLARED] += 1
             continue
@@ -419,7 +420,7 @@ def _outcome(reading: TarReading, map_set: str) -> str:
     return LINKED
 
 
-def require_inputs_agree(to_check: list[tuple[CatalogTar, ExternalFile, str]], inputs: Inputs, at: str) -> None:
+def require_inputs_agree(to_check: list[tuple[CatalogFile, ExternalFile, str]], inputs: Inputs, at: str) -> None:
     """``ValueError`` when a tar to be checked has no kept reading, or one read for another file or map path."""
     for tar, _file, path in to_check:
         reading = inputs.tars.get(tar.file_id)
@@ -430,35 +431,33 @@ def require_inputs_agree(to_check: list[tuple[CatalogTar, ExternalFile, str]], i
 
 
 def _read_callsets(
-    to_check: list[tuple[CatalogTar, ExternalFile, str]],
+    to_check: list[tuple[CatalogFile, ExternalFile, str]],
     inputs: Inputs,
     read_member: Callable[[str], str | None],
     progress: Progress,
 ) -> None:
     """Read each tar's ``callset.json`` into its reading, :data:`WORKERS` at a time; a tar with no md5 is read as unreadable."""
 
-    def read(tar: CatalogTar, path: str) -> TarReading:
-        reading = TarReading(tar.file_id, tar.file_name, tar.md5, path)
-        if tar.md5 is None:
-            reading.error = "no md5 to read the tar by"
-            return reading
-        try:
-            text = read_member(tar.md5)
-            if text is not None:
-                names = callset_samples(text)
-                reading.callset, reading.duplicated = sample_set_id(names), len(set(names)) != len(names)
-                inputs.sample_sets.setdefault(reading.callset, sorted(set(names)))
-        except (FetchError, ValueError) as exc:
-            reading.error = str(exc)
-        return reading
+    def task(tar: CatalogFile, path: str) -> Callable[[], None]:
+        def read() -> None:
+            reading = inputs.tars[tar.file_id] = TarReading(tar.file_id, tar.file_name, tar.md5, path)
+            if tar.md5 is None:
+                reading.error = "no md5 to read the tar by"
+                return
+            try:
+                text = read_member(tar.md5)
+                if text is not None:
+                    names = callset_samples(text)
+                    distinct = sorted(set(names))
+                    reading.callset, reading.duplicated = _set_id(distinct), len(distinct) != len(names)
+                    if reading.callset not in inputs.sample_sets:
+                        inputs.sample_sets[reading.callset] = distinct
+            except (FetchError, ValueError) as exc:
+                reading.error = str(exc)
 
-    with ThreadPoolExecutor(WORKERS) as pool:
-        futures = [pool.submit(read, tar, path) for tar, _file, path in to_check]
-        for done, future in enumerate(as_completed(futures), start=1):
-            reading = future.result()
-            inputs.tars[reading.file_id] = reading
-            if done % PROGRESS_EVERY == 0 or done == len(futures):
-                progress(f"read {done:,} of {len(futures):,} callsets")
+        return read
+
+    in_parallel([task(tar, path) for tar, _file, path in to_check], progress, "callsets", WORKERS, PROGRESS_EVERY)
 
 
 # --- the kept inputs --------------------------------------------------------------------
@@ -466,7 +465,7 @@ def _read_callsets(
 
 def write_inputs(path: Path, inputs: Inputs, file_ids: list[str]) -> None:
     """Write what was read for the tars ``file_ids``, and the sample sets their readings name."""
-    tars = [inputs.tars[f] for f in sorted(set(file_ids)) if f in inputs.tars]
+    tars = [inputs.tars[f] for f in sorted(file_ids)]
     named_sets = {t.callset for t in tars if t.callset is not None}
     document = {
         "catalog": inputs.catalog,
@@ -489,6 +488,9 @@ def load_inputs(paths: Iterable[Path]) -> dict[str, Inputs]:
         for key, names in sets.items():
             if sample_set_id(names) != key:
                 raise ValueError(f"{path}: sample set {key} holds names whose id is {sample_set_id(names)}")
+        missing = sorted({t["callset"] for t in document["tars"] if t.get("callset") is not None} - set(sets))
+        if missing:
+            raise ValueError(f"{path}: readings name sample sets the file does not hold: {missing}")
         inputs = Inputs(
             catalog=document["catalog"],
             dataset=document["dataset"],

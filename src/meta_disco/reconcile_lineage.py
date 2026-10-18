@@ -48,7 +48,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .activity_map import ActivityMap, Row, generation_stamp, keyed_lines
-from .edges import LineageStep, lineage_attribution, parent_kind_of
+from .edges import PARENT_REF, LineageStep, lineage_attribution, parent_kind_of
 from .lineage_evidence import read_lineage_envelope
 from .output_utils import relative_to
 from .records import JOIN_KEY_OUTPUT_FIELDS
@@ -84,9 +84,8 @@ OUTCOMES = (
 # to (None for every dataset), and the value. ``reconcile.join``'s key; a lineage line's is
 # scoped to its child's dataset, or to the dataset a declared line names for its parent.
 Locator = tuple[str, str | None, str]
-# A file held outside AnVIL is looked up by its address (#710), which no record carries:
-# its carrier is added by ``reconcile_external``, never found by the join's scan.
-EXTERNAL_REF = "parent_ref"
+# A file held outside AnVIL is looked up as ``(edges.PARENT_REF, dataset, address)`` (#710), which no
+# record carries: its carrier is added by ``reconcile_external``, never found by the join's scan.
 
 
 @dataclass(frozen=True)
@@ -182,7 +181,7 @@ def translate_lineage(
         parent_dataset = line.parent_dataset or dataset
         parent = None
         if str(line.parent_key_type) == LineageParentKeyEnum.external_file.value and line.parent is not None:
-            parent = (EXTERNAL_REF, dataset, line.parent)
+            parent = (PARENT_REF, dataset, line.parent)
             pending.external.add((dataset, line.parent))
         elif line.parent is not None and line.parent_key_type is not None:
             parent = (JOIN_KEY_OUTPUT_FIELDS[str(line.parent_key_type)], parent_dataset, line.parent)
@@ -207,7 +206,7 @@ def resolve_lineage(pending: PendingLineage, carriers: dict[Locator, list[Carrie
             counts[CHILD_NOT_IN_RUN if not children else CHILD_SEVERAL_MATCH] += 1
             continue
         parents = carriers.get(parent, []) if parent is not None else []
-        external = parent is not None and parent[0] == EXTERNAL_REF
+        external = parent is not None and parent[0] == PARENT_REF
         if len(parents) != 1:
             counts[(EXTERNAL_UNDECLARED if external else NOT_IN_DATASET) if not parents else SEVERAL_MATCH] += 1
             continue

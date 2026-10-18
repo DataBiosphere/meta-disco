@@ -1264,7 +1264,9 @@ def reconcile_run(
     # Every entity line is read and recognised here, before anything is written (#693).
     entity_evidence = gather(entity_paths, entity_root, table, rules)
     joined = join(applicable, run_dir, key, table, extra=pending.wanted | reconcile_external.member_locators(external))
-    lineage = resolve_lineage(pending, {**joined.carriers, **reconcile_external.carriers(external)})
+    # The external lists' carriers, keyed by their address, are no record's: added in place.
+    joined.carriers.update(reconcile_external.carriers(external))
+    lineage = resolve_lineage(pending, joined.carriers)
     external_held = reconcile_external.hold(external, joined.carriers, key)
     report = Report(
         coverage=joined.coverage,
@@ -1324,7 +1326,6 @@ def reconcile_run(
     for held in external_held:
         if held.list.samples.sample_list is not None:
             inference_lists[held.list.samples.sample_list["list_id"]] = held.list.samples.sample_list
-            samples.keep(held.list.samples.sample_list)
         graph.add(held.list.file.ref, held.record, {}, held.step)
         samples.hold(held.list.file.ref, held.record, inference_lists, [], graph.steps.get(held.list.file.ref))
     for _, records, lists in iter_run_file_contents(run_dir):
@@ -1365,7 +1366,9 @@ def reconcile_run(
     entities = reconcile_entities(entity_evidence, rules, run_lists, skipped=entity_skipped)
     write_reconciled_file(staging / DONORS_FILE, header, entities.donors)
     write_reconciled_file(staging / SAMPLES_FILE, header, entities.samples)
-    write_reconciled_file(staging / EXTERNAL_LISTS_FILE, header, (h.row() for h in external_held))
+    # A list's samples are written only where a reconciled file settled to them (#710).
+    written = {entry["list_id"] for entry in run_lists}
+    write_reconciled_file(staging / EXTERNAL_LISTS_FILE, header, (h.row(written) for h in external_held))
 
     full_report = {
         **header,

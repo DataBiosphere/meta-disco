@@ -12,109 +12,113 @@ datasets:
     # imported from, as the Schatz lab published them (uploaded once, 2023-03-20). Each map's
     # `named_as` is every path a tar's vcfheader.vcf names for it (`--sample-name-map`); the
     # tars name chrX_PAR1 and chrX_PAR2 maps, and the lab published one chrX_PAR map.
-    - host: github
-      repository: schatzlab/t2t-chm13-chry
-      commit: efad08780736405640560e96322479af549e15bf
-      directory: alignment_variant_calling_pipeline/example_sample_maps
-      sample_maps:
-        chr1_sample_map.tsv:
-          sha256: ac7f29aa5af2fc5cb54fa20d4a1b4829d4fbbe6f666637d02ade5b3c6a56f5d0
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr1_sample_map.tsv
-        chr2_sample_map.tsv:
-          sha256: 5b90b0fd9f6e5416c5e1a9b83e6fff758110abc517b2ddaaec7ddc2f6df81bf0
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr2_sample_map.tsv
-        chr3_sample_map.tsv:
-          sha256: f7b8e41ebdd48a4030007ba74a0886d56c2d510d1aa4af37dda199b5bc3f84ce
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr3_sample_map.tsv
-        chr4_sample_map.tsv:
-          sha256: ceb79753661a0b2b80c89469b15c842dc1902ec1e9978593133269972639b46a
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr4_sample_map.tsv
-        chr5_sample_map.tsv:
-          sha256: a2e060806c0b22afb093b1a757785a91fa5ce0404f3adcf3ff4c935568695787
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr5_sample_map.tsv
-        chr6_sample_map.tsv:
-          sha256: 89016d37f1042dfe6d84cc1007566a967c7914334d8a92433bfda39d6fc1d935
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr6_sample_map.tsv
-        chr7_sample_map.tsv:
-          sha256: 8d47759f9f2505662466558b3c9676baf98a7afcd2fc232afee90bc122e22806
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr7_sample_map.tsv
-        chr8_sample_map.tsv:
-          sha256: e702c497f0dba8602e2c9f0c33232ca1804dc08b5c7ce1d0f7ffe01edcf62910
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr8_sample_map.tsv
-        chr9_sample_map.tsv:
-          sha256: befd01d90b1b93e9c96be76291077965c6701f958e14e2b67233a800aba308c7
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr9_sample_map.tsv
-        chr10_sample_map.tsv:
-          sha256: c28b747eb9730c37e2519c800589d6149282228ab4947419b757f66472b4e6a0
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr10_sample_map.tsv
-        chr11_sample_map.tsv:
-          sha256: c45b8edc1f322eb174fcc82857976b4b839e3a8717d3546ce369b06b619f956e
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr11_sample_map.tsv
-        chr12_sample_map.tsv:
-          sha256: ee8844dd2e833a286b7a94b90491a4db45b29fa1ef1de504e5149215191c2e3f
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr12_sample_map.tsv
-        chr13_sample_map.tsv:
-          sha256: df74511bf4ae3b4811bd5417200e427098dd5f969221c8ea9d29946518e88202
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr13_sample_map.tsv
-        chr14_sample_map.tsv:
-          sha256: dba07162c58cecd993522e60547476fcc2aee097ae60c39700e9926ae3e72fbf
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr14_sample_map.tsv
-        chr15_sample_map.tsv:
-          sha256: 667d5289bfd19d6d06961720fb5e2c121ac1104147b9093497343de1830e1cd5
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr15_sample_map.tsv
-        chr16_sample_map.tsv:
-          sha256: fcbc443630b44a4f9eeeecb784e9b5958249ae968f46dbfec0d5fd584e613a91
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr16_sample_map.tsv
-        chr17_sample_map.tsv:
-          sha256: 5893f18499debc65b30367595dd92cc67e4ed1d88f6ba3dab9695f20c849fc13
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr17_sample_map.tsv
-        chr18_sample_map.tsv:
-          sha256: eb1372c2fa2fff58def9bc980c51e4bd4b743bde5e324e8c5b8f61304885f806
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr18_sample_map.tsv
-        chr19_sample_map.tsv:
-          sha256: e7f73e01b2d0e8155a55eca2ce0223f786464ae6ff0694612c15dc851d525e48
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr19_sample_map.tsv
-        chr20_sample_map.tsv:
-          sha256: dc7e6d2f49ddef4aa535e13e8773a5b9ef062b03363ed896031b575df75408b3
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr20_sample_map.tsv
-        chr21_sample_map.tsv:
-          sha256: 58a844f79ea097c95f2e0debd0946b3ccf4f73410f236dfde408e0cf706f534b
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr21_sample_map.tsv
-        chr22_sample_map.tsv:
-          sha256: 21d2b966d8fc71aa33e8e2ad1749cc88539b520690ab424eba4f4fc63e7589a7
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr22_sample_map.tsv
-        chrX_PAR_sample_map.tsv:
-          sha256: d5bbfac645151b1e2ed10ee2e25081428e077d665e40b564d14101f411463982
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chrX_PAR1_sample_map.tsv
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chrX_PAR2_sample_map.tsv
-        chrX_non_PAR_sample_map.tsv:
-          sha256: a1658c50e66755b89702144bf7dbd937d09cbc26d739b115ad73498b309de640
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chrX_non_PAR_sample_map.tsv
-        chrY_sample_map.tsv:
-          sha256: 843befd13b8d53fc744bccc5fab66358ca0364cae06a4de38b31341d388cc245
-          named_as:
-            - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chrY_sample_map.tsv
+    host: github
+    repository: schatzlab/t2t-chm13-chry
+    commit: efad08780736405640560e96322479af549e15bf
+    directory: alignment_variant_calling_pipeline/example_sample_maps
+    sample_maps:
+      chr1_sample_map.tsv:
+        sha256: ac7f29aa5af2fc5cb54fa20d4a1b4829d4fbbe6f666637d02ade5b3c6a56f5d0
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr1_sample_map.tsv
+      chr2_sample_map.tsv:
+        sha256: 5b90b0fd9f6e5416c5e1a9b83e6fff758110abc517b2ddaaec7ddc2f6df81bf0
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr2_sample_map.tsv
+      chr3_sample_map.tsv:
+        sha256: f7b8e41ebdd48a4030007ba74a0886d56c2d510d1aa4af37dda199b5bc3f84ce
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr3_sample_map.tsv
+      chr4_sample_map.tsv:
+        sha256: ceb79753661a0b2b80c89469b15c842dc1902ec1e9978593133269972639b46a
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr4_sample_map.tsv
+      chr5_sample_map.tsv:
+        sha256: a2e060806c0b22afb093b1a757785a91fa5ce0404f3adcf3ff4c935568695787
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr5_sample_map.tsv
+      chr6_sample_map.tsv:
+        sha256: 89016d37f1042dfe6d84cc1007566a967c7914334d8a92433bfda39d6fc1d935
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr6_sample_map.tsv
+      chr7_sample_map.tsv:
+        sha256: 8d47759f9f2505662466558b3c9676baf98a7afcd2fc232afee90bc122e22806
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr7_sample_map.tsv
+      chr8_sample_map.tsv:
+        sha256: e702c497f0dba8602e2c9f0c33232ca1804dc08b5c7ce1d0f7ffe01edcf62910
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr8_sample_map.tsv
+      chr9_sample_map.tsv:
+        sha256: befd01d90b1b93e9c96be76291077965c6701f958e14e2b67233a800aba308c7
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr9_sample_map.tsv
+      chr10_sample_map.tsv:
+        sha256: c28b747eb9730c37e2519c800589d6149282228ab4947419b757f66472b4e6a0
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr10_sample_map.tsv
+      chr11_sample_map.tsv:
+        sha256: c45b8edc1f322eb174fcc82857976b4b839e3a8717d3546ce369b06b619f956e
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr11_sample_map.tsv
+      chr12_sample_map.tsv:
+        sha256: ee8844dd2e833a286b7a94b90491a4db45b29fa1ef1de504e5149215191c2e3f
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr12_sample_map.tsv
+      chr13_sample_map.tsv:
+        sha256: df74511bf4ae3b4811bd5417200e427098dd5f969221c8ea9d29946518e88202
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr13_sample_map.tsv
+      chr14_sample_map.tsv:
+        sha256: dba07162c58cecd993522e60547476fcc2aee097ae60c39700e9926ae3e72fbf
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr14_sample_map.tsv
+      chr15_sample_map.tsv:
+        sha256: 667d5289bfd19d6d06961720fb5e2c121ac1104147b9093497343de1830e1cd5
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr15_sample_map.tsv
+      chr16_sample_map.tsv:
+        sha256: fcbc443630b44a4f9eeeecb784e9b5958249ae968f46dbfec0d5fd584e613a91
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr16_sample_map.tsv
+      chr17_sample_map.tsv:
+        sha256: 5893f18499debc65b30367595dd92cc67e4ed1d88f6ba3dab9695f20c849fc13
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr17_sample_map.tsv
+      chr18_sample_map.tsv:
+        sha256: eb1372c2fa2fff58def9bc980c51e4bd4b743bde5e324e8c5b8f61304885f806
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr18_sample_map.tsv
+      chr19_sample_map.tsv:
+        sha256: e7f73e01b2d0e8155a55eca2ce0223f786464ae6ff0694612c15dc851d525e48
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr19_sample_map.tsv
+      chr20_sample_map.tsv:
+        sha256: dc7e6d2f49ddef4aa535e13e8773a5b9ef062b03363ed896031b575df75408b3
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr20_sample_map.tsv
+      chr21_sample_map.tsv:
+        sha256: 58a844f79ea097c95f2e0debd0946b3ccf4f73410f236dfde408e0cf706f534b
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr21_sample_map.tsv
+      chr22_sample_map.tsv:
+        sha256: 21d2b966d8fc71aa33e8e2ad1749cc88539b520690ab424eba4f4fc63e7589a7
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chr22_sample_map.tsv
+      # One published map for the tars' two (24 name PAR1, 4 PAR2). The gate compares samples, not
+      # files, so this rests on the dataset (measured 2026-10-18): it holds no PAR1- or PAR2-specific
+      # gVCF, its 76,844 1000 Genomes gVCFs are exactly the published maps' paths, so this map's
+      # chrX_PAR.hc.vcf.gz (XY) and chrX.hc.vcf.gz (XX) are the only files those tars could have read.
+      chrX_PAR_sample_map.tsv:
+        sha256: d5bbfac645151b1e2ed10ee2e25081428e077d665e40b564d14101f411463982
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chrX_PAR1_sample_map.tsv
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chrX_PAR2_sample_map.tsv
+      chrX_non_PAR_sample_map.tsv:
+        sha256: a1658c50e66755b89702144bf7dbd937d09cbc26d739b115ad73498b309de640
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chrX_non_PAR_sample_map.tsv
+      chrY_sample_map.tsv:
+        sha256: 843befd13b8d53fc744bccc5fab66358ca0364cae06a4de38b31341d388cc245
+        named_as:
+          - gs://fc-c58482ad-a2f7-4d08-b7fa-553b70fd6c6a/sample_maps/full_sample/chrY_sample_map.tsv

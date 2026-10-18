@@ -13,6 +13,8 @@ import argparse
 import sys
 from pathlib import Path
 
+import requests
+
 from meta_disco.external_files import DEFAULT_EXTERNAL_ROOT, ExternalFileError, fetch, load_external_files
 
 
@@ -29,8 +31,8 @@ def main() -> int:
                     fetched += 1
                 else:
                     kept += 1
-            except ExternalFileError as exc:
-                print(str(exc), file=sys.stderr)
+            except (ExternalFileError, requests.RequestException) as exc:
+                print(f"{file.ref}: {exc}", file=sys.stderr)
                 return 1
     print(f"External files: {fetched} fetched, {kept} already cached, under {args.external_root}")
     return 0

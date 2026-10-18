@@ -1,38 +1,33 @@
 """Files held outside AnVIL that a dataset's files were made from: declared, pinned and cached (#710).
 
 **A workaround.** ANVIL_T2T_CHRY's 1000 Genomes GenomicsDB workspace tars were imported from
-GATK sample-name maps the dataset does not hold, in a bucket that no longer exists. The
-Schatz lab published those maps on GitHub. Until AnVIL holds them (#624), this module
-declares the published copies and keeps them for the dataset; when it does, the catalog
-maps take over through #621's code and this module, its declaration and its cache are
-deleted.
+sample-name maps the dataset does not hold; the Schatz lab published them on GitHub. Until
+AnVIL holds them (#624), this module declares and keeps the published copies; then the
+catalog maps take over (#621) and this module, its declaration and its cache are deleted.
 
 **The declaration** is ``sources/external_files.yaml``, one entry per dataset::
 
     catalog: anvil15
     datasets:
       ANVIL_T2T_CHRY:
-        - host: github
-          repository: schatzlab/t2t-chm13-chry           # owner/name
-          commit: efad08780736405640560e96322479af549e15bf
-          directory: alignment_variant_calling_pipeline/example_sample_maps
-          sample_maps:
-            chr19_sample_map.tsv:
-              sha256: e7f73e01…
-              named_as:                                  # the paths a tar's header names it by
-                - gs://fc-c58482ad-…/sample_maps/full_sample/chr19_sample_map.tsv
+        host: github
+        repository: schatzlab/t2t-chm13-chry           # owner/name
+        commit: efad08780736405640560e96322479af549e15bf
+        directory: alignment_variant_calling_pipeline/example_sample_maps
+        sample_maps:
+          chr19_sample_map.tsv:
+            sha256: e7f73e01…
+            named_as:                                  # the paths a tar's header names it by
+              - gs://fc-c58482ad-…/sample_maps/full_sample/chr19_sample_map.tsv
 
-**Each declared file has an address and a place.** Its address, ``ref``
-(``github:schatzlab/t2t-chm13-chry@<commit>/<directory>/<name>``), is what a lineage line and
-a step's input name it by. Its place in the cache is
-``data/external/<dataset>/github/<owner>/<repo>/<commit>/<directory>/<name>``: the dataset
-first, because the file is held for that dataset alone, as a file's parents are looked for
-in its own dataset (ADR-0002 decision 2). The commit is in both, so an edit upstream is
-another address and another file, never an overwrite of this one.
+**A declared file's address**, ``ref`` (``github:<owner>/<repo>@<commit>/<path>``), is what a
+lineage line and a step's input name it by; its cache path puts the dataset first
+(``data/external/<dataset>/github/…``), as it is held for that dataset alone (ADR-0002 decision
+2). The commit is in both, so an edit upstream is another file, never an overwrite.
 
 :func:`fetch` downloads a declared file into the cache and refuses one whose sha256 is not
 the declared one; :func:`read_text` reads a cached file and refuses one that is missing or
-has changed. :func:`load_external_files` checks the declaration's shape as it loads it.
+has changed, and :func:`read_sample_map` reads its rows. :func:`load_external_files` checks the declaration's shape as it loads it.
 """
 
 from __future__ import annotations
@@ -46,7 +41,7 @@ from pathlib import Path, PurePosixPath
 
 import requests
 
-from .cohort_steps import SAMPLE_MAP_SUFFIX
+from .cohort_steps import SAMPLE_MAP_SUFFIX, parse_sample_map
 from .lineage_map import expect_keys, expect_mapping, expect_name, map_document
 from .slot_map import Readable, unique_key_loader
 
@@ -115,6 +110,14 @@ class Entry:
         """The directory's page at the commit, as the lineage file's envelope names its source."""
         return f"https://github.com/{self.repository}/tree/{self.commit}/{self.directory}"
 
+    def named(self, path: str) -> ExternalFile | None:
+        """The sample map a file names by ``path`` (one of its ``named_as``), or None."""
+        return next((f for f in self.sample_maps if path in f.named_as), None)
+
+    def by_ref(self, ref: str) -> ExternalFile | None:
+        """The sample map whose address is ``ref``, or None."""
+        return next((f for f in self.sample_maps if f.ref == ref), None)
+
 
 @dataclass(frozen=True)
 class ExternalFiles:
@@ -123,18 +126,10 @@ class ExternalFiles:
     catalog: str
     entries: tuple[Entry, ...]
 
-    def entry(self, dataset: str) -> Entry | None:
-        return next((e for e in self.entries if e.dataset == dataset), None)
-
-    def named(self, dataset: str, path: str) -> ExternalFile | None:
-        """The sample map of ``dataset`` a file names by ``path`` (one of its ``named_as``), or None."""
-        entry = self.entry(dataset)
-        return next((f for f in entry.sample_maps if path in f.named_as), None) if entry is not None else None
-
     def by_ref(self, dataset: str, ref: str) -> ExternalFile | None:
         """The sample map of ``dataset`` whose address is ``ref``, or None: a file is held for its dataset alone."""
-        entry = self.entry(dataset)
-        return next((f for f in entry.sample_maps if f.ref == ref), None) if entry is not None else None
+        entry = next((e for e in self.entries if e.dataset == dataset), None)
+        return entry.by_ref(ref) if entry is not None else None
 
 
 def default_external_files_resource():
@@ -148,24 +143,23 @@ _UniqueKeyLoader = unique_key_loader(_WHERE)
 def load_external_files(source: Readable | None = None) -> ExternalFiles:
     """Load and check the declaration, the bundled one by default; ``ValueError`` naming where it is wrong.
 
-    Checked here: the top level (``lineage_map.map_document``); one entry per dataset; the
+    Checked here: the top level (``lineage_map.map_document``); a dataset name that is one
+    directory name; per dataset its entry's
     host, ``github`` the one there is; a repository ``owner/name``; a 40-hex commit; a
-    directory; and per sample map a name ending ``_sample_map.tsv``, a 64-hex sha256 and a
+    directory, no part of it or of the repository ``.`` or ``..``; and per sample map a name ending ``_sample_map.tsv``, a 64-hex sha256 and a
     non-empty list of distinct paths, no path named for two maps of the dataset.
     """
     resource = source if source is not None else default_external_files_resource()
     document = map_document(resource, _UniqueKeyLoader, _WHERE, set())
     entries = []
-    for dataset, listed in document["datasets"].items():
-        at = f"{_WHERE} {dataset}"
-        # The importer writes one lineage file per dataset, so a dataset has one source.
-        if not isinstance(listed, list) or len(listed) != 1:
-            raise ValueError(f"{at}: must be a list of one entry — one dataset, one lineage file")
-        entries.append(_entry(dataset, listed[0], f"{at} entry"))
+    for dataset, entry in document["datasets"].items():
+        entries.append(_entry(dataset, entry, f"{_WHERE} {dataset}"))
     return ExternalFiles(catalog=document["catalog"], entries=tuple(entries))
 
 
 def _entry(dataset: str, entry: object, at: str) -> Entry:
+    if not isinstance(dataset, str) or dataset in (".", "..") or "/" in dataset or not dataset:
+        raise ValueError(f"{at}: the dataset {dataset!r} is not one directory name")
     expect_keys(entry, _ENTRY_KEYS, _ENTRY_KEYS, at)
     assert isinstance(entry, dict)
     host = expect_name(entry["host"], f"{at} host")
@@ -178,6 +172,8 @@ def _entry(dataset: str, entry: object, at: str) -> Entry:
     if not isinstance(commit, str) or not _COMMIT.match(commit):
         raise ValueError(f"{at} commit: is {commit!r}, not a full 40-character commit hash")
     directory = expect_name(entry["directory"], f"{at} directory").strip("/")
+    if any(part in (".", "..", "") for part in (*repository.split("/"), *directory.split("/"))):
+        raise ValueError(f"{at}: a repository or directory part is '.', '..' or empty")
     expect_mapping(entry["sample_maps"], f"{at} sample_maps", "file")
     maps = []
     seen: dict[str, str] = {}
@@ -234,6 +230,17 @@ def fetch(file: ExternalFile, root: Path, get: Download = download) -> bool:
     partial.write_bytes(data)
     partial.replace(path)
     return True
+
+
+def read_sample_map(file: ExternalFile, root: Path) -> tuple[tuple[str, str], ...]:
+    """The rows, ``(sample, path)``, of a cached declared sample map (``cohort_steps.parse_sample_map``).
+
+    ``ExternalFileError`` where :func:`read_text` refuses it, or it is no sample map.
+    """
+    rows = parse_sample_map(read_text(file, root))
+    if rows is None:
+        raise ExternalFileError(f"{file.ref}: not a sample map (rows of a sample and a VCF path)")
+    return rows
 
 
 def read_text(file: ExternalFile, root: Path) -> str:
