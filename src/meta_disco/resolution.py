@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 
@@ -20,6 +21,11 @@ from .source_evidence import EvidenceEntry
 from .value_map import ValueMap, claims_from
 
 
+def identifier_key(identifier: dict) -> str:
+    """An ``EntityIdentifier`` dict's canonical JSON spelling: equal exactly when the identifiers are."""
+    return json.dumps(identifier, sort_keys=True)
+
+
 def declaration(entry: dict, slot: str | None = None) -> str | None:
     """What a claim, or inference's conclusion, declares for resolution: a value, ``not_applicable``, or None.
 
@@ -29,7 +35,12 @@ def declaration(entry: dict, slot: str | None = None) -> str | None:
     one function serves both. Given the ``slot``, a record's stored value is read as
     resolution reads it (``models.settled_value``): pass it for an entry read off a record,
     as a reconciled slot's ``inferred`` is.
+
+    A donor's parent claim declares an identifier, a dict (#582): it is read as its canonical
+    JSON spelling (:func:`identifier_key`), so every declaration is a string resolution can compare.
     """
+    if isinstance(entry.get("value"), dict):
+        return identifier_key(entry["value"])
     if entry.get("value") is not None:
         return entry["value"] if slot is None else settled_value(slot, entry["value"])
     if entry.get("status") == NOT_APPLICABLE:
@@ -53,7 +64,8 @@ def settle(
        ``conflict``, unless the values nest in the slot's ``is_a`` hierarchy
        (:func:`~.schema_vocab.most_specific`, #473): ``CHM13`` beside
        ``T2T-CHM13v2.0`` is one answer at two levels of detail, and the deepest is
-       the value (4.4).
+       the value (4.4). A slot with no vocabulary (a donor's family, #582) has no
+       hierarchy, so two of its values always conflict.
     3. An inherited ``mixed`` beside any declaration: ``conflict``, since one value
        contradicts a lineage that has none, and ``not_applicable`` stands for the values
        it would contradict (4.9). Alone it declares nothing, and the slot goes on.

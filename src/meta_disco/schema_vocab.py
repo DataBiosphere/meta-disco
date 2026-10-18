@@ -15,7 +15,7 @@ from importlib.resources import files
 
 import yaml
 
-from .models import CLASSIFICATION_FIELDS, DONOR_FIELDS
+from .models import CLASSIFICATION_FIELDS, DONOR_FIELDS, FAMILY_FIELDS
 
 # Classification field -> the enum that defines its permissible values. By
 # convention each dimension's enum is named ``<field>_enum`` in the schema, so
@@ -194,11 +194,15 @@ def most_specific(field: str, values: Iterable[str]) -> str | None:
     ``T2T-CHM13v2.0`` are both true of a v2.0 file — so the deepest is the answer
     (#473). Two siblings (``T2T-CHM13v1.0`` beside ``T2T-CHM13v2.0``) do not nest,
     and neither does anything outside the vocabulary (``not_applicable``) beside a
-    different value. A single value is returned as it is, in the vocabulary or not.
+    different value, nor two values of a donor's family slot, which has no vocabulary (#582). A
+    single value is returned as it is, in the vocabulary or not; two values of any other field
+    outside ``VOCABULARY_ENUMS`` raise as ``dimension_values`` does.
     """
     distinct = set(values)
     if len(distinct) == 1:
         return next(iter(distinct))
+    if field in FAMILY_FIELDS:
+        return None
     if not all(value_in_vocabulary(field, v) for v in distinct):
         return None
     for candidate in distinct:

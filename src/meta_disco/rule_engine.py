@@ -7,6 +7,8 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from pydantic import ValidationError
+
 from .file_name import FileName, Format
 from .models import (
     AUTHORABLE_STATUSES,
@@ -35,6 +37,7 @@ from .models import (
     stored_value,
 )
 from .rule_loader import UnifiedRule, get_unified_rules
+from .schema.classification_model import EntityIdentifier, IdentifierNamespaceEnum
 
 if TYPE_CHECKING:
     from .validators.header_extractors import SAMHeader, VCFHeader
@@ -144,13 +147,26 @@ class ExtendedFileInfo:
         )
 
 
+def _is_identifier(value: object) -> bool:
+    """Whether ``value`` is an ``EntityIdentifier`` dict: the generated model's fields, none null, and
+    the schema's two class rules the generator drops, a ``dataset`` exactly when the namespace is
+    ``dataset_local``."""
+    if not isinstance(value, dict) or None in value.values():
+        return False
+    try:
+        EntityIdentifier.model_validate(value)
+    except ValidationError:
+        return False
+    return ("dataset" in value) == (value["namespace"] == IdentifierNamespaceEnum.dataset_local.value)
+
+
 def make_claim(
     *,
     source_type: str,
     reason: str | None = None,
     rule_id: str | None = None,
     tier: int | None = None,
-    value: str | None = None,
+    value: str | dict | None = None,
     status: str | None = None,
     state: str | None = None,
     source: ClaimSource | None = None,
@@ -173,9 +189,12 @@ def make_claim(
     a ``state`` — declaring two or none raises rather than silently picking one.
     ``value``/``status`` is the original invariant (the same one ``rule_loader``
     enforces for a rule's ``then`` vs ``then.status`` — epic #116 / #136), widened
-    by one arm. A ``status`` claim declares a non-classified sentinel only
-    (``not_applicable`` / ``not_classified`` — the authorable statuses, never
-    ``classified``, which is expressed as a ``value`` claim). A ``state`` claim
+    by one arm. A ``value`` is a string (a vocabulary term, or a donor's family id as
+    written, #582), or, on a claim for a donor's parent, the parent's identifier as an
+    ``EntityIdentifier`` dict. A ``status``
+    claim declares a non-classified sentinel only (``not_applicable`` /
+    ``not_classified`` — the authorable statuses, never ``classified``, which is
+    expressed as a ``value`` claim). A ``state`` claim
     declares one of the claim states (``unmapped`` / ``no_vocabulary_term`` /
     ``declined``): the source was consulted and produced no vocabulary value.
     An unknown status or state raises here rather than being passed through as a
@@ -368,8 +387,10 @@ def make_claim(
         raise ValueError(f"claim from {producer!r} has reason {reason!r}, which is not a string")
     # Unrolled rather than looped over a tuple of pairs: this runs a few million times
     # per corpus run, and building that tuple was five allocations of it per call.
-    if value is not None and not isinstance(value, str):
-        raise ValueError(f"claim from {producer!r} has value {value!r}, which is not a string")
+    if value is not None and not isinstance(value, str) and not _is_identifier(value):
+        raise ValueError(
+            f"claim from {producer!r} has value {value!r}, which is neither a string nor an EntityIdentifier"
+        )
     if raw_value is not None and not isinstance(raw_value, str):
         raise ValueError(f"claim from {producer!r} has raw_value {raw_value!r}, which is not a string")
     # `unmapped` and `no_vocabulary_term` are *about* a raw value: one says no mapping

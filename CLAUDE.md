@@ -295,7 +295,7 @@ evidence}` entry — plus the controlled vocabulary:
     parents than inference names there, #609; a generic `Activity` beside a specific one naming another
     parent) gives no
     `generated_by`; both are counted in the report's `lineage` block, never written on a record. A
-    sample parent waits for #582. A file whose only steps are generic gets none, counted as
+    sample parent gives no input (no issue yet). A file whose only steps are generic gets none, counted as
     `generic_only`. The inference artifact's `generated_by` is never changed.
   - **Reconcile carries each parent's answer across that step** (#571, contract 4.9,
     `reconcile_inherit`): for each input role and each dimension its activity passes, the
@@ -435,7 +435,12 @@ evidence}` entry — plus the controlled vocabulary:
     it ties to, as `repository_ids` (many to one), and refuses one tying to two records. The value
     map translates both kinds of slot (`models.TRANSLATED_FIELDS`), a row declaring only slots of
     the kind it matches, and its seeding and review queue read the entity root beside the slot
-    root. No donor value is copied onto a file record.
+    root. **A donor's family** (#582, `models.FAMILY_FIELDS`) is `mother`, `father` and `family_id`,
+    settled the same way but never translated: a parent string is recognised as a donor through
+    `rules/sample_namespaces.yaml` and its claim declares the parent's `EntityIdentifier` (the one
+    claim value that is not a string), citing that identifier rule; PED's `0` makes no claim and is
+    counted; a family id is taken as written (`code_rules.FAMILY_ID_AS_WRITTEN`, an `ENTITY_RULES`
+    entry). Every parent named gets a donor record. No donor value is copied onto a file record.
   - **A producer is declared once**, in `producers.PRODUCERS` — the thirteen writers of a
     run's `*_classifications.json` files. Add one there, never to a second list:
     `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,

@@ -39,6 +39,11 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     parent's across a step that passes them (4.9, #668), as a file's step is settled (ADR-0002 decision 6),
     not by 4.x's resolution, and only a reader that asks for it is
     given its lines (`source_evidence.iter_evidence`).
+    A **donor's slots** (#693, #582) are imported as entity evidence, keyed by the donor's identifier
+    rather than a file's key (`entity_evidence`), and settled on its `DonorRecord` by 4.x's resolution.
+    `phenotypic_sex` and `genetic_ancestry` are translated by rows, as a dimension is. A donor's family
+    (`models.FAMILY_FIELDS`) never is: `mother` and `father` are read through the identifier rules, as
+    `samples` is, and `family_id` is taken as written.
     The importer names **both ends of the key correspondence** — `source_key` as the source publishes it,
     `target_key` as one of ours — and writes the value already in our space (#401). Evidence is attached to a
     **file** only at the join (6.7), which is what makes an unmatched or ambiguous row representable rather
@@ -141,7 +146,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 3.2 Every claim names the rule that made it — including an identity mapping. There is no implicit copy.
 
 3.3 A claim that declares a value declares a term in **that slot's** vocabulary, or it is not a claim.
-    The vocabularies are per slot, and a term of one slot is not a term of another.
+    The vocabularies are per slot, and a term of one slot is not a term of another. The one exception is a
+    donor's family (2.1), which has no vocabulary: a parent's claim declares the parent's identifier, and a
+    family id's the source's string as written.
 
 3.4 A rule that maps imported evidence matches on `(slot, raw_value)`, normalized per 3.5, and may
     condition on provenance — on `(source, dataset)`, and no finer. Table and column belong to the slot map
@@ -514,7 +521,7 @@ importer's half is built — 7.12 is enforced (below), and the published importe
 - **4.9 does not reach every derivation edge.** It is built at reconcile (#571, `reconcile_inherit`) and
   crosses only a reconciled file's step: the edges inference writes from a file's name (#356) and the links
   the source tables state (#583, #584), merged into that step (#577). Nothing is inherited across a link that
-  gives no step: a sample parent (#582), a parent no file or two files of the dataset carry, a step
+  gives no step: a sample parent (no issue yet; #582 became a donor's family), a parent no file or two files of the dataset carry, a step
   conflict, or a step only the generic `Activity` names. Nor does the inference artifact carry any of it: an
   index file's carried dimensions are `not_classified` there, and filled only at reconcile. (A checksum's
   are `not_applicable`: `ChecksumActivity` passes nothing, #596.)

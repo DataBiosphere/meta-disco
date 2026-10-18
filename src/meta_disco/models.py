@@ -201,6 +201,22 @@ EVIDENCE_FIELDS = (*CLASSIFICATION_FIELDS, SAMPLES_FIELD)
 DONOR_FIELDS = ("phenotypic_sex", "genetic_ancestry")
 TRANSLATED_FIELDS = (*CLASSIFICATION_FIELDS, *DONOR_FIELDS)
 
+# A donor's family (#582): its parents, each another donor's identifier, recognised through
+# `rules/sample_namespaces.yaml`, and its family id, taken as written. Settled as the donor's
+# other slots are, from entity evidence, but never translated: neither value has a
+# vocabulary for the value map to translate into.
+MOTHER = "mother"
+FATHER = "father"
+FAMILY_ID = "family_id"
+PARENT_FIELDS = (MOTHER, FATHER)
+FAMILY_FIELDS = (*PARENT_FIELDS, FAMILY_ID)
+# A PED file's parent "not known" (#582), which 1000 Genomes', HPRC's and HPRC_R2's tables write:
+# it names no parent, so reconcile makes no claim of it and counts it apart from a parent no
+# identifier rule recognises, and the entity map's check leaves it out of a parent column's values.
+UNKNOWN_PARENT = "0"
+# A donor record's settled slots, in the order it writes them.
+DONOR_SLOTS = (*DONOR_FIELDS, *FAMILY_FIELDS)
+
 # The entity evidence fields naming a repository's own identifier for a donor or a sample
 # (#669): AnVIL's `donor_id` and `biosample_id`, listed on the record they tie to as
 # `repository_ids`. An alias, not a slot: never translated by the value map, never settled.

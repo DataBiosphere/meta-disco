@@ -10,8 +10,9 @@ each line an ``EntityEvidenceRow``.
 **A line is a cell, as written** (contract 1.1, 1.4): the identifier string the row names
 the donor by, and the cell's value — a string verbatim, anything else as ``json.dumps``
 spells it (1000 Genomes' ``pedigree.sex`` is the number ``1``). Neither is interpreted
-here: the identifier rules recognise the identifier and the value map translates the
-value, both at reconcile. A null or empty-list cell, or a row whose identifier cell is not
+here: the identifier rules recognise the identifier and, at reconcile, the value map
+translates a sex or ancestry value, while a family value (``models.FAMILY_FIELDS``, #582) is
+read there as written or as a parent's identifier. A null or empty-list cell, or a row whose identifier cell is not
 a non-empty string, writes nothing and is counted.
 
 **AnVIL's published donor and biosample** name no identifier of ours: each is attached to
@@ -43,7 +44,13 @@ from .azul_manifest import (
 )
 from .entity_evidence import write_entity_file
 from .entity_map import EntityMap, EntityTable, PublishedEntities
-from .models import JOIN_KEY_ENTITY_IDENTIFIER, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
+from .models import (
+    JOIN_KEY_ENTITY_IDENTIFIER,
+    PARENT_FIELDS,
+    SOURCE_PUBLISHED_VALUE,
+    SOURCE_REPOSITORY_METADATA,
+    UNKNOWN_PARENT,
+)
 from .sample_identity import DONOR, REPOSITORY_ID_FIELD, EntityKind, identifier_rules
 from .schema.classification_model import EntityEvidenceRow, ImporterSourceTypeEnum, JoinKeyEnum
 from .source_evidence import (
@@ -115,7 +122,8 @@ def check(entity_map: EntityMap, manifest_root: Path, catalog: str, datasets: li
     column appear on some row; it serves a kind, a donor where it reads a slot or a published
     donor is made from its rows, a sample where a published sample is; and for each kind it
     serves, at least half the identifier column's non-empty strings are recognised as that
-    kind by the identifier rules, or the column names something else. Per published table
+    kind by the identifier rules, or the column names something else; and at least half of each
+    parent column's (#582) non-empty strings other than PED's ``0`` are recognised as donors. Per published table
     with rows: its source rows and repository identifier columns appear on some row, and
     every table its records were made from is mapped. Not that a published slot column holds
     a value: 1000 Genomes' donors carry no published sex.
@@ -142,6 +150,9 @@ def _check_dataset(entity_map: EntityMap, dataset: str, path: Path) -> list[str]
     rows: Counter = Counter()
     seen: dict[str, set[str]] = {name: set() for name in tables}
     identifiers: dict[str, list[str]] = {name: [] for name in tables}
+    parents: dict[tuple[str, str], list[str]] = {
+        (name, column): [] for name, t in tables.items() for f in PARENT_FIELDS for column in t.slots.get(f, ())
+    }
     sources: dict[str, set[str]] = {name: set() for name in published}
     published_seen: dict[str, set[str]] = {name: set() for name in published}
     for entity_type, row in iter_verbatim_entities(path, {*tables, *published}):
@@ -156,6 +167,10 @@ def _check_dataset(entity_map: EntityMap, dataset: str, path: Path) -> list[str]
         raw = row.get(tables[entity_type].identifier)
         if isinstance(raw, str) and raw:
             identifiers[entity_type].append(raw)
+        for (name, column), values in parents.items():
+            parent = row.get(column) if name == entity_type else None
+            if isinstance(parent, str) and parent and parent != UNKNOWN_PARENT:
+                values.append(parent)
     problems = []
     for name, table in tables.items():
         at = f"{dataset}/{name}"
@@ -175,6 +190,13 @@ def _check_dataset(entity_map: EntityMap, dataset: str, path: Path) -> list[str]
                     f"{at}: {len(missed):,} of {len(identifiers[name]):,} values of {table.identifier!r} are not "
                     f"a {kind} any identifier rule recognises (e.g. {missed[:_EXAMPLES]})"
                 )
+    for (name, column), values in parents.items():
+        missed = [raw for raw in values if rules.recognise(raw, dataset, DONOR) is None]
+        if 2 * len(missed) > len(values):
+            problems.append(
+                f"{dataset}/{name}: {len(missed):,} of {len(values):,} values of parent column {column!r} are not "
+                f"a donor any identifier rule recognises (e.g. {missed[:_EXAMPLES]})"
+            )
     for entity in entity_map.published:
         if rows[entity.table]:
             for column in (entity.source_rows, entity.repository_id):

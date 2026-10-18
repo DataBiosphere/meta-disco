@@ -29,6 +29,11 @@ dimension either: out of the file's own content (a header, a GATK sample map's r
 reconcile, out of its parent's settled samples (#668). It is declared in ``SAMPLE_RULES``; its
 id is what a file's ``samples.named_by`` carries for that source.
 
+An **entity rule** (#582) gives a donor's slot an answer, not a file's dimension. It is
+declared in ``ENTITY_RULES``; its id is what the slot's claims carry as ``rule_id``. A donor's
+parent claims cite instead the identifier rule (``rules/sample_namespaces.yaml``) that
+recognised the parent.
+
 ``basis`` says what a rule reads to reach its answer, in the report's terms
 (``BASES``). A YAML rule's basis is worked out from its ``when`` by the report. A code
 rule's is declared, because a code rule has no ``when`` to work it out from.
@@ -41,10 +46,12 @@ from dataclasses import dataclass
 
 from . import activities
 from .models import (
+    FAMILY_ID,
     SOURCE_CONTENT_READ,
     SOURCE_CONTIG_DETECTION,
     SOURCE_DERIVATION_INHERITANCE,
     SOURCE_FILENAME_RULE,
+    SOURCE_REPOSITORY_METADATA,
 )
 
 # What a rule reads to reach its answer. All but the last describe a rule of ours; a
@@ -75,6 +82,7 @@ COHORT_STEPS = "src/meta_disco/cohort_steps.py"
 METADATA_SCHEMA = "src/meta_disco/metadata_schema.py"
 SAMPLE_IDENTITY = "src/meta_disco/sample_identity.py"
 RECONCILE_SAMPLES = "src/meta_disco/reconcile_samples.py"
+RECONCILE_ENTITIES = "src/meta_disco/reconcile_entities.py"
 
 
 @dataclass(frozen=True)
@@ -137,6 +145,21 @@ class SampleRule:
     module: str
     source_type: str
     reads: str
+    rationale: str
+
+
+@dataclass(frozen=True)
+class EntityRule:
+    """A rule that gives a donor's slot an answer from entity evidence (#582), at reconcile.
+
+    ``sets`` is the donor slots it can claim; ``reads`` and ``rationale`` as a code rule's.
+    """
+
+    id: str
+    module: str
+    source_type: str
+    reads: str
+    sets: tuple[str, ...]
     rationale: str
 
 
@@ -773,6 +796,22 @@ SAMPLES_INHERITED_FROM_PARENT = SampleRule(
 )
 
 SAMPLE_RULES = (BAM_READ_GROUP_SAMPLES, VCF_SAMPLE_COLUMNS, SAMPLE_MAP_ROWS, SAMPLES_INHERITED_FROM_PARENT)
+
+FAMILY_ID_AS_WRITTEN = EntityRule(
+    id="family_id_as_written",
+    module=RECONCILE_ENTITIES,
+    source_type=SOURCE_REPOSITORY_METADATA,
+    reads="a submitter table's family id column (a PED file's `familyid`), on the row naming the donor",
+    sets=(FAMILY_ID,),
+    rationale=(
+        "A family id is a name for a group of relatives, with no vocabulary to translate it into, so the "
+        "string is the answer as the source wrote it. It means something only among datasets sharing a "
+        "numbering: HPRC and HPRC_R2 reuse 1000 Genomes' ids, and two sources writing different ids for "
+        "one donor are a conflict, never a choice."
+    ),
+)
+
+ENTITY_RULES = (FAMILY_ID_AS_WRITTEN,)
 
 FETCH_FAILED = CodeMarker(
     id="fetch_failed",

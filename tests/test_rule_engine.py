@@ -588,6 +588,32 @@ class TestMakeClaim:
                 match_exact="yes",  # type: ignore[arg-type]
             )
 
+    def test_a_value_may_be_an_entity_identifier(self):
+        # A donor's parent (#582) is declared as the parent's identifier, the shape its record stores.
+        parent = {"id": "NA12892", "namespace": "coriell"}
+        claim = make_claim(
+            rule_id="coriell", source_type=SOURCE_EXTERNAL_GROUND_TRUTH, source=EXTERNAL_SOURCE, value=parent
+        )
+        assert claim["value"] == parent
+
+    @pytest.mark.parametrize(
+        "value",
+        [
+            7,
+            {"id": "NA12892"},
+            {"id": "NA12892", "namespace": "coriell", "extra": "x"},
+            {"id": 1, "namespace": "coriell"},
+            {"id": "NA12892", "namespace": "not_a_namespace"},
+            {"id": "NA12892", "namespace": "coriell", "dataset": None},
+            {"id": "NA12892", "namespace": "coriell", "dataset": "D"},
+            {"id": "S1", "namespace": "dataset_local"},
+            {"id": "S1", "namespace": "dataset_local", "dataset": None},
+        ],
+    )
+    def test_rejects_a_value_neither_a_string_nor_an_entity_identifier(self, value):
+        with pytest.raises(ValueError, match="neither a string nor an EntityIdentifier"):
+            make_claim(rule_id="m", source_type=SOURCE_EXTERNAL_GROUND_TRUTH, source=EXTERNAL_SOURCE, value=value)
+
     @pytest.mark.parametrize("state", [UNMAPPED, NO_VOCABULARY_TERM])
     def test_rejects_a_value_shaped_state_with_no_raw_value(self, state):
         # Both states are *about* a raw value — no mapping entry exists for it, or

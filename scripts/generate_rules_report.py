@@ -22,8 +22,9 @@ going unclassified.
 
 The counts come from one streamed pass over a reconciled run (``iter_reconciled_records``),
 then its donor records (``DONORS_FILE``, #693), each counted as one "file" under the dataset
-:data:`DONOR_RECORDS`: a donor's slots for the value-map rows that settle them, and the
-identifier rule that recognises its identifier. For each claim carrying a ``rule_id``, per rule:
+:data:`DONOR_RECORDS`: a donor's slots for the value-map rows that settle them, its family's
+(#582) for the identifier rules that recognise its parents and ``code_rules.ENTITY_RULES``, and
+the identifier rule that recognises its identifier. For each claim carrying a ``rule_id``, per rule:
 
 - **claims**, and **files** (the records it appeared on, each counted once, overall and
   per dataset).
@@ -70,7 +71,7 @@ import yaml
 from meta_disco import code_rules
 from meta_disco.activity_map import default_activity_map_resource, describe_match, load_activity_map
 from meta_disco.callers import callers_in_reason, load_callers
-from meta_disco.models import DONOR_FIELDS, MIXED, SAMPLES_FIELD, SOURCE_DERIVATION_INHERITANCE
+from meta_disco.models import DONOR_SLOTS, MIXED, SAMPLES_FIELD, SOURCE_DERIVATION_INHERITANCE
 from meta_disco.output_utils import (
     DONORS_FILE,
     RUN_DIR_FORMAT,
@@ -174,8 +175,9 @@ SAMPLE_RULES_NOTE = (
     "Rules that say which samples a file's data comes from, rather than giving a field an answer (#357). The code "
     "rules read the file's own content (a header, a sample map's rows), or at reconcile its parent's settled "
     "samples (#668); the identifier rules (`rules/sample_namespaces.yaml`) say which strings are "
-    "samples and in which namespace, and are what a submitter table's sample is cited by. Counted by the sources "
-    "a reconciled record's `samples` lists."
+    "samples and in which namespace, and are what a submitter table's sample, and a donor's parent (#582), is "
+    "cited by. The donor rule `family_id_as_written` gives a donor its family id. Counted by the sources a "
+    "reconciled record's `samples` lists, and the claims on the donor records' family slots."
 )
 UNDECLARED_HEAD = "Rule names with no rule behind them"
 SAMPLE_NAMESPACES = "src/meta_disco/rules/sample_namespaces.yaml"
@@ -422,7 +424,7 @@ def donor_records(run_dir: Path):
         yield {
             _DONOR: True,
             "dataset_title": DONOR_RECORDS,
-            "classifications": {slot: donor[slot] for slot in DONOR_FIELDS},
+            "classifications": {slot: donor[slot] for slot in DONOR_SLOTS if slot in donor},
             SAMPLES_FIELD: {"named_by": [{"rule_id": got.rule_id}]} if got is not None else None,
         }
 
@@ -517,10 +519,11 @@ def _names(rule) -> str:
 
 
 def sample_rule_rows() -> list[dict]:
-    """The sample rules (#357): ``code_rules.SAMPLE_RULES`` (the file-content readers and the parent's, #668), then each identifier rule."""
+    """The sample and donor rules: ``code_rules.SAMPLE_RULES`` (#357; the file-content readers and the parent's, #668),
+    ``code_rules.ENTITY_RULES`` (#582), then each identifier rule."""
     rows = [
         {"id": r.id, "reads": r.reads, "rationale": r.rationale, "defined_in": r.module}
-        for r in code_rules.SAMPLE_RULES
+        for r in (*code_rules.SAMPLE_RULES, *code_rules.ENTITY_RULES)
     ]
     rows += [
         {
@@ -640,7 +643,7 @@ def build(
     return {
         "run": run_dir.name,
         "records": n,
-        "provenance": f"{len(rules)} rules, {len(edge_rules)} edge rules and {len(sample_rules)} sample rules. "
+        "provenance": f"{len(rules)} rules, {len(edge_rules)} edge rules and {len(sample_rules)} sample and donor rules. "
         f"Counts from classifying {n:,} files"
         + (f" on {date}" if date else "")
         + f" (output folder {run_dir.name})"
@@ -762,7 +765,7 @@ def render_markdown(data: dict) -> str:
             for e in data["edge_rules"]
         ],
     )
-    lines += ["", "## Sample rules", "", SAMPLE_RULES_NOTE, ""]
+    lines += ["", "## Sample and donor rules", "", SAMPLE_RULES_NOTE, ""]
     lines += md_table(
         ["id", "reads", "files", "rationale", "in"],
         [
