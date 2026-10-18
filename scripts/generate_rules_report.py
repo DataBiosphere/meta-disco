@@ -24,7 +24,10 @@ The counts come from one streamed pass over a reconciled run (``iter_reconciled_
 then its donor records (``DONORS_FILE``, #693), each counted as one "file" under the dataset
 :data:`DONOR_RECORDS`: a donor's slots for the value-map rows that settle them, its family's
 (#582) for the identifier rules that recognise its parents and ``code_rules.ENTITY_RULES``, and
-the identifier rule that recognises its identifier. For each claim carrying a ``rule_id``, per rule:
+the identifier rule that recognises its identifier; then its sample records (``SAMPLES_FILE``, #699),
+counted the same way under :data:`SAMPLE_RECORDS`, for a sample's slots and the identifier rule that
+recognises its identifier. For each claim carrying a
+``rule_id``, per rule:
 
 - **claims**, and **files** (the records it appeared on, each counted once, overall and
   per dataset).
@@ -71,10 +74,11 @@ import yaml
 from meta_disco import code_rules
 from meta_disco.activity_map import default_activity_map_resource, describe_match, load_activity_map
 from meta_disco.callers import callers_in_reason, load_callers
-from meta_disco.models import DONOR_SLOTS, MIXED, SAMPLES_FIELD, SOURCE_DERIVATION_INHERITANCE
+from meta_disco.models import DONOR_SLOTS, MIXED, SAMPLE_SLOTS, SAMPLES_FIELD, SOURCE_DERIVATION_INHERITANCE
 from meta_disco.output_utils import (
     DONORS_FILE,
     RUN_DIR_FORMAT,
+    SAMPLES_FILE,
     find_latest_run,
     iter_reconciled_artifact,
     iter_reconciled_records,
@@ -82,7 +86,7 @@ from meta_disco.output_utils import (
 from meta_disco.reconcile import declaration
 from meta_disco.rule_engine import CONFLICT_MARKER, CONTENT_TIER, NOT_CLASSIFIED_MARKER
 from meta_disco.rule_loader import RuleLoader, default_rules_resource
-from meta_disco.sample_identity import DONOR, identifier_rule_declarations, identifier_rules
+from meta_disco.sample_identity import DONOR, SAMPLE, identifier_rule_declarations, identifier_rules
 from meta_disco.schema_vocab import marker_values, value_ancestors, value_in_vocabulary
 from meta_disco.summaries import embed_json, md_code, md_table
 from meta_disco.value_map import default_value_map_resource, load_value_map
@@ -176,8 +180,10 @@ SAMPLE_RULES_NOTE = (
     "rules read the file's own content (a header, a sample map's rows), or at reconcile its parent's settled "
     "samples (#668); the identifier rules (`rules/sample_namespaces.yaml`) say which strings are "
     "samples and in which namespace, and are what a submitter table's sample, and a donor's parent (#582), is "
-    "cited by. The donor rule `family_id_as_written` gives a donor its family id. Counted by the sources a "
-    "reconciled record's `samples` lists, and the claims on the donor records' family slots."
+    "cited by. The donor rule `family_id_as_written` gives a donor its family id, and the sample rule "
+    "`anatomical_site_as_written` a sample its site (#699). Counted by the sources a reconciled record's "
+    "`samples` lists, the identifier rule keying each donor and sample record, and the claims on those "
+    "records' slots."
 )
 UNDECLARED_HEAD = "Rule names with no rule behind them"
 SAMPLE_NAMESPACES = "src/meta_disco/rules/sample_namespaces.yaml"
@@ -406,33 +412,57 @@ class Tally:
     source_types: Counter = field(default_factory=Counter)
 
 
-# The dataset a donor record is counted under, and the key marking an adapted donor record (:func:`donor_records`).
+# The datasets a donor and a sample record are counted under, and the key marking an adapted record of
+# either (:func:`donor_records`, :func:`sample_records`), which is not counted as a file.
 DONOR_RECORDS = "(donor records)"
-_DONOR = "_donor"
+SAMPLE_RECORDS = "(sample records)"
+_ENTITY = "_entity"
 
 
 def donor_records(run_dir: Path):
     """A run's donor records (#693) in the shape :func:`tally` reads: a donor's slots as its classifications,
     and the identifier rule that recognises its identifier as its samples' one source. Nothing for a run
     reconciled before #693, which has no donor file."""
-    if not (run_dir / "reconciled" / DONORS_FILE).exists():
+    return _entity_records(run_dir, DONORS_FILE, DONOR_RECORDS, DONOR_SLOTS, _named_by(DONOR))
+
+
+def _named_by(kind):
+    """The identifier rule recognising a record of ``kind`` by its identifier, as its samples' one source."""
+
+    def named_by(record: dict) -> dict | None:
+        identifier = record["identifier"]
+        got = identifier_rules().recognise(identifier["id"], identifier.get("dataset"), kind)
+        return {"named_by": [{"rule_id": got.rule_id}]} if got is not None else None
+
+    return named_by
+
+
+def sample_records(run_dir: Path):
+    """A run's sample records (#699) in the shape :func:`tally` reads: a sample's slots as its classifications,
+    and the identifier rule that recognises its identifier as its samples' one source. Nothing for a run
+    reconciled before #693, which has no sample file."""
+    return _entity_records(run_dir, SAMPLES_FILE, SAMPLE_RECORDS, SAMPLE_SLOTS, _named_by(SAMPLE))
+
+
+def _entity_records(run_dir: Path, name: str, label: str, slots: tuple[str, ...], named_by):
+    """Each record of the reconciled artifact ``name``, adapted for :func:`tally`: counted under ``label``,
+    its ``slots`` (those it carries) as classifications, ``named_by`` its samples' sources."""
+    if not (run_dir / "reconciled" / name).exists():
         return
-    rules = identifier_rules()
-    for donor in iter_reconciled_artifact(run_dir, DONORS_FILE):
-        identifier = donor["identifier"]
-        got = rules.recognise(identifier["id"], identifier.get("dataset"), DONOR)
+    for record in iter_reconciled_artifact(run_dir, name):
         yield {
-            _DONOR: True,
-            "dataset_title": DONOR_RECORDS,
-            "classifications": {slot: donor[slot] for slot in DONOR_SLOTS if slot in donor},
-            SAMPLES_FIELD: {"named_by": [{"rule_id": got.rule_id}]} if got is not None else None,
+            _ENTITY: True,
+            "dataset_title": label,
+            "classifications": {slot: record[slot] for slot in slots if slot in record},
+            SAMPLES_FIELD: named_by(record),
         }
 
 
 def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict[str, Tally], Counter]:
     """One pass over the reconciled records: the file record count; per rule id, marker and edge rule, what fired where; and per caller.
 
-    A donor record (:func:`donor_records`) is counted as a file is, but not in the file record count.
+    A donor or sample record (:func:`donor_records`, :func:`sample_records`) is counted as a file is, but
+    not in the file record count.
 
     The last counts, per ``(caller, dimension)``, the files whose claim by a :data:`CALLER_RULES`
     rule gave that dimension a value read from the caller's row (``callers.callers_in_reason``).
@@ -452,7 +482,7 @@ def tally(records, rule_ids: set[str], mapping_ids: set[str]) -> tuple[int, dict
     by_caller: Counter = Counter()
     n = 0
     for record in records:
-        n += not record.get(_DONOR)
+        n += not record.get(_ENTITY)
         dataset = record.get("dataset_title") or ""
         fired, won = set(), set()
         for field_name, slot in record["classifications"].items():
@@ -611,8 +641,10 @@ def build(
     run_dir: Path,
     activity_map_path: Path | None = None,
     donors=(),
+    samples=(),
 ) -> dict:
-    """The report's data. A path left None reads the bundled file; ``donors`` are :func:`donor_records`, counted after ``records``."""
+    """The report's data. A path left None reads the bundled file; ``donors`` are :func:`donor_records` and
+    ``samples`` :func:`sample_records`, counted after ``records``."""
     if set(PLACEHOLDER_MARKERS) != marker_values():
         raise ReportError(f"the schema's markers {sorted(marker_values())} are not the ones worded here")
     rules = yaml_rules(rules_path) + code_rule_rows() + mapping_rows(value_map_path)
@@ -630,9 +662,9 @@ def build(
     duplicates = sorted(i for i, c in Counter([*ids, *others]).items() if c > 1)
     if duplicates:
         raise ReportError(f"ids declared twice: {duplicates}")
-    donors = list(donors)
+    donors, samples = list(donors), list(samples)
     n, stats, by_caller = tally(
-        chain(records, donors),
+        chain(records, donors, samples),
         rule_ids={r["id"] for r in rules if r["kind"] != KIND_MAPPING},
         mapping_ids={r["id"] for r in rules if r["kind"] == KIND_MAPPING},
     )
@@ -647,7 +679,9 @@ def build(
         f"Counts from classifying {n:,} files"
         + (f" on {date}" if date else "")
         + f" (output folder {run_dir.name})"
-        + (f", and its {len(donors):,} donor records, counted as files under {DONOR_RECORDS}." if donors else "."),
+        + (f", and its {len(donors):,} donor records, counted as files under {DONOR_RECORDS}" if donors else "")
+        + (f", and its {len(samples):,} sample records, under {SAMPLE_RECORDS}" if samples else "")
+        + ".",
         "rules": rules,
         "markers": markers,
         "edge_rules": edge_rules,
@@ -843,6 +877,7 @@ def main(argv: list[str] | None = None) -> int:
             run_dir,
             args.activity_map,
             donor_records(run_dir),
+            sample_records(run_dir),
         )
     except (ReportError, FileNotFoundError, ValueError) as exc:
         print(f"rules-report: {exc}", file=sys.stderr)

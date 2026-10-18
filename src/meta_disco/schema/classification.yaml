@@ -31,6 +31,7 @@ prefixes:
   insdc.gca: "https://identifiers.org/insdc.gca:"
   HANCESTRO: http://purl.obolibrary.org/obo/HANCESTRO_
   PATO: http://purl.obolibrary.org/obo/PATO_
+  NCBITaxon: http://purl.obolibrary.org/obo/NCBITaxon_
 default_prefix: anvil
 default_range: string
 
@@ -110,7 +111,8 @@ classes:
       'classified'), a status sentinel, and the evidence behind it. Subclasses
       narrow `value` to the right enum per dimension. A reconciled record (#432)
       carries the same entry plus `use`, `inferred` and `credited_to` (#552); an
-      inference record carries none of them.
+      inference record carries none of them. A donor's or sample's slot (#693, #699) carries
+      `use` and neither of the other two, its subclass requiring it.
     slots:
       - value
       - status
@@ -671,13 +673,16 @@ classes:
     attributes:
       field:
         required: true
-        pattern: "^(phenotypic_sex|genetic_ancestry|mother|father|family_id|donor_repository_id|sample_repository_id)\\Z"
+        pattern: "^(phenotypic_sex|genetic_ancestry|organism_type|reported_ethnicity|mother|father|family_id|biosample_type|anatomical_site|donor_repository_id|sample_repository_id)\\Z"
         description: >-
           The donor slot this line speaks to (a `mother`, `father` or `family_id` line's
-          `raw_value` read as written at reconcile, never translated, #582), or `donor_repository_id` /
+          `raw_value` read as written at reconcile, never translated, #582), a sample's slot
+          (`biosample_type`, `anatomical_site`, #699; the line is then about the sample the source
+          names), or `donor_repository_id` /
           `sample_repository_id` where `raw_value` is the repository's own identifier for the
           donor or sample (#669), which reconcile lists on the record and never translates.
-          Pinned to `models.DONOR_FIELDS`, `models.FAMILY_FIELDS` and `models.REPOSITORY_ID_FIELDS` by
+          Pinned to `models.DONOR_FIELDS`, `models.FAMILY_FIELDS`, `models.SAMPLE_SLOTS` and
+          `models.REPOSITORY_ID_FIELDS` by
           `test_the_entity_row_field_pattern_lists_every_entity_field`.
       target_key_value:
         required: true
@@ -1135,7 +1140,10 @@ classes:
       identifier ties to, or another donor's `mother` or `father` claim names (#582), in
       `reconciled/donors.ndjson.gz`. A file reaches its donors through its `samples` and each
       sample's `collected_from`; no donor property is copied onto a file (epic #692,
-      decision 5).
+      decision 5). Each slot carries `use` (#699), as a reconciled file's does: `meta_disco`
+      where it is `classified` or `not_applicable`, else `published`, where a reader shows what
+      the repository publishes: its own rows' values are in the slot's `evidence` where it has
+      any (AnVIL has no field for a family, and its `Unknown` leaves no claim).
     attributes:
       identifier:
         range: EntityIdentifier
@@ -1147,6 +1155,14 @@ classes:
         inlined: true
       genetic_ancestry:
         range: GeneticAncestryClassification
+        required: true
+        inlined: true
+      organism_type:
+        range: OrganismTypeClassification
+        required: true
+        inlined: true
+      reported_ethnicity:
+        range: ReportedEthnicityClassification
         required: true
         inlined: true
       mother:
@@ -1206,6 +1222,8 @@ classes:
     is_a: Classification
     description: A donor's phenotypic sex, settled from every source that states it (#693).
     slot_usage:
+      use:
+        required: true
       value:
         range: phenotypic_sex_enum
 
@@ -1215,8 +1233,48 @@ classes:
       A donor's genetic ancestry, settled from every source that states it (#693): the most
       specific term the sources support, where they nest.
     slot_usage:
+      use:
+        required: true
       value:
         range: genetic_ancestry_enum
+
+  OrganismTypeClassification:
+    is_a: Classification
+    description: A donor's organism (#699), settled from every source that states it.
+    slot_usage:
+      use:
+        required: true
+      value:
+        range: organism_type_enum
+
+  ReportedEthnicityClassification:
+    is_a: Classification
+    description: A donor's reported ethnicity (#699), settled from every source that states it.
+    slot_usage:
+      use:
+        required: true
+      value:
+        range: reported_ethnicity_enum
+
+  BiosampleTypeClassification:
+    is_a: Classification
+    description: What kind of material a sample is (#699), settled from every source that states it.
+    slot_usage:
+      use:
+        required: true
+      value:
+        range: biosample_type_enum
+
+  AnatomicalSiteClassification:
+    is_a: Classification
+    description: >-
+      Where in the body a sample was taken (#699): the source's string as written, as
+      AnVIL's `anvil_biosample.anatomical_site` writes it, an `Unknown` making no claim. A
+      pooled sample's site is the repository's join of its members' (`Brain, Heart`, IGVF's
+      `MultiplexedSample`); mapping sites to an ontology, as a list, is #702.
+    slot_usage:
+      use:
+        required: true
 
   ParentClassification:
     is_a: Classification
@@ -1231,6 +1289,8 @@ classes:
       even where the two are one person in two namespaces (GIAB's `HG004` is Coriell's
       `NA24143`), until a crosswalk between namespaces exists (#674).
     slot_usage:
+      use:
+        required: true
       value:
         range: EntityIdentifier
         inlined: true
@@ -1258,12 +1318,16 @@ classes:
       person with no relative listed often has their own id as their family id, as PED files
       do.
       Two sources writing different ids are a `conflict`.
+    slot_usage:
+      use:
+        required: true
 
   SampleRecord:
     description: >-
       One sample (#693): every sample a reconciled file names, and every sample a
       repository's own sample record ties to (#669), in `reconciled/samples.ndjson.gz`, with
-      the donor it was collected from where a rule says.
+      the donor it was collected from where a rule says, and what the repository's own
+      record of it says (#699), each slot settled and carrying `use` as a donor's does.
     attributes:
       identifier:
         range: EntityIdentifier
@@ -1273,6 +1337,14 @@ classes:
         range: CollectedFrom
         inlined: true
         description: Absent where nothing names the sample's donor.
+      biosample_type:
+        range: BiosampleTypeClassification
+        required: true
+        inlined: true
+      anatomical_site:
+        range: AnatomicalSiteClassification
+        required: true
+        inlined: true
       repository_ids:
         range: RepositoryIdentifier
         multivalued: true
@@ -1490,10 +1562,10 @@ slots:
     inlined_as_list: true
   use:
     description: >-
-      On a reconciled record only (#432): whether the indexer takes this record's value
-      (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the
-      repository's published value (`published`, when it is `conflict` or
-      `not_classified`). Computed by reconcile so an export is structure only.
+      On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the
+      indexer takes this record's value (`meta_disco`, when the status is `classified` or
+      `not_applicable`) or keeps what the repository publishes (`published`, when it is
+      `conflict` or `not_classified`). Computed by reconcile so an export is structure only.
     range: use_enum
     required: false
   credited_to:
@@ -2089,6 +2161,41 @@ enums:
         meaning: PATO:0000383
       Male:
         meaning: PATO:0000384
+
+  organism_type_enum:
+    description: >-
+      A donor's organism (#699), in AnVIL's values: AnVIL's published
+      `anvil_donor.organism_type` writes `Human` and `Mouse`, and its data model suggests
+      NCBITaxon for the slot, whose species terms are the `meaning`s. A value no source writes
+      is not listed.
+    permissible_values:
+      Human:
+        meaning: NCBITaxon:9606
+        description: Homo sapiens
+      Mouse:
+        meaning: NCBITaxon:10090
+        description: Mus musculus
+
+  reported_ethnicity_enum:
+    description: >-
+      A donor's reported ethnicity (#699), in AnVIL's values, which are the US census's
+      categories. AnVIL's data model suggests HANCESTRO, but HANCESTRO has no term for these
+      categories (its nearest, `European American`, `African American` and `Hispanic or
+      Latin`, are narrower), so no value has a `meaning`. A value no source writes is not
+      listed.
+    permissible_values:
+      Black or African American: {}
+      Hispanic or Latino: {}
+      White: {}
+
+  biosample_type_enum:
+    description: >-
+      What kind of material a sample is (#699), in AnVIL's values for
+      `anvil_biosample.biosample_type`. AnVIL's `Unknown` is no value. A value no authored
+      translation row reads is not listed: AnVIL's `Blood` is on three Coriell samples, whose
+      record is the cell line (#706), and its `Tissue, Unknown` on IGVF's pools (#705).
+    permissible_values:
+      Tissue: {}
 
   genetic_ancestry_enum:
     description: >-

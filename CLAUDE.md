@@ -87,8 +87,8 @@ make unprocessable-report
 make test
 make lint
 
-# Donors' sex and ancestry from the submitter tables and AnVIL's anvil_donor (#693), and
-# AnVIL's donor and biosample ids (#669): check the entity map against the manifests, or
+# Donors' facts from the submitter tables and AnVIL's anvil_donor (#693, #582, #699), samples'
+# from AnVIL's anvil_biosample (#699), and AnVIL's donor and biosample ids (#669): check the entity map against the manifests, or
 # import it as entity evidence under data/entity_evidence/; `make reconcile` settles each
 # donor from it and lists each AnVIL id on the record it ties to
 make check-entity-map
@@ -138,6 +138,9 @@ evidence}` entry — plus the controlled vocabulary:
 - **phenotypic_sex_enum** and **genetic_ancestry_enum**: a donor's slots (#693), AnVIL's
   `Female`/`Male` (PATO `meaning`s) and 1000 Genomes' population codes as a HANCESTRO `is_a`
   tree (`GBR` under `EUR`), on a `DonorRecord`, never on a file
+- **organism_type_enum**, **reported_ethnicity_enum** and **biosample_type_enum** (#699): AnVIL's
+  values for its donors' and biosamples' fields (`Human`/`Mouse` with NCBITaxon `meaning`s; the census
+  categories, with none; `Tissue`), on a `DonorRecord` or `SampleRecord`
 - also **platform_enum**
 
 `status` is required on every dimension; `value` is null unless status is `classified`.
@@ -415,7 +418,7 @@ evidence}` entry — plus the controlled vocabulary:
     disagreeing pair is counted in the report's samples block.
   - **Donors and samples are records keyed by their identifier** (#693, ADR-0002 decision 1 as
     amended): reconcile (`reconcile_entities`) writes `reconciled/donors.ndjson.gz`, a
-    `DonorRecord` per donor with `phenotypic_sex` and `genetic_ancestry` (`models.DONOR_FIELDS`)
+    `DonorRecord` per donor with `phenotypic_sex`, `genetic_ancestry` and more (`models.DONOR_FIELDS`)
     settled by `reconcile.settle` (now in `resolution`, re-exported), and
     `reconciled/samples.ndjson.gz`, a `SampleRecord` per sample a reconciled file names or an
     AnVIL biosample ties to, with its `collected_from` donor where an identifier rule naming both
@@ -423,8 +426,8 @@ evidence}` entry — plus the controlled vocabulary:
     `data/entity_evidence/` (`entity_evidence`), its own root because every reader of
     `data/source_evidence/` reads each file there as a file's slot lines: lines
     (`EntityEvidenceRow`) keyed by the identifier as the source wrote it (`target_key:
-    entity_identifier`, which a slot or lineage file refuses), recognised as a donor at
-    reconcile, never at import. The importer is `anvil_entities`, driven by
+    entity_identifier`, which a slot or lineage file refuses), recognised as a donor or, for a
+    sample's slot or id, a sample at reconcile, never at import. The importer is `anvil_entities`, driven by
     `sources/anvil_entity_map.yaml` (`make check-entity-map` / `make import-anvil-entities`):
     per table the identifier column and each slot's columns (none, for a table AnVIL's
     biosamples are made from), and per kind AnVIL's published `anvil_donor` and
@@ -433,14 +436,20 @@ evidence}` entry — plus the controlled vocabulary:
     prod anvil15 and dev's 1000G snapshot (#692) and often several per person, are lines of their own
     (`models.REPOSITORY_ID_FIELDS`), never translated: reconcile lists each on the one record
     it ties to, as `repository_ids` (many to one), and refuses one tying to two records. The value
-    map translates both kinds of slot (`models.TRANSLATED_FIELDS`), a row declaring only slots of
-    the kind it matches, and its seeding and review queue read the entity root beside the slot
+    map translates a file's, a donor's and a sample's slots (`models.TRANSLATED_FIELDS`), a row
+    declaring only slots of the kind it matches (`models.KIND_OF_SLOT`), and its seeding and review queue read the entity root beside the slot
     root. **A donor's family** (#582, `models.FAMILY_FIELDS`) is `mother`, `father` and `family_id`,
     settled the same way but never translated: a parent string is recognised as a donor through
     `rules/sample_namespaces.yaml` and its claim declares the parent's `EntityIdentifier` (the one
     claim value that is not a string), citing that identifier rule; PED's `0` makes no claim and is
     counted; a family id is taken as written (`code_rules.FAMILY_ID_AS_WRITTEN`, an `ENTITY_RULES`
-    entry). Every parent named gets a donor record. No donor value is copied onto a file record.
+    entry). Every parent named gets a donor record. **AnVIL's own donor and biosample records** (#699) are
+    a source for each field they fill: a donor's `organism_type` and `reported_ethnicity`, translated, and
+    a sample's `biosample_type`, translated, and `anatomical_site`, as written (`models.SAMPLE_SLOTS`),
+    settled on the `SampleRecord`. Every donor and sample slot carries `use` (`resolution.use_for`, which
+    `reconcile` re-exports); `published` means show what the repository publishes, which is in the
+    slot's evidence where AnVIL has a value (no AnVIL field holds a family).
+    No donor value is copied onto a file record.
   - **A producer is declared once**, in `producers.PRODUCERS` — the thirteen writers of a
     run's `*_classifications.json` files. Add one there, never to a second list:
     `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,

@@ -73,6 +73,12 @@ and a parent not found there is `external` (decision 2). Only sample and donor i
    `genetic_ancestry`) and the vocabularies its submission guide suggests. `phenotypic_sex` takes
    AnVIL's values, `Female` and `Male`, with PATO's terms as their `meaning`; population codes are
    `genetic_ancestry`, HANCESTRO terms as an `is_a` tree (`GBR` under `EUR`, the most specific kept).
+   *Extended by #699:* AnVIL's own donor and biosample records are a source for every field they
+   fill: a donor's `organism_type` (NCBITaxon terms as `meaning`) and `reported_ethnicity` (AnVIL's
+   census categories, which HANCESTRO has no term for), and a sample's `biosample_type` and
+   `anatomical_site` (as written until #702). Each record slot carries `use`, as a file's does;
+   `published` means a reader shows what the repository publishes: its rows' values are in the
+   slot's evidence where it has any (it has none for a family, and an `Unknown` leaves no claim).
 5. **Nothing is copied onto a file.** A file reaches its donors through `samples` → sample →
    `collected_from` → donor, joined by the explorer; a file with several samples takes the set of its
    donors' values.

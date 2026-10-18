@@ -99,6 +99,8 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
                                 'prefix_reference': 'http://purl.obolibrary.org/obo/HANCESTRO_'},
                   'MODAL': {'prefix_prefix': 'MODAL',
                             'prefix_reference': 'https://datamodel.terra.bio/BioCoreTerms#'},
+                  'NCBITaxon': {'prefix_prefix': 'NCBITaxon',
+                                'prefix_reference': 'http://purl.obolibrary.org/obo/NCBITaxon_'},
                   'OBI': {'prefix_prefix': 'OBI',
                           'prefix_reference': 'http://purl.obolibrary.org/obo/OBI_'},
                   'PATO': {'prefix_prefix': 'PATO',
@@ -386,6 +388,36 @@ class PhenotypicSexEnum(str, Enum):
     """
     Female = "Female"
     Male = "Male"
+
+
+class OrganismTypeEnum(str, Enum):
+    """
+    A donor's organism (#699), in AnVIL's values: AnVIL's published `anvil_donor.organism_type` writes `Human` and `Mouse`, and its data model suggests NCBITaxon for the slot, whose species terms are the `meaning`s. A value no source writes is not listed.
+    """
+    Human = "Human"
+    """
+    Homo sapiens
+    """
+    Mouse = "Mouse"
+    """
+    Mus musculus
+    """
+
+
+class ReportedEthnicityEnum(str, Enum):
+    """
+    A donor's reported ethnicity (#699), in AnVIL's values, which are the US census's categories. AnVIL's data model suggests HANCESTRO, but HANCESTRO has no term for these categories (its nearest, `European American`, `African American` and `Hispanic or Latin`, are narrower), so no value has a `meaning`. A value no source writes is not listed.
+    """
+    Black_or_African_American = "Black or African American"
+    Hispanic_or_Latino = "Hispanic or Latino"
+    White = "White"
+
+
+class BiosampleTypeEnum(str, Enum):
+    """
+    What kind of material a sample is (#699), in AnVIL's values for `anvil_biosample.biosample_type`. AnVIL's `Unknown` is no value. A value no authored translation row reads is not listed: AnVIL's `Blood` is on three Coriell samples, whose record is the cell line (#706), and its `Tissue, Unknown` on IGVF's pools (#705).
+    """
+    Tissue = "Tissue"
 
 
 class GeneticAncestryEnum(str, Enum):
@@ -1014,7 +1046,7 @@ class Classifications(ConfiguredBaseModel):
 
 class Classification(ConfiguredBaseModel):
     """
-    A single classified field: its resolved value (null unless status is 'classified'), a status sentinel, and the evidence behind it. Subclasses narrow `value` to the right enum per dimension. A reconciled record (#432) carries the same entry plus `use`, `inferred` and `credited_to` (#552); an inference record carries none of them.
+    A single classified field: its resolved value (null unless status is 'classified'), a status sentinel, and the evidence behind it. Subclasses narrow `value` to the right enum per dimension. A reconciled record (#432) carries the same entry plus `use`, `inferred` and `credited_to` (#552); an inference record carries none of them. A donor's or sample's slot (#693, #699) carries `use` and neither of the other two, its subclass requiring it.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'abstract': True,
          'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
@@ -1022,7 +1054,7 @@ class Classification(ConfiguredBaseModel):
     value: Optional[str] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
-    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps what the repository publishes (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     inferred: Optional[InferredConclusion] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
 
@@ -1113,7 +1145,7 @@ class DataModalityClassification(Classification):
     value: Optional[DataModalityEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
-    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps what the repository publishes (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     inferred: Optional[DataModalityInferred] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
 
@@ -1126,7 +1158,7 @@ class DataTypeClassification(Classification):
     value: Optional[DataTypeEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
-    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps what the repository publishes (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     inferred: Optional[DataTypeInferred] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
 
@@ -1141,7 +1173,7 @@ class ReferenceAssemblyClassification(Classification):
     value: Optional[ReferenceAssemblyEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
-    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps what the repository publishes (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     inferred: Optional[ReferenceAssemblyInferred] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
 
@@ -1154,7 +1186,7 @@ class AssayTypeClassification(Classification):
     value: Optional[AssayTypeEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
-    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps what the repository publishes (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     inferred: Optional[AssayTypeInferred] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
 
@@ -1167,7 +1199,7 @@ class PlatformClassification(Classification):
     value: Optional[PlatformEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
-    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps what the repository publishes (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     inferred: Optional[PlatformInferred] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
 
@@ -1181,7 +1213,7 @@ class InstrumentModelClassification(Classification):
     value: Optional[InstrumentModelEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
-    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps what the repository publishes (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     inferred: Optional[InstrumentModelInferred] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
 
@@ -1200,7 +1232,7 @@ class VariantKindClassification(Classification):
     value: Optional[list[VariantKindEnum]] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
-    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps what the repository publishes (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     inferred: Optional[VariantKindInferred] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
 
@@ -1214,7 +1246,7 @@ class VariantOriginClassification(Classification):
     value: Optional[VariantOriginEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
-    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps what the repository publishes (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     inferred: Optional[VariantOriginInferred] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
 
@@ -1666,7 +1698,7 @@ class EntityEvidenceRow(ConfiguredBaseModel):
                                       'required': True}}})
 
     raw_value: str = Field(default=..., description="""What the source wrote, verbatim, as on an `EvidenceRow`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'EntityEvidenceRow', 'Evidence']} })
-    field: str = Field(default=..., description="""The donor slot this line speaks to (a `mother`, `father` or `family_id` line's `raw_value` read as written at reconcile, never translated, #582), or `donor_repository_id` / `sample_repository_id` where `raw_value` is the repository's own identifier for the donor or sample (#669), which reconcile lists on the record and never translates. Pinned to `models.DONOR_FIELDS`, `models.FAMILY_FIELDS` and `models.REPOSITORY_ID_FIELDS` by `test_the_entity_row_field_pattern_lists_every_entity_field`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'EntityEvidenceRow']} })
+    field: str = Field(default=..., description="""The donor slot this line speaks to (a `mother`, `father` or `family_id` line's `raw_value` read as written at reconcile, never translated, #582), a sample's slot (`biosample_type`, `anatomical_site`, #699; the line is then about the sample the source names), or `donor_repository_id` / `sample_repository_id` where `raw_value` is the repository's own identifier for the donor or sample (#669), which reconcile lists on the record and never translates. Pinned to `models.DONOR_FIELDS`, `models.FAMILY_FIELDS`, `models.SAMPLE_SLOTS` and `models.REPOSITORY_ID_FIELDS` by `test_the_entity_row_field_pattern_lists_every_entity_field`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'EntityEvidenceRow']} })
     target_key_value: str = Field(default=..., description="""The identifier the source wrote for the donor, or for the sample on a `sample_repository_id` line, verbatim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'LineageRow', 'EntityEvidenceRow']} })
     column: str = Field(default=..., description="""The column `raw_value` was read from.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceRow', 'EntityEvidenceRow']} })
     identifier_column: str = Field(default=..., description="""The column `target_key_value` was read from.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EntityEvidenceRow']} })
@@ -1674,7 +1706,7 @@ class EntityEvidenceRow(ConfiguredBaseModel):
 
     @field_validator('field')
     def pattern_field(cls, v):
-        pattern=re.compile(r"^(phenotypic_sex|genetic_ancestry|mother|father|family_id|donor_repository_id|sample_repository_id)\Z")
+        pattern=re.compile(r"^(phenotypic_sex|genetic_ancestry|organism_type|reported_ethnicity|mother|father|family_id|biosample_type|anatomical_site|donor_repository_id|sample_repository_id)\Z")
         if isinstance(v, list):
             for element in v:
                 if isinstance(element, str) and not pattern.match(element):
@@ -2090,13 +2122,15 @@ class IdentifierRule(ConfiguredBaseModel):
 
 class DonorRecord(ConfiguredBaseModel):
     """
-    One donor (#693, ADR-0002 decision 1 as amended): the person or animal samples were collected from, keyed by its identifier, so one record gathers what every dataset's tables say about one person, and each property is settled once, by the rule a file's dimensions are settled by (`reconcile.settle`). Reconcile writes one per donor that entity evidence names, a sample's `collected_from` points to, a repository's own identifier ties to, or another donor's `mother` or `father` claim names (#582), in `reconciled/donors.ndjson.gz`. A file reaches its donors through its `samples` and each sample's `collected_from`; no donor property is copied onto a file (epic #692, decision 5).
+    One donor (#693, ADR-0002 decision 1 as amended): the person or animal samples were collected from, keyed by its identifier, so one record gathers what every dataset's tables say about one person, and each property is settled once, by the rule a file's dimensions are settled by (`reconcile.settle`). Reconcile writes one per donor that entity evidence names, a sample's `collected_from` points to, a repository's own identifier ties to, or another donor's `mother` or `father` claim names (#582), in `reconciled/donors.ndjson.gz`. A file reaches its donors through its `samples` and each sample's `collected_from`; no donor property is copied onto a file (epic #692, decision 5). Each slot carries `use` (#699), as a reconciled file's does: `meta_disco` where it is `classified` or `not_applicable`, else `published`, where a reader shows what the repository publishes: its own rows' values are in the slot's `evidence` where it has any (AnVIL has no field for a family, and its `Unknown` leaves no claim).
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
     identifier: EntityIdentifier = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord', 'SampleRecord']} })
     phenotypic_sex: PhenotypicSexClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
     genetic_ancestry: GeneticAncestryClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
+    organism_type: OrganismTypeClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
+    reported_ethnicity: ReportedEthnicityClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
     mother: ParentClassification = Field(default=..., description="""The donor's mother (#582), from every source that names her.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
     father: ParentClassification = Field(default=..., description="""The donor's father (#582), from every source that names him.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
     family_id: FamilyIdClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
@@ -2177,12 +2211,13 @@ class PhenotypicSexClassification(Classification):
     A donor's phenotypic sex, settled from every source that states it (#693).
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
-         'slot_usage': {'value': {'name': 'value', 'range': 'phenotypic_sex_enum'}}})
+         'slot_usage': {'use': {'name': 'use', 'required': True},
+                        'value': {'name': 'value', 'range': 'phenotypic_sex_enum'}}})
 
     value: Optional[PhenotypicSexEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
-    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: UseEnum = Field(default=..., description="""On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps what the repository publishes (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     inferred: Optional[InferredConclusion] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
 
@@ -2192,12 +2227,76 @@ class GeneticAncestryClassification(Classification):
     A donor's genetic ancestry, settled from every source that states it (#693): the most specific term the sources support, where they nest.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
-         'slot_usage': {'value': {'name': 'value', 'range': 'genetic_ancestry_enum'}}})
+         'slot_usage': {'use': {'name': 'use', 'required': True},
+                        'value': {'name': 'value', 'range': 'genetic_ancestry_enum'}}})
 
     value: Optional[GeneticAncestryEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
-    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: UseEnum = Field(default=..., description="""On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps what the repository publishes (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    inferred: Optional[InferredConclusion] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+
+
+class OrganismTypeClassification(Classification):
+    """
+    A donor's organism (#699), settled from every source that states it.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'use': {'name': 'use', 'required': True},
+                        'value': {'name': 'value', 'range': 'organism_type_enum'}}})
+
+    value: Optional[OrganismTypeEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: UseEnum = Field(default=..., description="""On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps what the repository publishes (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    inferred: Optional[InferredConclusion] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+
+
+class ReportedEthnicityClassification(Classification):
+    """
+    A donor's reported ethnicity (#699), settled from every source that states it.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'use': {'name': 'use', 'required': True},
+                        'value': {'name': 'value', 'range': 'reported_ethnicity_enum'}}})
+
+    value: Optional[ReportedEthnicityEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: UseEnum = Field(default=..., description="""On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps what the repository publishes (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    inferred: Optional[InferredConclusion] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+
+
+class BiosampleTypeClassification(Classification):
+    """
+    What kind of material a sample is (#699), settled from every source that states it.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'use': {'name': 'use', 'required': True},
+                        'value': {'name': 'value', 'range': 'biosample_type_enum'}}})
+
+    value: Optional[BiosampleTypeEnum] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: UseEnum = Field(default=..., description="""On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps what the repository publishes (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    inferred: Optional[InferredConclusion] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+
+
+class AnatomicalSiteClassification(Classification):
+    """
+    Where in the body a sample was taken (#699): the source's string as written, as AnVIL's `anvil_biosample.anatomical_site` writes it, an `Unknown` making no claim. A pooled sample's site is the repository's join of its members' (`Brain, Heart`, IGVF's `MultiplexedSample`); mapping sites to an ontology, as a list, is #702.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'use': {'name': 'use', 'required': True}}})
+
+    value: Optional[str] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
+    evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: UseEnum = Field(default=..., description="""On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps what the repository publishes (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     inferred: Optional[InferredConclusion] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
 
@@ -2208,6 +2307,7 @@ class ParentClassification(Classification):
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
          'slot_usage': {'evidence': {'name': 'evidence', 'range': 'ParentEvidence'},
+                        'use': {'name': 'use', 'required': True},
                         'value': {'inlined': True,
                                   'name': 'value',
                                   'range': 'EntityIdentifier'}}})
@@ -2215,7 +2315,7 @@ class ParentClassification(Classification):
     value: Optional[EntityIdentifier] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     evidence: Optional[list[ParentEvidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
-    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: UseEnum = Field(default=..., description="""On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps what the repository publishes (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     inferred: Optional[InferredConclusion] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
 
@@ -2251,24 +2351,27 @@ class FamilyIdClassification(Classification):
     """
     The family a donor belongs to (#582), as a PED file's family id names it: the string as the source wrote it, so it means something only among datasets that share a numbering (1000 Genomes' family ids, which HPRC and HPRC_R2 reuse). It groups relatives no parent link joins, such as siblings whose parents were not sequenced; a person with no relative listed often has their own id as their family id, as PED files do. Two sources writing different ids are a `conflict`.
     """
-    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
+         'slot_usage': {'use': {'name': 'use', 'required': True}}})
 
     value: Optional[str] = Field(default=None, description="""The resolved value; null unless status is 'classified'.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     status: ClassificationStatusEnum = Field(default=..., description="""Whether the field was classified, is not applicable, etc.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification', 'InferredConclusion', 'Evidence']} })
     evidence: Optional[list[Evidence]] = Field(default=None, json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
-    use: Optional[UseEnum] = Field(default=None, description="""On a reconciled record only (#432): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the repository's published value (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
+    use: UseEnum = Field(default=..., description="""On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the indexer takes this record's value (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps what the repository publishes (`published`, when it is `conflict` or `not_classified`). Computed by reconcile so an export is structure only.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     inferred: Optional[InferredConclusion] = Field(default=None, description="""On a reconciled record only (#432): what inference concluded for this slot.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
     credited_to: Optional[CreditedToEnum] = Field(default=None, description="""On a reconciled record only (#552): where this slot's answer is credited, the per-slot category the reconcile report counts. The rule is `reconcile.credited_to`'s. It attributes and never decides: the value was settled before it is read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Classification']} })
 
 
 class SampleRecord(ConfiguredBaseModel):
     """
-    One sample (#693): every sample a reconciled file names, and every sample a repository's own sample record ties to (#669), in `reconciled/samples.ndjson.gz`, with the donor it was collected from where a rule says.
+    One sample (#693): every sample a reconciled file names, and every sample a repository's own sample record ties to (#669), in `reconciled/samples.ndjson.gz`, with the donor it was collected from where a rule says, and what the repository's own record of it says (#699), each slot settled and carrying `use` as a donor's does.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
     identifier: EntityIdentifier = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord', 'SampleRecord']} })
     collected_from: Optional[CollectedFrom] = Field(default=None, description="""Absent where nothing names the sample's donor.""", json_schema_extra = { "linkml_meta": {'domain_of': ['SampleRecord']} })
+    biosample_type: BiosampleTypeClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['SampleRecord']} })
+    anatomical_site: AnatomicalSiteClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['SampleRecord']} })
     repository_ids: Optional[list[RepositoryIdentifier]] = Field(default=None, description="""Every identifier a repository gave a record of its own for this sample (#669), AnVIL's `biosample_id`s. Absent where none ties to the sample.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord', 'SampleRecord']} })
 
 
@@ -2376,6 +2479,10 @@ DonorRecord.model_rebuild()
 RepositoryIdentifier.model_rebuild()
 PhenotypicSexClassification.model_rebuild()
 GeneticAncestryClassification.model_rebuild()
+OrganismTypeClassification.model_rebuild()
+ReportedEthnicityClassification.model_rebuild()
+BiosampleTypeClassification.model_rebuild()
+AnatomicalSiteClassification.model_rebuild()
 ParentClassification.model_rebuild()
 ParentEvidence.model_rebuild()
 FamilyIdClassification.model_rebuild()

@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
-from typing import Any
+from typing import Any, Literal
 
 from .file_name import FileName
 
@@ -194,12 +194,21 @@ CLASSIFICATION_FIELDS = (
 SAMPLES_FIELD = "samples"
 EVIDENCE_FIELDS = (*CLASSIFICATION_FIELDS, SAMPLES_FIELD)
 
-# A donor's slots (#693): settled as a file's dimensions are, but on a `DonorRecord`, from
+# A donor's slots (#693, #699): settled as a file's dimensions are, but on a `DonorRecord`, from
 # entity evidence (`entity_evidence`). Not dimensions of a file: no rule, tier or file
 # evidence names one. The value map translates them as it does the dimensions
 # (`TRANSLATED_FIELDS`).
-DONOR_FIELDS = ("phenotypic_sex", "genetic_ancestry")
-TRANSLATED_FIELDS = (*CLASSIFICATION_FIELDS, *DONOR_FIELDS)
+DONOR_FIELDS = ("phenotypic_sex", "genetic_ancestry", "organism_type", "reported_ethnicity")
+
+# A sample's slots (#699), from the repository's own record of the sample: `biosample_type` is
+# translated by the value map, as a donor's slots are (`SAMPLE_FIELDS`); `anatomical_site` is taken
+# as written, its values not yet mapped to an ontology (#702).
+SAMPLE_FIELDS = ("biosample_type",)
+ANATOMICAL_SITE = "anatomical_site"
+SAMPLE_SLOTS = (*SAMPLE_FIELDS, ANATOMICAL_SITE)
+# A site the repository writes when it has none: no claim, counted.
+UNKNOWN_SITE = "Unknown"
+TRANSLATED_FIELDS = (*CLASSIFICATION_FIELDS, *DONOR_FIELDS, *SAMPLE_FIELDS)
 
 # A donor's family (#582): its parents, each another donor's identifier, recognised through
 # `rules/sample_namespaces.yaml`, and its family id, taken as written. Settled as the donor's
@@ -216,6 +225,14 @@ FAMILY_FIELDS = (*PARENT_FIELDS, FAMILY_ID)
 UNKNOWN_PARENT = "0"
 # A donor record's settled slots, in the order it writes them.
 DONOR_SLOTS = (*DONOR_FIELDS, *FAMILY_FIELDS)
+# The record slots with no vocabulary, whose values are identifiers or strings as written.
+UNTRANSLATED_SLOTS = (*FAMILY_FIELDS, ANATOMICAL_SITE)
+# Whose record each entity slot is on (#699): a donor's, or a sample's, spelled as
+# `sample_identity.EntityKind` spells them.
+KIND_OF_SLOT: dict[str, Literal["donor", "sample"]] = {
+    **dict.fromkeys(DONOR_SLOTS, "donor"),
+    **dict.fromkeys(SAMPLE_SLOTS, "sample"),
+}
 
 # The entity evidence fields naming a repository's own identifier for a donor or a sample
 # (#669): AnVIL's `donor_id` and `biosample_id`, listed on the record they tie to as

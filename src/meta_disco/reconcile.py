@@ -125,8 +125,11 @@ from .reconcile_samples import Named, from_line
 from .record_keys import PUBLISHED_TABLES, RecordKey, is_key_value, record_key
 from .records import JOIN_KEY_OUTPUT_FIELDS, SAMPLE_OUTCOMES_KEY, STEP_OUTCOMES_KEY, UNRECOGNISED_SAMPLES_KEY
 from .resolution import NO_EVIDENCE, SlotEvidence, translate
+from .resolution import USE_META_DISCO as USE_META_DISCO
+from .resolution import USE_PUBLISHED as USE_PUBLISHED
 from .resolution import declaration as declaration  # re-exported: the resolution rule
 from .resolution import settle as settle
+from .resolution import use_for as use_for
 from .rule_engine import CONFLICT_MARKER
 from .run_lineage_map import RunLineageMap, load_run_lineage_map
 from .sample_identity import identifier_rules, most_frequent
@@ -143,10 +146,6 @@ from .source_evidence import (
     require_one_published_source,
 )
 from .value_map import ValueMap, load_value_map
-
-# The per-slot instruction to the indexer (#432, second 2026-09-22 amendment).
-USE_META_DISCO = "meta_disco"
-USE_PUBLISHED = "published"
 
 INFERENCE = "inference"
 
@@ -290,16 +289,6 @@ def own_inputs(inferred: dict, source_claims: Iterable[dict]) -> tuple[bool, fro
     if (own := declaration(inferred)) is not None:
         declared.add(own)
     return inferred["status"] == CONFLICT, frozenset(declared)
-
-
-def use_for(status: str) -> str:
-    """Take meta-disco's answer where it has one; keep the published value where it does not.
-
-    ``classified`` and ``not_applicable`` are answers. ``conflict`` and ``not_classified``
-    are not, and the indexer keeps what the repository already publishes — the not-worse
-    path, until curator rules (#397) answer conflicts.
-    """
-    return USE_META_DISCO if status in (CLASSIFIED, NOT_APPLICABLE) else USE_PUBLISHED
 
 
 def is_harmonized(claim: dict) -> bool:
@@ -1192,11 +1181,11 @@ def reconcile_run(
 
     Donors and samples (#693, :mod:`reconcile_entities`): the entity evidence under
     ``entity_root``, by default the ``entity_evidence`` directory beside ``evidence_root``,
-    settles each donor's slots into ``donors.ndjson.gz``, and every sample the reconciled
-    files name is written to ``samples.ndjson.gz`` with the donor it was collected from where
-    an identifier rule says. ``evidence_root=None`` excludes the entity evidence too: the
-    samples and the donors they point to are still written, each donor's slots
-    ``not_classified``.
+    settles each donor's slots into ``donors.ndjson.gz``, and each sample the reconciled files
+    name or the entity evidence names is written to ``samples.ndjson.gz``, its slots settled
+    (#699) and with the donor it was collected from where an identifier rule says.
+    ``evidence_root=None`` excludes the entity evidence too: the samples the files name and the
+    donors they point to are still written, each record's slots ``not_classified``.
 
     Inheritance (#571, :mod:`reconcile_inherit`) needs every parent's answer before its
     child is written, and the records come file by file, so inheritance reads the run twice,
