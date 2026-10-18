@@ -932,10 +932,13 @@ classes:
   ActivityInput:
     description: >-
       One input a step used, in one role (PROV's `hadRole`). With `parent_key` it is
-      `internal`, without it `external` (ADR-0002 decision 2).
+      `internal`, without it `external` (ADR-0002 decision 2). An external input with a
+      `parent_ref` is a file held outside AnVIL for the dataset (#710), which a role that
+      reads through its parents reads through as it does a catalog file.
     slots:
       - parent_file
       - parent_key
+      - parent_ref
       - parent_kind
     attributes:
       role:
@@ -1016,6 +1019,39 @@ classes:
           map's rows (`code_rules.SAMPLE_RULES`),
           a submitter-table column, the file's parent across a step that passes samples
           (#668), or each of them where they agree.
+
+  ExternalList:
+    description: >-
+      A list of files held outside AnVIL for a dataset, as reconcile read it (#710, a
+      workaround until AnVIL holds the list, #624): a GATK sample-name map that
+      `sources/external_files.yaml` declares, the step listing the dataset's files it
+      names as members, and the samples its rows name. Written once per run in the
+      reconciled `external_lists.ndjson.gz`; an `ActivityInput.parent_ref` points here.
+    attributes:
+      ref:
+        required: true
+        pattern: "^[^\\r\\n]+\\Z"
+        description: The list's address, `github:<owner>/<repo>@<commit>/<path>`.
+      dataset:
+        required: true
+        pattern: "^[^\\r\\n]+\\Z"
+        description: The dataset the list is held for, the only one whose files it names.
+      file_name:
+        required: true
+        pattern: "^[^\\r\\n]+\\Z"
+      sha256:
+        required: true
+        pattern: "^[0-9a-f]{64}\\Z"
+        description: The sha256 of the list's text, as declared and as read.
+      generated_by:
+        range: GeneratedBy
+        description: >-
+          The list's members, each a file of the dataset carrying the name a row gives.
+          Absent where a row's name is carried by no file of the dataset or by several:
+          a cohort missing a member is not the cohort.
+      samples:
+        range: SampleReference
+        description: The samples the list's rows name, where every one is recognised.
 
   SampleList:
     description: >-
@@ -1681,6 +1717,14 @@ slots:
       the child's dataset (ADR-0002 decision 2), or of the dataset an input's
       `parent_dataset` names under that decision's declared exception (#594). Named for the key rather than
       `parent_file_id` because HPRC's key is not a `file_id`.
+  parent_ref:
+    pattern: "^[^\\r\\n]+\\Z"
+    description: >-
+      The parent as a source wrote it when that is not a bare name (ADR-0002 decision 2).
+      Written today only for a file held outside AnVIL for the child's dataset (#710, a
+      workaround until #624): its address, `github:<owner>/<repo>@<commit>/<path>`, as
+      `sources/external_files.yaml` declares it, and its record in the reconciled
+      `external_lists.ndjson.gz`. Such an input has no `parent_key`.
   parent_kind:
     description: The kind of file the parent is.
     range: parent_kind_enum
@@ -2777,6 +2821,12 @@ enums:
         description: >-
           A sample's identifier, as `anvil_activity`'s `used_biosample_id` holds it. A
           sample is not a file; reconcile builds no input from one (#577).
+      external_file:
+        description: >-
+          A file held outside AnVIL for the child's dataset, by its address
+          (`github:<owner>/<repo>@<commit>/<path>`), as `sources/external_files.yaml`
+          declares it (#710). A workaround until AnVIL holds the file (#624). Reconcile
+          resolves it only to a file declared for the child's dataset.
 
   identifier_namespace_enum:
     description: >-

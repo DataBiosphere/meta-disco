@@ -195,6 +195,8 @@ class LineageStep:
     ``attribution`` is the ``Attribution`` the source gets, from :func:`lineage_attribution`
     for a lineage line. ``parent_dataset`` is the parent's dataset where it is not the
     child's (the run lineage map's declared exception, #594), else None.
+    ``parent_key`` is the address of a file held outside AnVIL where ``external`` is set
+    (#710).
     """
 
     activity: str
@@ -205,6 +207,18 @@ class LineageStep:
     attribution: dict
     parent_data_type: str | None = None
     parent_dataset: str | None = None
+    # Whether ``parent_key`` is a file held outside AnVIL for the dataset (#710), its address,
+    # written as the input's ``parent_ref`` (:func:`parent_node`).
+    external: bool = False
+
+
+def parent_node(used: dict) -> str:
+    """The key an input's parent is held by in reconcile's graph: its ``parent_key``, or its ``parent_ref`` where it has none.
+
+    An input with a ``parent_ref`` and no ``parent_key`` is a file held outside AnVIL for the
+    dataset (#710), held in the graph under its address (``reconcile_external``).
+    """
+    return used["parent_key"] if "parent_key" in used else used["parent_ref"]
 
 
 def lineage_attribution(source_type: str, row_id: str, source: ClaimSource, activity_id: str | None) -> dict:
@@ -250,10 +264,11 @@ def inferred_steps(step: dict | None) -> list[LineageStep]:
         LineageStep(
             step["activity"],
             used["role"],
-            used["parent_key"],
+            parent_node(used),
             used["parent_file"],
             used.get("parent_kind"),
             attribution,
+            external="parent_key" not in used,
         )
         for used in step["inputs"]
         for attribution in used.get("named_by") or step.get("named_by") or []
@@ -327,7 +342,7 @@ def merge_steps(inferred: dict | None, lineage: Iterable[LineageStep]) -> tuple[
             {
                 "role": s.role,
                 "parent_file": s.parent_file,
-                "parent_key": s.parent_key,
+                ("parent_ref" if s.external else "parent_key"): s.parent_key,
                 "parent_kind": s.parent_kind,
                 **({"parent_dataset": s.parent_dataset} if s.parent_dataset else {}),
                 "named_by": [],
@@ -380,7 +395,7 @@ def misfits(step: dict, child_kind: str | None, parent_kinds: dict[str, str | No
     found += [("required role missing", r.role) for r in declaration.inputs if r.required and r.role not in present]
     for used in step["inputs"]:
         role = roles.get(used["role"])
-        kind = parent_kinds.get(used["parent_key"])
+        kind = parent_kinds.get(parent_node(used))
         if role is not None and _outside(kind, {str(k) for k in role.kind or ()}):
             found.append((f"input kind ({used['role']})", str(kind)))
     return found

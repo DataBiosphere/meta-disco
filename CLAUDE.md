@@ -237,6 +237,17 @@ evidence}` entry — plus the controlled vocabulary:
     links T2T_CHRY's 1KGP CRAMs to their ENA run's FASTQs in ANVIL_T2T by read and base
     counts (contract 2.10). Reconcile resolves a line's `parent_dataset` only where
     `RunLineageMap.declares` says so, writes it on the input, and counts any other `undeclared_dataset`.
+  - **A file the catalog lacks may be held outside AnVIL for one dataset, as a workaround** (#710, contract
+    2.11, until AnVIL holds it, #624): `sources/external_files.yaml` declares ANVIL_T2T_CHRY's published
+    1000 Genomes sample maps, pinned by commit and sha256, read through `external_files`;
+    `make fetch-external-files` keeps them under `data/external/<dataset>/` (dataset first), refusing a
+    changed copy. `external_lineage` (`make import-external-lineage`, network) links a workspace tar to the
+    map its header names only where the tar's own `callset.json` lists exactly the map's samples, writing
+    lineage under `data/lineage_evidence/external/` (`parent_key_type: external_file`). Reconcile
+    (`reconcile_external`) holds each named map under its address, builds its members and samples, and the
+    tar's input names it by `parent_ref` (no `parent_key`); the maps are written to
+    `reconciled/external_lists.ndjson.gz`. Read an input's parent through `edges.parent_node`, never
+    `["parent_key"]` alone.
   - **Every repository has exactly one published source** (contract 7.12), declared in
     `record_keys.PUBLISHED_TABLES` beside the record keys, each repository's own entry in
     its module (`azul_manifest.PUBLISHED_TABLE`); `anvil_evidence.check` holds both maps to it

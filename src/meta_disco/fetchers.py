@@ -1318,6 +1318,18 @@ def fetch_tar_headers(
     return TarHead(member_names, text, unread)
 
 
+@wrap_as_fetch_error("tar member")
+def fetch_tar_member(md5sum: str, member: str, url: str | None = None) -> str | None:
+    """The text of the member named ``member`` of an uncompressed tar, read from the AnVIL S3 mirror (or ``url``) in its last, then first,
+    :data:`TAR_MEMBER_WINDOW` bytes (:func:`_read_member`); None where neither holds it, or its body is over :data:`MAX_TAR_MEMBER_TEXT` bytes.
+
+    Nothing is cached. Raises ``FetchError`` on a failed read. Read by the external lineage
+    importer for a GenomicsDB workspace's ``callset.json`` (#710), which sat in the last MiB of
+    each of 4 ANVIL_T2T_CHRY tars measured on 2026-10-18.
+    """
+    return _read_member(md5sum, member, url=url, tail_first=True)[0]
+
+
 def _read_kept(
     md5sum: str, member: str, member_names: list[str], *, url: str | None
 ) -> tuple[str | None, str | None, int]:

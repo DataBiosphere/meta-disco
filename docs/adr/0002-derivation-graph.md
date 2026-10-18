@@ -155,6 +155,13 @@ them. *Revisited by #693:* the submitter tables populate them, as the amendment 
 - **`external`** — a source names the parent (`NA21127.merged.bam` in a `@PG` line, or a `file_id` or DRS
   URI in a table) but it is missing from the child's dataset: it was never deposited, or the name is
   shared by more than one file (#438). An `external` parent passes nothing (contract 4.9).
+  *Amended by #710, a workaround until #624:* a parent the catalog lacks may be a file held outside AnVIL
+  for the child's dataset, declared in `sources/external_files.yaml` and kept under
+  `data/external/<dataset>/`: ANVIL_T2T_CHRY's published 1000 Genomes sample maps. Its input has no
+  `parent_key` and names it by its address in `parent_ref`. It is resolved only for the dataset that
+  declares it, so a file's parents stay within its dataset, and reconcile holds it as the step's list:
+  it passes nothing itself, and a role that reads through its parents (`read_through`) reads through it
+  to the dataset's own files it lists, as through a catalog map (contract 2.11).
 
 The parent as the source wrote it is always kept, resolved or not: `parent_file` for a name (looked up
 only within the child's dataset), `parent_ref` for anything else a source gives — a `file_id`, a DRS URI, an S3 or filesystem path.
@@ -552,7 +559,8 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
     `file_id`.
   - `parent_ref`: the parent as a source wrote it when that is not a bare name — a `file_id`, a DRS URI,
     an S3 or filesystem path — kept whether or not
-    it resolves (decision 2); a name stays in `parent_file`.
+    it resolves (decision 2); a name stays in `parent_file`. *Partly done by #710:* the slot exists, and is
+    written only for a file held outside AnVIL for the dataset (decision 2's amendment), as its address.
   - A constraint: exactly one parent form per input — `parent_id`, or a file parent (`parent_file` or
     `parent_ref`, with `parent_key` where it resolves) — and the `form` its role declares
     (`rules/activities.yaml`: an identifier for `SequenceActivity`'s sample and the other sample steps' inputs;

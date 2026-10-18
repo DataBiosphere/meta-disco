@@ -43,6 +43,7 @@ from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 
 from . import activities, code_rules
+from .edges import parent_node
 from .models import CLASSIFIED, CONFLICT, MIXED, NOT_APPLICABLE, NOT_CLASSIFIED, SOURCE_DERIVATION_INHERITANCE
 from .rule_engine import make_claim
 from .schema_vocab import most_specific
@@ -104,14 +105,14 @@ class Interner:
 
 @dataclass(frozen=True, slots=True)
 class Step:
-    """A child's step as inheritance reads it: the activity, and each input as ``(role, parent_key)``."""
+    """A child's step as inheritance reads it: the activity, and each input as ``(role, parent)``, the parent by ``edges.parent_node``."""
 
     activity: str
     inputs: tuple[tuple[str, str], ...]
 
     @classmethod
     def of(cls, generated_by: dict, share: Callable = lambda v: v) -> Step:
-        inputs = tuple((share(i["role"]), i["parent_key"]) for i in generated_by["inputs"])
+        inputs = tuple((share(i["role"]), parent_node(i)) for i in generated_by["inputs"])
         return cls(share(generated_by["activity"]), inputs)
 
     def parents(self, role: str) -> tuple[str, ...]:

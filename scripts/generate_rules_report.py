@@ -26,7 +26,9 @@ then its donor records (``DONORS_FILE``, #693), each counted as one "file" under
 (#582) for the identifier rules that recognise its parents and ``code_rules.ENTITY_RULES``, and
 the identifier rule that recognises its identifier; then its sample records (``SAMPLES_FILE``, #699),
 counted the same way under :data:`SAMPLE_RECORDS`, for a sample's slots and the identifier rule that
-recognises its identifier. For each claim carrying a
+recognises its identifier; then the sample maps held outside AnVIL that its steps read through
+(``EXTERNAL_LISTS_FILE``, #710), counted under :data:`EXTERNAL_LISTS` for their own step and samples.
+For each claim carrying a
 ``rule_id``, per rule:
 
 - **claims**, and **files** (the records it appeared on, each counted once, overall and
@@ -77,6 +79,7 @@ from meta_disco.callers import callers_in_reason, load_callers
 from meta_disco.models import DONOR_SLOTS, MIXED, SAMPLE_SLOTS, SAMPLES_FIELD, SOURCE_DERIVATION_INHERITANCE
 from meta_disco.output_utils import (
     DONORS_FILE,
+    EXTERNAL_LISTS_FILE,
     RUN_DIR_FORMAT,
     SAMPLES_FILE,
     find_latest_run,
@@ -416,6 +419,7 @@ class Tally:
 # either (:func:`donor_records`, :func:`sample_records`), which is not counted as a file.
 DONOR_RECORDS = "(donor records)"
 SAMPLE_RECORDS = "(sample records)"
+EXTERNAL_LISTS = "(external sample maps)"
 _ENTITY = "_entity"
 
 
@@ -424,6 +428,19 @@ def donor_records(run_dir: Path):
     and the identifier rule that recognises its identifier as its samples' one source. Nothing for a run
     reconciled before #693, which has no donor file."""
     return _entity_records(run_dir, DONORS_FILE, DONOR_RECORDS, DONOR_SLOTS, _named_by(DONOR))
+
+
+def external_list_records(run_dir: Path):
+    """A run's external lists (#710) in the shape :func:`tally` reads, counted under :data:`EXTERNAL_LISTS`, not as files:
+    each list's step and samples, which cite the external sample map rules. Nothing for a run reconciled before #710."""
+    if not (run_dir / "reconciled" / EXTERNAL_LISTS_FILE).exists():
+        return
+    for row in iter_reconciled_artifact(run_dir, EXTERNAL_LISTS_FILE):
+        record = {"dataset_title": EXTERNAL_LISTS, "classifications": {}, _ENTITY: True}
+        for name in ("generated_by", SAMPLES_FIELD):
+            if name in row:
+                record[name] = row[name]
+        yield record
 
 
 def _named_by(kind):
@@ -642,9 +659,10 @@ def build(
     activity_map_path: Path | None = None,
     donors=(),
     samples=(),
+    external_lists=(),
 ) -> dict:
-    """The report's data. A path left None reads the bundled file; ``donors`` are :func:`donor_records` and
-    ``samples`` :func:`sample_records`, counted after ``records``."""
+    """The report's data. A path left None reads the bundled file; ``donors`` are :func:`donor_records`,
+    ``samples`` :func:`sample_records` and ``external_lists`` :func:`external_list_records`, counted after ``records``."""
     if set(PLACEHOLDER_MARKERS) != marker_values():
         raise ReportError(f"the schema's markers {sorted(marker_values())} are not the ones worded here")
     rules = yaml_rules(rules_path) + code_rule_rows() + mapping_rows(value_map_path)
@@ -662,9 +680,9 @@ def build(
     duplicates = sorted(i for i, c in Counter([*ids, *others]).items() if c > 1)
     if duplicates:
         raise ReportError(f"ids declared twice: {duplicates}")
-    donors, samples = list(donors), list(samples)
+    donors, samples, external_lists = list(donors), list(samples), list(external_lists)
     n, stats, by_caller = tally(
-        chain(records, donors, samples),
+        chain(records, donors, samples, external_lists),
         rule_ids={r["id"] for r in rules if r["kind"] != KIND_MAPPING},
         mapping_ids={r["id"] for r in rules if r["kind"] == KIND_MAPPING},
     )
@@ -681,6 +699,12 @@ def build(
         + f" (output folder {run_dir.name})"
         + (f", and its {len(donors):,} donor records, counted as files under {DONOR_RECORDS}" if donors else "")
         + (f", and its {len(samples):,} sample records, under {SAMPLE_RECORDS}" if samples else "")
+        + (
+            f", and the {len(external_lists):,} sample maps held outside AnVIL its steps read through (#710), "
+            f"under {EXTERNAL_LISTS}"
+            if external_lists
+            else ""
+        )
         + ".",
         "rules": rules,
         "markers": markers,
@@ -878,6 +902,7 @@ def main(argv: list[str] | None = None) -> int:
             args.activity_map,
             donor_records(run_dir),
             sample_records(run_dir),
+            external_list_records(run_dir),
         )
     except (ReportError, FileNotFoundError, ValueError) as exc:
         print(f"rules-report: {exc}", file=sys.stderr)

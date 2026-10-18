@@ -44,7 +44,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 
 from . import activities, code_rules
-from .edges import distinct
+from .edges import distinct, parent_node
 from .models import SOURCE_DERIVATION_INHERITANCE, ClaimSource
 from .reconcile_inherit import PARENT_CONFLICT, Step, parent_first
 from .sample_identity import (
@@ -357,7 +357,7 @@ class SampleReport:
         passing = activities.samples_roles(activity)
         seen: set[str] = set()
         for i in generated_by["inputs"]:
-            key = i["parent_key"]
+            key = parent_node(i)
             if i["role"] in passing or key in seen:
                 continue
             seen.add(key)
@@ -411,6 +411,10 @@ class SampleReport:
                 "parent_disagreement_examples": self.parent_examples.get(dataset, []),
             }
         return {"lists": len(self.lists), "by_dataset": by_dataset}
+
+    def keep(self, entry: dict) -> None:
+        """Write the ``SampleList`` ``entry`` with the run's lists, as one an external list names (#710): no record settles to it."""
+        self.lists.setdefault(entry["list_id"], entry)
 
     def sorted_lists(self) -> list[dict]:
         """The run's lists in id order, as the artifact writes them."""

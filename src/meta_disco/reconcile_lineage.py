@@ -20,7 +20,11 @@ reconcile's slot-evidence join (``reconcile.join``) and shaped like it:
    the run lineage importer's shape, from the map's source, whose child's dataset and
    column take their reads from that dataset (``run_lineage_map.RunLineageMap.declares``).
    Any other such line, a sample parent's included, is counted ``undeclared_dataset``
-   before anything else and gives nothing.
+   before anything else and gives nothing. A line whose parent is a file held outside AnVIL
+   (``parent_key_type: external_file``, #710, a workaround until #624) is looked for among
+   the files ``sources/external_files.yaml`` declares for the child's dataset
+   (``reconcile_external``), whose carriers reconcile adds; one not declared there is
+   ``external_undeclared``.
    One carrier resolves it; none is ``not_in_dataset``, several ``several_match``, and
    either gives no input (counted, never written onto a record). A line naming no locator
    for its parent (``parent`` absent) is ``not_in_dataset``. A child no record carries is
@@ -59,6 +63,7 @@ SEVERAL_MATCH = "several_match"
 UNTRANSLATED = "untranslated"
 SAMPLE_PARENT = "sample_parent"
 UNDECLARED_DATASET = "undeclared_dataset"
+EXTERNAL_UNDECLARED = "external_undeclared"
 CHILD_NOT_IN_RUN = "child_not_in_run"
 CHILD_SEVERAL_MATCH = "child_several_match"
 PARENT_IS_CHILD = "parent_is_child"
@@ -69,6 +74,7 @@ OUTCOMES = (
     UNTRANSLATED,
     SAMPLE_PARENT,
     UNDECLARED_DATASET,
+    EXTERNAL_UNDECLARED,
     CHILD_NOT_IN_RUN,
     CHILD_SEVERAL_MATCH,
     PARENT_IS_CHILD,
@@ -78,6 +84,9 @@ OUTCOMES = (
 # to (None for every dataset), and the value. ``reconcile.join``'s key; a lineage line's is
 # scoped to its child's dataset, or to the dataset a declared line names for its parent.
 Locator = tuple[str, str | None, str]
+# A file held outside AnVIL is looked up by its address (#710), which no record carries:
+# its carrier is added by ``reconcile_external``, never found by the join's scan.
+EXTERNAL_REF = "parent_ref"
 
 
 @dataclass(frozen=True)
@@ -106,6 +115,8 @@ class PendingLineage:
     # Per line: its source's counts, its attribution, its row, and its child's and parent's locators.
     lines: list[tuple[Counter, dict, Row, Locator, Locator | None]] = field(default_factory=list)
     wanted: set[Locator] = field(default_factory=set)
+    # The external files the lines name, as ``(dataset, address)`` (#710).
+    external: set[tuple[str, str]] = field(default_factory=set)
     # Per source type and dataset: offered lines, and each outcome's count.
     counts: dict[str, dict[str, Counter]] = field(default_factory=lambda: defaultdict(lambda: defaultdict(Counter)))
     # The lineage files read, relative to the lineage root.
@@ -170,7 +181,10 @@ def translate_lineage(
         child = (JOIN_KEY_OUTPUT_FIELDS[str(envelope.target_key)], dataset, line.target_key_value)
         parent_dataset = line.parent_dataset or dataset
         parent = None
-        if line.parent is not None and line.parent_key_type is not None:
+        if str(line.parent_key_type) == LineageParentKeyEnum.external_file.value and line.parent is not None:
+            parent = (EXTERNAL_REF, dataset, line.parent)
+            pending.external.add((dataset, line.parent))
+        elif line.parent is not None and line.parent_key_type is not None:
             parent = (JOIN_KEY_OUTPUT_FIELDS[str(line.parent_key_type)], parent_dataset, line.parent)
             pending.wanted.add(parent)
         pending.wanted.add(child)
@@ -181,7 +195,11 @@ def translate_lineage(
 
 
 def resolve_lineage(pending: PendingLineage, carriers: dict[Locator, list[Carrier]]) -> LineageJoin:
-    """Hand each translated line whose child and parent each one record carries to that child; count the rest."""
+    """Hand each translated line whose child one record carries, and whose parent one carrier does, to that child; count the rest.
+
+    A parent's carrier is a record, or a file held outside AnVIL that reconcile adds to ``carriers``
+    (``reconcile_external.carriers``, #710), whose step names it by ``parent_ref``.
+    """
     result = LineageJoin(counts=pending.counts, files=pending.files)
     for counts, attribution, row, child, parent in pending.lines:
         children = carriers.get(child, [])
@@ -189,8 +207,9 @@ def resolve_lineage(pending: PendingLineage, carriers: dict[Locator, list[Carrie
             counts[CHILD_NOT_IN_RUN if not children else CHILD_SEVERAL_MATCH] += 1
             continue
         parents = carriers.get(parent, []) if parent is not None else []
+        external = parent is not None and parent[0] == EXTERNAL_REF
         if len(parents) != 1:
-            counts[NOT_IN_DATASET if not parents else SEVERAL_MATCH] += 1
+            counts[(EXTERNAL_UNDECLARED if external else NOT_IN_DATASET) if not parents else SEVERAL_MATCH] += 1
             continue
         ((found_child,), (found_parent,)) = children, parents
         if found_parent.key == found_child.key:
@@ -207,6 +226,7 @@ def resolve_lineage(pending: PendingLineage, carriers: dict[Locator, list[Carrie
                 attribution,
                 found_parent.data_type,
                 parent[1] if parent is not None and parent[1] != child[1] else None,
+                external=external,
             )
         )
     return result

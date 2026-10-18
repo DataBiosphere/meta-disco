@@ -596,6 +596,8 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
         "values_new_dimensions": new_dimensions(report, previous) if previous else [],
         "lineage": lineage_rows(report),
         "lineage_columns": list(LINEAGE_COLUMNS),
+        # Written before #710: no list held outside AnVIL.
+        "external_lists": report.get("external_lists") or {},
         "content_step_columns": list(CONTENT_STEP_COLUMNS),
         "inheritance": inheritance_rows(report),
         "inheritance_columns": list(INHERITANCE_COLUMNS),
@@ -951,6 +953,7 @@ def render_markdown(data: dict) -> str:
             "</details>",
         ]
     lines += ["", *_lineage_section(data["lineage"])]
+    lines += ["", *_external_lists_section(data["external_lists"])]
     lines += ["", *_inheritance_section(data["inheritance"])]
     lines += ["", *_samples_section(data["samples"])]
     lines += ["", "## Per dataset", ""]
@@ -975,6 +978,34 @@ def _said(example: dict) -> str:
     """Who said what in one conflict example; what a source said (a file name or an activity) is catalog text, so a code span."""
     return "; ".join(
         f"{s['by']['source_type']} ({s['by']['rule_id']}): {md_code(str(s['said']))}" for s in example["said"]
+    )
+
+
+EXTERNAL_LIST_COLUMNS = ("lists", "stepped", "rows", "rows_not_in_dataset", "rows_several_match", "samples_named")
+
+
+def _external_lists_section(per_dataset: dict[str, dict]) -> list[str]:
+    """The sample maps held outside AnVIL that the run's steps read through, per dataset (#710)."""
+    lines = [
+        "### Sample maps held outside AnVIL",
+        "",
+        "A workaround until AnVIL holds them (#624): the published copies of sample maps a dataset's workspace tars "
+        "were imported from, declared in `sources/external_files.yaml` and linked to a tar only where its own "
+        "`callset.json` lists exactly the map's samples (#710). Each map a lineage line names is read here. "
+        "*stepped*: every row's gVCF is one file of the dataset, so the map has its members and a tar reads "
+        "through it; *rows_not_in_dataset* / *rows_several_match*: rows whose name no file, or more than one, "
+        "carries (or that repeat a name), which leave the map without members; *samples_named*: maps whose every "
+        "sample is recognised.",
+        "",
+    ]
+    if not per_dataset:
+        return [*lines, "None: no lineage line named one in this run."]
+    return lines + md_table(
+        ["dataset", *EXTERNAL_LIST_COLUMNS],
+        [
+            [md_code(shown(d))] + [_n(c.get(k, 0)) for k in EXTERNAL_LIST_COLUMNS]
+            for d, c in sorted(per_dataset.items())
+        ],
     )
 
 
@@ -1026,7 +1057,9 @@ def _lineage_section(lineage: dict | None) -> list[str]:
         "`generated_by` (#577). *untranslated*: no authored activity-map row reads the line (the "
         "[review queue](review-queue-report.md) lists them); *sample_parent*: the parent is a sample, which becomes "
         "an input later (#701); *undeclared_dataset*: the line names its parent's dataset, and the ENA run lineage "
-        "map declares no such pair; *not_in_dataset* / *several_match*: no file, or more than one, of the dataset "
+        "map declares no such pair; *external_undeclared*: the parent is a file held outside AnVIL (#710) that "
+        "`sources/external_files.yaml` does not declare for the dataset; *not_in_dataset* / *several_match*: no "
+        "file, or more than one, of the dataset "
         "searched is the parent; *child_not_in_run* / *child_several_match*: no file, or more than "
         "one, is the child; *parent_is_child*: the parent named is the child itself. Only *resolved* lines give "
         "a step.",

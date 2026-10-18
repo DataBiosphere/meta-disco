@@ -41,6 +41,13 @@ rows:
     reason: >-
       A T2T_CHRY CRAM holds the ENA run whose read and base counts its samtools stats
       equal, and its own @PG says bwa mem took FASTQs: the run's reads, aligned (#594).
+  - id: activity.external_sample_map_import
+    match: {source_type: external_ground_truth, table: sample_maps, raw_activity: GenomicsDBImport, child_column: file_id, parent_column: "--sample-name-map"}
+    declares: {activity: CohortMergeActivity, role: input_list}
+    reason: >-
+      A workspace tar's own vcfheader.vcf says GenomicsDBImport read this sample-name map, and the
+      tar's callset.json names exactly the samples the map's published copy lists: the tar merges
+      the gVCFs the map lists, read through it (#710, a workaround until AnVIL holds the map, #624).
   - id: activity.t2t_variant_call
     match:
       source_type: repository_metadata
