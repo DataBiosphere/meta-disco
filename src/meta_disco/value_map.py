@@ -761,12 +761,13 @@ def queue_intro(
     roots read, the entity root by default the one beside ``evidence_root``."""
     entity_root = entity_root if entity_root is not None else entity_root_beside(evidence_root)
     scope = f" for {', '.join(sorted(datasets))} only" if datasets else ""
+    donor, sample = (", ".join(s for s in TRANSLATED_FIELDS if KIND_OF_SLOT.get(s) == k) for k in ("donor", "sample"))
     return (
         "Source values the slot map or the entity map routed to a slot but that no authored translation rule "
         "reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is "
         'listed once per source, dataset, table and column it was found in; "rule it would use" names the '
-        "seeded rule that matches it, or — where none does. For a donor's slot (phenotypic_sex, "
-        "genetic_ancestry), files counts donors, each dataset's identifiers apart. "
+        f"seeded rule that matches it, or — where none does. For a donor's slot ({donor}), files counts "
+        f"donors, and for a sample's slot ({sample}), samples, each dataset's identifiers apart. "
         f"{len(entries):,} listed, from evidence{scope} under {_shown_root(evidence_root)} and "
         f"{_shown_root(entity_root)}."
     )

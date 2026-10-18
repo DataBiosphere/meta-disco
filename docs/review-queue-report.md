@@ -1,6 +1,6 @@
 # Review queue
 
-Source values the slot map or the entity map routed to a slot but that no authored translation rule reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per source, dataset, table and column it was found in; "rule it would use" names the seeded rule that matches it, or — where none does. For a donor's slot (phenotypic_sex, genetic_ancestry), files counts donors, each dataset's identifiers apart. 27 listed, from evidence under data/source_evidence and data/entity_evidence.
+Source values the slot map or the entity map routed to a slot but that no authored translation rule reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per source, dataset, table and column it was found in; "rule it would use" names the seeded rule that matches it, or — where none does. For a donor's slot (phenotypic_sex, genetic_ancestry, organism_type, reported_ethnicity), files counts donors, and for a sample's slot (biosample_type), samples, each dataset's identifiers apart. 27 listed, from evidence under data/source_evidence and data/entity_evidence.
 
 ## Published: the catalog's published columns
 

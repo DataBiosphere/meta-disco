@@ -1025,7 +1025,7 @@ def _lineage_section(lineage: dict | None) -> list[str]:
         "line, in the dataset its map declares, #594), and merges every source's step for a file into its "
         "`generated_by` (#577). *untranslated*: no authored activity-map row reads the line (the "
         "[review queue](review-queue-report.md) lists them); *sample_parent*: the parent is a sample, which becomes "
-        "an input later (#582); *undeclared_dataset*: the line names its parent's dataset, and the ENA run lineage "
+        "an input later (#701); *undeclared_dataset*: the line names its parent's dataset, and the ENA run lineage "
         "map declares no such pair; *not_in_dataset* / *several_match*: no file, or more than one, of the dataset "
         "searched is the parent; *child_not_in_run* / *child_several_match*: no file, or more than "
         "one, is the child; *parent_is_child*: the parent named is the child itself. Only *resolved* lines give "

@@ -10,7 +10,7 @@ reconcile's slot-evidence join (``reconcile.join``) and shaped like it:
    file's raw ``data_type``). A line selecting no authored row is counted
    ``untranslated`` and gives nothing. A line whose parent is a sample
    (``parent_key_type: biosample_id``) is counted ``sample_parent`` and gives nothing:
-   only file parents become inputs here (a sample parent has no issue yet).
+   only file parents become inputs here (a sample parent is #701).
 2. **Resolve, within the child's dataset.** The child by the envelope's ``target_key``
    and the parent by its ``parent_key_type`` (``file_id`` or ``drs_uri``; an IGVF
    accession was already written as its DRS URI by the importer), each against that
