@@ -643,7 +643,7 @@ def build(
     return {
         "run": run_dir.name,
         "records": n,
-        "provenance": f"{len(rules)} rules, {len(edge_rules)} edge rules and {len(sample_rules)} sample rules. "
+        "provenance": f"{len(rules)} rules, {len(edge_rules)} edge rules and {len(sample_rules)} sample and donor rules. "
         f"Counts from classifying {n:,} files"
         + (f" on {date}" if date else "")
         + f" (output folder {run_dir.name})"

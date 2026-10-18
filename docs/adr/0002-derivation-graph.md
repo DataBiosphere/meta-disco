@@ -78,7 +78,9 @@ and a parent not found there is `external` (decision 2). Only sample and donor i
    donors' values.
 6. **A donor's family is on its record** (*amended by #582*): `mother` and `father`, each the parent's
    `EntityIdentifier`, and `family_id`, the source's string as written, each settled as any slot is,
-   so two sources naming different mothers are a `conflict`. The relation is still `isBiologicalChildOf`
+   so two sources naming different identifiers for a mother are a `conflict`, even where the two
+   are one person in two namespaces (GIAB's `HG004` is Coriell's `NA24143`) until a crosswalk
+   between namespaces exists (#674). The relation is still `isBiologicalChildOf`
    (KIN:032), child to parent, but it is a donor's field, not an `edges.jsonl` row (decision 5's
    paragraph and decision 6's, below): the child now has a record to carry it. A parent's children and
    a donor's siblings are derived, never stored.
@@ -155,8 +157,9 @@ the dataset decision 2's declared exception names.
 
 `parent_scope` is **not stored** on the record: it is whether `parent_key` is set, and a stored copy
 could disagree with it. `edges.jsonl` works it out, so a consumer can filter on it. An edge whose parent
-is an identifier (a `SequenceActivity`'s sample, a `SampleCollectionActivity`'s donor, an `isBiologicalChildOf` parent) has no `parent_scope`: an identifier is neither a
-file we hold nor one we lack.
+is an identifier (a `SequenceActivity`'s sample, a `SampleCollectionActivity`'s donor) has no `parent_scope`: an identifier is neither a
+file we hold nor one we lack. (*Amended by #582:* an `isBiologicalChildOf` parent is a donor record's
+`mother` or `father`, decision 1 item 6, not an edge.)
 
 *Rejected: a third scope, `type_only`* (the June doc's ungrounded edge: verb and parent kind known, no
 parent named). A `.tbi` whose VCF cannot be picked already says it is a VCF index through its own
@@ -590,7 +593,9 @@ Listed, not applied. Each lands with the sub-issue that first emits it.
   conflict kinds, and the conflict listing names `derivation_inheritance` with what it declared, `mixed`
   included; the report's `inheritance` block counts what each role gave. Edge conflicts are listed by #577.
 - An `edges.jsonl` row is its own class, not a `GeneratedBy`: its child is a record key or an
-  `EntityIdentifier`, because a `SampleCollectionActivity`'s child, a sample, and `isBiologicalChildOf`'s, a donor, have no record to sit on; its parent carries the
+  `EntityIdentifier`, because a `SampleCollectionActivity`'s child, a sample, has no record to sit on (*amended by
+  #693 and #582:* samples and donors now have records, and `isBiologicalChildOf` is the donor's `mother` and
+  `father`, decision 1 item 6); its parent carries the
   same fields as an `ActivityInput`'s — `parent_key`, `parent_file`, `parent_ref`, or `parent_id` — and its
   provenance `source_type` plus `source` and `rule_id` for evidence or `rule_id` alone for inference, with `parent_scope` worked out (decision 6).
 - `parent_kind_enum` gains `reference` and `assembly` if #358 and #360 need them; decided there.

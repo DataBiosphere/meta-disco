@@ -189,8 +189,9 @@ def make_claim(
     a ``state`` — declaring two or none raises rather than silently picking one.
     ``value``/``status`` is the original invariant (the same one ``rule_loader``
     enforces for a rule's ``then`` vs ``then.status`` — epic #116 / #136), widened
-    by one arm. A ``value`` is a vocabulary term, or, on a claim for a donor's parent
-    (#582), the parent's identifier as an ``EntityIdentifier`` dict. A ``status``
+    by one arm. A ``value`` is a string (a vocabulary term, or a donor's family id as
+    written, #582), or, on a claim for a donor's parent, the parent's identifier as an
+    ``EntityIdentifier`` dict. A ``status``
     claim declares a non-classified sentinel only (``not_applicable`` /
     ``not_classified`` — the authorable statuses, never ``classified``, which is
     expressed as a ``value`` claim). A ``state`` claim

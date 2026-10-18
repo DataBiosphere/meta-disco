@@ -607,6 +607,7 @@ class TestMakeClaim:
             {"id": "NA12892", "namespace": "coriell", "dataset": None},
             {"id": "NA12892", "namespace": "coriell", "dataset": "D"},
             {"id": "S1", "namespace": "dataset_local"},
+            {"id": "S1", "namespace": "dataset_local", "dataset": None},
         ],
     )
     def test_rejects_a_value_neither_a_string_nor_an_entity_identifier(self, value):

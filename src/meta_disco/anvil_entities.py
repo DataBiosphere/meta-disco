@@ -10,8 +10,9 @@ each line an ``EntityEvidenceRow``.
 **A line is a cell, as written** (contract 1.1, 1.4): the identifier string the row names
 the donor by, and the cell's value — a string verbatim, anything else as ``json.dumps``
 spells it (1000 Genomes' ``pedigree.sex`` is the number ``1``). Neither is interpreted
-here: the identifier rules recognise the identifier and the value map translates the
-value, both at reconcile. A null or empty-list cell, or a row whose identifier cell is not
+here: the identifier rules recognise the identifier and, at reconcile, the value map
+translates a sex or ancestry value, while a family value (``models.FAMILY_FIELDS``, #582) is
+read there as written or as a parent's identifier. A null or empty-list cell, or a row whose identifier cell is not
 a non-empty string, writes nothing and is counted.
 
 **AnVIL's published donor and biosample** name no identifier of ours: each is attached to

@@ -11,7 +11,7 @@
 # (models.DONOR_FIELDS, and its family's, models.FAMILY_FIELDS, #582), the columns whose
 # cells it reads. A `mother` or `father` cell names the parent as the source wrote it, PED's
 # `0` ("not known") included; reconcile recognises it as a donor, and makes no claim of a `0`.
-# A `family_id` cell is taken as written. A table naming only its
+# A `family_id` cell is taken as written (an empty or blank one makes no claim). A table naming only its
 # `identifier` reads no slot: it is there for AnVIL's records made from its rows to tie to
 # (`published`, below). Measured on anvil15, 2026-10-16 and (the sample tables) 2026-10-17.
 # Each table's comment says why its columns are the donor's sex or population: a sex
@@ -61,8 +61,8 @@ datasets:
       identifier: sample_id
   ANVIL_HPRC:
     # HPRC's participants, 1000 Genomes and GIAB people: `sex`; `subpopulation`, a
-    # 1000 Genomes population code; and `familyid`, 1000 Genomes' family id (GIAB's trios
-    # have their own, `3140`).
+    # 1000 Genomes population code; and `familyid`, 1000 Genomes' family id (GIAB's two
+    # trios have their own, `3140` and `3150`).
     participant:
       identifier: participant_id
       phenotypic_sex: [sex]
@@ -70,7 +70,8 @@ datasets:
       family_id: [familyid]
     # HPRC's samples, keyed by the Coriell or GIAB name (56 of 57; `mHomSap3`, no rule's, is not).
     # The cell line's `maternal_id` and `paternal_id` are its donor's parents (a Coriell or GIAB
-    # name, `0` on 2 rows), whose reads are this row's `mat_ilmn` / `pat_ilmn` files.
+    # name, `0` on 2 rows; mHomSap3's are mHomSap2 and mHomSap1, no rule's), whose reads are this
+    # row's `mat_ilmn` / `pat_ilmn` files.
     sample:
       identifier: sample_id
       mother: [maternal_id]
@@ -88,7 +89,8 @@ datasets:
       father: [paternal_id]
       family_id: [family_id]
     # HPRC release 2's Illumina CRAMs, a row per file of 1000 Genomes people: `sample_id` the
-    # person's Coriell number, with the same three family columns (`0` where not known).
+    # person's Coriell number, with the same three family columns (a parent `0` where not
+    # known; `family_id` always filled, the person's own number where they have no family).
     illumina:
       identifier: sample_id
       mother: [maternal_id]

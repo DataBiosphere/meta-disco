@@ -1164,7 +1164,73 @@ def test_the_importer_writes_each_family_cell_as_written_ped_unknown_included(tm
     ]
 
 
-def test_a_family_line_is_never_the_value_maps_to_seed_or_queue(tmp_path):
+def test_a_family_line_is_not_among_the_entries_the_value_map_reads_by_default(tmp_path):
+    """`entries()`' default fields are what the value map's seeding and review queue read."""
     root = tmp_path / "entity_evidence"
     family_lines(root, "D", "family_id", [("PR25", "HG01106")])
     assert list(entries(next(root.rglob("*.ndjson")))) == []
+
+
+def test_each_parent_settles_to_its_own_namespace_and_a_father_alone_gets_a_record(tmp_path):
+    root = tmp_path / "entity_evidence"
+    family_lines(root, "D", "father", [("HG003", "HG002")])
+    result = reconcile_entities(gathered(root, tmp_path), identifier_rules(), [])
+    donors = by_id(result.donors)
+    assert donors["HG002"]["father"]["value"] == {"id": "HG003", "namespace": "giab"}
+    assert donors["HG003"]["identifier"] == {"id": "HG003", "namespace": "giab"}
+
+
+def test_a_parent_only_a_sample_rule_recognises_is_unrecognised(tmp_path):
+    """An SRA sample accession names a sample, never a donor, so it is no one's parent."""
+    root = tmp_path / "entity_evidence"
+    family_lines(root, "D", "mother", [("SRS006871", "HG00096")])
+    result = reconcile_entities(gathered(root, tmp_path), identifier_rules(), [])
+    assert by_id(result.donors)["HG00096"]["mother"]["status"] == NOT_CLASSIFIED
+    assert result.report["family"]["unrecognised_parents"] == [
+        {"dataset": "D", "table": "t", "lines": 1, "examples": {"SRS006871": 1}}
+    ]
+
+
+def test_a_family_id_0_is_kept_since_ped_0_means_not_known_only_for_a_parent(tmp_path):
+    root = tmp_path / "entity_evidence"
+    family_lines(root, "D", "family_id", [("0", "HG00096")])
+    family = by_id(reconcile_entities(gathered(root, tmp_path), identifier_rules(), []).donors)["HG00096"]["family_id"]
+    assert (family["status"], family["value"]) == (CLASSIFIED, "0")
+
+
+def test_a_family_claim_carries_its_files_source_type_its_join_and_is_listed_once(tmp_path):
+    """The same line twice is one claim; a child an identifier rule rewrote (`GM19908`) is not an exact match."""
+    root = tmp_path / "entity_evidence"
+    family_lines(root, "D", "mother", [("NA19906", "GM19908"), ("NA19906", "GM19908")])
+    (claim,) = by_id(reconcile_entities(gathered(root, tmp_path), identifier_rules(), []).donors)["NA19908"]["mother"][
+        "evidence"
+    ]
+    assert (claim["source_type"], claim["match_exact"]) == (SOURCE_REPOSITORY_METADATA, False)
+
+
+def test_every_claim_citing_an_entity_rule_is_on_a_slot_it_declares_from_the_source_type_it_declares(tmp_path):
+    root = tmp_path / "entity_evidence"
+    family_lines(root, "D", "family_id", [("PR25", "HG01106")])
+    declared = {r.id: r for r in code_rules.ENTITY_RULES}
+    for donor in reconcile_entities(gathered(root, tmp_path), identifier_rules(), []).donors:
+        for slot in FAMILY_FIELDS:
+            for claim in donor[slot]["evidence"]:
+                if claim["rule_id"] in declared:
+                    rule = declared[claim["rule_id"]]
+                    assert slot in rule.sets and claim["source_type"] == rule.source_type
+
+
+def test_a_family_line_in_a_published_file_is_refused(tmp_path):
+    root = tmp_path / "entity_evidence"
+    write_entity_lines(root, "D", "mother", [("NA12892", "NA12878")])  # a published file by default
+    with pytest.raises(ValueError, match="carries mother in a published file"):
+        gathered(root, tmp_path)
+
+
+def test_the_reports_per_table_lists_are_in_dataset_then_table_order(tmp_path):
+    root = tmp_path / "entity_evidence"
+    family_lines(root, "E", "mother", [("0", "HG00096"), ("mHomSap2", "HG00097")])
+    family_lines(root, "D", "mother", [("0", "HG00098"), ("mHomSap1", "HG00099")])
+    family = reconcile_entities(gathered(root, tmp_path), identifier_rules(), []).report["family"]
+    assert [row["dataset"] for row in family["unknown_parent_lines"]] == ["D", "E"]
+    assert [row["dataset"] for row in family["unrecognised_parents"]] == ["D", "E"]

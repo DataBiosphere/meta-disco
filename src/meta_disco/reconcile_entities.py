@@ -164,9 +164,9 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
     """Every line of ``paths`` (:func:`select_entity_evidence`), recognised, and translated into its donor's slots,
     read into its donor's family (:func:`_family_claim`), or listed among its donor's or sample's repository identifiers.
 
-    Reads every line, so a malformed file or line, an identifier two rules match, or a
-    repository identifier that is empty or more than one line, in a file other than a published
-    table's, or tying to two records raises here: reconcile calls this before it
+    Reads every line, so a malformed file or line, an identifier two rules match, a family line
+    in a published table's file, or a repository identifier that is empty or more than one line,
+    in a file other than a published table's, or tying to two records raises here: reconcile calls this before it
     writes anything. A translated claim cites its value-map row, a parent's the identifier rule
     that recognised the parent, and a family id's ``code_rules.FAMILY_ID_AS_WRITTEN``; each carries
     the line's source and raw value, joined by ``entity_identifier``. A repository identifier is one record's by its kind,
@@ -191,6 +191,11 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
                 raise ValueError(
                     f"{relative_to(path, entity_root)}: carries {entry.field}, a repository's own identifier, in a "
                     f"{envelope.source_type} file; only the repository's published table issues one"
+                )
+            if entry.field in FAMILY_FIELDS and envelope.source_type == SOURCE_PUBLISHED_VALUE:
+                raise ValueError(
+                    f"{relative_to(path, entity_root)}: carries {entry.field} in a published file; the repository's "
+                    "model has no family, which only a submitter table states (#582)"
                 )
             if alias_kind is not None and _ONE_LINE.fullmatch(entry.raw_value) is None:
                 raise ValueError(

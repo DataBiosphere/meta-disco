@@ -2096,7 +2096,7 @@ class IdentifierRule(ConfiguredBaseModel):
 
 class DonorRecord(ConfiguredBaseModel):
     """
-    One donor (#693, ADR-0002 decision 1 as amended): the person or animal samples were collected from, keyed by its identifier, so one record gathers what every dataset's tables say about one person, and each property is settled once, by the rule a file's dimensions are settled by (`reconcile.settle`). Reconcile writes one per donor that entity evidence names or a sample's `collected_from` points to, in `reconciled/donors.ndjson.gz`. A file reaches its donors through its `samples` and each sample's `collected_from`; no donor property is copied onto a file (epic #692, decision 5).
+    One donor (#693, ADR-0002 decision 1 as amended): the person or animal samples were collected from, keyed by its identifier, so one record gathers what every dataset's tables say about one person, and each property is settled once, by the rule a file's dimensions are settled by (`reconcile.settle`). Reconcile writes one per donor that entity evidence names, a sample's `collected_from` points to, a repository's own identifier ties to, or another donor's `mother` or `father` claim names (#582), in `reconciled/donors.ndjson.gz`. A file reaches its donors through its `samples` and each sample's `collected_from`; no donor property is copied onto a file (epic #692, decision 5).
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
@@ -2210,7 +2210,7 @@ class GeneticAncestryClassification(Classification):
 
 class ParentClassification(Classification):
     """
-    A donor's mother or father (#582): the parent's identifier, so the parent's own `DonorRecord` is found by equality with its `identifier`. The relation is the Kinship Ontology's `isBiologicalChildOf` (KIN:032), child to parent, as a PED file states it; a parent's children and a donor's siblings are derived from it, never stored. Each source's parent string is recognised as a donor through `rules/sample_namespaces.yaml` in the source's dataset, and its claim cites the rule that recognised it; PED's `0` (\"not known\") makes no claim. Two sources naming different parents are a `conflict`.
+    A donor's mother or father (#582): the parent's identifier, so the parent's own `DonorRecord` is found by equality with its `identifier`. The relation is the Kinship Ontology's `isBiologicalChildOf` (KIN:032), child to parent, as a PED file states it; a parent's children and a donor's siblings are derived from it, never stored. Each source's parent string is recognised as a donor through `rules/sample_namespaces.yaml` in the source's dataset, and its claim cites the rule that recognised it; PED's `0` (\"not known\") makes no claim. Two sources naming different identifiers are a `conflict`, even where the two are one person in two namespaces (GIAB's `HG004` is Coriell's `NA24143`), until a crosswalk between namespaces exists (#674).
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
          'slot_usage': {'value': {'inlined': True,
@@ -2227,7 +2227,7 @@ class ParentClassification(Classification):
 
 class FamilyIdClassification(Classification):
     """
-    The family a donor belongs to (#582), as a PED file's family id names it: the string as the source wrote it, so it means something only among datasets that share a numbering (1000 Genomes' family ids, which HPRC and HPRC_R2 reuse). It groups relatives no parent link joins, such as siblings whose parents were not sequenced. Two sources writing different ids are a `conflict`.
+    The family a donor belongs to (#582), as a PED file's family id names it: the string as the source wrote it, so it means something only among datasets that share a numbering (1000 Genomes' family ids, which HPRC and HPRC_R2 reuse). It groups relatives no parent link joins, such as siblings whose parents were not sequenced; a person with no relative listed often has their own id as their family id, as PED files do. Two sources writing different ids are a `conflict`.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
