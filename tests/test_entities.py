@@ -1,6 +1,6 @@
-"""Donor and sample records (#693, #669): the entity map, entity evidence files, the importer, the value
-map's donor slots, and the reconcile pass that settles each donor, links each sample to its donor, and
-lists on each record the repository's own identifiers for it.
+"""Donor and sample records (#693, #669, #582): the entity map, entity evidence files, the importer, the
+value map's donor slots, and the reconcile pass that settles each donor and its family, links each sample
+to its donor, and lists on each record the repository's own identifiers for it.
 
 Synthetic manifests and a test translation table, so the tests check the mechanism and not the
 bundled rows."""
@@ -14,6 +14,7 @@ import pytest
 import yaml
 
 from meta_disco import anvil_entities as ae
+from meta_disco import code_rules
 from meta_disco.anvil_evidence import EVIDENCE_DIRS
 from meta_disco.azul_manifest import FORMAT_VERBATIM, manifest_path
 from meta_disco.entity_evidence import (
@@ -29,6 +30,7 @@ from meta_disco.models import (
     CONFLICT,
     DONOR_FIELDS,
     DONOR_REPOSITORY_ID,
+    FAMILY_FIELDS,
     JOIN_KEY_DRS_URI,
     JOIN_KEY_ENTITY_IDENTIFIER,
     NOT_CLASSIFIED,
@@ -212,7 +214,8 @@ def lines(root: Path, kind: str, dataset: str, table: str) -> list[dict]:
 def test_the_bundled_map_loads_and_reads_only_donor_slots():
     entity_map = load_entity_map()
     assert entity_map.catalog == "anvil15"
-    assert {slot for t in entity_map.tables for slot in t.slots} <= set(DONOR_FIELDS)
+    assert {slot for t in entity_map.tables for slot in t.slots} <= {*DONOR_FIELDS, *FAMILY_FIELDS}
+    assert {slot for p in entity_map.published for slot in p.slots} <= set(DONOR_FIELDS)
     assert [(p.kind, p.table, p.repository_id) for p in entity_map.published] == [
         ("donor", "anvil_donor", "donor_id"),
         ("sample", "anvil_biosample", "biosample_id"),
@@ -262,6 +265,7 @@ def test_a_table_may_name_only_its_identifier(tmp_path):
         ("{person: {table: t, source_rows: s, repository_id: i}}", "keys are"),
         ("{donor: {table: t, source_rows: s}}", "keys are"),
         ("{sample: {table: t, source_rows: s, repository_id: i, phenotypic_sex: [p]}}", "keys are"),
+        ("{donor: {table: t, source_rows: s, repository_id: i, mother: [m]}}", "keys are"),
         ("{donor: {table: t, source_rows: s, repository_id: s}}", "source rows and the repository identifier"),
         ("{donor: {table: t, source_rows: s, repository_id: i, phenotypic_sex: [i]}}", "read as the identifier"),
         (
@@ -525,7 +529,7 @@ def test_the_entity_row_field_pattern_lists_every_entity_field():
     pattern = schema["classes"]["EntityEvidenceRow"]["attributes"]["field"]["pattern"]
     match = re.fullmatch(r"\^\((.*)\)\\Z", pattern)
     assert match is not None, pattern
-    assert set(match.group(1).split("|")) == {*DONOR_FIELDS, *REPOSITORY_ID_FIELDS}
+    assert set(match.group(1).split("|")) == {*DONOR_FIELDS, *FAMILY_FIELDS, *REPOSITORY_ID_FIELDS}
 
 
 # --- the vocabulary and the value map ------------------------------------------------
@@ -892,6 +896,7 @@ def test_the_report_counts_each_slot_overall_and_by_the_datasets_naming_its_dono
     assert report["statuses"] == {
         "phenotypic_sex": {CLASSIFIED: 2, CONFLICT: 1},
         "genetic_ancestry": {CLASSIFIED: 1, NOT_CLASSIFIED: 2},
+        **{slot: {NOT_CLASSIFIED: 3} for slot in FAMILY_FIELDS},
     }
     assert report["by_dataset"] == {
         G1K: {
@@ -969,3 +974,159 @@ def test_entity_evidence_leaves_every_file_record_as_it_was(imported, tmp_path):
 
     with_entities = records_written(tmp_path / "entity_evidence")
     assert records_written(tmp_path / "nowhere") == with_entities
+
+
+# --- a donor's family (#582) ----------------------------------------------------------
+
+
+def family_lines(root: Path, dataset: str, field: str, lines: list[tuple[str, str]]) -> None:
+    write_entity_lines(root, dataset, field, lines, SOURCE_REPOSITORY_METADATA)
+
+
+def recognised_by(raw: str) -> str:
+    got = identifier_rules().recognise(raw, "D", "donor")
+    assert got is not None
+    return got.rule_id
+
+
+def test_a_parent_settles_to_its_identifier_citing_the_rule_that_recognised_it(tmp_path):
+    root = tmp_path / "entity_evidence"
+    family_lines(root, "D", "mother", [("NA12892", "NA12878")])
+    family_lines(root, "E", "father", [("GM12891", "NA12878")])
+    result = reconcile_entities(gathered(root, tmp_path), identifier_rules(), [])
+    child = by_id(result.donors)["NA12878"]
+    assert (child["mother"]["status"], child["mother"]["value"]) == (
+        CLASSIFIED,
+        {"id": "NA12892", "namespace": "coriell"},
+    )
+    # The parent is rewritten as its rule writes it; the claim keeps what the source wrote.
+    assert child["father"]["value"] == {"id": "NA12891", "namespace": "coriell"}
+    ((claim,),) = [child["father"]["evidence"]]
+    assert (claim["rule_id"], claim["raw_value"], claim["source_type"]) == (
+        recognised_by("GM12891"),
+        "GM12891",
+        SOURCE_REPOSITORY_METADATA,
+    )
+    assert (claim["join_key"], claim["match_exact"]) == (JOIN_KEY_ENTITY_IDENTIFIER, True)
+    for donor_record in result.donors:
+        DonorRecord(**donor_record)
+
+
+def test_each_parent_named_has_a_record_of_its_own(tmp_path):
+    root = tmp_path / "entity_evidence"
+    family_lines(root, "D", "mother", [("NA12892", "NA12878")])
+    family_lines(root, "E", "mother", [("NA12878", "NA12877")])
+    result = reconcile_entities(gathered(root, tmp_path), identifier_rules(), [])
+    assert [d["identifier"]["id"] for d in result.donors] == ["NA12877", "NA12878", "NA12892"]
+    assert by_id(result.donors)["NA12892"]["mother"] == {"value": None, "status": NOT_CLASSIFIED, "evidence": []}
+    # NA12878 is a parent with a claim of its own (its mother); NA12892 has none.
+    assert result.report["family"]["parents_named"] == 2
+    assert result.report["family"]["parents_with_no_claims"] == 1
+
+
+def test_a_ped_unknown_parent_makes_no_claim_and_is_counted_apart(tmp_path):
+    root = tmp_path / "entity_evidence"
+    family_lines(root, "D", "mother", [("0", "HG00096"), ("mHomSap2", "HG00097")])
+    result = reconcile_entities(gathered(root, tmp_path), identifier_rules(), [])
+    for child in ("HG00096", "HG00097"):
+        assert by_id(result.donors)[child]["mother"] == {"value": None, "status": NOT_CLASSIFIED, "evidence": []}
+    assert [d["identifier"]["id"] for d in result.donors] == ["HG00096", "HG00097"]
+    family = result.report["family"]
+    assert family["unknown_parent_lines"] == [{"dataset": "D", "table": "t", "lines": 1}]
+    assert family["unrecognised_parents"] == [{"dataset": "D", "table": "t", "lines": 1, "examples": {"mHomSap2": 1}}]
+    assert family["parents_named"] == 0
+
+
+def test_two_sources_naming_different_parents_are_a_conflict_and_agreeing_ones_are_each_kept(tmp_path):
+    """HPRC names HG002's mother HG004; HPRC_R2 names NA24695."""
+    root = tmp_path / "entity_evidence"
+    family_lines(root, "D", "mother", [("HG004", "HG002"), ("NA12892", "NA12878")])
+    family_lines(root, "E", "mother", [("NA24695", "HG002"), ("NA12892", "NA12878")])
+    result = reconcile_entities(gathered(root, tmp_path), identifier_rules(), [])
+    donors = by_id(result.donors)
+    assert (donors["HG002"]["mother"]["status"], donors["HG002"]["mother"]["value"]) == (CONFLICT, None)
+    assert donors["NA12878"]["mother"]["status"] == CLASSIFIED
+    assert sorted(c["source"]["dataset"] for c in donors["NA12878"]["mother"]["evidence"]) == ["D", "E"]
+    (conflict,) = result.report["conflicts"]
+    assert (conflict["identifier"]["id"], conflict["slot"]) == ("HG002", "mother")
+    assert sorted(c["raw_value"] for c in conflict["evidence"]) == ["HG004", "NA24695"]
+
+
+def test_a_family_id_is_the_answer_as_written_and_two_ids_conflict(tmp_path):
+    root = tmp_path / "entity_evidence"
+    family_lines(root, "D", "family_id", [("PR25", "HG01106"), ("1463", "NA12878")])
+    family_lines(root, "E", "family_id", [("PR25", "HG01106"), ("CEPH1463", "NA12878")])
+    result = reconcile_entities(gathered(root, tmp_path), identifier_rules(), [])
+    donors = by_id(result.donors)
+    family = donors["HG01106"]["family_id"]
+    assert (family["status"], family["value"]) == (CLASSIFIED, "PR25")
+    assert {c["rule_id"] for c in family["evidence"]} == {code_rules.FAMILY_ID_AS_WRITTEN.id}
+    assert donors["NA12878"]["family_id"]["status"] == CONFLICT
+    for donor_record in result.donors:
+        DonorRecord(**donor_record)
+
+
+FAMILY_MAP = f"""
+catalog: anvil15
+datasets:
+  {G1K}:
+    pedigree:
+      identifier: pedigree_id
+      phenotypic_sex: [sex]
+      mother: [motherid]
+      father: [fatherid]
+      family_id: [familyid]
+published:
+  donor:
+    table: anvil_donor
+    source_rows: source_datarepo_row_ids
+    repository_id: donor_id
+"""
+
+
+def test_the_importer_writes_each_family_cell_as_written_ped_unknown_included(tmp_path):
+    path = tmp_path / "entity_map.yaml"
+    path.write_text(FAMILY_MAP)
+    entity_map = load_entity_map(path)
+    rows = [
+        (
+            "pedigree",
+            {
+                "datarepo_row_id": "p1",
+                "pedigree_id": "NA12878",
+                "sex": 2,
+                "motherid": "NA12892",
+                "fatherid": "NA12891",
+                "familyid": "1463",
+            },
+        ),
+        (
+            "pedigree",
+            {
+                "datarepo_row_id": "p2",
+                "pedigree_id": "NA12892",
+                "sex": 2,
+                "motherid": "0",
+                "fatherid": "0",
+                "familyid": "1463",
+            },
+        ),
+    ]
+    write_dataset(tmp_path / "m", G1K, rows)
+    assert ae.check(entity_map, tmp_path / "m", CATALOG) == []
+    ae.import_all(entity_map, tmp_path / "m", CATALOG, SERVICE, tmp_path / "entity_evidence", generation=STAMP)
+    written = lines(tmp_path / "entity_evidence", "anvil", G1K, "pedigree")
+    assert [(r["target_key_value"], r["field"], r["raw_value"]) for r in written if r["field"] in FAMILY_FIELDS] == [
+        ("NA12878", "mother", "NA12892"),
+        ("NA12878", "father", "NA12891"),
+        ("NA12878", "family_id", "1463"),
+        ("NA12892", "mother", "0"),
+        ("NA12892", "father", "0"),
+        ("NA12892", "family_id", "1463"),
+    ]
+
+
+def test_a_family_line_is_never_the_value_maps_to_seed_or_queue(tmp_path):
+    root = tmp_path / "entity_evidence"
+    family_lines(root, "D", "family_id", [("PR25", "HG01106")])
+    assert list(entries(next(root.rglob("*.ndjson")))) == []

@@ -484,3 +484,28 @@ def test_a_donor_record_counts_its_rows_and_the_identifier_rule_that_keys_it(tmp
     assert rows["igvf_donor_accession"]["reads"].endswith("; names a donor")
     assert data["records"] == len(RECORDS)
     assert list(grr.donor_records(tmp_path / "unreconciled")) == []
+
+
+def test_a_donor_records_family_claims_count_the_rules_they_cite(tmp_path):
+    """A parent's claim cites the identifier rule that recognised the parent, a family id's the entity rule (#582)."""
+    run_dir = reconciled_run(tmp_path)
+    parent = {"id": "HG00096", "namespace": "coriell"}  # recognised by another rule than the child's NA12878
+    mother = {"rule_id": "coriell_hg", "value": parent, "source_type": SOURCE_REPOSITORY_METADATA}
+    family = {"rule_id": code_rules.FAMILY_ID_AS_WRITTEN.id, "value": "1463", "source_type": SOURCE_REPOSITORY_METADATA}
+    unsettled = {"value": None, "status": "not_classified", "evidence": []}
+    donor = {
+        "identifier": {"id": "NA12878", "namespace": "coriell"},
+        "phenotypic_sex": unsettled,
+        "genetic_ancestry": unsettled,
+        "mother": {"value": parent, "status": "classified", "evidence": [mother]},
+        "father": unsettled,
+        "family_id": {"value": "1463", "status": "classified", "evidence": [family]},
+    }
+    write_reconciled_file(run_dir / RECONCILED_DIR / DONORS_FILE, {"catalog": "t"}, [donor])
+    data = grr.build(
+        *rule_files(tmp_path), iter_reconciled_records(run_dir), run_dir, donors=grr.donor_records(run_dir)
+    )
+    rows = {r["id"]: r for r in data["sample_rules"]}
+    assert rows[code_rules.FAMILY_ID_AS_WRITTEN.id]["files"] == 1
+    assert rows["coriell_hg"]["claims"] == 1
+    assert not {u["id"] for u in data["undeclared"]} & set(rows)

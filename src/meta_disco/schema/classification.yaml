@@ -671,12 +671,13 @@ classes:
     attributes:
       field:
         required: true
-        pattern: "^(phenotypic_sex|genetic_ancestry|donor_repository_id|sample_repository_id)\\Z"
+        pattern: "^(phenotypic_sex|genetic_ancestry|mother|father|family_id|donor_repository_id|sample_repository_id)\\Z"
         description: >-
-          The donor slot this line speaks to, or `donor_repository_id` /
+          The donor slot this line speaks to (a `mother`, `father` or `family_id` line's
+          `raw_value` read as written at reconcile, never translated, #582), or `donor_repository_id` /
           `sample_repository_id` where `raw_value` is the repository's own identifier for the
           donor or sample (#669), which reconcile lists on the record and never translates.
-          Pinned to `models.DONOR_FIELDS` and `models.REPOSITORY_ID_FIELDS` by
+          Pinned to `models.DONOR_FIELDS`, `models.FAMILY_FIELDS` and `models.REPOSITORY_ID_FIELDS` by
           `test_the_entity_row_field_pattern_lists_every_entity_field`.
       target_key_value:
         required: true
@@ -898,6 +899,14 @@ classes:
       # carries it), unlike the required status on a Classification entry.
       status:
         required: false
+      # A vocabulary term, or, on a claim for a donor's parent (`ParentClassification`,
+      # #582), the parent's identifier, the shape its record's `value` takes.
+      value:
+        range: Any
+        any_of:
+          - range: string
+          - range: EntityIdentifier
+        inlined: true
       # On an inherited claim only (contract 4.9, #571): the step it crossed, the role
       # its parents play in it, and their record keys. Required on a step, not here.
       activity:
@@ -1124,6 +1133,13 @@ classes:
         required: true
         description: Why a string matching the pattern names one sample or donor in this namespace.
 
+  Any:
+    class_uri: linkml:Any
+    description: >-
+      LinkML's "any value" range, for a slot whose `any_of` names the ranges it may take
+      (`Evidence.value`): without it the generators read the slot's default range,
+      `string`, beside the `any_of`, and the JSON Schema requires a string as well.
+
   DonorRecord:
     description: >-
       One donor (#693, ADR-0002 decision 1 as amended): the person or animal samples were
@@ -1145,6 +1161,20 @@ classes:
         inlined: true
       genetic_ancestry:
         range: GeneticAncestryClassification
+        required: true
+        inlined: true
+      mother:
+        range: ParentClassification
+        required: true
+        inlined: true
+        description: The donor's mother (#582), from every source that names her.
+      father:
+        range: ParentClassification
+        required: true
+        inlined: true
+        description: The donor's father (#582), from every source that names him.
+      family_id:
+        range: FamilyIdClassification
         required: true
         inlined: true
       repository_ids:
@@ -1201,6 +1231,30 @@ classes:
     slot_usage:
       value:
         range: genetic_ancestry_enum
+
+  ParentClassification:
+    is_a: Classification
+    description: >-
+      A donor's mother or father (#582): the parent's identifier, so the parent's own
+      `DonorRecord` is found by equality with its `identifier`. The relation is the Kinship
+      Ontology's `isBiologicalChildOf` (KIN:032), child to parent, as a PED file states it; a
+      parent's children and a donor's siblings are derived from it, never stored. Each
+      source's parent string is recognised as a donor through `rules/sample_namespaces.yaml`
+      in the source's dataset, and its claim cites the rule that recognised it; PED's `0`
+      ("not known") makes no claim. Two sources naming different parents are a `conflict`.
+    slot_usage:
+      value:
+        range: EntityIdentifier
+        inlined: true
+
+  FamilyIdClassification:
+    is_a: Classification
+    description: >-
+      The family a donor belongs to (#582), as a PED file's family id names it: the string
+      as the source wrote it, so it means something only among datasets that share a
+      numbering (1000 Genomes' family ids, which HPRC and HPRC_R2 reuse). It groups
+      relatives no parent link joins, such as siblings whose parents were not sequenced.
+      Two sources writing different ids are a `conflict`.
 
   SampleRecord:
     description: >-
@@ -2612,7 +2666,7 @@ enums:
       biosample_id:
         description: >-
           A sample's identifier, as `anvil_activity`'s `used_biosample_id` holds it. A
-          sample is not a file; reconcile builds no input from one (#577, #582).
+          sample is not a file; reconcile builds no input from one (#577).
 
   identifier_namespace_enum:
     description: >-

@@ -8,13 +8,17 @@
 # Per dataset and table: `identifier`, the column naming the donor (or the sample, where
 # AnVIL's `anvil_biosample` is made from the table's rows), read through
 # rules/sample_namespaces.yaml at reconcile; and for each of a donor's slots
-# (models.DONOR_FIELDS), the columns whose cells it reads. A table naming only its
+# (models.DONOR_FIELDS, and its family's, models.FAMILY_FIELDS, #582), the columns whose
+# cells it reads. A `mother` or `father` cell names the parent as the source wrote it, PED's
+# `0` ("not known") included; reconcile recognises it as a donor, and makes no claim of a `0`.
+# A `family_id` cell is taken as written. A table naming only its
 # `identifier` reads no slot: it is there for AnVIL's records made from its rows to tie to
 # (`published`, below). Measured on anvil15, 2026-10-16 and (the sample tables) 2026-10-17.
 # Each table's comment says why its columns are the donor's sex or population: a sex
 # column is read as phenotypic sex wherever it is a sex recorded for the person (reported
 # or catalogued), as AnVIL's own `anvil_donor.phenotypic_sex` is filled from such columns;
-# a population column is 1000 Genomes' population or superpopulation code.
+# a population column is 1000 Genomes' population or superpopulation code; a parent column
+# is a PED file's (`motherid`) or names its role (`maternal_id`), measured 2026-10-17.
 #
 # Left out: AnVIL_ENCORE_293T and AnVIL_ENCORE_RS293, whose donors (`293T`,
 # `Ribo-STAMP-293T`, `DOX-RS293`) are engineered lines of one cell line and no rule
@@ -25,11 +29,15 @@ catalog: anvil15
 datasets:
   ANVIL_1000G_high_coverage_2019:
     # 1000 Genomes' PED file, one row per person: `sex` is PED's 1 = male, 2 = female;
-    # `population` and `superpopulation` are 1000 Genomes' codes (GBR, EUR).
+    # `population` and `superpopulation` are 1000 Genomes' codes (GBR, EUR); `motherid` and
+    # `fatherid` the parents (`0` on 2,594 and 2,595 of 3,202 rows), `familyid` the family.
     pedigree:
       identifier: pedigree_id
       phenotypic_sex: [sex]
       genetic_ancestry: [population, superpopulation]
+      mother: [motherid]
+      father: [fatherid]
+      family_id: [familyid]
     # One row per sequenced sample, `library_name` the person's Coriell number;
     # `population` is the same 1000 Genomes code the pedigree gives.
     participant:
@@ -52,22 +60,40 @@ datasets:
     sample:
       identifier: sample_id
   ANVIL_HPRC:
-    # HPRC's participants, 1000 Genomes and GIAB people: `sex`, and `subpopulation`, a
-    # 1000 Genomes population code.
+    # HPRC's participants, 1000 Genomes and GIAB people: `sex`; `subpopulation`, a
+    # 1000 Genomes population code; and `familyid`, 1000 Genomes' family id (GIAB's trios
+    # have their own, `3140`).
     participant:
       identifier: participant_id
       phenotypic_sex: [sex]
       genetic_ancestry: [subpopulation]
+      family_id: [familyid]
     # HPRC's samples, keyed by the Coriell or GIAB name (56 of 57; `mHomSap3`, no rule's, is not).
+    # The cell line's `maternal_id` and `paternal_id` are its donor's parents (a Coriell or GIAB
+    # name, `0` on 2 rows), whose reads are this row's `mat_ilmn` / `pat_ilmn` files.
     sample:
       identifier: sample_id
+      mother: [maternal_id]
+      father: [paternal_id]
   AnVIL_HPRC_R2:
     # HPRC release 2's sample metadata, a row per person: `sex`, and `population_abbreviation`,
     # a 1000 Genomes code, or another population's (`ASL`, `MKK`) left unmapped.
+    # Its `maternal_id`, `paternal_id` and `family_id` are the person's parents and family
+    # (null, not `0`, where not known).
     sample_metadata:
       identifier: sample_metadata_id
       phenotypic_sex: [sex]
       genetic_ancestry: [population_abbreviation]
+      mother: [maternal_id]
+      father: [paternal_id]
+      family_id: [family_id]
+    # HPRC release 2's Illumina CRAMs, a row per file of 1000 Genomes people: `sample_id` the
+    # person's Coriell number, with the same three family columns (`0` where not known).
+    illumina:
+      identifier: sample_id
+      mother: [maternal_id]
+      father: [paternal_id]
+      family_id: [family_id]
   AnVIL_IGVF_Mouse_R1:
     # IGVF's donors, mice: `phenotypic_sex`, IGVF's own name for the field.
     donor:

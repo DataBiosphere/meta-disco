@@ -76,6 +76,12 @@ and a parent not found there is `external` (decision 2). Only sample and donor i
 5. **Nothing is copied onto a file.** A file reaches its donors through `samples` → sample →
    `collected_from` → donor, joined by the explorer; a file with several samples takes the set of its
    donors' values.
+6. **A donor's family is on its record** (*amended by #582*): `mother` and `father`, each the parent's
+   `EntityIdentifier`, and `family_id`, the source's string as written, each settled as any slot is,
+   so two sources naming different mothers are a `conflict`. The relation is still `isBiologicalChildOf`
+   (KIN:032), child to parent, but it is a donor's field, not an `edges.jsonl` row (decision 5's
+   paragraph and decision 6's, below): the child now has a record to carry it. A parent's children and
+   a donor's siblings are derived, never stored.
 
 A donor's slots are read from **entity evidence** (`data/entity_evidence/`, `entity_evidence`), lines
 keyed by the identifier the source wrote, imported through the entity map
@@ -267,7 +273,9 @@ source's raw `activity_type` reaches a term through translation rows, as a raw v
 `AlignmentActivity` (decision 3). A donor's parents are a family tie, not a step: no processing step
 makes a child from its parents and nothing passes across it, so it stays the one relation of its own,
 **`isBiologicalChildOf`** (the GA4GH Pedigree Standard's Kinship Ontology, KIN:032; its inverse is
-`isBiologicalParentOf`, KIN:003), in `edges.jsonl` only (decision 6, #361). It points from child to
+`isBiologicalParentOf`, KIN:003), in `edges.jsonl` only (decision 6, #361). *Amended by #582: it is the
+donor record's `mother` and `father` (decision 1, item 6), not an `edges.jsonl` row; what follows on its
+sources and its conflict still holds.* It points from child to
 parent, as every edge here does, and carries a `role`, `mother` or `father`, from the submitter column
 that states it: HPRC's and HPRC_R2's `maternal_id` / `paternal_id` (tables `sample`, `sample_metadata`,
 `illumina`), 1000G's `pedigree.motherid` / `fatherid`, where `0` means not known and gives no edge. A
@@ -331,7 +339,8 @@ re-running it costs no corpus run (6.4) when a lineage mapping is corrected.
 A step whose output is a file is stored on that file's record as `generated_by: GeneratedBy`, its inputs
 `ActivityInput`s.
 A `SampleCollectionActivity` and an `isBiologicalChildOf` have an identifier as their child, which has no record, so
-they live only in a flat `edges.jsonl` written once per run: child (a record key or an identifier), the
+they live only in a flat `edges.jsonl` written once per run (*amended by #693 and #582:* a donor and a sample
+now have records, and `isBiologicalChildOf` is the donor's `mother` and `father`, decision 1 item 6): child (a record key or an identifier), the
 edge's activity (or `isBiologicalChildOf`, with its `role`), parent
 (`parent_key` where it resolves, and `parent_file` or `parent_ref` as the source wrote it, or an
 identifier), provenance (`source_type`, plus `source` and `rule_id` for evidence or `rule_id` alone for inference,

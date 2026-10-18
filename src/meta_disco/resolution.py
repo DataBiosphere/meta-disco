@@ -15,7 +15,7 @@ from .models import (
     settled_value,
 )
 from .rule_engine import make_claim
-from .schema_vocab import most_specific
+from .schema_vocab import VOCABULARY_ENUMS, most_specific
 from .source_evidence import EvidenceEntry
 from .value_map import ValueMap, claims_from
 
@@ -53,7 +53,8 @@ def settle(
        ``conflict``, unless the values nest in the slot's ``is_a`` hierarchy
        (:func:`~.schema_vocab.most_specific`, #473): ``CHM13`` beside
        ``T2T-CHM13v2.0`` is one answer at two levels of detail, and the deepest is
-       the value (4.4).
+       the value (4.4). A slot with no vocabulary (a donor's family, #582) has no
+       hierarchy, so two of its values always conflict.
     3. An inherited ``mixed`` beside any declaration: ``conflict``, since one value
        contradicts a lineage that has none, and ``not_applicable`` stands for the values
        it would contradict (4.9). Alone it declares nothing, and the slot goes on.
@@ -69,7 +70,7 @@ def settle(
     if inference_conflict:
         return CONFLICT, None
     if len(declared) > 1:
-        deepest = most_specific(slot, declared)
+        deepest = most_specific(slot, declared) if slot in VOCABULARY_ENUMS else None
         if deepest is None:
             return CONFLICT, None
         declared = {deepest}

@@ -1,7 +1,8 @@
 """The entity map: which of a source's tables say what about a donor, and name which donor or sample (#693, #669).
 
 The slot map keys a raw value for a *file's* dimension by a file-link column; this map keys a
-raw value for a *donor's* slot (``models.DONOR_FIELDS``) by the column naming the donor, since
+raw value for a *donor's* slot (``models.DONOR_FIELDS``, and on a submitter table the family's,
+``models.FAMILY_FIELDS``, #582) by the column naming the donor, since
 rows such as 1000 Genomes' ``pedigree`` have no file-link column. ``anvil_entities`` reads it.
 It maps structure, never meaning; the shape is ``sources/anvil_entity_map.yaml``'s.
 
@@ -24,14 +25,17 @@ from importlib.resources import files
 
 from .azul_manifest import HARMONIZED_PREFIX
 from .lineage_map import expect_keys, expect_mapping, expect_name, map_document
-from .models import DONOR_FIELDS
+from .models import DONOR_FIELDS, FAMILY_FIELDS
 from .sample_identity import DONOR, REPOSITORY_ID_FIELD, SAMPLE, EntityKind
 from .slot_map import Readable, unique_key_loader
 
 _WHERE = "entity map"
 IDENTIFIER = "identifier"
 _PUBLISHED_KEYS = frozenset({"table", "source_rows", "repository_id"})
-# The slots a published record of each kind may read: a donor's; a sample has none yet.
+# The slots a submitter table may read: a donor's, and its family's.
+_TABLE_SLOTS = (*DONOR_FIELDS, *FAMILY_FIELDS)
+# The slots a published record of each kind may read: a donor's, but not its family, which AnVIL's
+# model has no field for; a sample has none yet.
 _PUBLISHED_SLOTS: dict[EntityKind, tuple[str, ...]] = {DONOR: DONOR_FIELDS, SAMPLE: ()}
 
 _UniqueKeyLoader = unique_key_loader(_WHERE)
@@ -83,7 +87,7 @@ def default_entity_map_resource():
 def load_entity_map(source: Readable | None = None) -> EntityMap:
     """Load and check an entity map, the bundled one by default; ``ValueError`` naming where it is wrong.
 
-    Checked here: the shape, each slot one of ``DONOR_FIELDS`` with a non-empty list of
+    Checked here: the shape, each slot one of ``DONOR_FIELDS`` (or, on a table, ``FAMILY_FIELDS``) with a non-empty list of
     distinct columns, no column read both as the identifier (or a published table's source
     rows or repository identifier) and as a slot's, a slot only on a table or on the published
     donors, at least one table per dataset reading a slot, and no harmonized table under
@@ -100,9 +104,9 @@ def load_entity_map(source: Readable | None = None) -> EntityMap:
             at = f"{_WHERE} {dataset}/{table}"
             if str(table).startswith(HARMONIZED_PREFIX):
                 raise ValueError(f"{at}: a harmonized table is the repository's, not a submitter's; see `published`")
-            expect_keys(entry, {IDENTIFIER}, {IDENTIFIER, *DONOR_FIELDS}, at)
+            expect_keys(entry, {IDENTIFIER}, {IDENTIFIER, *_TABLE_SLOTS}, at)
             identifier = expect_name(entry[IDENTIFIER], f"{at} identifier")
-            slots = _slots(entry, at, {identifier})
+            slots = _slots(entry, at, {identifier}, _TABLE_SLOTS)
             tables.append(EntityTable(dataset=dataset, table=str(table), identifier=identifier, slots=slots))
     published = _published(document["published"])
     for dataset in document["datasets"]:
@@ -138,7 +142,7 @@ def _published(document: dict) -> tuple[PublishedEntities, ...]:
                 table=expect_name(entry["table"], f"{where} table"),
                 source_rows=source_rows,
                 repository_id=repository_id,
-                slots=_slots(entry, where, {source_rows, repository_id}),
+                slots=_slots(entry, where, {source_rows, repository_id}, _PUBLISHED_SLOTS[kind]),
             )
         )
     tables = [p.table for p in published]
@@ -147,10 +151,10 @@ def _published(document: dict) -> tuple[PublishedEntities, ...]:
     return tuple(published)
 
 
-def _slots(entry: dict, at: str, taken: set[str]) -> dict[str, tuple[str, ...]]:
-    """Each slot ``entry`` names and its columns, none or more, each a non-empty list of distinct names not in ``taken``."""
+def _slots(entry: dict, at: str, taken: set[str], fields: tuple[str, ...]) -> dict[str, tuple[str, ...]]:
+    """Each of ``fields`` that ``entry`` names and its columns, none or more, each a non-empty list of distinct names not in ``taken``."""
     slots = {}
-    for slot in DONOR_FIELDS:
+    for slot in fields:
         if slot not in entry:
             continue
         columns = entry[slot]
