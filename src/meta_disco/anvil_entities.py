@@ -1,7 +1,8 @@
-"""Read AnVIL's donor facts and its own donor and biosample identifiers into entity evidence files, through the entity map (#693, #669).
+"""Read AnVIL's donor and biosample facts and its own identifiers for them into entity evidence files, through the entity map (#693, #669, #699).
 
 The entity map (``entity_map``) says which submitter table's columns say what about a
-donor, and which column names the donor or sample. This module checks the map against the
+donor, which of AnVIL's own donor and biosample columns say what about a donor or a sample, and
+which column names the donor or sample. This module checks the map against the
 verbatim manifests on disk, then writes, per dataset, one generation of entity evidence
 files: one file per mapped table reading a slot under ``<root>/anvil/``, and one per
 published table (``anvil_donor``, ``anvil_biosample``) under ``<root>/anvil_published/``,
@@ -11,8 +12,9 @@ each line an ``EntityEvidenceRow``.
 the donor by, and the cell's value — a string verbatim, anything else as ``json.dumps``
 spells it (1000 Genomes' ``pedigree.sex`` is the number ``1``). Neither is interpreted
 here: the identifier rules recognise the identifier and, at reconcile, the value map
-translates a sex or ancestry value, while a family value (``models.FAMILY_FIELDS``, #582) is
-read there as written or as a parent's identifier. A null or empty-list cell, or a row whose identifier cell is not
+translates a translated slot's value (``models.TRANSLATED_FIELDS``), while an untranslated one
+(``models.UNTRANSLATED_SLOTS``: a family's, #582; a sample's site, #699) is read there as written
+or as a parent's identifier. A null or empty-list cell, or a row whose identifier cell is not
 a non-empty string, writes nothing and is counted.
 
 **AnVIL's published donor and biosample** name no identifier of ours: each is attached to
@@ -124,9 +126,10 @@ def check(entity_map: EntityMap, manifest_root: Path, catalog: str, datasets: li
     serves, at least half the identifier column's non-empty strings are recognised as that
     kind by the identifier rules, or the column names something else; and at least half of each
     parent column's (#582) non-empty strings other than PED's ``0`` are recognised as donors. Per published table
-    with rows: its source rows and repository identifier columns appear on some row, and
-    every table its records were made from is mapped. Not that a published slot column holds
-    a value: 1000 Genomes' donors carry no published sex.
+    with rows: its source rows and repository identifier columns hold a value on some row, each
+    slot column is a column of some row (#699), and every table its records were made from is
+    mapped. Not that a published slot column holds a value: 1000 Genomes' donors carry no
+    published sex, and no anvil15 donor a `genetic_ancestry`.
     """
     named = sidecar_datasets(manifest_root, catalog)
     known = entity_map.datasets()
@@ -155,10 +158,12 @@ def _check_dataset(entity_map: EntityMap, dataset: str, path: Path) -> list[str]
     }
     sources: dict[str, set[str]] = {name: set() for name in published}
     published_seen: dict[str, set[str]] = {name: set() for name in published}
+    published_keys: dict[str, set[str]] = {name: set() for name in published}
     for entity_type, row in iter_verbatim_entities(path, {*tables, *published}):
         if entity_type in published:
             rows[entity_type] += 1
             published_seen[entity_type].update(k for k, v in row.items() if v is not None and v != [])
+            published_keys[entity_type].update(row)
             source_rows = row.get(published[entity_type].source_rows) or []
             sources[entity_type].update(table for table, _ in map(_source_row, source_rows))
             continue
@@ -202,6 +207,9 @@ def _check_dataset(entity_map: EntityMap, dataset: str, path: Path) -> list[str]
             for column in (entity.source_rows, entity.repository_id):
                 if column not in published_seen[entity.table]:
                     problems.append(f"{dataset}/{entity.table}: column {column!r} holds a value on no row")
+            for column in (c for cs in entity.slots.values() for c in cs):
+                if column not in published_keys[entity.table]:
+                    problems.append(f"{dataset}/{entity.table}: column {column!r} is on no row")
         for table in sorted(sources[entity.table] - set(tables)):
             problems.append(
                 f"{dataset}/{entity.table}: {entity.kind}s made from {table!r}, which the map does not name"

@@ -23,8 +23,7 @@
 # Left out: AnVIL_ENCORE_293T and AnVIL_ENCORE_RS293, whose donors (`293T`,
 # `Ribo-STAMP-293T`, `DOX-RS293`) are engineered lines of one cell line and no rule
 # recognises, nor their biosamples' names (`TIAL1-BG293LV06-111B`); T2T_CHRY's SGDP tables, whose donors' identifiers are #559's; MAGE's
-# `kgp_sample.sex` (`XX`/`XY`), a sample's karyotype rather than a donor's sex; NIA_CARD's
-# `race_ethnicity`, a reported ethnicity.
+# `kgp_sample.sex` (`XX`/`XY`), a sample's karyotype rather than a donor's sex (#702).
 catalog: anvil15
 datasets:
   ANVIL_1000G_high_coverage_2019:
@@ -115,10 +114,12 @@ datasets:
     sequencing_library:
       identifier: kgp_sample_id
   ANVIL_NIA_CARD_Coriell_Cell_Lines_Open:
-    # NIA CARD's subjects, Coriell and GIAB people: `sex`.
+    # NIA CARD's subjects, Coriell and GIAB people: `sex`, and `race_ethnicity`, the person's reported
+    # ethnicity in the census categories (#699; AnVIL's `anvil_donor.reported_ethnicity` is made from it).
     subject:
       identifier: subject_id
       phenotypic_sex: [sex]
+      reported_ethnicity: [race_ethnicity]
     # NIA CARD's samples, keyed by the Coriell or GIAB name, the same as its subject's.
     sample:
       identifier: sample_id
@@ -140,7 +141,7 @@ datasets:
 # slot's columns (#699), AnVIL's own column of that name. Measured on anvil15, 2026-10-18:
 # `organism_type` on 9,842 of 10,086 donors (Human, Mouse), `reported_ethnicity` on 3 (NIA_CARD),
 # `genetic_ancestry` on none; `biosample_type` and `anatomical_site` on 2,168 of 17,181
-# biosamples (IGVF, HPRC_R2, NIA_CARD), `Unknown` on most of HPRC_R2's and NIA_CARD's sites.
+# biosamples (IGVF, HPRC_R2, NIA_CARD), the site `Unknown` on every one of HPRC_R2's and NIA_CARD's.
 published:
   donor:
     table: anvil_donor

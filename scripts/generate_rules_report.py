@@ -25,7 +25,8 @@ then its donor records (``DONORS_FILE``, #693), each counted as one "file" under
 :data:`DONOR_RECORDS`: a donor's slots for the value-map rows that settle them, its family's
 (#582) for the identifier rules that recognise its parents and ``code_rules.ENTITY_RULES``, and
 the identifier rule that recognises its identifier; then its sample records (``SAMPLES_FILE``, #699),
-counted the same way under :data:`SAMPLE_RECORDS`, for a sample's slots. For each claim carrying a
+counted the same way under :data:`SAMPLE_RECORDS`, for a sample's slots and the identifier rule that
+recognises its identifier. For each claim carrying a
 ``rule_id``, per rule:
 
 - **claims**, and **files** (the records it appeared on, each counted once, overall and
@@ -85,7 +86,7 @@ from meta_disco.output_utils import (
 from meta_disco.reconcile import declaration
 from meta_disco.rule_engine import CONFLICT_MARKER, CONTENT_TIER, NOT_CLASSIFIED_MARKER
 from meta_disco.rule_loader import RuleLoader, default_rules_resource
-from meta_disco.sample_identity import DONOR, identifier_rule_declarations, identifier_rules
+from meta_disco.sample_identity import DONOR, SAMPLE, identifier_rule_declarations, identifier_rules
 from meta_disco.schema_vocab import marker_values, value_ancestors, value_in_vocabulary
 from meta_disco.summaries import embed_json, md_code, md_table
 from meta_disco.value_map import default_value_map_resource, load_value_map
@@ -179,8 +180,10 @@ SAMPLE_RULES_NOTE = (
     "rules read the file's own content (a header, a sample map's rows), or at reconcile its parent's settled "
     "samples (#668); the identifier rules (`rules/sample_namespaces.yaml`) say which strings are "
     "samples and in which namespace, and are what a submitter table's sample, and a donor's parent (#582), is "
-    "cited by. The donor rule `family_id_as_written` gives a donor its family id. Counted by the sources a "
-    "reconciled record's `samples` lists, and the claims on the donor records' family slots."
+    "cited by. The donor rule `family_id_as_written` gives a donor its family id, and the sample rule "
+    "`anatomical_site_as_written` a sample its site (#699). Counted by the sources a reconciled record's "
+    "`samples` lists, the identifier rule keying each donor and sample record, and the claims on those "
+    "records' slots."
 )
 UNDECLARED_HEAD = "Rule names with no rule behind them"
 SAMPLE_NAMESPACES = "src/meta_disco/rules/sample_namespaces.yaml"
@@ -420,19 +423,25 @@ def donor_records(run_dir: Path):
     """A run's donor records (#693) in the shape :func:`tally` reads: a donor's slots as its classifications,
     and the identifier rule that recognises its identifier as its samples' one source. Nothing for a run
     reconciled before #693, which has no donor file."""
+    return _entity_records(run_dir, DONORS_FILE, DONOR_RECORDS, DONOR_SLOTS, _named_by(DONOR))
 
-    def named_by(donor: dict) -> dict | None:
-        identifier = donor["identifier"]
-        got = identifier_rules().recognise(identifier["id"], identifier.get("dataset"), DONOR)
+
+def _named_by(kind):
+    """The identifier rule recognising a record of ``kind`` by its identifier, as its samples' one source."""
+
+    def named_by(record: dict) -> dict | None:
+        identifier = record["identifier"]
+        got = identifier_rules().recognise(identifier["id"], identifier.get("dataset"), kind)
         return {"named_by": [{"rule_id": got.rule_id}]} if got is not None else None
 
-    return _entity_records(run_dir, DONORS_FILE, DONOR_RECORDS, DONOR_SLOTS, named_by)
+    return named_by
 
 
 def sample_records(run_dir: Path):
-    """A run's sample records (#699) in the shape :func:`tally` reads: a sample's slots as its classifications.
-    Nothing for a run reconciled before #693, which has no sample file."""
-    return _entity_records(run_dir, SAMPLES_FILE, SAMPLE_RECORDS, SAMPLE_SLOTS, lambda _: None)
+    """A run's sample records (#699) in the shape :func:`tally` reads: a sample's slots as its classifications,
+    and the identifier rule that recognises its identifier as its samples' one source. Nothing for a run
+    reconciled before #693, which has no sample file."""
+    return _entity_records(run_dir, SAMPLES_FILE, SAMPLE_RECORDS, SAMPLE_SLOTS, _named_by(SAMPLE))
 
 
 def _entity_records(run_dir: Path, name: str, label: str, slots: tuple[str, ...], named_by):

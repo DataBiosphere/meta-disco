@@ -1181,11 +1181,11 @@ def reconcile_run(
 
     Donors and samples (#693, :mod:`reconcile_entities`): the entity evidence under
     ``entity_root``, by default the ``entity_evidence`` directory beside ``evidence_root``,
-    settles each donor's slots into ``donors.ndjson.gz``, and every sample the reconciled
-    files name is written to ``samples.ndjson.gz`` with the donor it was collected from where
-    an identifier rule says. ``evidence_root=None`` excludes the entity evidence too: the
-    samples and the donors they point to are still written, each donor's slots
-    ``not_classified``.
+    settles each donor's slots into ``donors.ndjson.gz``, and each sample the reconciled files
+    name or the entity evidence names is written to ``samples.ndjson.gz``, its slots settled
+    (#699) and with the donor it was collected from where an identifier rule says.
+    ``evidence_root=None`` excludes the entity evidence too: the samples the files name and the
+    donors they point to are still written, each record's slots ``not_classified``.
 
     Inheritance (#571, :mod:`reconcile_inherit`) needs every parent's answer before its
     child is written, and the records come file by file, so inheritance reads the run twice,

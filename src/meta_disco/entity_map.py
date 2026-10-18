@@ -1,7 +1,7 @@
-"""The entity map: which of a source's tables say what about a donor, and name which donor or sample (#693, #669).
+"""The entity map: which of a source's tables say what about a donor or a sample, and name which (#693, #669, #699).
 
 The slot map keys a raw value for a *file's* dimension by a file-link column; this map keys a
-raw value for a *donor's* slot (``models.DONOR_FIELDS``, and on a submitter table the family's,
+raw value for a *donor's* or, on the repository's own sample table, a *sample's* slot (``models.DONOR_FIELDS``, and on a submitter table the family's,
 ``models.FAMILY_FIELDS``, #582) by the column naming the donor, since
 rows such as 1000 Genomes' ``pedigree`` have no file-link column. ``anvil_entities`` reads it.
 It maps structure, never meaning; the shape is ``sources/anvil_entity_map.yaml``'s.

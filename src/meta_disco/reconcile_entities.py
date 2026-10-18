@@ -2,8 +2,9 @@
 
 A donor is a record keyed by its identifier (``coriell:HG00096``), so one record gathers
 what every dataset's tables say about one person. Each line of an entity evidence file
-(``entity_evidence``) names a donor by the string the source wrote; the identifier rules
-recognise it as a donor in the line's dataset (``sample_identity``, ``DONOR``), the line is
+(``entity_evidence``) names a donor by the string the source wrote (or, for a sample's slot or
+repository id, a sample); the identifier rules recognise it as that kind in the line's dataset
+(``sample_identity``, ``DONOR``, ``SAMPLE``), the line is
 translated into claims as a file's line is (``resolution.translate``), and each of the donor's
 slots is settled from every claim on it by :func:`reconcile.settle`, the rule a file's
 dimensions are settled by. A line whose identifier no rule recognises as a donor is counted,
@@ -180,7 +181,7 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
     site), or listed among its donor's or sample's repository identifiers.
 
     Reads every line, so a malformed file or line, an identifier two rules match, a family line
-    in a published table's file, or a repository identifier that is empty or more than one line,
+    in a published table's file, a sample's slot in any other file, or a repository identifier that is empty or more than one line,
     in a file other than a published table's, or tying to two records raises here: reconcile calls this before it
     writes anything. A translated claim cites its value-map row, a parent's the identifier rule
     that recognised the parent, and a family id's or a site's its entity rule (``code_rules.ENTITY_RULES``); each carries
@@ -211,6 +212,11 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
                 raise ValueError(
                     f"{relative_to(path, entity_root)}: carries {entry.field} in a published file; the repository's "
                     "model has no family, which only a submitter table states (#582)"
+                )
+            if entry.field in SAMPLE_SLOTS and envelope.source_type != SOURCE_PUBLISHED_VALUE:
+                raise ValueError(
+                    f"{relative_to(path, entity_root)}: carries {entry.field} in a {envelope.source_type} file; a "
+                    "sample's slots are read only from the repository's own record of it (#699)"
                 )
             if alias_kind is not None and _ONE_LINE.fullmatch(entry.raw_value) is None:
                 raise ValueError(
@@ -369,8 +375,9 @@ def reconcile_entities(
     sample_lists: Iterable[dict],
     skipped: list[dict] | None = None,
 ) -> EntityResult:
-    """Settle every donor ``evidence`` names, link every sample ``sample_lists`` hold or a repository identifier
-    ties to, list each record's repository identifiers, and count what was done.
+    """Settle every donor ``evidence`` names and every sample ``sample_lists`` hold, a repository identifier ties
+    to or ``evidence`` names, link each sample to its donor, list each record's repository identifiers, and
+    count what was done.
 
     ``evidence`` is :func:`gather`'s; ``sample_lists`` are the run's reconciled ``SampleList``
     dicts. A donor a sample's ``collected_from`` points to, or a donor's ``mother`` or ``father``

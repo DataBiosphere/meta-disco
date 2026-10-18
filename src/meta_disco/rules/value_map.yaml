@@ -217,15 +217,15 @@ rows:
   - id: "reported_ethnicity.black_or_african_american"
     match: {slot: reported_ethnicity, value: "Black or African American"}
     declares: {reported_ethnicity: Black or African American}
-    reason: The term itself, as AnVIL's `anvil_donor.reported_ethnicity` writes it (NIA_CARD).
+    reason: The term itself, as AnVIL's `anvil_donor.reported_ethnicity` writes it, and NIA_CARD's `subject.race_ethnicity` it is made from.
   - id: "reported_ethnicity.hispanic_or_latino"
     match: {slot: reported_ethnicity, value: "Hispanic or Latino"}
     declares: {reported_ethnicity: Hispanic or Latino}
-    reason: The term itself, as AnVIL's `anvil_donor.reported_ethnicity` writes it (NIA_CARD).
+    reason: The term itself, as AnVIL's `anvil_donor.reported_ethnicity` writes it, and NIA_CARD's `subject.race_ethnicity` it is made from.
   - id: "reported_ethnicity.white"
     match: {slot: reported_ethnicity, value: "White"}
     declares: {reported_ethnicity: White}
-    reason: The term itself, as AnVIL's `anvil_donor.reported_ethnicity` writes it (NIA_CARD).
+    reason: The term itself, as AnVIL's `anvil_donor.reported_ethnicity` writes it, and NIA_CARD's `subject.race_ethnicity` it is made from.
   # --- biosample_type (#699): a sample's slot, from AnVIL's published biosample ----
   - id: "biosample_type.tissue"
     match: {slot: biosample_type, value: "Tissue"}
@@ -239,8 +239,8 @@ rows:
     match: {slot: biosample_type, value: "Unknown"}
     declares: {}
     reason: >-
-      AnVIL's `Unknown` names no type: reviewed, and no claim. On anvil15 it is every HPRC_R2
-      biosample's (230) and 135 of IGVF's.
+      AnVIL's `Unknown` names no type: reviewed, and no claim. On anvil15 it is every filled
+      HPRC_R2 biosample's (230 of 234; 4 are null) and 135 of IGVF's.
   - id: "biosample_type.tissue_unknown"
     match: {slot: biosample_type, value: "Tissue, Unknown"}
     scope: {source: anvil, dataset: AnVIL_IGVF_Mouse_R1}

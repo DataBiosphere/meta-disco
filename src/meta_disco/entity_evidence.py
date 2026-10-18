@@ -1,7 +1,7 @@
-"""Entity evidence files: a source saying what it wrote about a donor, or its own identifier for a donor or sample (#693, #669).
+"""Entity evidence files: a source saying what it wrote about a donor or a sample, or its own identifier for one (#693, #669, #699).
 
 Where a slot evidence file (``source_evidence``) is keyed by a file's key, an entity file is
-keyed by the identifier the source wrote for a donor (``HG00096``): line 1 is the same
+keyed by the identifier the source wrote for a donor or a sample (``HG00096``): line 1 is the same
 ``EvidenceFileEnvelope`` with ``target_key: entity_identifier``, every later line an
 ``EntityEvidenceRow``. The files go under their own root, ``data/entity_evidence/``, because
 every reader of ``data/source_evidence/`` takes each file there as a file's slot lines; the
@@ -12,10 +12,10 @@ value translated by the value map, and a line carrying an answer is refused by n
 :func:`entries` gives the lines naming the fields asked for, each as a
 ``source_evidence.EvidenceEntry``, so the value map's seeding and review queue read both roots alike. Like
 ``source_evidence.iter_evidence``, it yields by default only the lines the value map
-translates, a donor's slots and a sample's translated ones (#699): a family line (#582), a sample's
-site, and a line carrying a
-repository's own identifier for a donor or sample (``models.REPOSITORY_ID_FIELDS``, #669)
-goes only to a reader that asks for it, which today is reconcile.
+translates (a donor's slots, and a sample's translated ones, #699). Every other line goes only
+to a reader that asks for it, which today is reconcile: an untranslated slot's (a family's, #582;
+a sample's site), and one carrying a repository's own identifier for a donor or sample
+(``models.REPOSITORY_ID_FIELDS``, #669).
 """
 
 from __future__ import annotations

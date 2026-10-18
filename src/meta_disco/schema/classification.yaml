@@ -111,7 +111,8 @@ classes:
       'classified'), a status sentinel, and the evidence behind it. Subclasses
       narrow `value` to the right enum per dimension. A reconciled record (#432)
       carries the same entry plus `use`, `inferred` and `credited_to` (#552); an
-      inference record carries none of them.
+      inference record carries none of them. A donor's or sample's slot (#693, #699) carries
+      `use` and neither of the other two, its subclass requiring it.
     slots:
       - value
       - status
@@ -1141,7 +1142,8 @@ classes:
       sample's `collected_from`; no donor property is copied onto a file (epic #692,
       decision 5). Each slot carries `use` (#699), as a reconciled file's does: `meta_disco`
       where it is `classified` or `not_applicable`, else `published`, where a reader shows what
-      the repository's own rows say, which the slot's `evidence` holds.
+      the repository publishes: its own rows' values are in the slot's `evidence` where it has
+      any (AnVIL has no field for a family, and its `Unknown` leaves no claim).
     attributes:
       identifier:
         range: EntityIdentifier
@@ -1220,6 +1222,8 @@ classes:
     is_a: Classification
     description: A donor's phenotypic sex, settled from every source that states it (#693).
     slot_usage:
+      use:
+        required: true
       value:
         range: phenotypic_sex_enum
 
@@ -1229,6 +1233,8 @@ classes:
       A donor's genetic ancestry, settled from every source that states it (#693): the most
       specific term the sources support, where they nest.
     slot_usage:
+      use:
+        required: true
       value:
         range: genetic_ancestry_enum
 
@@ -1236,6 +1242,8 @@ classes:
     is_a: Classification
     description: A donor's organism (#699), settled from every source that states it.
     slot_usage:
+      use:
+        required: true
       value:
         range: organism_type_enum
 
@@ -1243,6 +1251,8 @@ classes:
     is_a: Classification
     description: A donor's reported ethnicity (#699), settled from every source that states it.
     slot_usage:
+      use:
+        required: true
       value:
         range: reported_ethnicity_enum
 
@@ -1250,6 +1260,8 @@ classes:
     is_a: Classification
     description: What kind of material a sample is (#699), settled from every source that states it.
     slot_usage:
+      use:
+        required: true
       value:
         range: biosample_type_enum
 
@@ -1260,6 +1272,9 @@ classes:
       AnVIL's `anvil_biosample.anatomical_site` writes it, an `Unknown` making no claim. A
       pooled sample's site is the repository's join of its members' (`Brain, Heart`, IGVF's
       `MultiplexedSample`); mapping sites to an ontology, as a list, is #702.
+    slot_usage:
+      use:
+        required: true
 
   ParentClassification:
     is_a: Classification
@@ -1274,6 +1289,8 @@ classes:
       even where the two are one person in two namespaces (GIAB's `HG004` is Coriell's
       `NA24143`), until a crosswalk between namespaces exists (#674).
     slot_usage:
+      use:
+        required: true
       value:
         range: EntityIdentifier
         inlined: true
@@ -1301,6 +1318,9 @@ classes:
       person with no relative listed often has their own id as their family id, as PED files
       do.
       Two sources writing different ids are a `conflict`.
+    slot_usage:
+      use:
+        required: true
 
   SampleRecord:
     description: >-
@@ -1542,10 +1562,10 @@ slots:
     inlined_as_list: true
   use:
     description: >-
-      On a reconciled record only (#432): whether the indexer takes this record's value
-      (`meta_disco`, when the status is `classified` or `not_applicable`) or keeps the
-      repository's published value (`published`, when it is `conflict` or
-      `not_classified`). Computed by reconcile so an export is structure only.
+      On a reconciled record only (#432), a file's or a donor's or sample's (#699): whether the
+      indexer takes this record's value (`meta_disco`, when the status is `classified` or
+      `not_applicable`) or keeps what the repository publishes (`published`, when it is
+      `conflict` or `not_classified`). Computed by reconcile so an export is structure only.
     range: use_enum
     required: false
   credited_to:

@@ -320,6 +320,7 @@ def test_the_check_names_a_published_column_no_row_fills(tmp_path, entity_map):
     write_dataset(tmp_path / "m", G1K, [*rows, biosample_without_id, ("anvil_donor", {"donor_id": "d1"})])
     assert ae.check(entity_map, tmp_path / "m", CATALOG, [G1K]) == [
         f"{G1K}/anvil_donor: column 'source_datarepo_row_ids' holds a value on no row",
+        f"{G1K}/anvil_donor: column 'phenotypic_sex' is on no row",
         f"{G1K}/anvil_biosample: column 'biosample_id' holds a value on no row",
     ]
 
@@ -566,12 +567,17 @@ def test_a_row_declares_only_slots_of_the_kind_it_matches(tmp_path):
             "rows:\n  - id: platform.m\n    match: {slot: platform, value: m}\n"
             "    declares: {phenotypic_sex: Male}\n    reason: r\n",
         )
-    with pytest.raises(ValueError, match="declares only slots of the kind it matches"):
-        load(
-            tmp_path,
-            "rows:\n  - id: biosample_type.m\n    match: {slot: biosample_type, value: m}\n"
-            "    declares: {organism_type: Human}\n    reason: r\n",
-        )
+    for slot, declares in [
+        ("biosample_type", "{organism_type: Human}"),
+        ("biosample_type", "{platform: ILLUMINA}"),
+        ("platform", "{biosample_type: Tissue}"),
+    ]:
+        with pytest.raises(ValueError, match="declares only slots of the kind it matches"):
+            load(
+                tmp_path,
+                f"rows:\n  - id: {slot}.m\n    match: {{slot: {slot}, value: m}}\n"
+                f"    declares: {declares}\n    reason: r\n",
+            )
 
 
 def test_the_seeder_and_the_queue_read_the_entity_root_beside_the_slot_root(imported, tmp_path):
@@ -1411,3 +1417,103 @@ def test_a_samples_unreviewed_value_is_counted_with_the_samples_never_the_donors
     report = attribute_result(root, tmp_path).report
     assert report["samples"]["unreviewed"] == {"biosample_type": 1}
     assert report["unreviewed_donors"] == {}
+
+
+PUBLISHED_ATTRIBUTE_MAP = f"""
+catalog: anvil15
+datasets:
+  {G1K}:
+    pedigree:
+      identifier: pedigree_id
+      phenotypic_sex: [sex]
+    sample:
+      identifier: library_name
+published:
+  donor:
+    table: anvil_donor
+    source_rows: source_datarepo_row_ids
+    repository_id: donor_id
+    organism_type: [organism_type]
+    reported_ethnicity: [reported_ethnicity]
+  sample:
+    table: anvil_biosample
+    source_rows: source_datarepo_row_ids
+    repository_id: biosample_id
+    biosample_type: [biosample_type]
+    anatomical_site: [anatomical_site]
+"""
+
+ETHNICITY_ROW = """  - id: reported_ethnicity.white
+    match: {slot: reported_ethnicity, value: White}
+    declares: {reported_ethnicity: White}
+    reason: test
+"""
+
+
+def published_attribute_rows(site_column: str = "anatomical_site"):
+    donor_row = (
+        "anvil_donor",
+        {
+            "donor_id": "d1",
+            "source_datarepo_row_ids": ["pedigree:p1"],
+            "organism_type": "Human",
+            "reported_ethnicity": ["White"],
+        },
+    )
+    sample_row = (
+        "anvil_biosample",
+        {
+            "biosample_id": "b1",
+            "source_datarepo_row_ids": ["sample:q1"],
+            "biosample_type": "Tissue",
+            site_column: "Brain",
+        },
+    )
+    return [pedigree("HG00096", 1, None, None, "p1"), g1k_sample("HG00096", "q1"), donor_row, sample_row]
+
+
+def test_the_importer_carries_anvils_published_donor_and_biosample_attributes_to_the_records(tmp_path):
+    path = tmp_path / "entity_map.yaml"
+    path.write_text(PUBLISHED_ATTRIBUTE_MAP)
+    entity_map = load_entity_map(path)
+    write_dataset(tmp_path / "m", G1K, published_attribute_rows())
+    assert ae.check(entity_map, tmp_path / "m", CATALOG) == []
+    root = tmp_path / "entity_evidence"
+    ae.import_all(entity_map, tmp_path / "m", CATALOG, SERVICE, root, generation=STAMP)
+    paths, _ = select_entity_evidence(root, "anvil", CATALOG)
+    result = reconcile_entities(
+        gather(paths, root, load(tmp_path, ATTRIBUTE_TABLE + ETHNICITY_ROW), identifier_rules()), identifier_rules(), []
+    )
+    donor = by_id(result.donors)["HG00096"]
+    assert (donor["organism_type"]["value"], donor["reported_ethnicity"]["value"]) == ("Human", "White")
+    # AnVIL's `reported_ethnicity` is a list column: the line is its JSON, matched as the set of its elements.
+    assert [c["raw_value"] for c in donor["reported_ethnicity"]["evidence"]] == ['["White"]']
+    sample = by_id(result.samples)["HG00096"]
+    assert (sample["biosample_type"]["value"], sample["anatomical_site"]["value"]) == ("Tissue", "Brain")
+    assert {c["source_type"] for c in sample["anatomical_site"]["evidence"]} == {SOURCE_PUBLISHED_VALUE}
+
+
+def test_the_check_names_a_published_slot_column_no_row_has(tmp_path):
+    """A misnamed published column would import nothing, silently; one present but empty everywhere is fine."""
+    path = tmp_path / "entity_map.yaml"
+    path.write_text(PUBLISHED_ATTRIBUTE_MAP)
+    write_dataset(tmp_path / "m", G1K, published_attribute_rows(site_column="anatomical_sites"))
+    assert ae.check(load_entity_map(path), tmp_path / "m", CATALOG) == [
+        f"{G1K}/anvil_biosample: column 'anatomical_site' is on no row"
+    ]
+
+
+@pytest.mark.parametrize("blank", ["", "  "])
+def test_a_blank_site_names_no_site_and_is_counted(tmp_path, blank):
+    root = tmp_path / "entity_evidence"
+    write_entity_lines(root, "D", "anatomical_site", [(blank, "IGVFSM9197PTER")])
+    result = attribute_result(root, tmp_path)
+    assert by_id(result.samples)["IGVFSM9197PTER"]["anatomical_site"] == UNSETTLED
+    assert result.report["samples"]["unknown_site_lines"] == [{"dataset": "D", "table": "t", "lines": 1}]
+
+
+def test_a_sample_slot_line_in_a_submitter_file_is_refused(tmp_path):
+    root = tmp_path / "entity_evidence"
+    write_entity_lines(root, "D", "anatomical_site", [("Brain", "IGVFSM9197PTER")], SOURCE_REPOSITORY_METADATA)
+    with pytest.raises(ValueError, match="carries anatomical_site in a repository_metadata file"):
+        gathered(root, tmp_path, ATTRIBUTE_TABLE)
