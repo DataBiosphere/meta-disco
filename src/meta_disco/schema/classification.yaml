@@ -899,15 +899,6 @@ classes:
       # carries it), unlike the required status on a Classification entry.
       status:
         required: false
-      # A string (a vocabulary term, or a donor's family id as written), or, on a claim for
-      # a donor's parent (`ParentClassification`, #582), the parent's identifier, the shape
-      # its record's `value` takes.
-      value:
-        range: Any
-        any_of:
-          - range: string
-          - range: EntityIdentifier
-        inlined: true
       # On an inherited claim only (contract 4.9, #571): the step it crossed, the role
       # its parents play in it, and their record keys. Required on a step, not here.
       activity:
@@ -1134,13 +1125,6 @@ classes:
         required: true
         description: Why a string matching the pattern names one sample or donor in this namespace.
 
-  Any:
-    class_uri: linkml:Any
-    description: >-
-      LinkML's "any value" range, for a slot whose `any_of` names the ranges it may take
-      (`Evidence.value`): without it the generators read the slot's default range,
-      `string`, beside the `any_of`, and the JSON Schema requires a string as well.
-
   DonorRecord:
     description: >-
       One donor (#693, ADR-0002 decision 1 as amended): the person or animal samples were
@@ -1246,6 +1230,19 @@ classes:
       ("not known") makes no claim. Two sources naming different identifiers are a `conflict`,
       even where the two are one person in two namespaces (GIAB's `HG004` is Coriell's
       `NA24143`), until a crosswalk between namespaces exists (#674).
+    slot_usage:
+      value:
+        range: EntityIdentifier
+        inlined: true
+      evidence:
+        range: ParentEvidence
+
+  ParentEvidence:
+    is_a: Evidence
+    description: >-
+      A claim on a donor's `mother` or `father` (#582): its `value` is the parent's
+      identifier, the shape `ParentClassification.value` takes, where every other claim's is
+      a string.
     slot_usage:
       value:
         range: EntityIdentifier

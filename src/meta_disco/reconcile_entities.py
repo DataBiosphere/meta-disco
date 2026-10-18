@@ -59,6 +59,7 @@ from .models import (
     REPOSITORY_IDS,
     SOURCE_IDENTIFIER_RULE,
     SOURCE_PUBLISHED_VALUE,
+    UNKNOWN_PARENT,
 )
 from .output_utils import relative_to
 from .reconcile_lineage import applies
@@ -83,10 +84,6 @@ MAX_EXAMPLES = 5
 
 # Every field an entity line may name, for :func:`gather`'s one read of each file.
 _ENTITY_FIELDS = (*DONOR_SLOTS, *REPOSITORY_ID_FIELDS)
-# A PED file's parent "not known" (#582), which 1000 Genomes', HPRC's and HPRC_R2's tables write:
-# a line saying it names no parent, so it makes no claim and is counted apart from a parent no
-# identifier rule recognises.
-UNKNOWN_PARENT = "0"
 # What a repository identifier must be to be listed: the schema's `RepositoryIdentifier.id` pattern.
 _ONE_LINE = re.compile(r"[^\r\n]+")
 
@@ -119,7 +116,7 @@ class EntityEvidence:
     """What the entity evidence said, per recognised donor and slot, the repository identifiers per
     recognised donor or sample, and what each file gave: :func:`gather`'s result.
 
-    ``unknown_parents`` counts the parent lines writing :data:`UNKNOWN_PARENT`, ``blank_family_ids``
+    ``unknown_parents`` counts the parent lines writing :data:`models.UNKNOWN_PARENT`, ``blank_family_ids``
     the family-id lines writing an empty or blank string, and ``unrecognised_parents`` the parent
     strings no rule recognises, each per dataset and table.
     """

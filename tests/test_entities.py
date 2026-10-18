@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 from meta_disco import anvil_entities as ae
 from meta_disco import code_rules
@@ -48,10 +49,12 @@ from meta_disco.sample_identity import Identifier, identifier_rules, reference, 
 from meta_disco.schema.classification_model import (
     DonorRecord,
     EntityEvidenceRow,
+    Evidence,
     ImporterSourceTypeEnum,
     JoinKeyEnum,
     LineageParentKeyEnum,
     LineageRow,
+    ParentEvidence,
     SampleRecord,
 )
 from meta_disco.schema_vocab import default_schema_path, most_specific, value_ancestors, value_meaning
@@ -1234,3 +1237,47 @@ def test_the_reports_per_table_lists_are_in_dataset_then_table_order(tmp_path):
     family = reconcile_entities(gathered(root, tmp_path), identifier_rules(), []).report["family"]
     assert [row["dataset"] for row in family["unknown_parent_lines"]] == ["D", "E"]
     assert [row["dataset"] for row in family["unrecognised_parents"]] == ["D", "E"]
+
+
+def test_only_a_parents_evidence_may_hold_an_identifier_as_its_value():
+    parent = {"id": "NA12892", "namespace": "coriell"}
+    claim = {"source_type": SOURCE_REPOSITORY_METADATA, "rule_id": "coriell_cell_line_or_dna", "value": parent}
+    ParentEvidence.model_validate(claim)
+    with pytest.raises(ValidationError):
+        Evidence.model_validate(claim)
+
+
+def test_the_check_names_a_parent_column_most_of_whose_values_are_no_donor(tmp_path):
+    """A column of file names mapped as a mother passes no longer; PED's `0` is not counted against it."""
+    path = tmp_path / "entity_map.yaml"
+    path.write_text(FAMILY_MAP)
+    rows = [
+        (
+            "pedigree",
+            {
+                "datarepo_row_id": "p1",
+                "pedigree_id": "NA12878",
+                "sex": 2,
+                "motherid": "NA12892.final.cram",
+                "fatherid": "NA12891",
+                "familyid": "1463",
+            },
+        ),
+        (
+            "pedigree",
+            {
+                "datarepo_row_id": "p2",
+                "pedigree_id": "NA12892",
+                "sex": 2,
+                "motherid": "0",
+                "fatherid": "0",
+                "familyid": "1463",
+            },
+        ),
+    ]
+    write_dataset(tmp_path / "m", G1K, rows)
+    problems = ae.check(load_entity_map(path), tmp_path / "m", CATALOG)
+    assert problems == [
+        f"{G1K}/pedigree: 1 of 1 values of parent column 'motherid' are not a donor any identifier rule "
+        "recognises (e.g. ['NA12892.final.cram'])"
+    ]

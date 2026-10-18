@@ -210,6 +210,10 @@ FATHER = "father"
 FAMILY_ID = "family_id"
 PARENT_FIELDS = (MOTHER, FATHER)
 FAMILY_FIELDS = (*PARENT_FIELDS, FAMILY_ID)
+# A PED file's parent "not known" (#582), which 1000 Genomes', HPRC's and HPRC_R2's tables write:
+# it names no parent, so reconcile makes no claim of it and counts it apart from a parent no
+# identifier rule recognises, and the entity map's check leaves it out of a parent column's values.
+UNKNOWN_PARENT = "0"
 # A donor record's settled slots, in the order it writes them.
 DONOR_SLOTS = (*DONOR_FIELDS, *FAMILY_FIELDS)
 
