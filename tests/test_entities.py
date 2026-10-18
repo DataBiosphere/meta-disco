@@ -662,6 +662,7 @@ def test_a_sample_is_collected_from_its_same_identifier_donor_which_then_has_a_r
         "collected_from": {"coriell": 3},
         "statuses": {slot: {NOT_CLASSIFIED: 4} for slot in SAMPLE_SLOTS},
         "unknown_site_lines": [],
+        "unreviewed": {},
     }
     for sample in result.samples:
         SampleRecord(**sample)
@@ -1402,3 +1403,11 @@ def test_a_sample_conflict_is_listed_with_the_sample_conflicts(tmp_path):
     assert [(c["identifier"]["id"], c["slot"]) for c in result.report["conflicts"]] == [
         ("IGVFSM9197PTER", "anatomical_site")
     ]
+
+
+def test_a_samples_unreviewed_value_is_counted_with_the_samples_never_the_donors(tmp_path):
+    root = tmp_path / "entity_evidence"
+    write_entity_lines(root, "D", "biosample_type", [("Cell line", "IGVFSM9197PTER")])
+    report = attribute_result(root, tmp_path).report
+    assert report["samples"]["unreviewed"] == {"biosample_type": 1}
+    assert report["unreviewed_donors"] == {}

@@ -420,31 +420,32 @@ def donor_records(run_dir: Path):
     """A run's donor records (#693) in the shape :func:`tally` reads: a donor's slots as its classifications,
     and the identifier rule that recognises its identifier as its samples' one source. Nothing for a run
     reconciled before #693, which has no donor file."""
-    if not (run_dir / "reconciled" / DONORS_FILE).exists():
-        return
-    rules = identifier_rules()
-    for donor in iter_reconciled_artifact(run_dir, DONORS_FILE):
+
+    def named_by(donor: dict) -> dict | None:
         identifier = donor["identifier"]
-        got = rules.recognise(identifier["id"], identifier.get("dataset"), DONOR)
-        yield {
-            _ENTITY: True,
-            "dataset_title": DONOR_RECORDS,
-            "classifications": {slot: donor[slot] for slot in DONOR_SLOTS if slot in donor},
-            SAMPLES_FIELD: {"named_by": [{"rule_id": got.rule_id}]} if got is not None else None,
-        }
+        got = identifier_rules().recognise(identifier["id"], identifier.get("dataset"), DONOR)
+        return {"named_by": [{"rule_id": got.rule_id}]} if got is not None else None
+
+    return _entity_records(run_dir, DONORS_FILE, DONOR_RECORDS, DONOR_SLOTS, named_by)
 
 
 def sample_records(run_dir: Path):
     """A run's sample records (#699) in the shape :func:`tally` reads: a sample's slots as its classifications.
     Nothing for a run reconciled before #693, which has no sample file."""
-    if not (run_dir / "reconciled" / SAMPLES_FILE).exists():
+    return _entity_records(run_dir, SAMPLES_FILE, SAMPLE_RECORDS, SAMPLE_SLOTS, lambda _: None)
+
+
+def _entity_records(run_dir: Path, name: str, label: str, slots: tuple[str, ...], named_by):
+    """Each record of the reconciled artifact ``name``, adapted for :func:`tally`: counted under ``label``,
+    its ``slots`` (those it carries) as classifications, ``named_by`` its samples' sources."""
+    if not (run_dir / "reconciled" / name).exists():
         return
-    for sample in iter_reconciled_artifact(run_dir, SAMPLES_FILE):
+    for record in iter_reconciled_artifact(run_dir, name):
         yield {
             _ENTITY: True,
-            "dataset_title": SAMPLE_RECORDS,
-            "classifications": {slot: sample[slot] for slot in SAMPLE_SLOTS if slot in sample},
-            SAMPLES_FIELD: None,
+            "dataset_title": label,
+            "classifications": {slot: record[slot] for slot in slots if slot in record},
+            SAMPLES_FIELD: named_by(record),
         }
 
 

@@ -65,8 +65,7 @@ from .entity_evidence import entries as entity_entries
 from .manifest_survey import name_tokens
 from .models import (
     AUTHORABLE_STATUSES,
-    DONOR_FIELDS,
-    SAMPLE_FIELDS,
+    KIND_OF_SLOT,
     SOURCE_EXTERNAL_GROUND_TRUTH,
     SOURCE_PRECEDENCE,
     SOURCE_PUBLISHED_VALUE,
@@ -316,8 +315,8 @@ def _row(node: yaml.Node, n: int) -> Row:
 
 
 def _kind(slot: str) -> str:
-    """Whose slot ``slot`` is: a donor's, a sample's, or a file's."""
-    return "donor" if slot in DONOR_FIELDS else "sample" if slot in SAMPLE_FIELDS else "file"
+    """Whose slot ``slot`` is: a donor's or a sample's (``models.KIND_OF_SLOT``), else a file's."""
+    return KIND_OF_SLOT.get(slot, "file")
 
 
 def _match(node: yaml.Node, at: str) -> tuple[str, str | tuple[str, ...], tuple[str | tuple[str, ...], ...]]:

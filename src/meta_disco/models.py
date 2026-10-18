@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
-from typing import Any
+from typing import Any, Literal
 
 from .file_name import FileName
 
@@ -227,6 +227,12 @@ UNKNOWN_PARENT = "0"
 DONOR_SLOTS = (*DONOR_FIELDS, *FAMILY_FIELDS)
 # The record slots with no vocabulary, whose values are identifiers or strings as written.
 UNTRANSLATED_SLOTS = (*FAMILY_FIELDS, ANATOMICAL_SITE)
+# Whose record each entity slot is on (#699): a donor's, or a sample's, spelled as
+# `sample_identity.EntityKind` spells them.
+KIND_OF_SLOT: dict[str, Literal["donor", "sample"]] = {
+    **dict.fromkeys(DONOR_SLOTS, "donor"),
+    **dict.fromkeys(SAMPLE_SLOTS, "sample"),
+}
 
 # The entity evidence fields naming a repository's own identifier for a donor or a sample
 # (#669): AnVIL's `donor_id` and `biosample_id`, listed on the record they tie to as
