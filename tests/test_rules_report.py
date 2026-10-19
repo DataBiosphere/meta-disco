@@ -555,7 +555,7 @@ def test_the_report_main_counts_the_runs_donor_and_sample_records(tmp_path):
     argv = ["--run-dir", str(run_dir), "--rules", str(rules), "--value-map", str(value_map)]
     assert grr.main([*argv, "--markdown", str(md), "--html", str(tmp_path / "r.html")]) == 0
     text = md.read_text()
-    assert f"its 1 donor records, counted as files under {grr.DONOR_RECORDS}" in text
+    assert f"the run's 1 donor records, counted as files under {grr.DONOR_RECORDS}" in text
     assert f"its 1 sample records, under {grr.SAMPLE_RECORDS}" in text
     # Each record counts the identifier rule that keys it.
     assert "| `igvf_sample_accession` | a string matching ^IGVFSM[0-9A-Z]{8}$; names a sample | 1 |" in text
