@@ -53,7 +53,7 @@ help:
 	@echo "  make reconcile          Reconcile a stored run with source evidence into <run>/reconciled/ (RUN_DIR=, DEPLOYMENT=)"
 	@echo "  make reconcile-report   Render a reconciled run's report to docs/reconcile-report.md + dashboard (RUN_DIR=, PREVIOUS=)"
 	@echo "  make rules-report       List every rule, its basis and how often it fired in a reconciled run (RUN_DIR=)"
-	@echo "  make all-reports        Generate every report (hprc, coverage, validation, consistency, unprocessable, reconcile, review queue, rules; RUN_DIR=, PREVIOUS=)"
+	@echo "  make all-reports        Generate every report (hprc, coverage, validation, consistency, unprocessable, reconcile, review queue, rules; RUN_DIR= for the five that read a run, PREVIOUS= for reconcile)"
 	@echo ""
 	@echo "  make download-hprc      Download HPRC catalogs for validation"
 	@echo "  make validate-hprc      Validate classifications against HPRC catalogs"
@@ -187,7 +187,8 @@ validate-metadata:
 # dated-partials default. classify-headers sets its own shared RUN_DIR, so a
 # RUN_DIR passed to classify-headers itself is overridden.
 # RUN_DIR_ARG expands to nothing when RUN_DIR is unset: a per-type classify target then
-# writes a fresh partials folder, and a report target reads the latest run.
+# writes a fresh partials folder, and a report target that takes it (coverage, consistency,
+# unprocessable, reconcile, rules) reads the latest run.
 RUN_DIR_ARG = $(if $(RUN_DIR),--run-dir $(RUN_DIR))
 
 classify-headers:

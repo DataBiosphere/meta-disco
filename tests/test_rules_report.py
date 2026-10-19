@@ -597,3 +597,17 @@ def test_a_sample_map_held_outside_anvil_counts_its_step_and_sample_rules(tmp_pa
     assert samples[code_rules.EXTERNAL_SAMPLE_MAP_ROWS.id]["datasets"] == {grr.EXTERNAL_LISTS: 1}
     assert data["records"] == len(RECORDS)
     assert list(grr.external_list_records(tmp_path / "unreconciled")) == []
+
+
+@pytest.mark.parametrize(
+    ("folder", "opening"),
+    [
+        (
+            "20260928_000000",
+            "Counts from the reconciled records of 0 files, in the run started on 28 September 2026 (output folder 20260928_000000).",
+        ),
+        ("myrun", "Counts from the reconciled records of 0 files (output folder myrun)."),
+    ],
+)
+def test_the_provenance_names_the_runs_start_only_where_its_folder_is_dated(folder, opening):
+    assert opening in grr.build(None, None, iter([]), Path("/x") / folder)["provenance"]
