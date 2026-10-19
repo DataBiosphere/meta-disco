@@ -697,7 +697,7 @@ def build(
         "run": run_dir.name,
         "records": n,
         "provenance": f"{len(rules)} rules, {len(edge_rules)} edge rules and {len(sample_rules)} sample and donor rules. "
-        f"Counts from classifying {n:,} files"
+        f"Counts from the reconciled records of {n:,} files classified"
         + (f" on {date}" if date else "")
         + f" (output folder {run_dir.name})"
         + (f", and its {len(donors):,} donor records, counted as files under {DONOR_RECORDS}" if donors else "")

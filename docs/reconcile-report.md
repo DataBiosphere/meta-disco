@@ -228,7 +228,7 @@ What each dataset holds, per dimension: every file counted once, under its recon
 
 ## Change since the previous reconciled run
 
-Against `20261014_004231` (708,088 files; a different translation table). Each cell is this run's count minus that run's.
+Against `20261018_112712` (708,088 files; the same translation table). Each cell is this run's count minus that run's.
 
 | dimension | published | published harmonized | submitter | submitter harmonized | external | external harmonized | inference | inherited | conflict (inference) | conflict (sources) | conflict (published) | published unreviewed | not applicable | not classified | added over published | filled over inference |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |

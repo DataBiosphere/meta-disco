@@ -220,15 +220,15 @@ classify-idat:
 	uv run python scripts/classify_headers.py --type idat $(RUN_DIR_ARG) -w 10
 
 consistency-report:
-	uv run python scripts/check_consistency.py
+	uv run python scripts/check_consistency.py $(RUN_DIR_ARG)
 
 # What the run could not classify, and why (#376): checksum-less files excluded from
 # classification, input-contract violations, and content that could not be read.
 unprocessable-report:
-	uv run python scripts/generate_unprocessable_report.py
+	uv run python scripts/generate_unprocessable_report.py $(RUN_DIR_ARG)
 
 coverage-report:
-	uv run python scripts/generate_coverage_report.py
+	uv run python scripts/generate_coverage_report.py $(RUN_DIR_ARG)
 
 # What the downloaded manifests actually carry (#384): compact column coverage,
 # the verbatim entity census, file-to-donor reach each way, and which datasets can
