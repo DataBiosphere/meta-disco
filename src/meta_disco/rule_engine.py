@@ -246,7 +246,7 @@ def make_claim(
     **An inherited claim** (``SOURCE_DERIVATION_INHERITANCE``, contract 4.9, #571) is a
     parent's settled answer carried across the child's ``generated_by`` at reconcile.
     It names the step it crossed — ``activity``, the input ``parent_role`` and the
-    parents' record keys (``parent_keys``) — and only it may carry those three. It
+    parents' record keys (``parent_keys``; a list held outside AnVIL by its address, #710) — and only it may carry those three. It
     carries no tier, since it never reaches ``evaluate_claims``, and it is the only
     claim that may declare the state ``mixed``.
 

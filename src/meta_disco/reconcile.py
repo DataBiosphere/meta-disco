@@ -63,12 +63,13 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import activities, reconcile_samples
+from . import activities, reconcile_external, reconcile_samples
 from .activity_map import ActivityMap, load_activity_map
 from .azul_manifest import REPOSITORY as ANVIL_REPOSITORY
 from .deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS
 from .edges import LineageStep, StepConflict, generic_only, merge_steps, misfits
 from .entity_evidence import entity_root_beside
+from .external_files import DEFAULT_EXTERNAL_ROOT, ExternalFileError, ExternalFiles, load_external_files
 from .inputs import load_envelope
 from .lineage_evidence import DEFAULT_LINEAGE_EVIDENCE_ROOT
 from .models import (
@@ -92,6 +93,7 @@ from .models import (
 from .output_utils import (
     CLASSIFICATION_FILES,
     DONORS_FILE,
+    EXTERNAL_LISTS_FILE,
     RECONCILED_DIR,
     REPORT_FILE,
     SAMPLE_LISTS_FILE,
@@ -245,6 +247,8 @@ MAX_EXAMPLES = 5
 
 # The report's block for the donor and sample records (#693, `reconcile_entities`).
 ENTITIES_KEY = "entities"
+# The report's block of the lists held outside AnVIL that the run's steps read through (#710).
+EXTERNAL_LISTS_KEY = "external_lists"
 
 
 class ReconcileError(Exception):
@@ -1150,6 +1154,8 @@ def reconcile_run(
     activity_table: ActivityMap | None = None,
     run_lineage_map: RunLineageMap | None = None,
     entity_root: Path | None = None,
+    external_files: ExternalFiles | None = None,
+    external_root: Path | None = None,
 ) -> dict:
     """Reconcile one stored run into ``<run>/reconciled/`` and return its report; ``evidence_root=None`` excludes all evidence.
 
@@ -1178,6 +1184,13 @@ def reconcile_run(
     ``run_lineage_map`` (the bundled run lineage map by default, #594) declares it; a run
     holding a child dataset of that map but not the dataset its reads are in is refused
     (``RunLineageMap.require_in_run``).
+
+    A lineage line naming a file held outside AnVIL (#710, :mod:`reconcile_external`, a
+    workaround until #624) resolves to a map ``external_files`` (the bundled declaration by
+    default) declares for the line's dataset, read from its cache under ``external_root``
+    (by default the ``external`` directory beside ``evidence_root``); a declared map missing
+    from the cache, or changed, refuses the run. Each such map is held in the graph under its address and written to
+    ``external_lists.ndjson.gz``.
 
     Donors and samples (#693, :mod:`reconcile_entities`): the entity evidence under
     ``entity_root``, by default the ``entity_evidence`` directory beside ``evidence_root``,
@@ -1220,6 +1233,7 @@ def reconcile_run(
     activity_table = activity_table if activity_table is not None else load_activity_map()
 
     rules = identifier_rules()
+    external: list[reconcile_external.ExternalList] = []
     if evidence_root is None:
         applicable, skipped = [], []
         pending = PendingLineage()
@@ -1236,13 +1250,24 @@ def reconcile_run(
         except ValueError as exc:
             raise ReconcileError(str(exc)) from None
         pending = translate_lineage(lineage_root, evidence_root, repository, catalog, activity_table, run_map)
+        if pending.external:
+            declared = external_files if external_files is not None else load_external_files()
+            if external_root is None:
+                external_root = evidence_root.parent / DEFAULT_EXTERNAL_ROOT.name
+            try:
+                external = reconcile_external.read_lists(pending.external, declared, external_root)
+            except ExternalFileError as exc:
+                raise ReconcileError(str(exc)) from None
         if entity_root is None:
             entity_root = entity_root_beside(evidence_root)
         entity_paths, entity_skipped = select_entity_evidence(entity_root, repository, catalog)
     # Every entity line is read and recognised here, before anything is written (#693).
     entity_evidence = gather(entity_paths, entity_root, table, rules)
-    joined = join(applicable, run_dir, key, table, extra=pending.wanted)
+    joined = join(applicable, run_dir, key, table, extra=pending.wanted | reconcile_external.member_locators(external))
+    # The external lists' carriers, keyed by their address, are no record's: added in place.
+    joined.carriers.update(reconcile_external.carriers(external))
     lineage = resolve_lineage(pending, joined.carriers)
+    external_held = reconcile_external.hold(external, joined.carriers, key)
     report = Report(
         coverage=joined.coverage,
         published_slots=published_slots(repository),
@@ -1297,6 +1322,12 @@ def reconcile_run(
     samples = reconcile_samples.SampleReport(rules)
     seen: set[str] = set()
     inference_lists: dict[str, dict] = {}
+    # The external lists first (#710): each is held under its address, as a record is under its key.
+    for held in external_held:
+        if held.list.samples.sample_list is not None:
+            inference_lists[held.list.samples.sample_list["list_id"]] = held.list.samples.sample_list
+        graph.add(held.list.file.ref, held.record, {}, held.step)
+        samples.hold(held.list.file.ref, held.record, inference_lists, [], graph.steps.get(held.list.file.ref))
     for _, records, lists in iter_run_file_contents(run_dir):
         inference_lists.update((entry["list_id"], entry) for entry in lists)
         for record in records:
@@ -1335,6 +1366,9 @@ def reconcile_run(
     entities = reconcile_entities(entity_evidence, rules, run_lists, skipped=entity_skipped)
     write_reconciled_file(staging / DONORS_FILE, header, entities.donors)
     write_reconciled_file(staging / SAMPLES_FILE, header, entities.samples)
+    # A list's samples are written only where a reconciled file settled to them (#710).
+    written = {entry["list_id"] for entry in run_lists}
+    write_reconciled_file(staging / EXTERNAL_LISTS_FILE, header, (h.row(written) for h in external_held))
 
     full_report = {
         **header,
@@ -1343,6 +1377,7 @@ def reconcile_run(
         **report.to_dict(),
         SAMPLES_FIELD: samples.to_dict(header_samples(files_metadata), joined.unrecognised_samples),
         ENTITIES_KEY: entities.report,
+        EXTERNAL_LISTS_KEY: reconcile_external.report(external_held),
     }
     (staging / REPORT_FILE).write_text(json.dumps(full_report, indent=2, sort_keys=True) + "\n")
     # Swap by renames: the earlier artifact is moved aside, the new one moved in, and only
@@ -1419,10 +1454,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Entity evidence, the donors' (default: entity_evidence beside the evidence root)",
     )
     parser.add_argument(
+        "--external-root",
+        type=Path,
+        default=None,
+        help="The external files cache, sample maps AnVIL lacks (#710) (default: external beside the evidence root)",
+    )
+    parser.add_argument(
         "--no-evidence",
         action="store_true",
-        help="Exclude all source evidence, lineage and entity evidence (--lineage-root and --entity-root are "
-        "then not read): the reconciled "
+        help="Exclude all source evidence, lineage and entity evidence (--lineage-root, --entity-root and "
+        "--external-root are then not read): the reconciled "
         "artifact concludes what inference did, plus what inheritance carries across the steps inference "
         "wrote (6.6)",
     )
@@ -1442,6 +1483,7 @@ def main(argv: list[str] | None = None) -> int:
             None if args.no_evidence else args.evidence_root,
             lineage_root=args.lineage_root,
             entity_root=args.entity_root,
+            external_root=args.external_root,
         )
     except (ReconcileError, ValueError, FileNotFoundError) as exc:
         print(f"reconcile refused: {exc}", file=sys.stderr)

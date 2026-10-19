@@ -51,6 +51,7 @@ from .models import (
     SOURCE_CONTENT_READ,
     SOURCE_CONTIG_DETECTION,
     SOURCE_DERIVATION_INHERITANCE,
+    SOURCE_EXTERNAL_GROUND_TRUTH,
     SOURCE_FILENAME_RULE,
     SOURCE_PUBLISHED_VALUE,
     SOURCE_REPOSITORY_METADATA,
@@ -85,6 +86,7 @@ METADATA_SCHEMA = "src/meta_disco/metadata_schema.py"
 SAMPLE_IDENTITY = "src/meta_disco/sample_identity.py"
 RECONCILE_SAMPLES = "src/meta_disco/reconcile_samples.py"
 RECONCILE_ENTITIES = "src/meta_disco/reconcile_entities.py"
+RECONCILE_EXTERNAL = "src/meta_disco/reconcile_external.py"
 
 
 @dataclass(frozen=True)
@@ -735,6 +737,27 @@ COHORT_BY_SAMPLE_MAP = EdgeRule(
     ),
 )
 
+# A workaround until AnVIL holds the maps (#624): the step of a sample map held outside AnVIL for
+# a dataset, built at reconcile from the declared copy (#710).
+COHORT_BY_EXTERNAL_SAMPLE_MAP = EdgeRule(
+    id="cohort_by_external_sample_map",
+    module=RECONCILE_EXTERNAL,
+    activity=activities.COHORT_DEFINITION,
+    role="member",
+    source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+    reads=(
+        "the rows, at reconcile, of a GATK sample-name map held outside AnVIL for the dataset "
+        "(sources/external_files.yaml, pinned by commit and sha256): each path's base name, exactly, "
+        "among the dataset's files"
+    ),
+    rationale=(
+        "A published copy of the sample-name map a workspace tar was imported from lists the gVCFs that "
+        "import joint-called, as a catalog map does (#621); a tar is linked to the copy only where its own "
+        "callset.json names exactly the copy's samples (external_lineage). A row whose name no file or "
+        "two files of the dataset carry gives no step: a cohort missing a member is not the cohort."
+    ),
+)
+
 EDGE_RULES = (
     INDEX_BY_NAME,
     CHECKSUM_BY_NAME,
@@ -742,6 +765,7 @@ EDGE_RULES = (
     MERGE_BY_HEADER,
     MERGE_BY_WORKSPACE_HEADER,
     COHORT_BY_SAMPLE_MAP,
+    COHORT_BY_EXTERNAL_SAMPLE_MAP,
 )
 
 BAM_READ_GROUP_SAMPLES = SampleRule(
@@ -797,7 +821,28 @@ SAMPLES_INHERITED_FROM_PARENT = SampleRule(
     ),
 )
 
-SAMPLE_RULES = (BAM_READ_GROUP_SAMPLES, VCF_SAMPLE_COLUMNS, SAMPLE_MAP_ROWS, SAMPLES_INHERITED_FROM_PARENT)
+EXTERNAL_SAMPLE_MAP_ROWS = SampleRule(
+    id="external_sample_map_rows",
+    module=SAMPLE_IDENTITY,
+    source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
+    reads=(
+        "the rows, at reconcile, of a GATK sample-name map held outside AnVIL for the dataset "
+        "(sources/external_files.yaml): the sample name in each row's first column"
+    ),
+    rationale=(
+        "A sample-name map's first column names the samples its import joint-called, as a catalog "
+        "map's does (sample_map_rows, #668). A map whose every name is recognised names them; one with "
+        "a name no identifier rule recognises names none. A workaround until AnVIL holds the map (#624)."
+    ),
+)
+
+SAMPLE_RULES = (
+    BAM_READ_GROUP_SAMPLES,
+    VCF_SAMPLE_COLUMNS,
+    SAMPLE_MAP_ROWS,
+    SAMPLES_INHERITED_FROM_PARENT,
+    EXTERNAL_SAMPLE_MAP_ROWS,
+)
 
 FAMILY_ID_AS_WRITTEN = EntityRule(
     id="family_id_as_written",

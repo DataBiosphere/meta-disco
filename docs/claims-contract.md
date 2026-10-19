@@ -140,6 +140,23 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     A source keyed by a field the target publishes (a file name within a dataset) joins on that field
     as it is.
 
+2.11 **A file the catalog lacks may be held outside it for one dataset, only as a declared workaround, and
+    links to it only where the child's own content confirms it** (#710). ANVIL_T2T_CHRY's 1000 Genomes
+    GenomicsDB workspace tars were imported from GATK sample-name maps the dataset does not hold; the
+    Schatz lab published copies on GitHub. `sources/external_files.yaml` declares each copy for the one
+    dataset, pinned by commit and sha256, and `make fetch-external-files` keeps it under
+    `data/external/<dataset>/`, refusing a copy whose sha256 differs. A copy is not the file the import read,
+    so the tar's own `callset.json` stands in for 2.10's identity: `external_lineage` links a tar to the copy
+    its header names only where that member lists exactly the copy's samples, each once, and counts every
+    other tar. The check confirms the cohort, not the chromosome: the 25 maps hold two sample sets (3,202
+    samples, and chrY's 1,599), so which map a tar read is its header's map path, as declared in
+    `named_as`. The lines name each tar's map, never the map's members, since a lineage line's child must
+    be a catalog file. Reconcile holds the copy under its address, resolves it only for its declared
+    dataset (ADR-0002 decision 2), reads its members from the cached copy (a code rule,
+    `cohort_by_external_sample_map`), and reads the tar's values and samples through it as it does a
+    catalog map's (4.9). This ends when AnVIL holds the maps (#624): the catalog maps then take over, and the
+    declaration, its cache and its lineage are deleted.
+
 ## 3. Claims
 
 3.1 A claim is a rule's declaration about a slot, derived from source evidence (2.1), from inference's own
@@ -299,7 +316,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 4.9 **A child inherits across a derivation edge** (ADR-0002, #355) — an `internal` one, which joins two
     files of one dataset, or, under ADR-0002 decision 2's one declared exception (#594), a child to its
     parent in the dataset the run lineage map declares (the input's `parent_dataset`). A parent is
-    looked for only there; one missing is `external`, and nothing is inherited across it. A child has one activity (its
+    looked for only there; one missing is `external`, and nothing is inherited across it, except a list
+    held outside AnVIL for the child's dataset (2.11, #710): a role that reads through its parents reads
+    through it to the dataset's own files it lists. A child has one activity (its
     `generated_by`); for each input role that passes a dimension, the child's parents in that role settle
     their resolved answers among themselves and give the child one declaration, credited to them, to which
     4.2–4.6 apply as to inputs 1–4 — so a dimension two roles pass (none today) has two declarations, which
@@ -558,6 +577,10 @@ importer's half is built — 7.12 is enforced (below), and the published importe
 - **Reconcile checks a run's input only as far as its files record it** (#404). Each classification file records the input it was classified from, and reconcile refuses an input whose `repository` or `catalog` differs; `downloaded_at` is recorded but not compared, a file written before #404 records none and is not checked, and the input's records themselves are not compared, so an input with no catalog (HPRC's) is checked only by its repository. A catalog name pins its snapshots for prod (`anvil15`) but not for dev, whose catalog is always `anvil`: a dev run is not refused against a later input whose snapshots were bumped. No run reads dev's input until #480.
 - **6.9 holds for `corpus_diff` only.** It is told which artifact it compares; the coverage, validation and consistency reports still read the inference artifact.
 - **6.11 holds for the reconciled artifact only.** It is gzip-compressed NDJSON (`.ndjson.gz`) under `<run>/reconciled/`; inference output is still pretty-printed JSON at the run root (#448, #271).
+- **2.11 is a workaround with one entry.** The external files declaration holds ANVIL_T2T_CHRY's 25
+  published 1000 Genomes sample maps and nothing else; its 62,022 SGDP tars name maps no one has
+  published, and are counted `map_not_declared`, not read. #624 asks AnVIL for the maps; when they are in
+  the snapshot, 2.11 and everything it names are deleted.
 - **No curator rule exists** (4.7, #397). Every conflict stands unanswered, which 7.13 makes deliverable.
 - **5.1 is met for values, not rules.** `make reconcile-report` (#395) lists each conflict's competing values
   per input, counted per distinct set; the rule behind each value is on the reconciled record, not in the list.

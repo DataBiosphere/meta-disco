@@ -12,6 +12,7 @@ from meta_disco.models import SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
 from meta_disco.output_utils import (
     CLASSIFICATION_FILES,
     DONORS_FILE,
+    EXTERNAL_LISTS_FILE,
     RECONCILED_DIR,
     SAMPLES_FILE,
     iter_reconciled_records,
@@ -558,3 +559,41 @@ def test_the_report_main_counts_the_runs_donor_and_sample_records(tmp_path):
     assert f"its 1 sample records, under {grr.SAMPLE_RECORDS}" in text
     # Each record counts the identifier rule that keys it.
     assert "| `igvf_sample_accession` | a string matching ^IGVFSM[0-9A-Z]{8}$; names a sample | 1 |" in text
+
+
+def test_a_sample_map_held_outside_anvil_counts_its_step_and_sample_rules(tmp_path):
+    """An external list (#710) is no record, so its own step and samples are counted from its file."""
+    run_dir = reconciled_run(tmp_path)
+    member = {"source_type": "external_ground_truth", "rule_id": code_rules.COHORT_BY_EXTERNAL_SAMPLE_MAP.id}
+    named = {"source_type": "external_ground_truth", "rule_id": code_rules.EXTERNAL_SAMPLE_MAP_ROWS.id}
+    listed = {
+        "ref": "github:o/r@c/m.tsv",
+        "dataset": "C",
+        "file_name": "m_sample_map.tsv",
+        "sha256": "0" * 64,
+        "generated_by": {
+            "activity": "CohortDefinitionActivity",
+            "named_by": [member],
+            "inputs": [
+                {"role": "member", "parent_file": f"g{n}.hc.vcf.gz", "parent_key": f"g{n}", "named_by": [member]}
+                for n in (1, 2)
+            ],
+        },
+        "samples": {"list_id": "0" * 16, "count": 2, "named_by": [named]},
+    }
+    write_reconciled_file(run_dir / RECONCILED_DIR / EXTERNAL_LISTS_FILE, {"catalog": "t"}, [listed])
+    data = grr.build(
+        *rule_files(tmp_path),
+        iter_reconciled_records(run_dir),
+        run_dir,
+        external_lists=grr.external_list_records(run_dir),
+    )
+    edges = {r["id"]: r for r in data["edge_rules"]}
+    samples = {r["id"]: r for r in data["sample_rules"]}
+    assert (
+        edges[code_rules.COHORT_BY_EXTERNAL_SAMPLE_MAP.id]["claims"],
+        edges[code_rules.COHORT_BY_EXTERNAL_SAMPLE_MAP.id]["files"],
+    ) == (2, 1)
+    assert samples[code_rules.EXTERNAL_SAMPLE_MAP_ROWS.id]["datasets"] == {grr.EXTERNAL_LISTS: 1}
+    assert data["records"] == len(RECORDS)
+    assert list(grr.external_list_records(tmp_path / "unreconciled")) == []

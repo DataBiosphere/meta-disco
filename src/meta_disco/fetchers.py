@@ -694,14 +694,16 @@ def _fetch_suffix(md5sum: str, length: int, *, url: str | None, timeout: int = 6
             if found is None:
                 raise FetchError(f"suffix range from {source} with no Content-Range start")
             start = found
-        body = b""
+        chunks: list[bytes] = []
+        size = 0
         for chunk in resp.iter_content(chunk_size=65536):
-            body += chunk
-            if len(body) > length:
+            chunks.append(chunk)
+            size += len(chunk)
+            if size > length:
                 raise FetchError(
                     f"HTTP {resp.status_code} from {source} suffix range request past {length} bytes (Range ignored)"
                 )
-        return body, start
+        return b"".join(chunks), start
 
 
 def _member_in_window(data: bytes, base: int, member: str) -> tuple[int, int, bytes] | None:
@@ -1316,6 +1318,18 @@ def fetch_tar_headers(
         vcf_header_read=kept_member is not None and unread is None,
     )
     return TarHead(member_names, text, unread)
+
+
+@wrap_as_fetch_error("tar member")
+def fetch_tar_member(md5sum: str, member: str, url: str | None = None) -> str | None:
+    """The text of the member named ``member`` of an uncompressed tar, read from the AnVIL S3 mirror (or ``url``) in its last, then first,
+    :data:`TAR_MEMBER_WINDOW` bytes (:func:`_read_member`); None where neither holds it, or its body is over :data:`MAX_TAR_MEMBER_TEXT` bytes.
+
+    Nothing is cached. Raises ``FetchError`` on a failed read. Read by the external lineage
+    importer for a GenomicsDB workspace's ``callset.json`` (#710), which sat in the last MiB of
+    each of 4 ANVIL_T2T_CHRY tars measured on 2026-10-18.
+    """
+    return _read_member(md5sum, member, url=url, tail_first=True)[0]
 
 
 def _read_kept(

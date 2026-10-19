@@ -103,6 +103,40 @@ def parse_tar_head(head: TarHead) -> ParsedTarHead:
     return ParsedTarHead(head.member_names, header, head.vcf_header_unread)
 
 
+def sample_name_map(head: ParsedTarHead, file_name: str) -> tuple[str | None, str | None]:
+    """The path of the sample-name map a workspace tar's ``vcfheader.vcf`` says it was imported from, as written; or None and why.
+
+    The header's ``GenomicsDBImport`` steps, identical lines once, must be exactly one
+    (:data:`NO_ACTIVITY` otherwise; :data:`NO_COMMAND_LINE` with no command line at all),
+    whose workspace path's base name is ``file_name`` less ``.tar``
+    (:data:`OUTPUT_NOT_THIS_FILE`), and which names one sample-name map and no gVCF one
+    by one (:data:`NO_ACTIVITY`). A tar that is no workspace gives None and no outcome; a
+    workspace whose header was not read, its ``ParsedTarHead.unread``. Shared by
+    :class:`TarSteps` and the external lineage importer (``external_lineage``, #710).
+    """
+    if not head.is_workspace:
+        return None, None
+    if head.header is None:
+        return None, head.unread
+    commands = head.header.commands
+    if not commands:
+        return None, NO_COMMAND_LINE
+    imports = list(
+        dict.fromkeys(
+            c.step for c in commands if c.step.read and c.step.family == GATK and c.step.tool == GENOMICSDB_IMPORT
+        )
+    )
+    if len(imports) != 1:
+        return None, NO_ACTIVITY
+    (step,) = imports
+    if step.output is None or data_name(step.output) != workspace_name(file_name):
+        return None, OUTPUT_NOT_THIS_FILE
+    lists = list(dict.fromkeys(step.input_lists))
+    if step.inputs or len(lists) != 1:
+        return None, NO_ACTIVITY
+    return lists[0], None
+
+
 def parse_sample_map(text: str) -> tuple[tuple[str, str], ...] | None:
     """A sample map's rows, ``(sample, path)``, or None where ``text`` is not one.
 
@@ -161,36 +195,14 @@ class TarSteps(_StepReader):
         A tar whose members are no GenomicsDB store has no step to read, and gives no outcome
         (None): it is not counted.
 
-        Its header's ``GenomicsDBImport`` steps, identical lines once, must be exactly one
-        (:data:`NO_ACTIVITY` otherwise; :data:`NO_COMMAND_LINE` with no command line at all),
-        whose workspace path's base name is this tar's name less ``.tar``
-        (:data:`OUTPUT_NOT_THIS_FILE`), and which names one sample-name map and no gVCF
-        one by one (:data:`NO_ACTIVITY`). The map is the one sample map of ``dataset_id``
-        carrying its base name, case-folded (:data:`PARENT_NOT_FOUND`,
-        :data:`PARENT_AMBIGUOUS`). A workspace whose ``vcfheader.vcf`` was not read gives
-        :data:`VCF_HEADER_UNREADABLE` where reading it failed, else :data:`NO_VCF_HEADER`.
+        The map its header names (:func:`sample_name_map`, whose outcomes it gives where the
+        header names none) is the one sample map of ``dataset_id`` carrying its base name,
+        case-folded (:data:`PARENT_NOT_FOUND`, :data:`PARENT_AMBIGUOUS`).
         """
-        if not head.is_workspace:
-            return None, None
-        if head.header is None:
-            return None, head.unread
-        commands = head.header.commands
-        if not commands:
-            return None, NO_COMMAND_LINE
-        imports = list(
-            dict.fromkeys(
-                c.step for c in commands if c.step.read and c.step.family == GATK and c.step.tool == GENOMICSDB_IMPORT
-            )
-        )
-        if len(imports) != 1:
-            return None, NO_ACTIVITY
-        (step,) = imports
-        if step.output is None or data_name(step.output) != workspace_name(file_name):
-            return None, OUTPUT_NOT_THIS_FILE
-        lists = list(dict.fromkeys(step.input_lists))
-        if step.inputs or len(lists) != 1:
-            return None, NO_ACTIVITY
-        parents, outcome = resolve_names(self.index, dataset_id, [PurePosixPath(lists[0]).name])
+        named, outcome = sample_name_map(head, file_name)
+        if named is None:
+            return None, outcome
+        parents, outcome = resolve_names(self.index, dataset_id, [PurePosixPath(named).name])
         if parents is None:
             return None, outcome
         return edges.generated_by(code_rules.MERGE_BY_WORKSPACE_HEADER, parents, self.key), STEPPED

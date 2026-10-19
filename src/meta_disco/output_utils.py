@@ -203,6 +203,9 @@ SAMPLE_LISTS_FILE = "sample_lists.ndjson.gz"
 # their line format: a `DonorRecord` or `SampleRecord` per line.
 DONORS_FILE = "donors.ndjson.gz"
 SAMPLES_FILE = "samples.ndjson.gz"
+# The lists held outside AnVIL that the run's steps read through (#710, `reconcile_external`):
+# an `ExternalList` per line, where an input's `parent_ref` points.
+EXTERNAL_LISTS_FILE = "external_lists.ndjson.gz"
 # The gzip level. On a run's BAM file, 6 measured nearly as small as 9 (25x vs 26x), and 9
 # took 1.6-1.7 times as long to write; 1 was faster still but compressed only 14x.
 RECONCILED_GZIP_LEVEL = 6
@@ -241,7 +244,7 @@ def iter_reconciled_records(run_dir: Path):
     Raises FileNotFoundError when the run has no reconciled artifact at all — reading
     nothing would pass for a run with no coverage. Raises ValueError, before any record is
     yielded, when the artifact holds a name other than the reconciled names, ``REPORT_FILE``,
-    ``SAMPLE_LISTS_FILE``, ``DONORS_FILE`` and ``SAMPLES_FILE`` (dot-files aside), such as an uncompressed ``.ndjson`` written before
+    ``SAMPLE_LISTS_FILE``, ``DONORS_FILE``, ``SAMPLES_FILE`` and ``EXTERNAL_LISTS_FILE`` (dot-files aside), such as an uncompressed ``.ndjson`` written before
     #554, whose records this reader would otherwise skip as unwritten; and, when it is
     reached, on a file that is not gzip or is cut short.
     """
@@ -253,6 +256,7 @@ def iter_reconciled_records(run_dir: Path):
         SAMPLE_LISTS_FILE,
         DONORS_FILE,
         SAMPLES_FILE,
+        EXTERNAL_LISTS_FILE,
     }
     unexpected = sorted(p.name for p in directory.iterdir() if not p.name.startswith(".") and p.name not in expected)
     if unexpected:
@@ -279,7 +283,7 @@ def iter_reconciled_artifact(run_dir: Path, name: str):
     """Yield each line after the envelope of one reconciled artifact file, ``run_dir/reconciled/<name>``.
 
     For the files beside the records: ``SAMPLE_LISTS_FILE``, ``DONORS_FILE``, ``SAMPLES_FILE``
-    (#693). Line 1 is the envelope, checked and skipped. Raises FileNotFoundError when the
+    (#693), ``EXTERNAL_LISTS_FILE`` (#710). Line 1 is the envelope, checked and skipped. Raises FileNotFoundError when the
     file is absent.
     """
     path = run_dir / RECONCILED_DIR / name

@@ -44,7 +44,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 
 from . import activities, code_rules
-from .edges import distinct
+from .edges import distinct, parent_node
 from .models import SOURCE_DERIVATION_INHERITANCE, ClaimSource
 from .reconcile_inherit import PARENT_CONFLICT, Step, parent_first
 from .sample_identity import (
@@ -357,7 +357,7 @@ class SampleReport:
         passing = activities.samples_roles(activity)
         seen: set[str] = set()
         for i in generated_by["inputs"]:
-            key = i["parent_key"]
+            key = parent_node(i)
             if i["role"] in passing or key in seen:
                 continue
             seen.add(key)

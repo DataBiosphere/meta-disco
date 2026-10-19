@@ -1,4 +1,4 @@
-.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-sample_map classify-idat classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published check-lineage-map import-anvil-lineage check-entity-map import-anvil-entities import-ena-evidence check-ena-lineage-map import-ena-lineage seed-activity-map seed-value-map review-queue corpus-diff reconcile reconcile-report rules-report all-reports download-hprc validate-hprc clean help
+.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-sample_map classify-idat classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published check-lineage-map import-anvil-lineage check-entity-map import-anvil-entities import-ena-evidence check-ena-lineage-map import-ena-lineage fetch-external-files check-external-files import-external-lineage seed-activity-map seed-value-map review-queue corpus-diff reconcile reconcile-report rules-report all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -40,6 +40,9 @@ help:
 	@echo "  make import-ena-evidence Import ENA's run records for the FASTQs ENA generated, where the md5 matches (network)"
 	@echo "  make check-ena-lineage-map Check the ENA run lineage map against the deployment and the manifests (offline)"
 	@echo "  make import-ena-lineage Link declared alignments to the ENA run whose reads they hold, by read and base counts (network)"
+	@echo "  make fetch-external-files Fetch the declared external files (sample maps AnVIL lacks, #710) into data/external/ (network)"
+	@echo "  make check-external-files Check the external files declaration against the deployment, manifests and cache (offline)"
+	@echo "  make import-external-lineage Link workspace tars to the declared sample map whose samples their callset.json lists (network)"
 	@echo "  make seed-activity-map  Append a seeded row to the activity map for every lineage step with no row (offline)"
 	@echo "  make seed-value-map     Append a seeded row to the value map for every evidence value with no row (offline)"
 	@echo "  make review-queue       Write docs/review-queue-report.md + review-queue.html: every evidence value and lineage step no authored row reads (offline)"
@@ -299,6 +302,22 @@ check-ena-lineage-map:
 
 import-ena-lineage:
 	uv run python scripts/import_ena_lineage.py $(ARGS)
+
+# Files held outside AnVIL for a dataset (#710; src/meta_disco/external_files.py), a
+# workaround until AnVIL holds them (#624): ANVIL_T2T_CHRY's 1000 Genomes sample maps, as the
+# Schatz lab published them. Fetch them, pinned by commit and sha256, into
+# data/external/<dataset>/ (network); check the declaration (offline); or import each
+# workspace tar's link to its map, where the tar's own callset.json lists exactly the map's
+# samples, as lineage evidence under data/lineage_evidence/external/. Network;
+# `ARGS="--inputs <file>"` re-imports offline from what an import kept.
+fetch-external-files:
+	uv run python scripts/fetch_external_files.py
+
+check-external-files:
+	uv run python scripts/import_external_lineage.py --check
+
+import-external-lineage:
+	uv run python scripts/import_external_lineage.py $(ARGS)
 
 # The activity translation table (#584; src/meta_disco/activity_map.py): seed it from the
 # current lineage evidence; `make review-queue` lists its unauthored rows. Offline.

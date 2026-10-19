@@ -236,8 +236,8 @@ def map_document(resource: Readable, loader: type[yaml.SafeLoader], where: str, 
     """A dataset map's YAML document, checked: a mapping with no ``notes``, whose top-level keys are
     ``catalog``, ``datasets`` and ``more_keys``, ``catalog`` a name and ``datasets`` a non-empty mapping.
 
-    Shared by the lineage map and the ENA run lineage map (``run_lineage_map``, #594), which
-    have the same top-level shape.
+    Shared by the lineage map, the ENA run lineage map (``run_lineage_map``, #594) and the
+    external files declaration (``external_files``, #710), which have the same top-level shape.
     """
     document = yaml.load(resource.read_text(encoding="utf-8"), Loader=loader)
     if not isinstance(document, dict):

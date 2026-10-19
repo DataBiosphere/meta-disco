@@ -669,3 +669,23 @@ def test_a_report_written_before_samples_says_so():
 def test_the_most_frequent_unrecognised_strings_are_shown_whatever_the_report_order():
     """The report JSON is written with sorted keys; the section ranks by count."""
     assert rr._strings({"a": 1, "b": 1, "c": 9, "d": 1, "e": 1, "f": 1}, limit=2) == "`c` (9), `a` (1)"
+
+
+def test_the_sample_maps_held_outside_anvil_are_listed_per_dataset(conflicted):
+    report = rr.load_report(conflicted)
+    md = rr.render_markdown(rr.dashboard_data(report, None, Path("report.json")))
+    assert "None: no lineage line named one in this run." in md
+    report["external_lists"] = {"ANVIL_T2T_CHRY": {"lists": 25, "rows": 78447, "samples_named": 25, "stepped": 25}}
+    md = rr.render_markdown(rr.dashboard_data(report, None, Path("report.json")))
+    row = next(line for line in md.splitlines() if line.startswith("| `ANVIL_T2T_CHRY` |"))
+    assert row.strip("| ").split(" | ")[1:] == ["25", "25", "78,447", "0", "0", "25"]
+
+
+def test_the_dashboard_draws_the_sample_maps_held_outside_anvil(tmp_path, conflicted):
+    report = rr.load_report(conflicted)
+    report["external_lists"] = {"ANVIL_T2T_CHRY": {"lists": 25, "stepped": 25}}
+    data = rr.dashboard_data(report, None, Path("report.json"))
+    assert data["external_list_columns"] == list(rr.EXTERNAL_LIST_COLUMNS)
+    html = rr.render_html(data, rr.TEMPLATE.read_text())
+    assert "<h3>Sample maps held outside AnVIL</h3>" in html and "DATA.external_lists" in html
+    assert '"ANVIL_T2T_CHRY": {"lists": 25, "stepped": 25}' in html

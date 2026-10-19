@@ -369,7 +369,8 @@ def run_sample(run: dict) -> str | None:
     return next(iter(names)) if len(names) == 1 else None
 
 
-def _catalog_files(path: Path) -> Iterable[tuple[dict, CatalogFile]]:
+def catalog_files(path: Path) -> Iterable[tuple[dict, CatalogFile]]:
+    """Each ``anvil_file`` entity of a verbatim manifest with a file id and name, and the file it gives; shared with ``external_lineage`` (#710)."""
     for _table, value in iter_verbatim_entities(path, {VERBATIM_FILE}):
         file_id, name, md5 = value.get("file_id"), value.get("file_name"), value.get("file_md5sum")
         if isinstance(file_id, str) and isinstance(name, str):
@@ -382,7 +383,7 @@ def files_by_drs(path: Path) -> dict[str, CatalogFile]:
     """A dataset's files, from its verbatim manifest, by each DRS URI its ``anvil_file`` entity carries."""
     return {
         handle: file
-        for value, file in _catalog_files(path)
+        for value, file in catalog_files(path)
         for column in ANVIL_FILE_HANDLE_COLUMNS
         for handle in link_handles(value.get(column)) or []
     }
@@ -391,7 +392,7 @@ def files_by_drs(path: Path) -> dict[str, CatalogFile]:
 def files_by_md5(path: Path) -> dict[str, list[CatalogFile]]:
     """A dataset's files, from its verbatim manifest, by md5."""
     found: dict[str, list[CatalogFile]] = defaultdict(list)
-    for _value, file in _catalog_files(path):
+    for _value, file in catalog_files(path):
         if file.md5:
             found[file.md5].append(file)
     return dict(found)
@@ -574,13 +575,15 @@ def require_inputs_agree(
             raise ValueError(f"{at}: {child.file_name}'s stats file is not the one its kept reading read")
 
 
-def _in_parallel(tasks: list[Callable[[], None]], progress: Progress, what: str) -> None:
-    """Run ``tasks`` :data:`WORKERS` at a time, telling ``progress`` how many of ``what`` are done every :data:`PROGRESS_EVERY` and at the end."""
-    with ThreadPoolExecutor(WORKERS) as pool:
+def in_parallel(
+    tasks: list[Callable[[], None]], progress: Progress, what: str, workers: int = WORKERS, every: int = PROGRESS_EVERY
+) -> None:
+    """Run ``tasks`` ``workers`` at a time, telling ``progress`` how many of ``what`` are done every ``every`` and at the end."""
+    with ThreadPoolExecutor(workers) as pool:
         futures = [pool.submit(task) for task in tasks]
         for done, future in enumerate(as_completed(futures), start=1):
             future.result()
-            if done % PROGRESS_EVERY == 0 or done == len(tasks):
+            if done % every == 0 or done == len(tasks):
                 progress(f"read {done:,} of {len(tasks):,} {what}")
 
 
@@ -614,7 +617,7 @@ def _read_stats_files(
         for child, stats in found
         if stats is not None and stats.md5 is not None and inputs.crams[child.file_id].stats_md5 is None
     ]
-    _in_parallel(tasks, lambda message: progress(f"{at}: {message}"), "stats files")
+    in_parallel(tasks, lambda message: progress(f"{at}: {message}"), "stats files")
 
 
 def _read_headers(
@@ -645,7 +648,7 @@ def _read_headers(
         unread = reading.steps is None and reading.header_error is None
         if unread and _run_match(child, stats, reading, by_counts, reads_by_md5)[0] is None:
             tasks.append(task(child, reading))
-    _in_parallel(tasks, lambda message: progress(f"{at}: {message}"), "headers")
+    in_parallel(tasks, lambda message: progress(f"{at}: {message}"), "headers")
 
 
 def _lines(
