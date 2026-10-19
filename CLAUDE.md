@@ -80,7 +80,8 @@ make reconcile-report
 make rules-report
 
 # What a run could not classify, and why: excluded (no checksum), contract
-# violations, unreadable content (issue #376)
+# violations, unreadable content (issue #376); RUN_DIR=, default the latest, as for the
+# coverage and consistency reports
 make unprocessable-report
 
 # Tests and lint

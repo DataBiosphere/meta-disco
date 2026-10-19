@@ -26,7 +26,8 @@ help:
 	@echo "  make classify-sample_map  Read GATK sample maps' cohort steps (network required)"
 	@echo "  make classify-idat      Classify Illumina IDATs from their headers (network required)"
 	@echo "  make classify-hprc      Classify HPRC catalog files (network required)"
-	@echo "  make coverage-report    Generate coverage report from latest run"
+	@echo "  make coverage-report    Generate the coverage report from a run (RUN_DIR=, default the latest)"
+	@echo "  make consistency-report Check a run's records for internal consistency (RUN_DIR=, default the latest)"
 	@echo "  make manifest-survey    Survey what the downloaded manifests carry (offline)"
 	@echo "  make download-and-survey Pull manifests, then survey what they carry"
 	@echo "  make check-slot-map     Check the AnVIL slot map against the manifests on disk (offline)"
@@ -46,13 +47,13 @@ help:
 	@echo "  make seed-activity-map  Append a seeded row to the activity map for every lineage step with no row (offline)"
 	@echo "  make seed-value-map     Append a seeded row to the value map for every evidence value with no row (offline)"
 	@echo "  make review-queue       Write docs/review-queue-report.md + review-queue.html: every evidence value and lineage step no authored row reads (offline)"
-	@echo "  make unprocessable-report Report what a run could not classify, and why"
+	@echo "  make unprocessable-report Report what a run could not classify, and why (RUN_DIR=, default the latest)"
 	@echo "  make validation-report  Generate validation report against ground truth"
 	@echo "  make corpus-diff        Compare two corpus generations (snapshots by md5, runs by label; ARGS=--artifact ...)"
 	@echo "  make reconcile          Reconcile a stored run with source evidence into <run>/reconciled/ (RUN_DIR=, DEPLOYMENT=)"
 	@echo "  make reconcile-report   Render a reconciled run's report to docs/reconcile-report.md + dashboard (RUN_DIR=, PREVIOUS=)"
 	@echo "  make rules-report       List every rule, its basis and how often it fired in a reconciled run (RUN_DIR=)"
-	@echo "  make all-reports        Generate every report (hprc, coverage, validation, consistency, unprocessable, reconcile, review queue, rules)"
+	@echo "  make all-reports        Generate every report (hprc, coverage, validation, consistency, unprocessable, reconcile, review queue, rules; RUN_DIR=, PREVIOUS=)"
 	@echo ""
 	@echo "  make download-hprc      Download HPRC catalogs for validation"
 	@echo "  make validate-hprc      Validate classifications against HPRC catalogs"
@@ -185,7 +186,8 @@ validate-metadata:
 # `make classify-bam RUN_DIR=...`) to place its output, or leave it unset for the
 # dated-partials default. classify-headers sets its own shared RUN_DIR, so a
 # RUN_DIR passed to classify-headers itself is overridden.
-# RUN_DIR_ARG expands to nothing when RUN_DIR is unset (standalone run).
+# RUN_DIR_ARG expands to nothing when RUN_DIR is unset: a per-type classify target then
+# writes a fresh partials folder, and a report target reads the latest run.
 RUN_DIR_ARG = $(if $(RUN_DIR),--run-dir $(RUN_DIR))
 
 classify-headers:
@@ -370,14 +372,14 @@ reconcile:
 # latest run, which must have been reconciled (`make reconcile`); PREVIOUS is the run to
 # compare with, by default the newest earlier run holding a reconcile report.
 reconcile-report:
-	uv run python scripts/generate_reconcile_report.py $(if $(RUN_DIR),--run-dir $(RUN_DIR)) $(if $(PREVIOUS),--previous $(PREVIOUS))
+	uv run python scripts/generate_reconcile_report.py $(RUN_DIR_ARG) $(if $(PREVIOUS),--previous $(PREVIOUS))
 
 # List every rule that classifies a file (#572): the YAML rules, the rules written in
 # Python (code_rules.CODE_RULES) and the translation rows, each with its basis and how
 # often it fired in a reconciled run, to docs/rules-report.md + docs/rules-dashboard.html.
 # RUN_DIR defaults to the latest run, which must have been reconciled (`make reconcile`).
 rules-report:
-	uv run python scripts/generate_rules_report.py $(if $(RUN_DIR),--run-dir $(RUN_DIR))
+	uv run python scripts/generate_rules_report.py $(RUN_DIR_ARG)
 
 all-reports: validate-hprc coverage-report validation-report consistency-report unprocessable-report reconcile-report review-queue rules-report
 
