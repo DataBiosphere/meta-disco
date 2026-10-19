@@ -697,10 +697,10 @@ def build(
         "run": run_dir.name,
         "records": n,
         "provenance": f"{len(rules)} rules, {len(edge_rules)} edge rules and {len(sample_rules)} sample and donor rules. "
-        f"Counts from classifying {n:,} files"
-        + (f" on {date}" if date else "")
+        f"Counts from the reconciled records of {n:,} files"
+        + (f", in the run started on {date}" if date else "")
         + f" (output folder {run_dir.name})"
-        + (f", and its {len(donors):,} donor records, counted as files under {DONOR_RECORDS}" if donors else "")
+        + (f", and the run's {len(donors):,} donor records, counted as files under {DONOR_RECORDS}" if donors else "")
         + (f", and its {len(samples):,} sample records, under {SAMPLE_RECORDS}" if samples else "")
         + (
             f", and the {len(external_lists):,} sample maps held outside AnVIL its steps read through (#710), "
