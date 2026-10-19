@@ -1047,11 +1047,13 @@ classes:
         range: GeneratedBy
         description: >-
           The list's members, each a file of the dataset carrying the name a row gives.
-          Absent where a row's name is carried by no file of the dataset or by several:
-          a cohort missing a member is not the cohort.
+          Absent where a row's name is carried by no file of the dataset or by several, or
+          two rows give one name: a cohort missing a member is not the cohort.
       samples:
         range: SampleReference
-        description: The samples the list's rows name, where every one is recognised.
+        description: >-
+          The samples the list's rows name, where every one is recognised and a reconciled
+          file settles to them (so the list they point to is in `sample_lists.ndjson.gz`).
 
   SampleList:
     description: >-

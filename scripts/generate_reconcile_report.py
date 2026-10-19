@@ -1033,7 +1033,8 @@ def _content_steps_section(rows: list[dict]) -> list[str]:
         "sample map's rows a `CohortDefinitionActivity` of its gVCFs; a tar that is no GenomicsDB workspace is not "
         "counted; *no_vcf_header*: the workspace has no `vcfheader.vcf` where it was looked for; *vcf_header_unreadable*: reading it failed, and the next run "
         "reads it again; *output_not_this_file*, for a tar: the import's workspace names another directory; *not_a_list*: the file "
-        "is not two tab-separated columns naming VCFs, or three with an index path.",
+        "is not two tab-separated columns naming VCFs, or three with an index path. A tar counted *parent_not_found* "
+        "here may still get its step at reconcile, through a sample map held outside AnVIL (#710, below).",
         "",
     ]
     if not rows:
@@ -1063,7 +1064,9 @@ def _lineage_section(lineage: dict | None) -> list[str]:
         "file, or more than one, of the dataset "
         "searched is the parent; *child_not_in_run* / *child_several_match*: no file, or more than "
         "one, is the child; *parent_is_child*: the parent named is the child itself. Only *resolved* lines give "
-        "a step.",
+        "a step. ENA's run lineage (#594) and the sample maps held outside AnVIL (#710) are both "
+        "`external_ground_truth`, so their lines are added together in one row per dataset; the maps' own table "
+        "below and the inheritance section's `input_list` row show the maps' share.",
         "",
     ]
     if lineage is None:

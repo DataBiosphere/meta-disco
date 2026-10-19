@@ -224,7 +224,7 @@ evidence}` entry — plus the controlled vocabulary:
     `make import-anvil-lineage`). A line declares no activity or role (#584 translates) and the
     parent is not resolved (#577 does). `repository_activity` (`anvil_activity`) is an importer kind
     written only as lineage (`models.LINEAGE_ONLY_SOURCE_TYPES`); a slot evidence file refuses it.
-  - **ENA's run records** (#606) are the one external (`external_ground_truth`) evidence:
+  - **ENA's run records** (#606) are the one external (`external_ground_truth`) slot evidence:
     `ena_evidence` (`make import-ena-evidence`, network) looks up the files named as ENA names
     its generated FASTQs (`ERR…_1.fastq.gz`) and writes a file's `library_strategy`,
     `library_source`, `instrument_platform` and `instrument_model`, keyed by `file_id`, under
@@ -241,10 +241,11 @@ evidence}` entry — plus the controlled vocabulary:
     2.11, until AnVIL holds it, #624): `sources/external_files.yaml` declares ANVIL_T2T_CHRY's published
     1000 Genomes sample maps, pinned by commit and sha256, read through `external_files`;
     `make fetch-external-files` keeps them under `data/external/<dataset>/` (dataset first), refusing a
-    changed copy. `external_lineage` (`make import-external-lineage`, network) links a workspace tar to the
+    download whose sha256 differs (a changed cached copy is downloaded again, and read refused until it is). `external_lineage` (`make import-external-lineage`, network) links a workspace tar to the
     map its header names only where the tar's own `callset.json` lists exactly the map's samples, writing
     lineage under `data/lineage_evidence/external/` (`parent_key_type: external_file`). Reconcile
-    (`reconcile_external`) holds each named map under its address, builds its members and samples, and the
+    (`reconcile_external`) holds each named map under its address, builds its members and samples from
+    the cached copy (no lineage line names a map's members), and the
     tar's input names it by `parent_ref` (no `parent_key`); the maps are written to
     `reconciled/external_lists.ndjson.gz`. Read an input's parent through `edges.parent_node`, never
     `["parent_key"]` alone.

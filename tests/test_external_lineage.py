@@ -3,6 +3,7 @@ its cache (``external_files``), the importer gating each workspace tar on its ow
 (``external_lineage``), and reconcile reading a tar's values and samples through such a map
 (``reconcile_external``)."""
 
+import dataclasses
 import hashlib
 import json
 from datetime import datetime, timezone
@@ -15,6 +16,7 @@ from meta_disco import code_rules
 from meta_disco import external_lineage as xl
 from meta_disco.activity_map import load_activity_map
 from meta_disco.deployments import Deployment
+from meta_disco.edges import misfits
 from meta_disco.evidence import TarEvidence
 from meta_disco.external_files import (
     ExternalFileError,
@@ -362,15 +364,16 @@ def tar_line(child: str = "t1", parent: str = REF):
     )
 
 
-def reconcile(tmp_path, declared, rows, lineage_rows, external_root=None):
+def reconcile(tmp_path, declared, rows, lineage_rows, external_root=None, dataset="C"):
     evidence = tmp_path / "data" / "source_evidence"
     evidence.mkdir(parents=True, exist_ok=True)
     lineage = tmp_path / "data" / "lineage_evidence"
-    directory = generation_dir(lineage, xl.SOURCE, CATALOG, "C", STAMP)
+    directory = generation_dir(lineage, xl.SOURCE, CATALOG, dataset, STAMP)
     directory.mkdir(parents=True)
+    entry = dataclasses.replace(declared.entries[0], dataset=dataset)
     write_lineage_file(
         evidence_file_path(directory, xl.TABLE),
-        xl.envelope(CATALOG, declared.entries[0], datetime(2026, 10, 18, tzinfo=timezone.utc)),
+        xl.envelope(CATALOG, entry, datetime(2026, 10, 18, tzinfo=timezone.utc)),
         lineage_rows,
     )
     run_dir = write_run(tmp_path / "output" / "20261018_000000", rows)
@@ -520,3 +523,139 @@ def test_a_reimport_refuses_a_kept_reading_whose_tar_it_no_longer_checks(tmp_pat
         ValueError, match=r"1 kept readings name tars this re-import does not check: chr1\.2\.tar \(t2\)"
     ):
         run_import(tmp_path, declared, importing, stored=stored, generation="20261019T000000Z")
+
+
+# --- what the first tests left untested (the no-context review's surviving mutations) ------------
+
+
+def test_a_callset_with_one_nameless_entry_among_named_ones_is_refused():
+    with pytest.raises(ValueError):
+        xl.callset_samples(json.dumps({"callsets": [{"sample_name": "A"}, {"row_idx": 1}]}))
+
+
+def test_a_changed_cached_copy_is_downloaded_again(declared, cached):
+    (file,) = declared.entries[0].sample_maps
+    file.cache_path(cached).write_text("edited locally\n")
+    assert fetch(file, cached, get=lambda _url: MAP_TEXT.encode()) is True
+    assert read_text(file, cached) == MAP_TEXT
+
+
+def test_a_header_naming_no_map_and_a_tar_that_is_no_workspace_are_counted_apart(tmp_path):
+    cache = tmp_path / "tar_cache"
+    no_map = header_text(gatk4("GenomicsDBImport", "--genomicsdb-workspace-path ./chr1.8 -V a.g.vcf.gz"))
+    TarEvidence(
+        md5sum=md5("t8"),
+        file_name="chr1.8.tar",
+        member_names=["./chr1.8/vcfheader.vcf"],
+        vcf_header=no_map,
+        vcf_header_read=True,
+    ).save(cache)
+    TarEvidence(md5sum=md5("t9"), file_name="reads.tar", member_names=["a.fastq.gz"]).save(cache)
+    tar = lambda n, name: xl.CatalogFile(f"t{n}", name, md5(f"t{n}"))  # noqa: E731
+    assert xl.named_map(tar(8, "chr1.8.tar"), cache) == (None, xl.NO_IMPORT)
+    assert xl.named_map(tar(9, "reads.tar"), cache) == (None, xl.NOT_A_WORKSPACE)
+
+
+def test_a_map_naming_a_sample_twice_is_refused(tmp_path):
+    text = "HG00096\tgs://b/a.hc.vcf.gz\nHG00096\tgs://b/b.hc.vcf.gz\n"
+    declared = load(tmp_path, declaration(sha=hashlib.sha256(text.encode()).hexdigest()))
+    (file,) = declared.entries[0].sample_maps
+    fetch(file, tmp_path / "ext", get=lambda _url: text.encode())
+    with pytest.raises(ValueError, match="names a sample in two rows"):
+        xl.map_samples(file, tmp_path / "ext")
+
+
+def deployment(catalog=CATALOG, datasets=("C",)):
+    snapshots = {d: Snapshot("p", d) for d in datasets}
+    return Deployment(
+        name="test", service="https://azul.test", catalog=catalog, input_root=Path("unused"), snapshots=snapshots
+    )
+
+
+def test_check_refuses_another_catalog_and_a_dataset_the_deployment_lacks(declared, importing):
+    manifests, _, external = importing
+    assert xl.check(declared, deployment(), manifests, external) == []
+    assert any(
+        "authored against anvil15" in p for p in xl.check(declared, deployment(catalog="anvil16"), manifests, external)
+    )
+    assert any(
+        "not a dataset the test deployment" in p
+        for p in xl.check(declared, deployment(datasets=("D",)), manifests, external)
+    )
+
+
+@pytest.mark.parametrize(
+    ("edit", "fault"),
+    [
+        (
+            lambda d: d["tars"][0].update(named="gs://elsewhere/chr1_sample_map.tsv"),
+            "not the tar its kept reading read",
+        ),
+        (lambda d: d["tars"][0].update(file_name="renamed.tar"), "not the tar its kept reading read"),
+        (lambda d: d.update(commit="b" * 40), "cannot be imported as"),
+    ],
+)
+def test_a_reimport_refuses_inputs_read_for_another_tar_path_or_commit(tmp_path, declared, importing, edit, fault):
+    first = run_import(tmp_path, declared, importing)
+    path = first.directory / f"{xl.TABLE}.inputs.json"
+    document = json.loads(path.read_text())
+    edit(document)
+    path.write_text(json.dumps(document))
+    with pytest.raises(ValueError, match=fault):
+        run_import(tmp_path, declared, importing, stored=xl.load_inputs([path]), generation="20261019T000000Z")
+
+
+def test_kept_inputs_with_a_tampered_set_or_two_files_for_a_dataset_are_refused(tmp_path, declared, importing):
+    first = run_import(tmp_path, declared, importing)
+    path = first.directory / f"{xl.TABLE}.inputs.json"
+    with pytest.raises(ValueError, match="a second inputs file for C"):
+        xl.load_inputs([path, path])
+    document = json.loads(path.read_text())
+    key = next(iter(document["sample_sets"]))
+    document["sample_sets"][key].append("NA00000")
+    path.write_text(json.dumps(document))
+    with pytest.raises(ValueError, match="holds names whose id is"):
+        xl.load_inputs([path])
+
+
+def test_the_kept_inputs_count_each_tars_outcome(tmp_path, declared, importing):
+    result = run_import(tmp_path, declared, importing)
+    document = json.loads((result.directory / f"{xl.TABLE}.inputs.json").read_text())
+    assert document["outcomes"] == {o: result.outcomes[o] for o in xl.OUTCOMES}
+
+
+@pytest.mark.parametrize(
+    ("rows", "map_text"),
+    [
+        # Two files of the dataset carry one row's name.
+        ([*run_rows(*BOTH), output_record(BOTH[0], md5("copy"), dataset="C", file_id="g_copy")], MAP_TEXT),
+        # Two rows give one name.
+        (run_rows(BOTH[0]), "HG00096\tgs://b/chr1/HG00096.chr1.hc.vcf.gz\nHG00097\tgs://b/x/HG00096.chr1.hc.vcf.gz\n"),
+    ],
+)
+def test_a_map_whose_row_names_several_files_or_repeats_a_name_has_no_step(tmp_path, rows, map_text):
+    declared = load(tmp_path, declaration(sha=hashlib.sha256(map_text.encode()).hexdigest()))
+    (file,) = declared.entries[0].sample_maps
+    fetch(file, tmp_path / "data" / "external", get=lambda _url: map_text.encode())
+    run_dir, reconciled, report = reconcile(tmp_path, declared, rows, [tar_line()])
+    assert report["external_lists"]["C"]["rows_several_match"] == 1
+    assert report["external_lists"]["C"]["stepped"] == 0
+    assert reconciled["chr1.1.tar"]["classifications"]["assay_type"]["status"] == "not_classified"
+    (listed,) = iter_reconciled_artifact(run_dir, EXTERNAL_LISTS_FILE)
+    assert "generated_by" not in listed
+
+
+def test_a_tar_of_another_dataset_naming_the_map_is_counted_and_gives_nothing(tmp_path, declared, cached):
+    rows = [output_record("chr1.1.tar", md5("t1"), dataset="D", file_id="t1"), *run_rows(*BOTH)[1:]]
+    _, reconciled, report = reconcile(tmp_path, declared, rows, [tar_line()], dataset="D")
+    assert reconciled["chr1.1.tar"]["generated_by"] is None
+    assert report["lineage"]["sources"][SOURCE_EXTERNAL_GROUND_TRUTH]["D"][EXTERNAL_UNDECLARED] == 1
+    assert report["external_lists"] == {}
+
+
+def test_a_step_misfit_is_judged_on_an_input_named_by_parent_ref():
+    step = {
+        "activity": "CohortDefinitionActivity",
+        "inputs": [{"role": "member", "parent_file": "x.bam", "parent_ref": REF, "named_by": []}],
+    }
+    assert ("input kind (member)", "alignments") in misfits(step, None, {REF: "alignments"})

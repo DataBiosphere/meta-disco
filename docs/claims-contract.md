@@ -146,11 +146,15 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     Schatz lab published copies on GitHub. `sources/external_files.yaml` declares each copy for the one
     dataset, pinned by commit and sha256, and `make fetch-external-files` keeps it under
     `data/external/<dataset>/`, refusing a copy whose sha256 differs. A copy is not the file the import read,
-    so 2.10's rule applies with the tar's own `callset.json` as the identity: `external_lineage` links a tar
-    to the copy its header names only where that member lists exactly the copy's samples, each once, and
-    counts every other tar. Reconcile holds the copy under its address, resolves it only for its declared
-    dataset (ADR-0002 decision 2), and reads the tar's values and samples through it as it does a catalog
-    map's (4.9). This ends when AnVIL holds the maps (#624): the catalog maps then take over, and the
+    so the tar's own `callset.json` stands in for 2.10's identity: `external_lineage` links a tar to the copy
+    its header names only where that member lists exactly the copy's samples, each once, and counts every
+    other tar. The check confirms the cohort, not the chromosome: the 25 maps hold two sample sets (3,202
+    samples, and chrY's 1,599), so which map a tar read is its header's map path, as declared in
+    `named_as`. The lines name each tar's map, never the map's members, since a lineage line's child must
+    be a catalog file. Reconcile holds the copy under its address, resolves it only for its declared
+    dataset (ADR-0002 decision 2), reads its members from the cached copy (a code rule,
+    `cohort_by_external_sample_map`), and reads the tar's values and samples through it as it does a
+    catalog map's (4.9). This ends when AnVIL holds the maps (#624): the catalog maps then take over, and the
     declaration, its cache and its lineage are deleted.
 
 ## 3. Claims
@@ -312,7 +316,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 4.9 **A child inherits across a derivation edge** (ADR-0002, #355) — an `internal` one, which joins two
     files of one dataset, or, under ADR-0002 decision 2's one declared exception (#594), a child to its
     parent in the dataset the run lineage map declares (the input's `parent_dataset`). A parent is
-    looked for only there; one missing is `external`, and nothing is inherited across it. A child has one activity (its
+    looked for only there; one missing is `external`, and nothing is inherited across it, except a list
+    held outside AnVIL for the child's dataset (2.11, #710): a role that reads through its parents reads
+    through it to the dataset's own files it lists. A child has one activity (its
     `generated_by`); for each input role that passes a dimension, the child's parents in that role settle
     their resolved answers among themselves and give the child one declaration, credited to them, to which
     4.2–4.6 apply as to inputs 1–4 — so a dimension two roles pass (none today) has two declarations, which

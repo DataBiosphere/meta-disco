@@ -261,6 +261,7 @@
         el.innerHTML = (L.sources.length
             ? table(['source type', 'dataset', ...DATA.lineage_columns],
                 L.sources.map(r => [r.source_type, shown(r.dataset), ...DATA.lineage_columns.map(k => ({text: n(r[k]), cls: 'num'}))]))
+              + '<p class="note">ENA\'s run lineage (#594) and the sample maps held outside AnVIL (#710) are both <code>external_ground_truth</code>, so their lines are added together in one row per dataset; the maps\' own table below and the inheritance section\'s <code>input_list</code> row show the maps\' share.</p>'
             : '<p>No lineage was read.</p>')
           + '<h3>Steps read from file content</h3>'
           + '<p class="note">Inference chains a VCF\'s producer command lines and takes the one end of that flow as the step that made it (#609); a GenomicsDB workspace tar\'s <code>vcfheader.vcf</code> names its sample map, and a sample map\'s rows name its gVCFs (#621). A step is written only where every parent resolves.</p>'

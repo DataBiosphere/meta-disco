@@ -6,10 +6,11 @@ sample-name map it imported (``cohort_steps.sample_name_map``). Where a dataset'
 no file of that name, the map may still be a declared external file: one whose ``named_as``
 lists the path the header names.
 
-**The gate is the tar's own samples** (contract 2.10). The declared map is a published copy,
+**The gate is the tar's own samples** (contract 2.11). The declared map is a published copy,
 not the file the import read, so a tar is linked to it only where the tar's own
 ``callset.json``, the list of samples GenomicsDB imported, read from AnVIL's S3 mirror, names
-exactly the samples the map's rows name, each once. The tar is then written one lineage line:
+exactly the samples the map's rows name, each once. That confirms the cohort; which map is the
+one its header's path names (``named_as``), since maps of one cohort share their samples. The tar is then written one lineage line:
 made from the map (``parent`` its address, ``parent_key_type: external_file``), the path its
 header named kept as ``parent_source_identifier``, and ``raw_activity`` the header's tool,
 ``GenomicsDBImport``, whose meaning is the activity translation table's (#584). Every other tar
@@ -18,8 +19,9 @@ declared file stands for (``map_not_declared``, ANVIL_T2T_CHRY's SGDP tars) is n
 
 **What was read is kept** beside each generation (``sample_maps.inputs.json``): per tar read,
 its name, md5, the path its header named and its sample set's id, and each distinct sample
-set once. A re-import from it (:func:`load_inputs`) reads no network, and refuses a reading
-whose tar the manifest names otherwise. The tars' headers are read from the tar producer's
+set once, and each outcome's count. A re-import from it (:func:`load_inputs`) reads no network,
+and refuses kept inputs of another catalog, dataset or commit, a reading whose tar the manifest
+or header names otherwise, and a reading whose tar it no longer checks. The tars' headers are read from the tar producer's
 cache (``TarEvidence``), never fetched here: ``make classify-tar`` reads them.
 """
 
@@ -253,9 +255,9 @@ def named_map(tar: CatalogFile, evidence_dir: Path) -> tuple[str | None, str | N
 def read_callset(md5: str) -> str | None:
     """A tar's ``callset.json`` text (``fetchers.fetch_tar_member``), tried :data:`ATTEMPTS` times in all where the connection fails.
 
-    A failed read caused by a ``requests`` exception (a dropped connection, a body cut off) is
-    tried again; any other ``FetchError`` (an HTTP status) raises at once, as
-    ``ena_lineage.read_stats`` does.
+    A failed read whose cause is a ``requests`` exception (a dropped connection, a stream cut off
+    mid-read) is tried again; any other ``FetchError`` (an HTTP status, a member body shorter than
+    its header says) raises at once, as ``ena_lineage.read_stats`` does.
     """
     for attempt in range(1, ATTEMPTS + 1):
         try:
@@ -393,7 +395,7 @@ def import_dataset(
         result.written = write_lineage_file(
             evidence_file_path(staging, TABLE), envelope(catalog, entry, inputs.read_at), rows
         )
-        write_inputs(staging / f"{TABLE}.inputs.json", inputs, [t.file_id for t, _, _ in to_check])
+        write_inputs(staging / f"{TABLE}.inputs.json", inputs, [t.file_id for t, _, _ in to_check], result.outcomes)
     return result
 
 
@@ -442,7 +444,7 @@ def _read_callsets(
     read_member: Callable[[str], str | None],
     progress: Progress,
 ) -> None:
-    """Read each tar's ``callset.json`` into its reading, :data:`WORKERS` at a time; a tar with no md5 is read as unreadable."""
+    """Read each tar's ``callset.json`` into its reading, :data:`WORKERS` at a time."""
 
     def task(tar: CatalogFile, path: str) -> Callable[[], None]:
         def read() -> None:
@@ -469,8 +471,8 @@ def _read_callsets(
 # --- the kept inputs --------------------------------------------------------------------
 
 
-def write_inputs(path: Path, inputs: Inputs, file_ids: list[str]) -> None:
-    """Write what was read for the tars ``file_ids``, and the sample sets their readings name."""
+def write_inputs(path: Path, inputs: Inputs, file_ids: list[str], outcomes: Counter) -> None:
+    """Write what was read for the tars ``file_ids``, the sample sets their readings name, and each tar outcome's count."""
     tars = [inputs.tars[f] for f in sorted(file_ids)]
     named_sets = {t.callset for t in tars if t.callset is not None}
     document = {
@@ -479,6 +481,7 @@ def write_inputs(path: Path, inputs: Inputs, file_ids: list[str]) -> None:
         "commit": inputs.commit,
         "read_at": inputs.read_at.isoformat(),
         "member": CALLSET_MEMBER,
+        "outcomes": {o: outcomes[o] for o in OUTCOMES},
         "tars": [asdict(t) for t in tars],
         "sample_sets": {k: inputs.sample_sets[k] for k in sorted(named_sets)},
     }

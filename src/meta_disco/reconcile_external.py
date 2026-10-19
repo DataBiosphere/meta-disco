@@ -4,8 +4,8 @@
 lineage line may name, as a workspace tar's parent, a sample map declared in
 ``sources/external_files.yaml`` (``external_lineage`` writes such lines). That map is no file
 of the run, so reconcile holds it itself. For each map a line names that is declared for the
-line's dataset (``ExternalFiles.by_ref``), the cached copy is read as a catalog map is
-(``external_files.read_sample_map``; a missing or changed copy refuses the run), and gives:
+line's dataset (``ExternalFiles.by_ref``), the cached copy's rows are parsed as a catalog map's
+are (``external_files.read_sample_map``; a missing or changed copy refuses the run), and give:
 
 - **a carrier** (:func:`carriers`), so the tar's line resolves to it, as an input whose
   ``parent_ref`` is the map's address;

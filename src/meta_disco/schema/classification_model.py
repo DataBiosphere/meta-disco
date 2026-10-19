@@ -2020,8 +2020,8 @@ class ExternalList(ConfiguredBaseModel):
                        'RepositoryIdentifier']} })
     file_name: str = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList']} })
     sha256: str = Field(default=..., description="""The sha256 of the list's text, as declared and as read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ExternalList']} })
-    generated_by: Optional[GeneratedBy] = Field(default=None, description="""The list's members, each a file of the dataset carrying the name a row gives. Absent where a row's name is carried by no file of the dataset or by several: a cohort missing a member is not the cohort.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList']} })
-    samples: Optional[SampleReference] = Field(default=None, description="""The samples the list's rows name, where every one is recognised.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList']} })
+    generated_by: Optional[GeneratedBy] = Field(default=None, description="""The list's members, each a file of the dataset carrying the name a row gives. Absent where a row's name is carried by no file of the dataset or by several, or two rows give one name: a cohort missing a member is not the cohort.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList']} })
+    samples: Optional[SampleReference] = Field(default=None, description="""The samples the list's rows name, where every one is recognised and a reconciled file settles to them (so the list they point to is in `sample_lists.ndjson.gz`).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList']} })
 
     @field_validator('ref')
     def pattern_ref(cls, v):
