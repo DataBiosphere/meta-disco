@@ -598,6 +598,7 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
         "lineage_columns": list(LINEAGE_COLUMNS),
         # Written before #710: no list held outside AnVIL.
         "external_lists": report.get("external_lists") or {},
+        "external_list_columns": list(EXTERNAL_LIST_COLUMNS),
         "content_step_columns": list(CONTENT_STEP_COLUMNS),
         "inheritance": inheritance_rows(report),
         "inheritance_columns": list(INHERITANCE_COLUMNS),

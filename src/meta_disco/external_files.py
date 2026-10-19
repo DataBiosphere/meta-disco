@@ -147,13 +147,20 @@ def load_external_files(source: Readable | None = None) -> ExternalFiles:
     directory name; per dataset its entry's
     host, ``github`` the one there is; a repository ``owner/name``; a 40-hex commit; a
     directory, no part of it or of the repository ``.`` or ``..``; and per sample map a name ending ``_sample_map.tsv``, a 64-hex sha256 and a
-    non-empty list of distinct paths, no path named for two maps of the dataset.
+    non-empty list of distinct paths, no path named for two maps of the dataset; and no file
+    declared for two datasets.
     """
     resource = source if source is not None else default_external_files_resource()
     document = map_document(resource, _UniqueKeyLoader, _WHERE, set())
     entries = []
+    held: dict[str, str] = {}
     for dataset, entry in document["datasets"].items():
         entries.append(_entry(dataset, entry, f"{_WHERE} {dataset}"))
+        for file in entries[-1].sample_maps:
+            # Reconcile holds a file under its address alone, so one address serves one dataset.
+            if file.ref in held:
+                raise ValueError(f"{_WHERE}: {file.ref} is declared for both {held[file.ref]} and {dataset}")
+            held[file.ref] = dataset
     return ExternalFiles(catalog=document["catalog"], entries=tuple(entries))
 
 

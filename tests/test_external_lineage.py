@@ -122,6 +122,12 @@ def test_the_declaration_refuses_a_malformed_entry(tmp_path, text, fault):
         load(tmp_path, text)
 
 
+def test_one_file_declared_for_two_datasets_is_refused(tmp_path):
+    second = declaration().split("datasets:\n", 1)[1].replace("  C:\n", "  D:\n", 1)
+    with pytest.raises(ValueError, match="declared for both C and D"):
+        load(tmp_path, declaration() + second)
+
+
 def test_the_bundled_declaration_names_each_1000_genomes_map_once():
     (entry,) = load_external_files().entries
     assert (entry.dataset, entry.repository) == ("ANVIL_T2T_CHRY", "schatzlab/t2t-chm13-chry")

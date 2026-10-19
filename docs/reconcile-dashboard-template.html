@@ -268,6 +268,12 @@
               ? table(['producer', 'dataset', ...DATA.content_step_columns],
                   L.content_steps.map(r => [r.producer, shown(r.dataset), ...DATA.content_step_columns.map(k => ({text: n(r[k]), cls: 'num'}))]))
               : '<p>None: no producer read a step in this run.</p>')
+          + '<h3>Sample maps held outside AnVIL</h3>'
+          + '<p class="note">A workaround until AnVIL holds them (#624): published copies of the sample maps a dataset\'s workspace tars were imported from, declared in <code>sources/external_files.yaml</code> and linked to a tar only where its own <code>callset.json</code> lists exactly the map\'s samples (#710). <em>stepped</em>: every row\'s gVCF is one file of the dataset, so a tar reads through the map; <em>rows_not_in_dataset</em> / <em>rows_several_match</em>: rows whose name no file, or more than one, carries (or that repeat a name).</p>'
+          + (Object.keys(DATA.external_lists).length
+              ? table(['dataset', ...DATA.external_list_columns],
+                  Object.keys(DATA.external_lists).sort().map(d => [shown(d), ...DATA.external_list_columns.map(k => ({text: n(DATA.external_lists[d][k] ?? 0), cls: 'num'}))]))
+              : '<p>None: no lineage line named one in this run.</p>')
           + '<h3>Who named each file\'s step</h3>'
           + table(['dataset', 'named by', 'files'], L.steps.map(r => [shown(r.dataset), r.named_by, {text: n(r.files), cls: 'num'}]))
           + '<h3>Conflicts</h3>'
