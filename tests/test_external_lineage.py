@@ -506,3 +506,17 @@ def test_a_maps_samples_no_reconciled_file_settles_to_are_not_written(tmp_path, 
     assert list(iter_reconciled_artifact(run_dir, SAMPLES_FILE)) == []
     (listed,) = iter_reconciled_artifact(run_dir, EXTERNAL_LISTS_FILE)
     assert "samples" not in listed and "generated_by" in listed
+
+
+def test_a_reimport_refuses_a_kept_reading_whose_tar_it_no_longer_checks(tmp_path, declared, importing):
+    """Two tars were read; one tar's cache entry has since gone, so the selection no longer reaches it."""
+    first = run_import(tmp_path, declared, importing)
+    stored = xl.load_inputs([first.directory / f"{xl.TABLE}.inputs.json"])
+    _, tar_cache, _ = importing
+    gone = TarEvidence.load(tar_cache, md5("t2"))
+    assert gone is not None and "t1" in stored["C"].tars and "t2" in stored["C"].tars
+    next(p for p in tar_cache.rglob(f"{md5('t2')}*")).unlink()
+    with pytest.raises(
+        ValueError, match=r"1 kept readings name tars this re-import does not check: chr1\.2\.tar \(t2\)"
+    ):
+        run_import(tmp_path, declared, importing, stored=stored, generation="20261019T000000Z")

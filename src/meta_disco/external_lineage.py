@@ -421,7 +421,13 @@ def _outcome(reading: TarReading, map_set: str) -> str:
 
 
 def require_inputs_agree(to_check: list[tuple[CatalogFile, ExternalFile, str]], inputs: Inputs, at: str) -> None:
-    """``ValueError`` when a tar to be checked has no kept reading, or one read for another file or map path."""
+    """``ValueError`` when a tar to be checked has no kept reading, or one read for another file or map path;
+    or when a kept reading's tar is not among those to be checked (its cache entry gone, say), whose
+    link a re-import would otherwise drop without a word."""
+    unreached = sorted(set(inputs.tars) - {tar.file_id for tar, _, _ in to_check})
+    if unreached:
+        names = ", ".join(f"{inputs.tars[f].file_name} ({f})" for f in unreached[:5])
+        raise ValueError(f"{at}: {len(unreached)} kept readings name tars this re-import does not check: {names}")
     for tar, _file, path in to_check:
         reading = inputs.tars.get(tar.file_id)
         if reading is None:
