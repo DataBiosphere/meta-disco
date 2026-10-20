@@ -33,7 +33,7 @@ ATTRIBUTE_MESSAGE = 0x000C
 _ATTRIBUTE_HEADER = struct.Struct("<BxHHH")
 _DATATYPE = struct.Struct("<B3sI")  # class and version in one byte, three bytes of class bits, the size
 STRING_CLASS = 3
-SPACE_PAD = 2  # a string datatype padding type; the others end at a NUL
+NULL_TERM, NULL_PAD, SPACE_PAD = 0, 1, 2  # a string datatype's padding types
 _DATASPACE = struct.Struct("<BBB5x")  # a version 1 dataspace's first 8 bytes: version, rank, flags
 
 
@@ -71,7 +71,7 @@ def _padded(length: int) -> int:
 
 
 def _attribute_value(head: bytes, at: int) -> str | None:
-    """The string value of the attribute whose name starts at ``at``; None where no attribute message header precedes it, or it runs past ``head``."""
+    """The string value of the attribute whose name starts at ``at``; None where no attribute message header precedes it, or the message it declares runs past ``head``."""
     start = at - _ATTRIBUTE_HEADER.size - _MESSAGE_PREFIX.size
     if start < 0:
         return None
@@ -83,13 +83,14 @@ def _attribute_value(head: bytes, at: int) -> str | None:
         return None
     if version != 1:
         raise Fast5Error(f"a {SAMPLE_ID} attribute message of version {version}; only version 1 is read")
+    message_end = start + _MESSAGE_PREFIX.size + body_length
+    if message_end > len(head):
+        return None
     datatype = at + _padded(name_length)
     dataspace = datatype + _padded(datatype_length)
     data = dataspace + _padded(dataspace_length)
-    if datatype_length < _DATATYPE.size or dataspace_length < _DATASPACE.size:
+    if datatype_length < _DATATYPE.size or dataspace_length < _DATASPACE.size or data > message_end:
         raise Fast5Error(f"a {SAMPLE_ID} attribute message whose datatype or dataspace is cut short")
-    if data > len(head):
-        return None
     class_version, bits, size = _DATATYPE.unpack_from(head, datatype)
     if class_version & 0x0F != STRING_CLASS or class_version >> 4 != 1:
         raise Fast5Error(
@@ -101,10 +102,15 @@ def _attribute_value(head: bytes, at: int) -> str | None:
             f"a {SAMPLE_ID} attribute of dataspace version {space_version}, rank {rank}; only a version 1 scalar is read"
         )
     end = data + size
-    if body_length < end - (start + _MESSAGE_PREFIX.size):
+    if end > message_end:
         raise Fast5Error(f"a {SAMPLE_ID} attribute's {size}-byte value runs past its message")
-    if end > len(head):
-        return None
-    raw = head[data:end]
-    raw = raw.rstrip(b" ") if bits[0] & 0x0F == SPACE_PAD else raw.split(b"\x00", 1)[0]
+    raw, padding = head[data:end], bits[0] & 0x0F
+    if padding == NULL_TERM:
+        raw = raw.split(b"\x00", 1)[0]
+    elif padding == NULL_PAD:
+        raw = raw.rstrip(b"\x00")
+    elif padding == SPACE_PAD:
+        raw = raw.rstrip(b" ")
+    else:
+        raise Fast5Error(f"a {SAMPLE_ID} string of padding type {padding}; only 0 to 2 are read")
     return raw.decode("utf-8", "replace")

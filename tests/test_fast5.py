@@ -134,11 +134,37 @@ def test_a_message_running_past_the_bytes_read_is_unread_not_refused():
     assert sample_ids(head[:-4]) == [] and sample_ids(head[:-20]) == []
 
 
-def test_a_space_padded_value_loses_its_padding():
-    message = bytearray(_attribute("sample_id", "HG02723"))
-    struct.pack_into("<B", message, 33, fast5.SPACE_PAD)  # the datatype's padding type
-    message[48:56] = b"HG02723 "
-    assert sample_ids(_fast5(bytes(message))) == ["HG02723"]
+def test_a_message_declaring_more_than_the_bytes_read_hold_is_unread():
+    """The value fits, but 16 of the bytes the message declares were never read."""
+    message = bytearray(REAL_MESSAGE)
+    struct.pack_into("<H", message, 2, 64)  # the message's body length, 16 past its value
+    assert sample_ids(fast5.SIGNATURE + b"\x00" * 64 + bytes(message)) == []
+
+
+def _padded_value(padding: int, value: bytes) -> bytes:
+    """The real message with its datatype's padding type and its 8-byte value replaced."""
+    message = bytearray(REAL_MESSAGE)
+    struct.pack_into("<B", message, 33, padding)
+    message[48:56] = value
+    return _fast5(bytes(message))
+
+
+@pytest.mark.parametrize(
+    "padding, value, read",
+    [
+        pytest.param(fast5.NULL_TERM, b"HG02723\x00", "HG02723", id="null-terminated"),
+        pytest.param(fast5.NULL_PAD, b"HG027\x00\x00\x00", "HG027", id="null-padded"),
+        pytest.param(fast5.NULL_PAD, b"HG027\x00ab", "HG027\x00ab", id="null-padded with a NUL inside"),
+        pytest.param(fast5.SPACE_PAD, b"HG02723 ", "HG02723", id="space-padded"),
+    ],
+)
+def test_each_padding_type_ends_the_value_where_hdf5_says(padding, value, read):
+    assert sample_ids(_padded_value(padding, value)) == [read]
+
+
+def test_an_unknown_padding_type_is_refused():
+    with pytest.raises(Fast5Error, match="padding type 3"):
+        sample_ids(_padded_value(3, b"HG02723\x00"))
 
 
 def test_a_value_longer_than_its_message_is_refused():
