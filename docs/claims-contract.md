@@ -47,6 +47,11 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     (#699, `models.SAMPLE_SLOTS`), from the repository's own record of the sample, are settled the same
     way on its `SampleRecord`: `biosample_type` translated by rows, `anatomical_site` taken as written
     until its values are mapped to an ontology (#702).
+    Two kinds of line name another identifier rather than a value, read through the identifier rules
+    as a parent is and never translated (#559): `collected_from`, about a sample, names the donor it
+    was collected from, settled with an identifier rule's link and none where they differ; and
+    `same_donor_as`, about a donor, names its main identifier, so the record is keyed by that one and
+    keeps the line's own as a synonym, and whatever is said under either is settled on it.
     The importer names **both ends of the key correspondence** — `source_key` as the source publishes it,
     `target_key` as one of ours — and writes the value already in our space (#401). Evidence is attached to a
     **file** only at the join (6.7), which is what makes an unmatched or ambiguous row representable rather
@@ -138,7 +143,12 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     run's reads, not values on the alignment, and its parent may be in another dataset only where
     `sources/ena_run_lineage_map.yaml` declares it (ADR-0002 decision 2).
     A source keyed by a field the target publishes (a file name within a dataset) joins on that field
-    as it is.
+    as it is. Where the target's own pairing of that field with its records rests on one table, an
+    identity both sides state stands in for the checksum: SGDP's metadata file (#559) is keyed by SGDP's
+    name for a genome, which ANVIL_T2T_CHRY's `SGDP_*_sample` tables pair with a sample
+    (`simons_data_sample_64` = `S_Spanish-2`) and no file's header confirms, so `sgdp_entities`
+    writes a sample's lines only where SGDP's `Gender` and the table's `karyotype` agree (M with XY, F
+    with XX), and counts every other sample by why (275 of 279 agree; the four are #718).
 
 2.11 **A file the catalog lacks may be held outside it for one dataset, only as a declared workaround, and
     links to it only where the child's own content confirms it** (#710). ANVIL_T2T_CHRY's 1000 Genomes
