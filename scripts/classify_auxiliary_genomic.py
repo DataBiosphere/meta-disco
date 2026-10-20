@@ -2,7 +2,8 @@
 """Classify auxiliary genomic files using RuleEngine.
 
 Uses rules from the bundled unified_rules.yaml (package data of meta_disco.rules) for:
-- .fast5, .pod5 -> genomic.raw_signal (ONT raw signal data)
+- .pod5 -> genomic.raw_signal (ONT raw signal data); a .fast5 is the fast5 type's, which
+  reads its sample from its head (#605)
 - .psam, .pgen -> genomic.genotypes (PLINK2 genotype data); a .pvar is the VCF
   producer's, which reads its reference from its VCF-style header (#561)
 """
@@ -20,14 +21,8 @@ from meta_disco.provenance import run_provenance
 from meta_disco.records import OutputRecord, RunMetadata
 from meta_disco.rule_engine import RuleEngine
 
-# Routes through the shared predicate — see meta_disco.producers.
-#
-# That is also where an archive of fast5s stopped being this producer's problem. It used
-# to need its own guard (`_is_archived`), because a source may declare the *core*
-# extension for an archive (`.fast5` for `x.fast5.tar`) and this producer matched the
-# format while the tar type matched the name, writing the file twice (#445). The shared
-# predicate routes on the name first, so `x.fast5.tar` is the tar type's for the same
-# reason any `.tar` is — without this producer knowing that tar exists.
+# Routes through the shared predicate — see meta_disco.producers. A `.fast5`, and an archive
+# of them, is no longer this producer's (#605): the fast5 type and the tar type split them.
 AUXILIARY = PRODUCERS["auxiliary"]
 
 

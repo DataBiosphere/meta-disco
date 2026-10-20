@@ -36,11 +36,11 @@ value; the golden would silently record the unrefined result.
 This guards output *shape*; it is not a substitute for the content-driven
 classification tests in ``tests/test_evals.py``.
 
-**Two committed fixtures, one regen command.** The golden covers the nine producers
+**Two committed fixtures, one regen command.** The golden covers the ten producers
 ``ClassifyPipeline`` writes; ``standalone_output.json`` covers the four standalone ones
 (#465), which have no golden and so reached no schema validation at all. Both are read
 across the component boundary by ``schema/tests/test_output_validation.py``, whose gate
-is what makes them cover all thirteen — ``test_the_schema_gate_covers_every_producer``
+is what makes them cover all fourteen — ``test_the_schema_gate_covers_every_producer``
 pins that union against ``producers.PRODUCERS``. Regenerate with::
 
     python -m tests.test_output_shape   # writes both fixtures under tests/fixtures/golden/
@@ -60,7 +60,7 @@ import pytest
 import yaml
 
 from meta_disco import activities, schema_vocab
-from meta_disco.evidence import BedSignals, IdatHeader, SegmentTag, TarHead, VcfHead
+from meta_disco.evidence import BedSignals, Fast5Header, IdatHeader, SegmentTag, TarHead, VcfHead
 from meta_disco.file_types import FILE_TYPE_REGISTRY
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
@@ -199,6 +199,15 @@ GOLDEN_INPUTS = {
             "ab", file_name="201868530174_R03C01_Red.idat", file_size=32792621, file_format=".idat", entry_id="g-idat-1"
         ),
     ],
+    "fast5": [
+        _golden_record(
+            "ac",
+            file_name="PAK57726_28c8475f_fcf1fc64_1284.fast5",
+            file_size=179936569,
+            file_format=".fast5",
+            entry_id="g-fast5-1",
+        ),
+    ],
 }
 GOLDEN_INPUTS["sample_map"] = [SAMPLE_MAP_RECORD, GOLDEN_INPUTS["vcf"][0]]
 
@@ -265,6 +274,8 @@ STUB_PAYLOADS = {
         chip_type="1-95um_multi-swath_for_8x2-5M",
         scan_software=["iScan Control Software"],
     ),
+    # fast5 returns a Fast5Header: one run's sample_id, so the golden carries its `samples` (#605).
+    "fast5": Fast5Header(sample_ids=["HG02723"]),
 }
 # Every evidence entry has a reason, and is either a synthetic resolution marker
 # (carries `marker`) or something a producer made — the two are mutually exclusive
@@ -507,7 +518,7 @@ def test_standalone_output_matches_fixture(standalone_output):
 
 
 def test_the_schema_gate_covers_every_producer():
-    """The gate's input is these two fixtures; together they must be all thirteen.
+    """The gate's input is these two fixtures; together they must be all fourteen.
 
     Read off the committed files rather than off the builders above, because the files
     are what `schema/tests/test_output_validation.py` actually validates — a fixture
@@ -627,9 +638,9 @@ def test_output_values_in_vocabulary(output):
 
 @pytest.mark.parametrize("producer,name,fmt", STANDALONE_PRODUCERS)
 def test_a_standalone_producer_emits_the_record_keys(tmp_path, producer, name, fmt):
-    """All thirteen output files carry one record shape (#450).
+    """All fourteen output files carry one record shape (#450).
 
-    The golden fixture covers the nine the pipeline writes; this covers the four that
+    The golden fixture covers the ten the pipeline writes; this covers the four that
     used to assemble dicts by hand and so could each carry a different set. That is what
     the catalog identity (#433) needed a sweep for, and what building `OutputRecord`
     makes structural instead.
@@ -666,7 +677,7 @@ def test_the_index_producer_emits_the_metadata_keys(tmp_path):
 
 
 def test_the_pipeline_emits_the_metadata_keys(output):
-    """The nine header types, off the golden run, so all thirteen are covered."""
+    """The ten header types, off the golden run, so all fourteen are covered."""
     for ftype, payload in output.items():
         assert list(payload["metadata"]) == METADATA_KEYS, ftype
 
@@ -773,7 +784,7 @@ if __name__ == "__main__":
 
 
 def test_every_rule_id_in_the_output_is_declared(output, standalone_output):
-    """Every ``rule_id`` the golden output of the thirteen producers carries is declared (#572).
+    """Every ``rule_id`` the golden output of the fourteen producers carries is declared (#572).
 
     Declared means a YAML rule, or a rule or marker in ``code_rules``. This is the output
     half of the check that ``test_code_rules`` makes on the source: it catches an id

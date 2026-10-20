@@ -45,11 +45,13 @@ from typing import NamedTuple
 
 import requests
 
-from . import idat
+from . import fast5, idat
 from .evidence import (
     BamEvidence,
     BedEvidence,
     BedSignals,
+    Fast5Evidence,
+    Fast5Header,
     FastaEvidence,
     FastqEvidence,
     GfaEvidence,
@@ -1413,14 +1415,44 @@ def fetch_idat_header(
     the reader refuses gzipped bytes itself. Raises ``FetchError`` for a failed read and for
     bytes that are no version-3 IDAT, gzipped ones included.
     """
-    payload = _load_cached(IdatEvidence, evidence_dir, md5sum, use_cache)
+    return _read_by_ranges(IdatEvidence, idat.read_header, evidence_dir, md5sum, file_name, use_cache, url)
+
+
+# =============================================================================
+# FAST5 FETCHER
+# =============================================================================
+
+
+@wrap_as_fetch_error("FAST5 header")
+def fetch_fast5_header(
+    evidence_dir: Path,
+    md5sum: str,
+    file_name: str = "",
+    is_gzipped: bool = False,
+    use_cache: bool = True,
+    url: str | None = None,
+    **kwargs,
+) -> Fast5Header:
+    """Read the ``sample_id`` values in a nanopore FAST5's first bytes (#605), by one byte range.
+
+    ``fast5.read_header`` reads ``fast5.HEAD_LENGTH`` bytes from the start. If url is provided,
+    fetches from that URL directly. Otherwise uses the AnVIL S3 mirror. ``is_gzipped`` is ignored: gzipped bytes have no HDF5 signature, and the reader
+    refuses them. Raises ``FetchError`` for a failed read and for bytes the reader refuses.
+    """
+    return _read_by_ranges(Fast5Evidence, fast5.read_header, evidence_dir, md5sum, file_name, use_cache, url)
+
+
+def _read_by_ranges(
+    evidence_cls, read, evidence_dir: Path, md5sum: str, file_name: str, use_cache: bool, url: str | None
+):
+    """A header ``read`` takes from byte ranges, from the cache where it holds one, else read and cached (IDAT, FAST5)."""
+    payload = _load_cached(evidence_cls, evidence_dir, md5sum, use_cache)
     if payload is not None:
         return payload
-
     ranges = _CountedRanges(md5sum, url)
-    header = idat.read_header(ranges.fetch)
+    header = read(ranges.fetch)
     _save_head_evidence(
-        IdatEvidence, evidence_dir, md5sum=md5sum, file_name=file_name, raw=ranges, url=url, header=header
+        evidence_cls, evidence_dir, md5sum=md5sum, file_name=file_name, raw=ranges, url=url, header=header
     )
     return header
 

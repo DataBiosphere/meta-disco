@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 from . import code_rules
 from .callers import BY_MERGE, BY_SOURCE, BY_STEP, Reading, find_caller
-from .evidence import BedSignals, IdatHeader, SegmentTag
+from .evidence import BedSignals, Fast5Header, IdatHeader, SegmentTag
 from .file_name import FileName
 from .models import (
     CLASSIFICATION_FIELDS,
@@ -593,6 +593,16 @@ _TRANSCRIPT_PATTERN = re.compile(r"^(ENST\d|NM_\d|NR_\d|XM_\d|rna-)", re.IGNOREC
 FETCH_FAILED_RULE_ID = code_rules.FETCH_FAILED.id
 
 
+def classify_from_name_only(classifications: dict, reason: str) -> dict:
+    """``classifications`` (a classifier's answers from the name) with the fetch failure ``reason``
+    noted on each ``not_classified`` dimension, for a type that reads content only for samples (#605).
+    The note declares nothing; it is what the unprocessable report counts the file by."""
+    for entry in classifications.values():
+        if isinstance(entry, dict) and entry.get("status") == NOT_CLASSIFIED:
+            entry["evidence"].append({"rule_id": FETCH_FAILED_RULE_ID, "reason": reason})
+    return classifications
+
+
 def classify_without_content(reason: str) -> dict:
     """Classify a file whose content could not be read: every dimension not_classified.
 
@@ -1100,6 +1110,14 @@ def _quoted(text: str | None) -> str:
     return repr(text)
 
 
+def _classify_by_name(name: FileName, file_format: str, file_size: int | None):
+    """The rule engine's result for a file of a known format: with no name (a header-only call)
+    the engine reads the extension from ``file_format``, so the extension rule still runs."""
+    from .rule_engine import ExtendedFileInfo
+
+    return _get_engine().classify_extended(ExtendedFileInfo(name=name, file_format=file_format, file_size=file_size))
+
+
 def classify_from_idat_header(
     header: IdatHeader,
     *,
@@ -1117,11 +1135,9 @@ def classify_from_idat_header(
     accepted to match the uniform ``_fetch_and_classify`` call, and not read: the format is
     ``.idat``, which routed the file here.
     """
-    from .rule_engine import CONTENT_TIER, ExtendedFileInfo
+    from .rule_engine import CONTENT_TIER
 
-    # The known ".idat" as the format, as for BAM: with no name (a header-only call) the
-    # engine reads the extension from it, so the extension rule still runs.
-    result = _get_engine().classify_extended(ExtendedFileInfo(name=name, file_format=".idat", file_size=file_size))
+    result = _classify_by_name(name, ".idat", file_size)
 
     # One helper per rule, each claiming the fields its calls name: a value where one is
     # given, else not_classified. A helper of this shape is one `test_code_rules` reads.
@@ -1175,6 +1191,23 @@ def classify_from_idat_header(
         )
         _claim_scanner(why, platform=None, instrument_model=None)
     return result.to_output_dict()
+
+
+def classify_from_fast5_header(
+    header: Fast5Header,
+    *,
+    name: FileName = FileName.EMPTY,
+    file_size: int | None = None,
+    file_format: str | None = None,
+) -> dict:
+    """Classify a nanopore FAST5 from its name, through the rule engine (``nanopore_fast5``), not its header (#605).
+
+    The header is read for the file's samples (``sample_identity.FAST5_SAMPLES``), not for
+    any dimension, so ``header`` is not read here. ``file_format`` is accepted to match the
+    uniform ``_fetch_and_classify`` call, and not read: ``.fast5`` stands in for it, the
+    format a file this type claims carries in its name or, failing that, declares.
+    """
+    return _classify_by_name(name, ".fast5", file_size).to_output_dict()
 
 
 @cache

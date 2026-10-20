@@ -13,6 +13,8 @@ reason                  row in a ``*_classifications.json``  where this reads it
 no checksum             no — excluded (#376)                ``excluded_files.json``
 input-contract          yes, all dimensions not_classified  evidence ``rule_id``
 content unreadable      yes, all dimensions not_classified  evidence ``rule_id``
+                        (a samples-only type: the name's
+                        answers, #605)
 ======================  ==================================  =========================
 
 The excluded files are listed individually and the other two only counted per dataset
@@ -97,7 +99,9 @@ CONTENT_UNREADABLE = Reason(
     explanation=(
         "The record passed the contract, but its content could not be read — a 404 from the "
         "mirror, a DNS or connection failure, a timeout. Nothing is asserted about a file we "
-        "could not read, not even what the filename alone would support."
+        "could not read, not even what the filename alone would support, except for a type "
+        "whose content is read only for its samples (a nanopore FAST5), which keeps what its "
+        "name gives."
     ),
     row_exists="A row exists in the run's output, with the fetch failure as each dimension's evidence.",
 )

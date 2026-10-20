@@ -569,8 +569,8 @@ class _RecordEvidence(CachedEvidence):
     ``PAYLOAD_TYPE`` is the record's class, whose ``from_evidence`` parses the cached
     dict. A ``KeyError`` or ``TypeError`` it raises is a cache miss here, keeping
     ``load``'s "any miss -> None" contract at the boundary. Each record class raises
-    ``KeyError`` on a missing key; ``IdatHeader`` also raises ``TypeError`` on a field of
-    the wrong type.
+    ``KeyError`` on a missing key; ``IdatHeader`` and ``Fast5Header`` also raise ``TypeError`` on
+    a field of the wrong type.
     """
 
     PAYLOAD_TYPE: ClassVar[type]
@@ -674,3 +674,39 @@ class IdatEvidence(_RecordEvidence):
     def count(self) -> int:
         """The run log's Scan rows. Nothing reads it; it replaces the base's ``len(payload)``, as one record has no length."""
         return len(self.header.scan_software)
+
+
+@dataclass(frozen=True)
+class Fast5Header:
+    """What the FAST5 reader takes from a nanopore FAST5's first bytes (#605): each distinct
+    ``sample_id`` attribute value, in the order found; ``[]`` where the bytes read hold none."""
+
+    sample_ids: list[str]
+
+    @classmethod
+    def from_evidence(cls, raw: dict) -> Fast5Header:
+        """Parse cached evidence JSON into a header.
+
+        Raises:
+            KeyError: the field is missing.
+            TypeError: it is not a list of strings.
+        """
+        header = cls(sample_ids=raw["sample_ids"])
+        if not (isinstance(header.sample_ids, list) and all(isinstance(s, str) for s in header.sample_ids)):
+            raise TypeError(f"cached FAST5 header has a field of the wrong type: {raw!r}")
+        return header
+
+
+@dataclass(frozen=True, kw_only=True)
+class Fast5Evidence(_RecordEvidence):
+    """Cached FAST5 header fields (#605): a single :class:`Fast5Header`."""
+
+    PAYLOAD_KEY: ClassVar[str] = "header"
+    PAYLOAD_TYPE: ClassVar[type] = Fast5Header
+
+    header: Fast5Header
+
+    @property
+    def count(self) -> int:
+        """The distinct ``sample_id`` values read. Nothing reads it; it replaces the base's ``len(payload)``, as one record has no length."""
+        return len(self.header.sample_ids)
