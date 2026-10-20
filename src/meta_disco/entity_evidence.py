@@ -14,8 +14,9 @@ value translated by the value map, and a line carrying an answer is refused by n
 ``source_evidence.iter_evidence``, it yields by default only the lines the value map
 translates (a donor's slots, and a sample's translated ones, #699). Every other line goes only
 to a reader that asks for it, which today is reconcile: an untranslated slot's (a family's, #582;
-a sample's site), and one carrying a repository's own identifier for a donor or sample
-(``models.REPOSITORY_ID_FIELDS``, #669).
+a sample's site), one carrying a repository's own identifier for a donor or sample
+(``models.REPOSITORY_ID_FIELDS``, #669), and one naming another identifier for a donor
+(``models.IDENTITY_LINK_FIELDS``, #559).
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from .models import (
     DONOR_FIELDS,
     JOIN_KEY_ENTITY_IDENTIFIER,
     SAMPLE_FIELDS,
+    SOURCE_EXTERNAL_GROUND_TRUTH,
     SOURCE_PUBLISHED_VALUE,
     SOURCE_REPOSITORY_METADATA,
     ClaimSource,
@@ -44,9 +46,10 @@ from .source_evidence import (
 
 DEFAULT_ENTITY_EVIDENCE_ROOT = DEFAULT_SOURCE_EVIDENCE_ROOT.parent / "entity_evidence"
 
-# The kinds an entity file may declare: a submitter's table, and what the repository
-# publishes for the donor (AnVIL's `anvil_donor`).
-ENTITY_SOURCE_TYPES = frozenset({SOURCE_REPOSITORY_METADATA, SOURCE_PUBLISHED_VALUE})
+# The kinds an entity file may declare: a submitter's table, what the repository publishes
+# for the donor (AnVIL's `anvil_donor`), and a source outside the repository that names the
+# same people (SGDP's metadata file, #559).
+ENTITY_SOURCE_TYPES = frozenset({SOURCE_REPOSITORY_METADATA, SOURCE_PUBLISHED_VALUE, SOURCE_EXTERNAL_GROUND_TRUTH})
 
 # Members a line would carry if it declared an answer, each with why it may not.
 _REFUSED_LINE_KEYS = {

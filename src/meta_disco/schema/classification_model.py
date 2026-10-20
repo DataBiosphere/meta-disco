@@ -962,6 +962,14 @@ class IdentifierNamespaceEnum(str, Enum):
     """
     A name one dataset gives its samples, unique only within it; recognised only by a rule declared for that dataset.
     """
+    sgdp = "sgdp"
+    """
+    The Simons Genome Diversity Project's names for its genomes (`S_Tuscan-2`, `B_Australian-3`), its metadata file's `SGDP_ID` and T2T_CHRY's `sgdp_id` (#559).
+    """
+    hgdp = "hgdp"
+    """
+    The CEPH-HGDP panel's cell line numbers (`HGDP` and five digits), as SGDP's metadata file gives the person behind 130 of its genomes (#559).
+    """
 
 
 class EvidenceMarkerEnum(str, Enum):
@@ -1705,15 +1713,15 @@ class EntityEvidenceRow(ConfiguredBaseModel):
                                       'required': True}}})
 
     raw_value: str = Field(default=..., description="""What the source wrote, verbatim, as on an `EvidenceRow`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'EntityEvidenceRow', 'Evidence']} })
-    field: str = Field(default=..., description="""The donor slot this line speaks to (a `mother`, `father` or `family_id` line's `raw_value` read as written at reconcile, never translated, #582), a sample's slot (`biosample_type`, `anatomical_site`, #699; the line is then about the sample the source names), or `donor_repository_id` / `sample_repository_id` where `raw_value` is the repository's own identifier for the donor or sample (#669), which reconcile lists on the record and never translates. Pinned to `models.DONOR_FIELDS`, `models.FAMILY_FIELDS`, `models.SAMPLE_SLOTS` and `models.REPOSITORY_ID_FIELDS` by `test_the_entity_row_field_pattern_lists_every_entity_field`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'EntityEvidenceRow']} })
-    target_key_value: str = Field(default=..., description="""The identifier the source wrote for the donor, or for the sample on a `sample_repository_id` line, verbatim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'LineageRow', 'EntityEvidenceRow']} })
+    field: str = Field(default=..., description="""The donor slot this line speaks to (a `mother`, `father` or `family_id` line's `raw_value` read as written at reconcile, never translated, #582), a sample's slot (`biosample_type`, `anatomical_site`, #699; the line is then about the sample the source names), or `donor_repository_id` / `sample_repository_id` where `raw_value` is the repository's own identifier for the donor or sample (#669), which reconcile lists on the record and never translates. `collected_from` (about a sample) and `same_donor_as` (about a donor) name another identifier in `raw_value`, which reconcile recognises as a donor (#559): the donor the sample was collected from, and the donor's main identifier, under which the line's own identifier is kept as a synonym. Pinned to `models.DONOR_FIELDS`, `models.FAMILY_FIELDS`, `models.SAMPLE_SLOTS`, `models.REPOSITORY_ID_FIELDS` and `models.IDENTITY_LINK_FIELDS` by `test_the_entity_row_field_pattern_lists_every_entity_field`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'EntityEvidenceRow']} })
+    target_key_value: str = Field(default=..., description="""The identifier the source wrote for the donor, or for the sample on a sample's slot, `sample_repository_id` or `collected_from` line, verbatim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'LineageRow', 'EntityEvidenceRow']} })
     column: str = Field(default=..., description="""The column `raw_value` was read from.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceRow', 'EntityEvidenceRow']} })
     identifier_column: str = Field(default=..., description="""The column `target_key_value` was read from.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EntityEvidenceRow']} })
-    identifier_table: Optional[str] = Field(default=None, description="""The table `target_key_value` was read from, where it is not the envelope's: AnVIL's published `anvil_donor` and `anvil_biosample` name their donor or sample only through the submitter row each was made from (`source_datarepo_row_ids`), so their lines take the identifier from that row's table.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EntityEvidenceRow']} })
+    identifier_table: Optional[str] = Field(default=None, description="""The table `target_key_value` was read from, where it is not the envelope's: AnVIL's published `anvil_donor` and `anvil_biosample` name their donor or sample only through the submitter row each was made from (`source_datarepo_row_ids`), so their lines take the identifier from that row's table; SGDP's `collected_from` lines take the sample from T2T_CHRY's table pairing it with SGDP's name (#559).""", json_schema_extra = { "linkml_meta": {'domain_of': ['EntityEvidenceRow']} })
 
     @field_validator('field')
     def pattern_field(cls, v):
-        pattern=re.compile(r"^(phenotypic_sex|genetic_ancestry|organism_type|reported_ethnicity|mother|father|family_id|biosample_type|anatomical_site|donor_repository_id|sample_repository_id)\Z")
+        pattern=re.compile(r"^(phenotypic_sex|genetic_ancestry|organism_type|reported_ethnicity|mother|father|family_id|biosample_type|anatomical_site|donor_repository_id|sample_repository_id|collected_from|same_donor_as)\Z")
         if isinstance(v, list):
             for element in v:
                 if isinstance(element, str) and not pattern.match(element):
@@ -1895,6 +1903,7 @@ class GeneratedBy(ConfiguredBaseModel):
     named_by: list[Attribution] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy',
                        'ActivityInput',
                        'SampleReference',
+                       'Synonym',
                        'CollectedFrom']} })
     inputs: list[ActivityInput] = Field(default=..., description="""The inputs the step used, each in one of the roles its activity declares.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy', 'ActivityDeclaration']} })
 
@@ -1914,6 +1923,7 @@ class ActivityInput(ConfiguredBaseModel):
     named_by: list[Attribution] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy',
                        'ActivityInput',
                        'SampleReference',
+                       'Synonym',
                        'CollectedFrom']} })
     parent_dataset: Optional[str] = Field(default=None, description="""The dataset `parent_key`'s record is in, where it is not the child's own: only an input resolved through the run lineage map's declared exception (#594, ADR-0002 decision 2), such as a T2T_CHRY CRAM's reads in ANVIL_T2T. Absent on every input whose parent is in the child's dataset.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow', 'ActivityInput']} })
 
@@ -1988,6 +1998,7 @@ class SampleReference(ConfiguredBaseModel):
     named_by: list[Attribution] = Field(default=..., description="""Every source that named these samples: the file's own content, a header or a sample map's rows (`code_rules.SAMPLE_RULES`), a submitter-table column, the file's parent across a step that passes samples (#668), or each of them where they agree.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy',
                        'ActivityInput',
                        'SampleReference',
+                       'Synonym',
                        'CollectedFrom']} })
 
     @field_validator('list_id')
@@ -2221,7 +2232,7 @@ class DonorRecord(ConfiguredBaseModel):
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
-    identifier: EntityIdentifier = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord', 'SampleRecord']} })
+    identifier: EntityIdentifier = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord', 'Synonym', 'SampleRecord']} })
     phenotypic_sex: PhenotypicSexClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
     genetic_ancestry: GeneticAncestryClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
     organism_type: OrganismTypeClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
@@ -2230,6 +2241,21 @@ class DonorRecord(ConfiguredBaseModel):
     father: ParentClassification = Field(default=..., description="""The donor's father (#582), from every source that names him.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
     family_id: FamilyIdClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
     repository_ids: Optional[list[RepositoryIdentifier]] = Field(default=None, description="""Every identifier a repository gave a record of its own for this donor (#669), AnVIL's `donor_id`s: a person has an AnVIL donor in each dataset whose donors are made from a row naming them, and the datasets give them one or more distinct ids (PRIMED's and T2T's are one). Absent where none ties to the donor.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord', 'SampleRecord']} })
+    synonyms: Optional[list[Synonym]] = Field(default=None, description="""Every other identifier a source says names this donor (#559): SGDP's own name (`sgdp:S_Spanish-2`) on the record its metadata file keys by the cell line's repository number (`coriell:HG01504`). What a source said under a synonym is settled on this record. Absent where none does.""", json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord']} })
+
+
+class Synonym(ConfiguredBaseModel):
+    """
+    Another identifier for a donor, and every source that said so (#559): a source's `same_donor_as` line, about the donor it names by `identifier`, naming the record's own identifier. The record keeps the identifier the line names as its own, so it is listed under the repository's number, and a search on either finds it.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    identifier: EntityIdentifier = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord', 'Synonym', 'SampleRecord']} })
+    named_by: list[Attribution] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy',
+                       'ActivityInput',
+                       'SampleReference',
+                       'Synonym',
+                       'CollectedFrom']} })
 
 
 class RepositoryIdentifier(ConfiguredBaseModel):
@@ -2464,7 +2490,7 @@ class SampleRecord(ConfiguredBaseModel):
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
-    identifier: EntityIdentifier = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord', 'SampleRecord']} })
+    identifier: EntityIdentifier = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['DonorRecord', 'Synonym', 'SampleRecord']} })
     collected_from: Optional[CollectedFrom] = Field(default=None, description="""Absent where nothing names the sample's donor.""", json_schema_extra = { "linkml_meta": {'domain_of': ['SampleRecord']} })
     biosample_type: BiosampleTypeClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['SampleRecord']} })
     anatomical_site: AnatomicalSiteClassification = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['SampleRecord']} })
@@ -2473,7 +2499,7 @@ class SampleRecord(ConfiguredBaseModel):
 
 class CollectedFrom(ConfiguredBaseModel):
     """
-    The donor a sample was collected from, and every source that said so (#693). Today the one source is an identifier rule naming both a sample and a donor (`IdentifierRule.names`), cited by its id with `source_type: identifier_rule`.
+    The donor a sample was collected from, and every source that said so (#693): an identifier rule naming both a sample and a donor (`IdentifierRule.names`), cited by its id with `source_type: identifier_rule`, and an entity evidence line naming the sample's donor (`collected_from`, #559), cited by the identifier rule that recognised the donor, with the line's source. Sources naming different donors give none.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
@@ -2481,6 +2507,7 @@ class CollectedFrom(ConfiguredBaseModel):
     named_by: list[Attribution] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy',
                        'ActivityInput',
                        'SampleReference',
+                       'Synonym',
                        'CollectedFrom']} })
 
 
@@ -2573,6 +2600,7 @@ EntityIdentifier.model_rebuild()
 IdentifierRules.model_rebuild()
 IdentifierRule.model_rebuild()
 DonorRecord.model_rebuild()
+Synonym.model_rebuild()
 RepositoryIdentifier.model_rebuild()
 PhenotypicSexClassification.model_rebuild()
 GeneticAncestryClassification.model_rebuild()

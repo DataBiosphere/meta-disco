@@ -673,7 +673,7 @@ classes:
     attributes:
       field:
         required: true
-        pattern: "^(phenotypic_sex|genetic_ancestry|organism_type|reported_ethnicity|mother|father|family_id|biosample_type|anatomical_site|donor_repository_id|sample_repository_id)\\Z"
+        pattern: "^(phenotypic_sex|genetic_ancestry|organism_type|reported_ethnicity|mother|father|family_id|biosample_type|anatomical_site|donor_repository_id|sample_repository_id|collected_from|same_donor_as)\\Z"
         description: >-
           The donor slot this line speaks to (a `mother`, `father` or `family_id` line's
           `raw_value` read as written at reconcile, never translated, #582), a sample's slot
@@ -681,15 +681,19 @@ classes:
           names), or `donor_repository_id` /
           `sample_repository_id` where `raw_value` is the repository's own identifier for the
           donor or sample (#669), which reconcile lists on the record and never translates.
-          Pinned to `models.DONOR_FIELDS`, `models.FAMILY_FIELDS`, `models.SAMPLE_SLOTS` and
-          `models.REPOSITORY_ID_FIELDS` by
+          `collected_from` (about a sample) and `same_donor_as` (about a donor) name another
+          identifier in `raw_value`, which reconcile recognises as a donor (#559): the donor the
+          sample was collected from, and the donor's main identifier, under which the line's
+          own identifier is kept as a synonym.
+          Pinned to `models.DONOR_FIELDS`, `models.FAMILY_FIELDS`, `models.SAMPLE_SLOTS`,
+          `models.REPOSITORY_ID_FIELDS` and `models.IDENTITY_LINK_FIELDS` by
           `test_the_entity_row_field_pattern_lists_every_entity_field`.
       target_key_value:
         required: true
         pattern: "^[^\\r\\n]+\\Z"
         description: >-
-          The identifier the source wrote for the donor, or for the sample on a
-          `sample_repository_id` line, verbatim.
+          The identifier the source wrote for the donor, or for the sample on a sample's
+          slot, `sample_repository_id` or `collected_from` line, verbatim.
       column:
         required: true
         pattern: "^[^\\r\\n]+\\Z"
@@ -704,7 +708,8 @@ classes:
           The table `target_key_value` was read from, where it is not the envelope's: AnVIL's
           published `anvil_donor` and `anvil_biosample` name their donor or sample only through
           the submitter row each was made from (`source_datarepo_row_ids`), so their lines take
-          the identifier from that row's table.
+          the identifier from that row's table; SGDP's `collected_from` lines take the sample from
+          T2T_CHRY's table pairing it with SGDP's name (#559).
 
   EvidenceFileEnvelope:
     description: >-
@@ -1226,6 +1231,32 @@ classes:
           AnVIL's `donor_id`s: a person has an AnVIL donor in each dataset whose donors are
           made from a row naming them, and the datasets give them one or more distinct ids
           (PRIMED's and T2T's are one). Absent where none ties to the donor.
+      synonyms:
+        range: Synonym
+        multivalued: true
+        inlined_as_list: true
+        description: >-
+          Every other identifier a source says names this donor (#559): SGDP's own name
+          (`sgdp:S_Spanish-2`) on the record its metadata file keys by the cell line's
+          repository number (`coriell:HG01504`). What a source said under a synonym is settled
+          on this record. Absent where none does.
+
+  Synonym:
+    description: >-
+      Another identifier for a donor, and every source that said so (#559): a source's
+      `same_donor_as` line, about the donor it names by `identifier`, naming the record's own
+      identifier. The record keeps the identifier the line names as its own, so it is listed
+      under the repository's number, and a search on either finds it.
+    attributes:
+      identifier:
+        range: EntityIdentifier
+        required: true
+        inlined: true
+      named_by:
+        range: Attribution
+        multivalued: true
+        inlined_as_list: true
+        required: true
 
   RepositoryIdentifier:
     description: >-
@@ -1393,9 +1424,11 @@ classes:
 
   CollectedFrom:
     description: >-
-      The donor a sample was collected from, and every source that said so (#693). Today
-      the one source is an identifier rule naming both a sample and a donor
-      (`IdentifierRule.names`), cited by its id with `source_type: identifier_rule`.
+      The donor a sample was collected from, and every source that said so (#693): an
+      identifier rule naming both a sample and a donor (`IdentifierRule.names`), cited by its
+      id with `source_type: identifier_rule`, and an entity evidence line naming the sample's
+      donor (`collected_from`, #559), cited by the identifier rule that recognised the donor,
+      with the line's source. Sources naming different donors give none.
     attributes:
       donor:
         range: EntityIdentifier
@@ -2858,6 +2891,14 @@ enums:
         description: >-
           A name one dataset gives its samples, unique only within it; recognised only by a
           rule declared for that dataset.
+      sgdp:
+        description: >-
+          The Simons Genome Diversity Project's names for its genomes (`S_Tuscan-2`,
+          `B_Australian-3`), its metadata file's `SGDP_ID` and T2T_CHRY's `sgdp_id` (#559).
+      hgdp:
+        description: >-
+          The CEPH-HGDP panel's cell line numbers (`HGDP` and five digits), as SGDP's metadata
+          file gives the person behind 130 of its genomes (#559).
 
   evidence_marker_enum:
     description: >-

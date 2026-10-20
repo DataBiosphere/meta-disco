@@ -242,6 +242,17 @@ SAMPLE_REPOSITORY_ID = "sample_repository_id"
 REPOSITORY_ID_FIELDS = (DONOR_REPOSITORY_ID, SAMPLE_REPOSITORY_ID)
 REPOSITORY_IDS = "repository_ids"
 
+# The entity evidence fields whose value names a donor (#559), recognised through
+# `rules/sample_namespaces.yaml` as a parent's is: `collected_from`, about a sample, names the
+# donor it was collected from; `same_donor_as`, about a donor, names its main identifier, the
+# line's own identifier kept on that record as a synonym. Links, not slots: never translated,
+# never settled as a slot is. Each maps to whose identifier the line is keyed by.
+COLLECTED_FROM = "collected_from"
+SAME_DONOR_AS = "same_donor_as"
+IDENTITY_LINK_FIELDS = (COLLECTED_FROM, SAME_DONOR_AS)
+KIND_OF_IDENTITY_LINK: dict[str, Literal["donor", "sample"]] = {COLLECTED_FROM: "sample", SAME_DONOR_AS: "donor"}
+SYNONYMS = "synonyms"
+
 # The dimensions a record stores as a list (ADR-0003, #654): the schema's slots whose
 # ``value`` is ``multivalued``, held to it by test_output_shape. A claim still declares
 # one value, a string, and resolution runs over strings as for any other dimension;

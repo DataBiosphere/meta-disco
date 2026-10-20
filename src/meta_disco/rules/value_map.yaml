@@ -25,6 +25,20 @@ rows:
     reason: >-
       1000 Genomes' `pedigree.sex` is a PED file's sex column, where 1 is male and 2 female;
       scoped to the dataset, since a bare `2` means this only in a PED file.
+  - id: "phenotypic_sex.sgdp_m"
+    match: {slot: phenotypic_sex, value: "M"}
+    scope: {source: sgdp}
+    declares: {phenotypic_sex: Male}
+    reason: >-
+      SGDP's metadata file writes a genome's sex in `Gender` as M, F or U (not known); scoped to
+      SGDP, since a bare `M` means male only there (#559). Its U has no row and makes no claim.
+  - id: "phenotypic_sex.sgdp_f"
+    match: {slot: phenotypic_sex, value: "F"}
+    scope: {source: sgdp}
+    declares: {phenotypic_sex: Female}
+    reason: >-
+      SGDP's metadata file writes a genome's sex in `Gender` as M, F or U (not known); scoped to
+      SGDP, since a bare `F` means female only there (#559). Its U has no row and makes no claim.
   # --- genetic_ancestry (#693): a donor's slot, from entity evidence ----------------
   - id: "genetic_ancestry.afr"
     match: {slot: genetic_ancestry, value: "AFR"}
