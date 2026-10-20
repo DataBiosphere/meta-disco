@@ -70,10 +70,11 @@ and a parent not found there is `external` (decision 2). Only sample and donor i
    whether a sample and a donor are one person. Where a sample's own row names its donor
    (`anvil_biosample.donor_id`, a submitter donor column), reading that link is #361's and #559's.
    *Extended by #559:* a source's line naming a sample's donor is a source of `collected_from` beside
-   the rule (SGDP's metadata file, for T2T_CHRY's SGDP genomes), and a donor a source names two ways
-   is keyed by its main identifier, the other kept on the record as a synonym (`sgdp:S_Spanish-2` on
-   `coriell:HG01504`), so a reader shows the dataset's name and finds the record by either. The
-   general crosswalk between namespaces (`giab:HG002` and `coriell:NA24385`) stays #361's.
+   the rule (T2T_CHRY's SGDP tables, for its SGDP genomes), and a donor a source names two ways is keyed
+   by the identifier at the end of the chain, the others kept on the record as synonyms
+   (`sgdp:S_Spanish-2` on `coriell:HG01504`, as SGDP's metadata file says), so a reader shows the
+   dataset's name and finds the record by either. Joining namespaces by rule (`giab:HG002` and
+   `coriell:NA24385`) stays #361's, and one canonical-identity resolver #674's.
 4. **The AnVIL model is followed**: its donor fields (`phenotypic_sex`, `reported_ethnicity`,
    `genetic_ancestry`) and the vocabularies its submission guide suggests. `phenotypic_sex` takes
    AnVIL's values, `Female` and `Male`, with PATO's terms as their `meaning`; population codes are

@@ -28,18 +28,13 @@ from meta_disco.models import (
 )
 from meta_disco.output_utils import DONORS_FILE, RECONCILED_DIR, SAMPLES_FILE, iter_reconciled_artifact
 from meta_disco.reconcile import ENTITIES_KEY
-from meta_disco.reconcile_entities import gather, reconcile_entities, select_entity_evidence
-from meta_disco.sample_identity import Identifier, identifier_rules, reference, sample_list
-from meta_disco.schema.classification_model import (
-    DonorRecord,
-    EntityEvidenceRow,
-    ImporterSourceTypeEnum,
-    JoinKeyEnum,
-    SampleRecord,
-)
-from meta_disco.source_evidence import EvidenceFileEnvelope, EvidenceFileSource, EvidenceTarget, generation_dir
-from tests.manifest_fixtures import CATALOG, write_dataset
+from meta_disco.sample_identity import Identifier, reference, sample_list
+from meta_disco.schema.classification_model import DonorRecord, EntityEvidenceRow, SampleRecord
+from meta_disco.source_evidence import generation_dir
+from tests import test_entities
+from tests.manifest_fixtures import CATALOG, FETCHED, SERVICE, write_dataset
 from tests.run_fixtures import write_run
+from tests.test_entities import by_id
 from tests.test_reconcile import go, record
 from tests.test_value_map import load
 
@@ -106,19 +101,33 @@ T2T_ROWS = [
 ]
 
 
+DOWNLOADED = se.datetime(2026, 10, 20, tzinfo=se.timezone.utc)
+
+
 def read(content: bytes = sgdp_bytes()):
-    return lambda: se.SgdpFile(content, se.datetime(2026, 10, 20, tzinfo=se.timezone.utc))
+    return lambda: se.SgdpFile(content, DOWNLOADED)
+
+
+def run(tmp_path: Path, root: str, reader=None, rows=T2T_ROWS) -> se.Import:
+    write_dataset(tmp_path / "m", T2T, rows)
+    return se.import_sgdp(tmp_path / "m", CATALOG, tmp_path / root, SERVICE, reader or read(), generation=STAMP)
 
 
 @pytest.fixture
 def imported(tmp_path):
-    write_dataset(tmp_path / "m", T2T, T2T_ROWS)
-    return se.import_sgdp(tmp_path / "m", CATALOG, tmp_path / "entity_evidence", read(), generation=STAMP)
+    return run(tmp_path, "entity_evidence")
 
 
-def written(root: Path) -> list[dict]:
-    path = generation_dir(root, se.SOURCE, CATALOG, T2T, STAMP) / f"{se.TABLE}.ndjson"
-    return [row.model_dump(exclude_none=True) for row in iter_entity_evidence(path)]
+def path_of(root: Path, table: str) -> Path:
+    return generation_dir(root, se.SOURCE, CATALOG, T2T, STAMP) / f"{table}.ndjson"
+
+
+def written(root: Path, table: str = se.TABLE) -> list[dict]:
+    return [row.model_dump(exclude_none=True) for row in iter_entity_evidence(path_of(root, table))]
+
+
+def envelope_of(root: Path, table: str) -> dict:
+    return json.loads(path_of(root, table).read_text().splitlines()[0])["evidence_file"]
 
 
 # --- the importer ---------------------------------------------------------------------
@@ -134,82 +143,77 @@ def test_a_sample_is_written_only_where_sgdp_and_the_karyotype_agree_and_every_o
     }
     lines = se.describe(imported)
     assert "  confirmed: 3" in lines and "  sex_contradicts: 1: simons_data_sample_3" in lines
+    assert imported.written == {CHM13: 3, GRCH38: 1, se.TABLE: 8}
 
 
-def test_a_confirmed_sample_names_its_genome_and_the_genome_its_sex_population_and_person(imported, tmp_path):
-    got = written(tmp_path / "entity_evidence")
-    assert got[:4] == [
-        {
-            "field": COLLECTED_FROM,
-            "target_key_value": "simons_data_sample_1",
-            "raw_value": "S_Spanish-2",
-            "column": "SGDP_ID",
-            "identifier_column": "sgdp_chm13v2_sample_id",
-            "identifier_table": CHM13,
-        },
-        {
-            "field": "phenotypic_sex",
-            "target_key_value": "S_Spanish-2",
-            "raw_value": "M",
-            "column": "Gender",
-            "identifier_column": "SGDP_ID",
-        },
-        {
-            "field": "genetic_ancestry",
-            "target_key_value": "S_Spanish-2",
-            "raw_value": "Spanish",
-            "column": "Population_ID",
-            "identifier_column": "SGDP_ID",
-        },
-        {
-            "field": SAME_DONOR_AS,
-            "target_key_value": "S_Spanish-2",
-            "raw_value": "HG01504",
-            "column": "Sample_ID",
-            "identifier_column": "SGDP_ID",
-        },
-    ]
-    # An empty cell writes nothing: S_Dinka-2 has no population.
-    assert [g["field"] for g in got if g["target_key_value"] == "S_Dinka-2"] == ["phenotypic_sex", SAME_DONOR_AS]
-    assert {g["target_key_value"] for g in got} == {
-        "simons_data_sample_1",
-        "S_Spanish-2",
-        "simons_data_sample_2",
-        "S_Tuscan-2",
-        "simons_data_sample_7",
-        "S_Dinka-2",
+def test_each_table_cites_the_pairing_it_states_and_sgdp_its_genomes(imported, tmp_path):
+    root = tmp_path / "entity_evidence"
+    # T2T_CHRY's tables pair each confirmed sample with its SGDP genome, each table for its own rows.
+    assert written(root, CHM13)[0] == {
+        "field": COLLECTED_FROM,
+        "target_key_value": "simons_data_sample_1",
+        "raw_value": "S_Spanish-2",
+        "column": "sgdp_id",
+        "identifier_column": "sgdp_chm13v2_sample_id",
     }
-    assert imported.written == len(got)
+    assert [g["target_key_value"] for g in written(root, CHM13)] == [
+        "simons_data_sample_1",
+        "simons_data_sample_2",
+        "simons_data_sample_7",
+    ]
+    assert [g["target_key_value"] for g in written(root, GRCH38)] == ["simons_data_sample_1"]
+    # SGDP's file speaks only of its genomes, by its names, a cell each.
+    got = written(root)
+    dinka = [(g["field"], g["raw_value"], g["column"]) for g in got if g["target_key_value"] == "S_Dinka-2"]
+    # An empty cell writes nothing: S_Dinka-2 has no population.
+    assert dinka == [("phenotypic_sex", "M", "Gender"), (SAME_DONOR_AS, "DNK07", "Sample_ID")]
+    assert {g["identifier_column"] for g in got} == {"SGDP_ID"}
+    assert {g["target_key_value"] for g in got} == {"S_Spanish-2", "S_Tuscan-2", "S_Dinka-2"}
+    assert len(got) == 8
 
 
-def test_the_file_is_kept_beside_its_lines_and_imports_again_from_the_copy(imported, tmp_path, monkeypatch):
-    kept = imported.directory / se.KEPT_FILE
-    assert kept.read_bytes() == sgdp_bytes()
-    monkeypatch.setattr(se, "SHA256", hashlib.sha256(sgdp_bytes()).hexdigest())
-    again = se.import_sgdp(tmp_path / "m", CATALOG, tmp_path / "again", lambda: se.load_kept(kept), generation=STAMP)
-    assert written(tmp_path / "again") == written(tmp_path / "entity_evidence")
-    assert again.outcomes == imported.outcomes
-
-
-def test_a_file_whose_sha256_is_not_the_pinned_one_is_refused(tmp_path):
-    path = tmp_path / se.KEPT_FILE
-    path.write_bytes(sgdp_bytes())
-    with pytest.raises(ValueError, match=r"not the .* this importer was measured against"):
-        se.load_kept(path)
-
-
-def test_the_envelope_names_sgdp_its_version_and_the_target(imported, tmp_path):
-    path = generation_dir(tmp_path / "entity_evidence", se.SOURCE, CATALOG, T2T, STAMP) / f"{se.TABLE}.ndjson"
-    (first,) = [json.loads(line) for line in path.read_text().splitlines()[:1]]
-    envelope = first["evidence_file"]
-    assert envelope["source"] == {"repository": "sgdp", "table": se.TABLE, "url": se.URL}
-    assert (envelope["source_type"], envelope["source_version"], envelope["source_key"]) == (
+def test_each_file_names_its_source_kind_and_when_its_source_was_fetched(imported, tmp_path):
+    root = tmp_path / "entity_evidence"
+    t2t_envelope = envelope_of(root, CHM13)
+    assert t2t_envelope["source"] == {"repository": "anvil", "dataset": T2T, "table": CHM13, "url": SERVICE}
+    assert (t2t_envelope["source_type"], t2t_envelope["source_key"]) == (
+        SOURCE_REPOSITORY_METADATA,
+        "sgdp_chm13v2_sample_id",
+    )
+    assert t2t_envelope["fetched_at"].startswith(FETCHED)
+    sgdp_envelope = envelope_of(root, se.TABLE)
+    assert sgdp_envelope["source"] == {"repository": "sgdp", "table": se.TABLE, "url": se.URL}
+    assert (sgdp_envelope["source_type"], sgdp_envelope["source_version"], sgdp_envelope["source_key"]) == (
         SOURCE_EXTERNAL_GROUND_TRUTH,
         se.SHA256,
         "SGDP_ID",
     )
-    assert envelope["target"] == {"system": "anvil", "dataset": T2T, "version": CATALOG}
-    assert envelope["target_key"] == JOIN_KEY_ENTITY_IDENTIFIER
+    assert sgdp_envelope["fetched_at"] == DOWNLOADED.isoformat()
+    for envelope in (t2t_envelope, sgdp_envelope):
+        assert envelope["target"] == {"system": "anvil", "dataset": T2T, "version": CATALOG}
+        assert envelope["target_key"] == JOIN_KEY_ENTITY_IDENTIFIER
+
+
+def test_the_file_is_kept_and_imports_again_from_the_copy_with_its_download_time(imported, tmp_path, monkeypatch):
+    kept = imported.directory / se.KEPT_FILE
+    assert kept.read_bytes() == sgdp_bytes()
+    monkeypatch.setattr(se, "SHA256", hashlib.sha256(sgdp_bytes()).hexdigest())
+    again = run(tmp_path, "again", lambda: se.load_kept(kept))
+    for table in (CHM13, GRCH38, se.TABLE):
+        assert written(tmp_path / "again", table) == written(tmp_path / "entity_evidence", table)
+    assert again.outcomes == imported.outcomes
+    # When SGDP's file was downloaded, not when it was imported again.
+    assert envelope_of(tmp_path / "again", se.TABLE)["fetched_at"] == DOWNLOADED.isoformat()
+
+
+def test_a_copy_with_another_sha256_or_no_generation_beside_it_is_refused(tmp_path, monkeypatch):
+    path = tmp_path / se.KEPT_FILE
+    path.write_bytes(sgdp_bytes())
+    with pytest.raises(ValueError, match=r"not the .* this importer was measured against"):
+        se.load_kept(path)
+    monkeypatch.setattr(se, "SHA256", hashlib.sha256(sgdp_bytes()).hexdigest())
+    with pytest.raises(ValueError, match="to say when it was downloaded"):
+        se.load_kept(path)
 
 
 @pytest.mark.parametrize(
@@ -220,29 +224,21 @@ def test_the_envelope_names_sgdp_its_version_and_the_target(imported, tmp_path):
     ],
 )
 def test_a_file_naming_a_genome_twice_or_lacking_a_column_is_refused(tmp_path, content, message):
-    write_dataset(tmp_path / "m", T2T, T2T_ROWS)
     with pytest.raises(ValueError, match=message):
-        se.import_sgdp(tmp_path / "m", CATALOG, tmp_path / "e", read(content), generation=STAMP)
+        run(tmp_path, "e", read(content))
 
 
 def test_an_import_confirming_no_sample_fails_and_writes_nothing(tmp_path):
-    write_dataset(tmp_path / "m", T2T, [t2t(CHM13, "simons_data_sample_3", "S_Palestinian-2", "XX")])
     with pytest.raises(ValueError, match="no SGDP sample confirmed"):
-        se.import_sgdp(tmp_path / "m", CATALOG, tmp_path / "e", read(), generation=STAMP)
-    assert not (tmp_path / "e").exists() or not any((tmp_path / "e").rglob("*.ndjson"))
+        run(tmp_path, "e", rows=[t2t(CHM13, "simons_data_sample_3", "S_Palestinian-2", "XX")])
+    assert not any((tmp_path / "e").rglob("*.ndjson"))
 
 
 # --- reconcile: a donor's main identifier and a sample's donor ------------------------
 
 
 def settled(root: Path, tmp_path: Path, sample_lists=()):
-    paths, skipped = select_entity_evidence(root, "anvil", CATALOG)
-    rules = identifier_rules()
-    return reconcile_entities(gather(paths, root, load(tmp_path, TABLE), rules), rules, sample_lists, skipped)
-
-
-def by_id(records: list[dict]) -> dict[str, dict]:
-    return {r["identifier"]["id"]: r for r in records}
+    return test_entities.settled(root, tmp_path, sample_lists, TABLE)
 
 
 def lines_file(
@@ -256,18 +252,9 @@ def lines_file(
     """One entity file, a line per ``(field, identifier string, raw value)``."""
     directory = generation_dir(root, f"{repository}_{source_type}", CATALOG, dataset, STAMP)
     directory.mkdir(parents=True, exist_ok=True)
-    envelope = EvidenceFileEnvelope(
-        source=EvidenceFileSource(repository=repository, dataset=dataset, table=name, url="https://example.org"),
-        source_type=ImporterSourceTypeEnum(source_type),
-        source_version="v",
-        source_key="id",
-        target=EvidenceTarget(system="anvil", dataset=dataset, version=CATALOG),
-        target_key=JoinKeyEnum(JOIN_KEY_ENTITY_IDENTIFIER),
-        fetched_at="2026-10-20T00:00:00Z",
-    )
     write_entity_file(
         directory / f"{name}.ndjson",
-        envelope,
+        test_entities.envelope(source_type=source_type, dataset=dataset, repository=repository, table=name),
         [
             EntityEvidenceRow(field=f, target_key_value=ident, raw_value=raw, column=f"c_{f}", identifier_column="x")
             for f, ident, raw in rows
@@ -317,21 +304,25 @@ def test_a_main_identifier_no_rule_recognises_leaves_the_donor_under_its_own_and
     }
 
 
-def test_a_sample_is_collected_from_its_donors_main_identifier_citing_the_line(imported, tmp_path):
+def test_a_sample_is_collected_from_its_donors_main_identifier_citing_each_table_pairing_them(imported, tmp_path):
     members = [Identifier("dataset_local", f"simons_data_sample_{n}", T2T) for n in (1, 3)]
     result = settled(tmp_path / "entity_evidence", tmp_path, [sample_list(members)])
     samples = by_id(result.samples)
     linked = samples["simons_data_sample_1"][COLLECTED_FROM]
     assert linked["donor"] == {"id": "HG01504", "namespace": "coriell"}
-    (attribution,) = linked["named_by"]
-    assert (attribution["source_type"], attribution["rule_id"]) == (SOURCE_EXTERNAL_GROUND_TRUTH, "sgdp_id")
-    assert (attribution["source"]["table"], attribution["source"]["column"]) == (se.TABLE, "SGDP_ID")
+    # Each T2T_CHRY table pairing the sample with its genome, cited by the rule recognising the genome's name.
+    assert [
+        (a["source_type"], a["rule_id"], a["source"]["table"], a["source"]["column"]) for a in linked["named_by"]
+    ] == [
+        (SOURCE_REPOSITORY_METADATA, "sgdp_id", CHM13, "sgdp_id"),
+        (SOURCE_REPOSITORY_METADATA, "sgdp_id", GRCH38, "sgdp_id"),
+    ]
     # A sample no line names (its sex disagreed at import) has no donor.
     assert COLLECTED_FROM not in samples["simons_data_sample_3"]
     # A sample a line names has a record though no file names it.
     assert samples["simons_data_sample_7"][COLLECTED_FROM]["donor"] == {"id": "S_Dinka-2", "namespace": "sgdp"}
     assert result.report["samples"]["collected_from"] == {"dataset_local": 3}
-    assert result.report["samples"]["collected_from_by_source"] == {SOURCE_EXTERNAL_GROUND_TRUTH: 3}
+    assert result.report["samples"]["collected_from_by_source"] == {SOURCE_REPOSITORY_METADATA: 3}
     for record_ in result.samples:
         SampleRecord(**record_)
 
@@ -358,28 +349,62 @@ def test_sources_naming_different_donors_give_a_sample_none_and_are_counted(tmp_
     ]
 
 
+def test_synonyms_are_followed_to_the_end_of_their_chain_each_keeping_its_own_steps_source(tmp_path):
+    root = tmp_path / "entity_evidence"
+    chain = [
+        (SAME_DONOR_AS, "S_Spanish-2", "S_Spanish-1"),
+        (SAME_DONOR_AS, "S_Spanish-1", "HG01504"),
+        (SAME_DONOR_AS, "HG01504", "NA99999"),
+        ("phenotypic_sex", "S_Spanish-2", "M"),
+    ]
+    lines_file(root, "D", chain, SOURCE_EXTERNAL_GROUND_TRUTH, "sgdp")
+    result = settled(root, tmp_path)
+    donors = by_id(result.donors)
+    assert set(donors) == {"NA99999"}
+    person = donors["NA99999"]
+    assert person["phenotypic_sex"]["value"] == "Male"
+    steps = {s["identifier"]["id"]: [a["rule_id"] for a in s["named_by"]] for s in person[SYNONYMS]}
+    # Each synonym is cited by the rule recognising the identifier its own line named.
+    assert steps == {"HG01504": ["coriell_cell_line_or_dna"], "S_Spanish-1": ["coriell_hg"], "S_Spanish-2": ["sgdp_id"]}
+    assert result.report[SYNONYMS]["unjoined"] == []
+
+
 @pytest.mark.parametrize(
-    ("rows", "reason"),
+    ("rows", "refused", "reason"),
     [
         (
             [(SAME_DONOR_AS, "S_Spanish-2", "HG01504"), (SAME_DONOR_AS, "S_Spanish-2", "HG01503")],
-            "names two main identifiers",
+            {"S_Spanish-2"},
+            "its chain reaches sgdp:S_Spanish-2, which names 2 identifiers",
         ),
         (
-            [(SAME_DONOR_AS, "S_Spanish-2", "S_Spanish-1"), (SAME_DONOR_AS, "S_Spanish-1", "HG01504")],
-            "its main identifier is itself a synonym",
+            # S_Spanish-1's chain branches at HG01504, so it joins nothing either.
+            [
+                (SAME_DONOR_AS, "S_Spanish-1", "HG01504"),
+                (SAME_DONOR_AS, "HG01504", "NA99999"),
+                (SAME_DONOR_AS, "HG01504", "NA88888"),
+                (SAME_DONOR_AS, "S_Spanish-2", "HG01504"),
+            ],
+            {"S_Spanish-1", "S_Spanish-2", "HG01504"},
+            "its chain reaches coriell:HG01504, which names 2 identifiers",
+        ),
+        (
+            [(SAME_DONOR_AS, "S_Spanish-2", "S_Spanish-1"), (SAME_DONOR_AS, "S_Spanish-1", "S_Spanish-2")],
+            {"S_Spanish-1", "S_Spanish-2"},
+            "its chain comes back on itself",
         ),
     ],
 )
-def test_a_synonym_naming_two_main_identifiers_or_a_synonym_joins_none_and_is_listed(tmp_path, rows, reason):
+def test_a_chain_that_branches_or_loops_joins_none_and_each_synonym_on_it_is_listed(tmp_path, rows, refused, reason):
     root = tmp_path / "entity_evidence"
     lines_file(root, "D", [*rows, ("phenotypic_sex", "S_Spanish-2", "M")], SOURCE_EXTERNAL_GROUND_TRUTH, "sgdp")
     result = settled(root, tmp_path)
     donors = by_id(result.donors)
     assert donors["S_Spanish-2"]["phenotypic_sex"]["value"] == "Male"
-    assert SYNONYMS not in donors["S_Spanish-2"]
-    (unjoined,) = [u for u in result.report[SYNONYMS]["unjoined"] if u["identifier"]["id"] == "S_Spanish-2"]
-    assert unjoined["reason"] == reason
+    assert not any(SYNONYMS in d for d in donors.values())
+    unjoined = {u["identifier"]["id"]: u["reason"] for u in result.report[SYNONYMS]["unjoined"]}
+    assert set(unjoined) == refused
+    assert set(unjoined.values()) == {reason}
 
 
 def test_a_parent_or_a_repository_identifier_naming_a_synonym_reaches_the_main_record(tmp_path):
@@ -418,4 +443,19 @@ def test_a_run_reaches_an_sgdp_files_donor_through_its_sample_and_the_synonym(im
     assert donors["HG01504"][SYNONYMS][0]["identifier"] == {"id": "S_Spanish-2", "namespace": "sgdp"}
     assert report[ENTITIES_KEY][SYNONYMS]["synonyms"] == 2
     first = json.loads(gzip.decompress((run / RECONCILED_DIR / DONORS_FILE).read_bytes()).splitlines()[0])
-    assert {f["source_type"] for f in first["reconcile"]["entity_evidence"]} == {SOURCE_EXTERNAL_GROUND_TRUTH}
+    assert {f["source_type"] for f in first["reconcile"]["entity_evidence"]} == {
+        SOURCE_EXTERNAL_GROUND_TRUTH,
+        SOURCE_REPOSITORY_METADATA,
+    }
+
+
+def test_a_karyotype_or_a_cell_the_file_leaves_out_states_no_sex_and_writes_nothing(tmp_path):
+    rows = [
+        t2t(CHM13, "simons_data_sample_1", "S_Spanish-2", "XY"),
+        t2t(CHM13, "simons_data_sample_2", "S_Tuscan-2", ""),
+    ]
+    # S_Spanish-2's row stops after Sample_ID and SGDP_ID: DictReader gives its other cells as None.
+    short = sgdp_bytes([("HG01504", "S_Spanish-2"), SGDP[1]])
+    with pytest.raises(ValueError, match="no SGDP sample confirmed"):
+        run(tmp_path, "e", read(short), rows)
+    assert se.outcome([se.T2tRow(CHM13, "s", "S_Tuscan-2", None)], se.sgdp_rows(sgdp_bytes())) == se.SEX_NOT_STATED

@@ -968,7 +968,7 @@ class IdentifierNamespaceEnum(str, Enum):
     """
     hgdp = "hgdp"
     """
-    The CEPH-HGDP panel's cell line numbers (`HGDP` and five digits), as SGDP's metadata file gives the person behind 130 of its genomes (#559).
+    The CEPH-HGDP panel's cell line numbers (`HGDP` and five digits), as SGDP's metadata file names the person behind a genome in `Sample_ID` (#559).
     """
 
 
@@ -1717,7 +1717,7 @@ class EntityEvidenceRow(ConfiguredBaseModel):
     target_key_value: str = Field(default=..., description="""The identifier the source wrote for the donor, or for the sample on a sample's slot, `sample_repository_id` or `collected_from` line, verbatim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceRow', 'LineageRow', 'EntityEvidenceRow']} })
     column: str = Field(default=..., description="""The column `raw_value` was read from.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource', 'EvidenceRow', 'EntityEvidenceRow']} })
     identifier_column: str = Field(default=..., description="""The column `target_key_value` was read from.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EntityEvidenceRow']} })
-    identifier_table: Optional[str] = Field(default=None, description="""The table `target_key_value` was read from, where it is not the envelope's: AnVIL's published `anvil_donor` and `anvil_biosample` name their donor or sample only through the submitter row each was made from (`source_datarepo_row_ids`), so their lines take the identifier from that row's table; SGDP's `collected_from` lines take the sample from T2T_CHRY's table pairing it with SGDP's name (#559).""", json_schema_extra = { "linkml_meta": {'domain_of': ['EntityEvidenceRow']} })
+    identifier_table: Optional[str] = Field(default=None, description="""The table `target_key_value` was read from, where it is not the envelope's: AnVIL's published `anvil_donor` and `anvil_biosample` name their donor or sample only through the submitter row each was made from (`source_datarepo_row_ids`), so their lines take the identifier from that row's table.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EntityEvidenceRow']} })
 
     @field_validator('field')
     def pattern_field(cls, v):
@@ -2246,7 +2246,7 @@ class DonorRecord(ConfiguredBaseModel):
 
 class Synonym(ConfiguredBaseModel):
     """
-    Another identifier for a donor, and every source that said so (#559): a source's `same_donor_as` line, about the donor it names by `identifier`, naming the record's own identifier. The record keeps the identifier the line names as its own, so it is listed under the repository's number, and a search on either finds it.
+    Another identifier for a donor, and every source that said so (#559): a source's `same_donor_as` line, about the donor it names by `identifier`, naming another identifier for it, followed to the end of the chain (the record's own identifier). Each synonym is cited by its own line, so the record is listed under the repository's number, and a search on either finds it.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 

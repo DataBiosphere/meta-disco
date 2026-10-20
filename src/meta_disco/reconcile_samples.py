@@ -115,13 +115,13 @@ def from_line(
         members.add(got.identifier)
         if got.rule_id not in rule_ids:
             rule_ids.append(got.rule_id)
-    return Named(frozenset(members), _attributions(source_type, tuple(rule_ids), source))
+    return Named(frozenset(members), attributions(source_type, tuple(rule_ids), source))
 
 
 # A source's column is one `ClaimSource` for every line of its file, and the join keeps every
 # line's attributions for the whole run: built once per (rule, column), not once per line.
 @lru_cache(maxsize=4096)
-def _attributions(source_type: str, rule_ids: tuple[str, ...], source: ClaimSource) -> tuple[dict, ...]:
+def attributions(source_type: str, rule_ids: tuple[str, ...], source: ClaimSource) -> tuple[dict, ...]:
     return tuple({"source_type": source_type, "rule_id": r, "source": source.to_dict()} for r in rule_ids)
 
 

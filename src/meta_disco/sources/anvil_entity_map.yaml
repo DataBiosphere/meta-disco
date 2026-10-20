@@ -22,7 +22,7 @@
 #
 # Left out: AnVIL_ENCORE_293T and AnVIL_ENCORE_RS293, whose donors (`293T`,
 # `Ribo-STAMP-293T`, `DOX-RS293`) are engineered lines of one cell line and no rule
-# recognises, nor their biosamples' names (`TIAL1-BG293LV06-111B`); T2T_CHRY's SGDP tables, whose donors' identifiers are #559's; MAGE's
+# recognises, nor their biosamples' names (`TIAL1-BG293LV06-111B`); T2T_CHRY's SGDP tables, read with SGDP's own metadata file by `sgdp_entities` (#559); MAGE's
 # `kgp_sample.sex` (`XX`/`XY`), a sample's karyotype rather than a donor's sex (#702).
 catalog: anvil15
 datasets:

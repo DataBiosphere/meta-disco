@@ -252,6 +252,13 @@ SAME_DONOR_AS = "same_donor_as"
 IDENTITY_LINK_FIELDS = (COLLECTED_FROM, SAME_DONOR_AS)
 KIND_OF_IDENTITY_LINK: dict[str, Literal["donor", "sample"]] = {COLLECTED_FROM: "sample", SAME_DONOR_AS: "donor"}
 SYNONYMS = "synonyms"
+# Every entity evidence field, and whose identifier its line is keyed by: a donor's or a sample's.
+KIND_OF_ENTITY_FIELD: dict[str, Literal["donor", "sample"]] = {
+    **KIND_OF_SLOT,
+    DONOR_REPOSITORY_ID: "donor",
+    SAMPLE_REPOSITORY_ID: "sample",
+    **KIND_OF_IDENTITY_LINK,
+}
 
 # The dimensions a record stores as a list (ADR-0003, #654): the schema's slots whose
 # ``value`` is ``multivalued``, held to it by test_output_shape. A claim still declares

@@ -8,26 +8,24 @@ SGDP's metadata file (:data:`URL`, Mallick et al. 2016) gives, per SGDP name, th
 (``Gender``) and population. No AnVIL table holds a donor for these genomes; this file is the source.
 
 **The join is on SGDP's name** (contract 2.10): the target publishes it (``sgdp_id``), so the file's
-``SGDP_ID`` is joined on it as written. **A line is written only where both sides agree on sex**:
+``SGDP_ID`` is joined on it as written. **A sample is written only where both sides agree on sex**:
 SGDP's ``Gender`` (``M``, ``F``) and T2T_CHRY's ``karyotype`` (``XY``, ``XX``, :data:`KARYOTYPE`), in
 every table naming the sample. The pairing of a sample with an SGDP name rests on T2T_CHRY's tables
 alone (the files' headers name only ``simons_data_sample_N``), and sex is the one fact both sides
 state about the genome. Measured on 2026-10-20 (#559): 275 of 279 samples agree. The others are each
 counted by :data:`OUTCOMES` and written nothing; #718 holds them.
 
-**Lines are observations** (contract 1.1), as SGDP wrote them, in one file per generation:
+**Each line is cited to the source that wrote it** (contract 1.1), one file per source in a generation:
 
-- about the sample (``simons_data_sample_64``, its identifier read from T2T_CHRY's table):
-  ``collected_from``, SGDP's name for the genome;
-- about the donor, by SGDP's name: ``phenotypic_sex`` (``Gender``), ``genetic_ancestry``
-  (``Population_ID``), and ``same_donor_as`` (``Sample_ID``), the donor's main identifier where an
-  identifier rule recognises it (#559), so the record is keyed by ``coriell:HG01504`` and keeps
-  ``sgdp:S_Spanish-2`` as a synonym.
+- T2T_CHRY's tables (one file each, ``repository_metadata``): about each confirmed sample, ``collected_from``,
+  the ``sgdp_id`` the table pairs it with;
+- SGDP's file (``external_ground_truth``): about each confirmed genome, by SGDP's name, ``phenotypic_sex``
+  (``Gender``), ``genetic_ancestry`` (``Population_ID``), and ``same_donor_as`` (``Sample_ID``), the donor's
+  main identifier where an identifier rule recognises it, so the record is keyed by ``coriell:HG01504`` and
+  keeps ``sgdp:S_Spanish-2`` as a synonym.
 
-**The file is pinned and kept**: :func:`fetch` refuses a download whose sha256 is not
-:data:`SHA256`, and each generation holds the file as read (:data:`KEPT_FILE`) beside its evidence,
-so an import can be run again from it without the network. ``discover`` reads only ``*.ndjson``, so no
-evidence reader takes it as evidence.
+The file is pinned (:data:`SHA256`) and kept beside each generation (:data:`KEPT_FILE`); ``discover``
+reads only ``*.ndjson``, so no evidence reader takes the copy as evidence.
 """
 
 from __future__ import annotations
@@ -43,13 +41,14 @@ from pathlib import Path
 import requests
 
 from .anvil_evidence import verbatim_manifest
-from .azul_manifest import REPOSITORY, iter_verbatim_entities, sidecar_datasets
-from .entity_evidence import write_entity_file
+from .azul_manifest import FORMAT_VERBATIM, REPOSITORY, iter_verbatim_entities, sidecar_datasets, sidecar_requested_at
+from .entity_evidence import read_entity_envelope, write_entity_file
 from .models import (
     COLLECTED_FROM,
     JOIN_KEY_ENTITY_IDENTIFIER,
     SAME_DONOR_AS,
     SOURCE_EXTERNAL_GROUND_TRUTH,
+    SOURCE_REPOSITORY_METADATA,
 )
 from .schema.classification_model import EntityEvidenceRow, ImporterSourceTypeEnum, JoinKeyEnum
 from .source_evidence import (
@@ -59,6 +58,7 @@ from .source_evidence import (
     evidence_file_path,
     generation_dir,
     new_generation,
+    parse_iso_datetime,
     staged_generation,
 )
 
@@ -73,7 +73,7 @@ URL = (
 )
 SHA256 = "1e4f0076ddadc57ce9feb252c1f9a782ea9d5ba4e6606627fcd60e9c5bf2ef33"
 ENCODING = "latin-1"
-# The evidence file's table, and the name the file is kept under beside it.
+# SGDP's evidence file's table, and the name the file is kept under beside it.
 TABLE = "SGDP_metadata"
 KEPT_FILE = f"{TABLE}.txt"
 # SGDP's columns read: its key, and the three a donor line is written from.
@@ -100,19 +100,19 @@ OUTCOMES = (CONFIRMED, NOT_IN_SGDP_FILE, SEX_NOT_STATED, SEX_CONTRADICTS, TABLES
 
 @dataclass(frozen=True)
 class SgdpFile:
-    """SGDP's metadata file as read: its bytes, and when they were read."""
+    """SGDP's metadata file as read: its bytes, and when they were downloaded."""
 
     content: bytes
-    read_at: datetime
+    fetched_at: datetime
 
 
 @dataclass
 class Import:
-    """One import: where it went, each sample's outcome, and the lines written."""
+    """One import: where it went, each sample's outcome, and the lines written to each file."""
 
     directory: Path
     outcomes: dict[str, list[str]] = field(default_factory=dict)
-    written: int = 0
+    written: dict[str, int] = field(default_factory=dict)
 
 
 Fetch = Callable[[], SgdpFile]
@@ -127,18 +127,23 @@ def check_sha256(content: bytes, where: str) -> None:
 
 def fetch() -> SgdpFile:
     """Download SGDP's metadata file from :data:`URL`, refused unless its sha256 is :data:`SHA256`."""
-    read_at = datetime.now(timezone.utc)
+    fetched_at = datetime.now(timezone.utc)
     response = requests.get(URL, timeout=60)
     response.raise_for_status()
     check_sha256(response.content, URL)
-    return SgdpFile(response.content, read_at)
+    return SgdpFile(response.content, fetched_at)
 
 
 def load_kept(path: Path) -> SgdpFile:
-    """A kept copy of the file (:data:`KEPT_FILE`), refused unless its sha256 is :data:`SHA256`; read now."""
+    """A kept copy of the file (:data:`KEPT_FILE`), refused unless its sha256 is :data:`SHA256`, with the download
+    time its generation's SGDP evidence file records; ``ValueError`` where that file is not beside it."""
     content = path.read_bytes()
     check_sha256(content, str(path))
-    return SgdpFile(content, datetime.now(timezone.utc))
+    beside = evidence_file_path(path.parent, TABLE)
+    if not beside.is_file():
+        raise ValueError(f"{path}: no {beside.name} beside it to say when it was downloaded")
+    fetched_at = read_entity_envelope(beside).fetched_at
+    return SgdpFile(content, parse_iso_datetime(fetched_at, "fetched_at", str(beside)))
 
 
 def sgdp_rows(content: bytes) -> dict[str, dict[str, str]]:
@@ -180,37 +185,39 @@ def t2t_rows(manifest: Path) -> dict[str, list[T2tRow]]:
 
 def outcome(rows: list[T2tRow], sgdp: dict[str, dict[str, str]]) -> str:
     """One sample's outcome (:data:`OUTCOMES`): ``confirmed`` where every T2T_CHRY row naming it names one SGDP
-    genome and one karyotype, SGDP's file has the genome, and its sex is that karyotype's."""
+    genome and one karyotype, SGDP's file has the genome, and its sex is that karyotype's. ``sex_not_stated`` where
+    SGDP's sex or the karyotype is neither of :data:`KARYOTYPE`'s."""
     if len({(r.sgdp_id, r.karyotype) for r in rows}) != 1:
         return TABLES_DISAGREE
     first = rows[0]
     found = sgdp.get(first.sgdp_id) if first.sgdp_id else None
     if found is None:
         return NOT_IN_SGDP_FILE
-    karyotype = KARYOTYPE.get(found[GENDER])
-    if karyotype is None:
+    karyotype = KARYOTYPE.get(found[GENDER] or "")
+    if karyotype is None or first.karyotype not in KARYOTYPE.values():
         return SEX_NOT_STATED
     return CONFIRMED if karyotype == first.karyotype else SEX_CONTRADICTS
 
 
-def lines(confirmed: list[tuple[T2tRow, str]], sgdp: dict[str, dict[str, str]]) -> Iterator[EntityEvidenceRow]:
-    """Each confirmed sample's ``collected_from`` line, then its donor's lines, a cell each, an empty cell writing nothing.
+def link_lines(rows: list[T2tRow]) -> Iterator[EntityEvidenceRow]:
+    """One T2T_CHRY table's ``collected_from`` lines: each confirmed sample's row naming its SGDP genome."""
+    for row in rows:
+        if row.sgdp_id:
+            yield EntityEvidenceRow(
+                field=COLLECTED_FROM,
+                target_key_value=row.sample,
+                raw_value=row.sgdp_id,
+                column=T2T_SGDP_ID,
+                identifier_column=SAMPLE_TABLES[row.table],
+            )
 
-    ``confirmed`` pairs each sample's first T2T_CHRY row, which :func:`outcome` has shown every other agrees
-    with, with the SGDP name it gives.
-    """
-    for row, sgdp_id in confirmed:
-        yield EntityEvidenceRow(
-            field=COLLECTED_FROM,
-            target_key_value=row.sample,
-            raw_value=sgdp_id,
-            column=SGDP_ID,
-            identifier_column=SAMPLE_TABLES[row.table],
-            identifier_table=row.table,
-        )
+
+def donor_lines(genomes: list[str], sgdp: dict[str, dict[str, str]]) -> Iterator[EntityEvidenceRow]:
+    """SGDP's lines about each confirmed genome, by its name: a cell each, an empty or missing cell writing nothing."""
+    for sgdp_id in genomes:
         found = sgdp[sgdp_id]
         for slot, column in DONOR_COLUMNS.items():
-            if found[column].strip():
+            if (found[column] or "").strip():
                 yield EntityEvidenceRow(
                     field=slot,
                     target_key_value=sgdp_id,
@@ -220,20 +227,18 @@ def lines(confirmed: list[tuple[T2tRow, str]], sgdp: dict[str, dict[str, str]]) 
                 )
 
 
-def envelope(catalog: str, read_at: datetime) -> EvidenceFileEnvelope:
-    """The envelope of SGDP's lines about ANVIL_T2T_CHRY's SGDP genomes, keyed by an identifier.
-
-    Its ``source_version`` is the file's sha256, since SGDP publishes no version of it, and ``fetched_at`` when
-    it was read.
-    """
+def envelope(
+    source: EvidenceFileSource, source_type: str, version: str, key: str, catalog: str, fetched_at: datetime
+) -> EvidenceFileEnvelope:
+    """The envelope of one file of lines about ANVIL_T2T_CHRY's SGDP genomes, keyed by an identifier."""
     return EvidenceFileEnvelope(
-        source=EvidenceFileSource(repository=SOURCE, table=TABLE, url=URL),
-        source_type=ImporterSourceTypeEnum(SOURCE_EXTERNAL_GROUND_TRUTH),
-        source_version=SHA256,
-        source_key=SGDP_ID,
+        source=source,
+        source_type=ImporterSourceTypeEnum(source_type),
+        source_version=version,
+        source_key=key,
         target=EvidenceTarget(system=REPOSITORY, dataset=DATASET, version=catalog),
         target_key=JoinKeyEnum(JOIN_KEY_ENTITY_IDENTIFIER),
-        fetched_at=read_at.isoformat(),
+        fetched_at=fetched_at.isoformat(),
     )
 
 
@@ -241,44 +246,65 @@ def import_sgdp(
     manifest_root: Path,
     catalog: str,
     entity_root: Path,
+    service: str,
     read: Fetch = fetch,
     generation: str | None = None,
 ) -> Import:
-    """Write one generation of SGDP's lines for the samples both sides agree on, and the file as read beside them.
+    """Write one generation for the samples both sides agree on: each T2T_CHRY table's links, SGDP's lines, and the
+    file as read beside them.
 
-    Raises, writing nothing, where T2T_CHRY's verbatim manifest cannot be read or no sample is confirmed: an
-    evidence file with no lines is refused by reconcile (contract 5.3), and no generation would leave an older
-    one current.
+    A T2T_CHRY file's source is the table, its url ``service`` (the Azul service the manifest came from), its
+    ``fetched_at`` the verbatim manifest's request time; SGDP's file's version is its sha256, since SGDP
+    publishes none, and its ``fetched_at`` when it was downloaded. Raises, writing nothing, where T2T_CHRY's
+    verbatim manifest cannot be read or has no request time, or no sample is confirmed: an evidence file with no
+    lines is refused by reconcile (contract 5.3), and no generation would leave an older one current.
     """
     manifest = verbatim_manifest(manifest_root, catalog, DATASET, sidecar_datasets(manifest_root, catalog))
     if isinstance(manifest, str):
         raise ValueError(manifest)
+    requested_at = sidecar_requested_at(manifest_root, catalog, DATASET, FORMAT_VERBATIM)
+    if requested_at is None:
+        raise ValueError(f"{DATASET}: the {catalog} sidecar records no {FORMAT_VERBATIM} requested_at")
     t2t = t2t_rows(manifest)
     got = read()
     sgdp = sgdp_rows(got.content)
     result = Import(generation_dir(entity_root, SOURCE, catalog, DATASET, generation or new_generation()))
-    confirmed: list[tuple[T2tRow, str]] = []
+    confirmed: list[T2tRow] = []
     for sample in sorted(t2t):
         verdict = outcome(t2t[sample], sgdp)
         result.outcomes.setdefault(verdict, []).append(sample)
-        first = t2t[sample][0]
-        if verdict == CONFIRMED and first.sgdp_id is not None:
-            confirmed.append((first, first.sgdp_id))
+        if verdict == CONFIRMED:
+            confirmed.extend(t2t[sample])
     if not confirmed:
         counts = ", ".join(f"{verdict} {len(s):,}" for verdict, s in sorted(result.outcomes.items()))
         raise ValueError(f"{DATASET}: no SGDP sample confirmed ({counts or 'no SGDP rows'}); nothing written")
+    genomes = sorted({r.sgdp_id for r in confirmed if r.sgdp_id})
     with staged_generation(result.directory) as staging:
-        result.written = write_entity_file(
-            evidence_file_path(staging, TABLE), envelope(catalog, got.read_at), lines(confirmed, sgdp)
+        for table, identifier in SAMPLE_TABLES.items():
+            rows = [r for r in confirmed if r.table == table]
+            if not rows:
+                continue
+            source = EvidenceFileSource(repository=REPOSITORY, dataset=DATASET, table=table, url=service)
+            result.written[table] = write_entity_file(
+                evidence_file_path(staging, table),
+                envelope(source, SOURCE_REPOSITORY_METADATA, catalog, identifier, catalog, requested_at),
+                link_lines(rows),
+            )
+        source = EvidenceFileSource(repository=SOURCE, table=TABLE, url=URL)
+        result.written[TABLE] = write_entity_file(
+            evidence_file_path(staging, TABLE),
+            envelope(source, SOURCE_EXTERNAL_GROUND_TRUTH, SHA256, SGDP_ID, catalog, got.fetched_at),
+            donor_lines(genomes, sgdp),
         )
         (staging / KEPT_FILE).write_bytes(got.content)
     return result
 
 
 def describe(result: Import) -> list[str]:
-    """Where the import went, each outcome's count, and the samples of every outcome but ``confirmed``."""
+    """Where the import went, each file's lines, each outcome's count, and the samples of every outcome but ``confirmed``."""
     total = sum(len(s) for s in result.outcomes.values())
-    out = [f"{DATASET} -> {result.directory} ({total:,} SGDP samples, {result.written:,} lines)"]
+    out = [f"{DATASET} -> {result.directory} ({total:,} SGDP samples)"]
+    out += [f"  {table}: {n:,} lines" for table, n in result.written.items()]
     for verdict in OUTCOMES:
         samples = result.outcomes.get(verdict, [])
         if not samples:

@@ -467,12 +467,14 @@ evidence}` entry — plus the controlled vocabulary:
     `reconcile` re-exports); `published` means show what the repository publishes, which is in the
     slot's evidence where AnVIL has a value (no AnVIL field holds a family).
     **ANVIL_T2T_CHRY's SGDP genomes** (#559) get their donors from SGDP's own metadata file,
-    `sgdp_entities` (`make import-sgdp-entities`, network, sha256-pinned, `external_ground_truth`
-    entity evidence under `data/entity_evidence/sgdp/`), written only for a sample whose SGDP sex and
-    T2T_CHRY karyotype agree (275 of 279; the rest are #718). Its lines are the two **identity links**
-    (`models.IDENTITY_LINK_FIELDS`): `collected_from` names a sample's donor, beside the identifier
-    rule's link, and `same_donor_as` names a donor's main identifier, so the record is keyed by
-    `coriell:HG01504` or `hgdp:HGDP01163` and lists SGDP's own `sgdp:S_Spanish-2` under `synonyms`.
+    `sgdp_entities` (`make import-sgdp-entities`, network, sha256-pinned, a generation under
+    `data/entity_evidence/sgdp/`), written only for a sample whose SGDP sex and T2T_CHRY karyotype agree
+    (275 of 279; the rest are #718), each line cited to its source: T2T_CHRY's tables' pairing as
+    `repository_metadata`, SGDP's facts as `external_ground_truth`. Its links are the two **identity
+    links** (`models.IDENTITY_LINK_FIELDS`): `collected_from` names a sample's donor, beside the
+    identifier rule's link, and `same_donor_as` names another identifier for a donor, followed to the end
+    of its chain, so the record is keyed by `coriell:HG01504` or `hgdp:HGDP01163` and lists SGDP's own
+    `sgdp:S_Spanish-2` under `synonyms`.
     No donor value is copied onto a file record.
   - **A producer is declared once**, in `producers.PRODUCERS` — the fourteen writers of a
     run's `*_classifications.json` files. Add one there, never to a second list:

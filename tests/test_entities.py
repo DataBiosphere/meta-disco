@@ -474,9 +474,13 @@ def envelope(
     target_key: str = JOIN_KEY_ENTITY_IDENTIFIER,
     source_type: str = SOURCE_REPOSITORY_METADATA,
     dataset: str | None = "D",
+    repository: str = "anvil",
+    table: str = "t",
 ) -> EvidenceFileEnvelope:
     return EvidenceFileEnvelope(
-        source=EvidenceFileSource(repository="anvil", dataset=dataset or "D", table="t", url="https://example.org"),
+        source=EvidenceFileSource(
+            repository=repository, dataset=dataset or "D", table=table, url="https://example.org"
+        ),
         source_type=ImporterSourceTypeEnum(source_type),
         source_version="anvil15",
         source_key="id",
@@ -606,10 +610,10 @@ def test_the_seeder_and_the_queue_read_the_entity_root_beside_the_slot_root(impo
 # --- reconcile -----------------------------------------------------------------------
 
 
-def settled(imported_root: Path, tmp_path: Path, sample_lists=()):
+def settled(imported_root: Path, tmp_path: Path, sample_lists=(), table: str = TABLE):
     paths, skipped = select_entity_evidence(imported_root, "anvil", CATALOG)
     rules = identifier_rules()
-    return reconcile_entities(gather(paths, imported_root, load(tmp_path, TABLE), rules), rules, sample_lists, skipped)
+    return reconcile_entities(gather(paths, imported_root, load(tmp_path, table), rules), rules, sample_lists, skipped)
 
 
 def by_id(records: list[dict]) -> dict[str, dict]:
