@@ -661,11 +661,12 @@ class TestFileTypeConfigs:
             "bed",
             "sample_map",
             "idat",
+            "fast5",
         }
 
     def test_a_registered_type_routes_as_its_registry_producer(self, tmp_path):
         """The pipeline does not route with a predicate of its own: it is one of the
-        thirteen producers, and asks the same question they all ask (#449)."""
+        fourteen producers, and asks the same question they all ask (#449)."""
         from meta_disco.file_types import FILE_TYPE_REGISTRY
         from meta_disco.producers import PRODUCERS
 

@@ -17,7 +17,7 @@ from .exclusions import MD5_RE, partition_records, write_excluded
 from .fetchers import FetchError
 from .file_name import FileName
 from .file_types import FileTypeConfig
-from .header_classifier import classify_without_content
+from .header_classifier import classify_from_name_only, classify_without_content
 from .inputs import load_envelope, load_records
 from .metadata_schema import (
     classification_blocking_reasons,
@@ -99,7 +99,7 @@ class RecordOutcome(NamedTuple):
     The three flags are mutually exclusive and only one, at most, is set:
     ``validation_failed`` (failed the input contract), ``was_cached`` (evidence already
     on disk), ``content_unreadable`` (fetch failed; the record is fully not_classified,
-    #293), or none of these (a fresh fetch). Named so the fields cannot be transposed
+    #293, or for a samples-only type keeps its answers from the name, #605), or none of these (a fresh fetch). Named so the fields cannot be transposed
     at the unpack sites.
     """
 
@@ -140,7 +140,9 @@ def _fetch_and_classify(
     * content unreadable  -> ``(all-not_classified classifications, True, None)``, when the
       fetcher raised ``FetchError``; the file stays in the output as a fully
       ``not_classified`` row rather than vanishing (#155), asserting nothing about
-      a file we could not read (#293).
+      a file we could not read (#293). A type that reads content only for samples
+      (``FileTypeConfig.reads_samples_only``, #605) keeps its answers from the name
+      instead, the failure noted on each ``not_classified`` dimension.
 
     A fetcher signals failure by raising ``FetchError``, not by returning ``None``.
     An exception the fetcher does not wrap (e.g. a missing-tool ``FileNotFoundError``)
@@ -169,6 +171,10 @@ def _fetch_and_classify(
             url=url,
         )
     except FetchError as e:
+        if config.reads_samples_only:
+            print(f"Content unreadable, classified from the name only — {file_name or md5sum}: {e.reason}")
+            named = config.classifier(None, name=name, file_size=file_size, file_format=file_format)
+            return classify_from_name_only(named, e.reason), True, None
         print(f"Content unreadable, classified as nothing — {file_name or md5sum}: {e.reason}")
         return classify_without_content(e.reason), True, None
 

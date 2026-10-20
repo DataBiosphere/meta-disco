@@ -1,7 +1,7 @@
 """File type configurations for the classification pipeline.
 
 Each config defines extensions, fetcher, classifier, and summary printer for one file
-type. They are used by ClassifyPipeline and classify_headers.py, and are the nine header
+type. They are used by ClassifyPipeline and classify_headers.py, and are the ten header
 entries in the producer registry (``producers``).
 
 ``FileTypeConfig`` is declared here rather than in ``pipeline`` so that ``pipeline`` can
@@ -17,6 +17,7 @@ from .cohort_steps import SAMPLE_MAP_SUFFIX, SampleMapSteps, TarSteps, parse_sam
 from .fetchers import (
     fetch_bam_header,
     fetch_bed_signals,
+    fetch_fast5_header,
     fetch_fasta_headers,
     fetch_fastq_reads,
     fetch_gfa_segment_tags,
@@ -29,6 +30,7 @@ from .fetchers import (
 from .header_classifier import (
     GRAPH_TEXT_EXTENSIONS,
     classify_from_bed_signals,
+    classify_from_fast5_header,
     classify_from_fasta_header,
     classify_from_fastq_header,
     classify_from_gfa_segment_tags,
@@ -41,7 +43,7 @@ from .header_classifier import (
     workspace_header_member,
 )
 from .producer_steps import HeaderSteps
-from .sample_identity import BAM_SAMPLES, SAMPLE_MAP_SAMPLES, VCF_SAMPLES, SampleReader
+from .sample_identity import BAM_SAMPLES, FAST5_SAMPLES, SAMPLE_MAP_SAMPLES, VCF_SAMPLES, SampleReader
 from .summaries import print_bam_summary, print_fastq_summary, print_vcf_summary
 from .validators.header_extractors import parse_vcf_head
 
@@ -85,10 +87,15 @@ class FileTypeConfig:
     # The samples a file's own content names (#357; a header, a sample map's rows, #668), read from the parse (or the payload, for a
     # type without a ``parser``). None means the type reads no samples.
     samples: SampleReader | None = None
+    # The content is read only for ``samples``, the dimensions coming from the name (#605): a
+    # failed read keeps the classifier's answers from the name, rather than none.
+    reads_samples_only: bool = False
 
     def __post_init__(self):
         if self.step is not None and self.parser is None:
             raise ValueError(f"file type {self.name!r} reads a step but declares no parser to read it from")
+        if self.reads_samples_only and self.samples is None:
+            raise ValueError(f"file type {self.name!r} reads content only for samples but declares no sample reader")
 
 
 BAM_CONFIG = FileTypeConfig(
@@ -202,6 +209,17 @@ IDAT_CONFIG = FileTypeConfig(
     classifier=classify_from_idat_header,
 )
 
+# Nanopore FAST5 (#605): the rule engine gives the dimensions from the name, as the auxiliary
+# producer did (`nanopore_fast5`); the first 64 KiB are read for the run's sample_id, the file's sample.
+FAST5_CONFIG = FileTypeConfig(
+    name="fast5",
+    extensions=(".fast5",),
+    fetcher=fetch_fast5_header,
+    classifier=classify_from_fast5_header,
+    samples=FAST5_SAMPLES,
+    reads_samples_only=True,
+)
+
 FILE_TYPE_REGISTRY = {
     "bam": BAM_CONFIG,
     "vcf": VCF_CONFIG,
@@ -212,4 +230,5 @@ FILE_TYPE_REGISTRY = {
     "bed": BED_CONFIG,
     "sample_map": SAMPLE_MAP_CONFIG,
     "idat": IDAT_CONFIG,
+    "fast5": FAST5_CONFIG,
 }

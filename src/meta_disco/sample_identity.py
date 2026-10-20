@@ -30,6 +30,7 @@ from typing import Any, Literal
 import yaml
 
 from . import code_rules
+from .evidence import Fast5Header
 from .models import DONOR_REPOSITORY_ID, SAMPLE_REPOSITORY_ID
 from .schema.classification_model import IdentifierRule, IdentifierRules
 from .slot_map import unique_key_loader
@@ -404,6 +405,17 @@ def _sample_column_strings(header: VCFHeader) -> tuple[str, ...] | None:
     return header.sample_columns
 
 
+# A FAST5 head naming several sample_ids, which a one-run file should not hold (#605): no rule recognises it.
+SEVERAL_SAMPLE_IDS = "(a FAST5 head naming several sample_id values)"
+
+
+def _fast5_strings(header: Fast5Header) -> list[str] | None:
+    """The head's ``sample_id``; with :data:`SEVERAL_SAMPLE_IDS` beside them where it holds several; None where it holds none."""
+    if not header.sample_ids:
+        return None
+    return header.sample_ids if len(header.sample_ids) == 1 else [*header.sample_ids, SEVERAL_SAMPLE_IDS]
+
+
 def _sample_map_strings(rows: Sequence[tuple[str, str]] | None) -> list[str]:
     """Each row's sample name; none for a file that is not a map (``cohort_steps.parse_sample_map``'s None)."""
     return [sample for sample, _ in rows or ()]
@@ -412,4 +424,5 @@ def _sample_map_strings(rows: Sequence[tuple[str, str]] | None) -> list[str]:
 BAM_SAMPLES = SampleReader(code_rules.BAM_READ_GROUP_SAMPLES, _read_group_strings)
 VCF_SAMPLES = SampleReader(code_rules.VCF_SAMPLE_COLUMNS, _sample_column_strings)
 SAMPLE_MAP_SAMPLES = SampleReader(code_rules.SAMPLE_MAP_ROWS, _sample_map_strings)
+FAST5_SAMPLES = SampleReader(code_rules.FAST5_TRACKING_SAMPLE, _fast5_strings)
 EXTERNAL_SAMPLE_MAP_SAMPLES = SampleReader(code_rules.EXTERNAL_SAMPLE_MAP_ROWS, _sample_map_strings)

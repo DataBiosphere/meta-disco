@@ -13,6 +13,8 @@ reason                  row in a ``*_classifications.json``  where this reads it
 no checksum             no — excluded (#376)                ``excluded_files.json``
 input-contract          yes, all dimensions not_classified  evidence ``rule_id``
 content unreadable      yes, all dimensions not_classified  evidence ``rule_id``
+                        (a samples-only type: the name's
+                        answers, #605)
 ======================  ==================================  =========================
 
 The excluded files are listed individually and the other two only counted per dataset
@@ -24,8 +26,9 @@ run's own output.
 Both row-backed reasons are detected by the ``rule_id`` their producer stamps on the
 evidence — ``metadata_schema.VALIDATION_RULE_ID`` and
 ``header_classifier.FETCH_FAILED_RULE_ID`` — not by the shape of the classifications
-they produce. The two produce the *same* all-not_classified shape, so shape could not
-tell them apart, and a third producer of that shape would be misattributed.
+they produce. The two produce the *same* all-not_classified shape (but for a samples-only
+type's fetch failure, which keeps its name's answers and marks the rest, #605), so shape
+could not tell them apart, and a third producer of that shape would be misattributed.
 """
 
 from __future__ import annotations
@@ -97,9 +100,13 @@ CONTENT_UNREADABLE = Reason(
     explanation=(
         "The record passed the contract, but its content could not be read — a 404 from the "
         "mirror, a DNS or connection failure, a timeout. Nothing is asserted about a file we "
-        "could not read, not even what the filename alone would support."
+        "could not read, not even what the filename alone would support, except for a type "
+        "whose content is read only for its samples (a nanopore FAST5), which keeps what its "
+        "name gives."
     ),
-    row_exists="A row exists in the run's output, with the fetch failure as each dimension's evidence.",
+    row_exists=(
+        "A row exists in the run's output, with the fetch failure as each not_classified dimension's evidence."
+    ),
 )
 
 # The reasons whose files still have a row in the run's classification output, and are
@@ -183,10 +190,9 @@ def _reason_for(record: dict) -> Reason | None:
     Reads the evidence ``rule_id`` on the classification fields, through
     ``models.field_evidence`` — the same layout normalization every other reader of a
     classification record uses, so this report sees a record's evidence wherever the
-    other readers would. Both producers stamp the same rule_id on every one of the
-    dimensions, so the first field carrying a recognized id settles it; scanning them
-    all rather than assuming a fixed field keeps this correct if a producer ever marks
-    a subset.
+    other readers would. A producer stamps its rule_id on every dimension, or for a
+    samples-only type's fetch failure on each not_classified one (#605), so the first
+    field carrying a recognized id settles it; scanning them all keeps that correct.
     """
     for dimension in CLASSIFICATION_FIELDS:
         for item in field_evidence(record, dimension):

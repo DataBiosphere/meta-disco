@@ -64,7 +64,7 @@ class TestTheNameDecidesBeforeTheFormat:
 
     def test_the_format_is_used_when_no_producer_claims_the_name(self):
         record = valid_record(file_name="HG02148_1.unknown", file_format=".fast5")
-        assert producer_of(record) is PRODUCERS["auxiliary"]
+        assert producer_of(record) is PRODUCERS["fast5"]
 
     def test_a_record_claimed_by_neither_is_the_catch_alls(self):
         assert producer_of(valid_record(file_name="notes.xyz", file_format=".xyz")) is None
@@ -86,6 +86,7 @@ class TestATarOfFast5sIsATar:
 
     def test_the_auxiliary_producer_writes_no_row_for_it(self, tmp_path):
         assert run_producer(classify_auxiliary_genomic, tmp_path, [_fast5_tar_record()]) == []
+        assert not PRODUCERS["fast5"].claims(_fast5_tar_record())
 
     @pytest.mark.parametrize(
         "file_name, file_format",
@@ -102,17 +103,17 @@ class TestATarOfFast5sIsATar:
         name is how one file gets two rows with no shared extension to detect."""
         records = [_fast5_tar_record(file_name=file_name, file_format=file_format)]
         assert run_producer(classify_auxiliary_genomic, tmp_path, records) == []
+        assert not PRODUCERS["fast5"].claims(records[0])
 
     @pytest.mark.parametrize(
         "file_name",
         ["HG02148_1.fast5", "HG02148_1.fast5.tar.xz"],
         ids=["unwrapped", "tar under another compression"],
     )
-    def test_what_the_tar_type_does_not_claim_stays_here(self, tmp_path, file_name):
-        """The handover goes exactly as far as `TAR_CONFIG`. A `.tar.xz` is claimed by no
-        type, so giving it up would send it to the catch-all for nothing."""
-        rows = run_producer(classify_auxiliary_genomic, tmp_path, [_fast5_tar_record(file_name, ".fast5")])
-        assert [r["file_name"] for r in rows] == [file_name]
+    def test_what_the_tar_type_does_not_claim_is_the_fast5_types(self, file_name):
+        """The handover goes exactly as far as `TAR_CONFIG`. A `.tar.xz` is claimed by no type on its
+        name, so its declared `.fast5` routes it to the fast5 type (#605), not the catch-all."""
+        assert producer_of(_fast5_tar_record(file_name, ".fast5")) is PRODUCERS["fast5"]
 
     @pytest.mark.parametrize(
         "file_name, file_format",

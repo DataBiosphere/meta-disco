@@ -1,4 +1,4 @@
-.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-sample_map classify-idat classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published check-lineage-map import-anvil-lineage check-entity-map import-anvil-entities import-ena-evidence check-ena-lineage-map import-ena-lineage fetch-external-files check-external-files import-external-lineage seed-activity-map seed-value-map review-queue corpus-diff reconcile reconcile-report rules-report all-reports download-hprc validate-hprc clean help
+.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-sample_map classify-idat classify-fast5 classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published check-lineage-map import-anvil-lineage check-entity-map import-anvil-entities import-ena-evidence check-ena-lineage-map import-ena-lineage fetch-external-files check-external-files import-external-lineage seed-activity-map seed-value-map review-queue corpus-diff reconcile reconcile-report rules-report all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -25,6 +25,7 @@ help:
 	@echo "  make classify-bed       Classify BED files"
 	@echo "  make classify-sample_map  Read GATK sample maps' cohort steps (network required)"
 	@echo "  make classify-idat      Classify Illumina IDATs from their headers (network required)"
+	@echo "  make classify-fast5     Read nanopore FAST5s' samples from their heads (network required)"
 	@echo "  make classify-hprc      Classify HPRC catalog files (network required)"
 	@echo "  make coverage-report    Generate the coverage report from a run (RUN_DIR=, default the latest)"
 	@echo "  make consistency-report Check a run's records for internal consistency (RUN_DIR=, default the latest)"
@@ -192,7 +193,7 @@ validate-metadata:
 RUN_DIR_ARG = $(if $(RUN_DIR),--run-dir $(RUN_DIR))
 
 classify-headers:
-	$(MAKE) classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-sample_map classify-idat \
+	$(MAKE) classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-sample_map classify-idat classify-fast5 \
 		RUN_DIR="output/anvil/partials/$$(date +%Y%m%d_%H%M%S)"
 
 classify-bam:
@@ -221,6 +222,9 @@ classify-sample_map:
 
 classify-idat:
 	uv run python scripts/classify_headers.py --type idat $(RUN_DIR_ARG) -w 10
+
+classify-fast5:
+	uv run python scripts/classify_headers.py --type fast5 $(RUN_DIR_ARG) -w 10
 
 consistency-report:
 	uv run python scripts/check_consistency.py $(RUN_DIR_ARG)

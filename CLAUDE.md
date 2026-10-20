@@ -369,10 +369,10 @@ evidence}` entry — plus the controlled vocabulary:
     deployment's: output and the header cache stay prod's paths until #480/#479.
   - **Every producer builds `records.OutputRecord`** (#450) — the pipeline through
     `from_work_item`, the four standalone producers through `from_record`. A per-record
-    field added there reaches all thirteen outputs; one wired into a producer does not.
+    field added there reaches all fourteen outputs; one wired into a producer does not.
     That is why the per-producer sweeps for the catalog identity (#433), and formerly
     for the `published` block (#424, deleted by #513), are gone: `test_output_shape`
-    pins the record's key set across all thirteen instead.
+    pins the record's key set across all fourteen instead.
     Add a new standalone producer to `STANDALONE_PRODUCERS` in `tests/producer_sweep`
     and that test picks it up.
   - **Output records carry no `dataset_id`** (#450). It is an input-contract slot and
@@ -416,8 +416,9 @@ evidence}` entry — plus the controlled vocabulary:
     its sorted members, each an `EntityIdentifier`. A string is a sample only through
     `rules/sample_namespaces.yaml` (`sample_identity`), which also declares the one rewrite
     (`GM` → `NA`, same number); a string no rule recognises is counted, never guessed.
-    Inference reads it from the file's own content, a header or a sample map's rows
-    (`FileTypeConfig.samples`, its readers among `code_rules.SAMPLE_RULES`), all of its strings or none, and each producer file holds its lists under
+    Inference reads it from the file's own content, a header, a sample map's rows or a nanopore
+    FAST5's `sample_id` (`fast5`, #605: found by name in the first 64 KiB, its attribute
+    message parsed whole) (`FileTypeConfig.samples`, its readers among `code_rules.SAMPLE_RULES`), all of its strings or none, and each producer file holds its lists under
     `sample_lists`. A submitter table states it through the slot map, one cell per column
     (`samples` is the one non-dimension in `models.EVIDENCE_FIELDS`, never translated by the
     value map), and `make check-slot-map` refuses a column whose files' names mostly name
@@ -463,7 +464,7 @@ evidence}` entry — plus the controlled vocabulary:
     `reconcile` re-exports); `published` means show what the repository publishes, which is in the
     slot's evidence where AnVIL has a value (no AnVIL field holds a family).
     No donor value is copied onto a file record.
-  - **A producer is declared once**, in `producers.PRODUCERS` — the thirteen writers of a
+  - **A producer is declared once**, in `producers.PRODUCERS` — the fourteen writers of a
     run's `*_classifications.json` files. Add one there, never to a second list:
     `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,
     and the three hand-maintained lists they replaced are what let a registered type

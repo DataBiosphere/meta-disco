@@ -534,6 +534,193 @@
       }
     ]
   },
+  "fast5": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "credited_to": "not_classified",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for assay_type",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "data_modality": {
+            "credited_to": "not_classified",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for data_modality",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "data_type": {
+            "credited_to": "filled_by_inference",
+            "evidence": [
+              {
+                "reason": "FAST5 files contain raw Oxford Nanopore electrical signal data. Reference not applicable until basecalling/alignment",
+                "rule_id": "nanopore_fast5",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "raw_signal"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "raw_signal"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "raw_signal"
+          },
+          "instrument_model": {
+            "credited_to": "not_classified",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for instrument_model",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "platform": {
+            "credited_to": "conflict_sources",
+            "evidence": [
+              {
+                "reason": "FAST5 files contain raw Oxford Nanopore electrical signal data. Reference not applicable until basecalling/alignment",
+                "rule_id": "nanopore_fast5",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "ONT"
+              },
+              {
+                "join_key": "drs_uri",
+                "match_exact": true,
+                "raw_value": "PacBio",
+                "rule_id": "platform.golden",
+                "source": {
+                  "column": "platform",
+                  "dataset": "AnVIL_GOLDEN",
+                  "name": "anvil",
+                  "table": "sequencing"
+                },
+                "source_type": "repository_metadata",
+                "value": "PACBIO"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "ONT"
+            },
+            "status": "conflict",
+            "use": "published",
+            "value": null
+          },
+          "reference_assembly": {
+            "credited_to": "not_applicable",
+            "evidence": [
+              {
+                "reason": "FAST5 files contain raw Oxford Nanopore electrical signal data. Reference not applicable until basecalling/alignment",
+                "rule_id": "nanopore_fast5",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          },
+          "variant_kind": {
+            "credited_to": "not_applicable",
+            "evidence": [
+              {
+                "reason": "FAST5 files contain raw Oxford Nanopore electrical signal data. Reference not applicable until basecalling/alignment",
+                "rule_id": "nanopore_fast5",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          },
+          "variant_origin": {
+            "credited_to": "not_applicable",
+            "evidence": [
+              {
+                "reason": "FAST5 files contain raw Oxford Nanopore electrical signal data. Reference not applicable until basecalling/alignment",
+                "rule_id": "nanopore_fast5",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "drs_uri": "drs://golden/v2_g-object-ac",
+        "entry_id": "g-fast5-1",
+        "file_format": ".fast5",
+        "file_id": "g-file-ac",
+        "file_name": "PAK57726_28c8475f_fcf1fc64_1284.fast5",
+        "file_size": 179936569,
+        "generated_by": null,
+        "md5sum": "acacacacacacacacacacacacacacacac",
+        "samples": {
+          "count": 1,
+          "list_id": "e8c2b1bd1242443c",
+          "named_by": [
+            {
+              "rule_id": "fast5_tracking_sample",
+              "source_type": "content_read"
+            }
+          ]
+        }
+      }
+    ]
+  },
   "fasta": {
     "classifications": [
       {

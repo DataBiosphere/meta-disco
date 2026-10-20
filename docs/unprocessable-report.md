@@ -1,6 +1,6 @@
 # Unprocessable files
 
-What run `output/anvil/20261019_084533` could not classify, and why (#376).
+What run `output/anvil/20261019_225524` could not classify, and why (#376).
 
 ## Summary
 
@@ -33,9 +33,9 @@ None in this run (708,088 classification records read).
 
 ### Content unreadable
 
-The record passed the contract, but its content could not be read — a 404 from the mirror, a DNS or connection failure, a timeout. Nothing is asserted about a file we could not read, not even what the filename alone would support.
+The record passed the contract, but its content could not be read — a 404 from the mirror, a DNS or connection failure, a timeout. Nothing is asserted about a file we could not read, not even what the filename alone would support, except for a type whose content is read only for its samples (a nanopore FAST5), which keeps what its name gives.
 
-A row exists in the run's output, with the fetch failure as each dimension's evidence.
+A row exists in the run's output, with the fetch failure as each not_classified dimension's evidence.
 
 **23 file(s)** across 1 dataset(s), counted per dataset with up to 5 example(s) each.
 

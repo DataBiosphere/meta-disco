@@ -805,6 +805,19 @@ SAMPLE_MAP_ROWS = SampleRule(
         "lists; one with a name no identifier rule recognises names none."
     ),
 )
+FAST5_TRACKING_SAMPLE = SampleRule(
+    id="fast5_tracking_sample",
+    module=SAMPLE_IDENTITY,
+    source_type=SOURCE_CONTENT_READ,
+    reads="a nanopore FAST5's first 64 KiB: each attribute named sample_id (MinKNOW writes it in tracking_id)",
+    rationale=(
+        "MinKNOW writes one sequencing run's reads to a FAST5, and records the sample the run "
+        "sequenced as every read's tracking_id sample_id; the one NIA_CARD file read whole stores it "
+        "once, shared by its 4,000 reads (#605). A head holding one recognised value names the file's sample; one holding "
+        "none, an unrecognised value or two or more values names none. The attribute is found by its name and "
+        "its message parsed whole, not reached by walking the file, which would read about 7.5 MB."
+    ),
+)
 SAMPLES_INHERITED_FROM_PARENT = SampleRule(
     id="samples_inherited_from_parent",
     module=RECONCILE_SAMPLES,
@@ -840,6 +853,7 @@ SAMPLE_RULES = (
     BAM_READ_GROUP_SAMPLES,
     VCF_SAMPLE_COLUMNS,
     SAMPLE_MAP_ROWS,
+    FAST5_TRACKING_SAMPLE,
     SAMPLES_INHERITED_FROM_PARENT,
     EXTERNAL_SAMPLE_MAP_ROWS,
 )
@@ -876,7 +890,10 @@ ENTITY_RULES = (FAMILY_ID_AS_WRITTEN, ANATOMICAL_SITE_AS_WRITTEN)
 FETCH_FAILED = CodeMarker(
     id="fetch_failed",
     module=HEADER_CLASSIFIER,
-    meaning="The file's content could not be read, so every dimension is not_classified (#293).",
+    meaning=(
+        "The file's content could not be read, so every dimension is not_classified (#293); a type that "
+        "reads content only for samples keeps its answers from the name, the marker on the rest (#605)."
+    ),
 )
 INPUT_VALIDATION = CodeMarker(
     id="input_validation",
