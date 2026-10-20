@@ -99,7 +99,7 @@ class RecordOutcome(NamedTuple):
     The three flags are mutually exclusive and only one, at most, is set:
     ``validation_failed`` (failed the input contract), ``was_cached`` (evidence already
     on disk), ``content_unreadable`` (fetch failed; the record is fully not_classified,
-    #293), or none of these (a fresh fetch). Named so the fields cannot be transposed
+    #293, or for a samples-only type keeps its answers from the name, #605), or none of these (a fresh fetch). Named so the fields cannot be transposed
     at the unpack sites.
     """
 

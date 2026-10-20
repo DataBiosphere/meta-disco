@@ -94,6 +94,8 @@ class FileTypeConfig:
     def __post_init__(self):
         if self.step is not None and self.parser is None:
             raise ValueError(f"file type {self.name!r} reads a step but declares no parser to read it from")
+        if self.reads_samples_only and self.samples is None:
+            raise ValueError(f"file type {self.name!r} reads content only for samples but declares no sample reader")
 
 
 BAM_CONFIG = FileTypeConfig(

@@ -53,16 +53,22 @@ def _attribute(
     datatype_version: int = 1,
     rank: int = 0,
     kind: int = fast5.ATTRIBUTE_MESSAGE,
+    bits: int = 0,
+    datatype_length: int = 8,
+    dataspace_version: int = 1,
 ) -> bytes:
-    """An attribute message, its object-header prefix included, laid out as NIA_CARD's are."""
+    """An attribute message, its object-header prefix included, laid out as NIA_CARD's are.
+
+    ``datatype_length`` past 8 adds that many bytes of datatype properties, padded to 8 as HDF5 pads them."""
     raw_name = name.encode() + b"\x00"
     raw_value = value.encode() + b"\x00"
     size = (len(raw_value) + 7) // 8 * 8
+    datatype = struct.pack("<B3sI", datatype_version << 4 | datatype_class, bytes([bits, 0, 0]), size)
     body = (
-        struct.pack("<BxHHH", version, len(raw_name), 8, 8)
+        struct.pack("<BxHHH", version, len(raw_name), datatype_length, 8)
         + raw_name.ljust((len(raw_name) + 7) // 8 * 8, b"\x00")
-        + struct.pack("<B3sI", datatype_version << 4 | datatype_class, b"\x00\x00\x00", size)
-        + struct.pack("<BBB5x", 1, rank, 0)
+        + datatype.ljust((max(datatype_length, 8) + 7) // 8 * 8, b"\x00")
+        + struct.pack("<BBB5x", dataspace_version, rank, 0)
         + raw_value.ljust(size, b"\x00")
     )
     return struct.pack("<HHB3x", kind, len(body), 0) + body
@@ -122,6 +128,12 @@ def test_the_name_outside_a_sample_id_attribute_message_is_skipped(stray):
             _fast5(_attribute("sample_id", "HG02723", datatype_version=2)), "version 2", id="datatype version"
         ),
         pytest.param(_fast5(_attribute("sample_id", "HG02723", rank=1)), "rank 1", id="not a scalar"),
+        pytest.param(
+            _fast5(_attribute("sample_id", "HG02723", dataspace_version=2)),
+            "dataspace version 2",
+            id="dataspace version",
+        ),
+        pytest.param(_fast5(_attribute("sample_id", "HG02723", datatype_length=4)), "cut short", id="datatype short"),
     ],
 )
 def test_bytes_this_reader_does_not_read_are_refused(blob, match):
@@ -129,8 +141,13 @@ def test_bytes_this_reader_does_not_read_are_refused(blob, match):
         sample_ids(blob)
 
 
-def test_a_message_running_past_the_bytes_read_is_unread_not_refused():
-    head = fast5.SIGNATURE + b"\x00" * 64 + REAL_MESSAGE
+@pytest.mark.parametrize(
+    "message",
+    [REAL_MESSAGE, _attribute("sample_id", "HG02723", version=3)],
+    ids=["version 1", "a version this reader refuses"],
+)
+def test_a_message_running_past_the_bytes_read_is_unread_not_refused(message):
+    head = fast5.SIGNATURE + b"\x00" * 64 + message
     assert sample_ids(head[:-4]) == [] and sample_ids(head[:-20]) == []
 
 
@@ -153,6 +170,7 @@ def _padded_value(padding: int, value: bytes) -> bytes:
     "padding, value, read",
     [
         pytest.param(fast5.NULL_TERM, b"HG02723\x00", "HG02723", id="null-terminated"),
+        pytest.param(fast5.NULL_TERM, b"HG027\x00zz", "HG027", id="null-terminated with bytes after"),
         pytest.param(fast5.NULL_PAD, b"HG027\x00\x00\x00", "HG027", id="null-padded"),
         pytest.param(fast5.NULL_PAD, b"HG027\x00ab", "HG027\x00ab", id="null-padded with a NUL inside"),
         pytest.param(fast5.SPACE_PAD, b"HG02723 ", "HG02723", id="space-padded"),
@@ -160,6 +178,27 @@ def _padded_value(padding: int, value: bytes) -> bytes:
 )
 def test_each_padding_type_ends_the_value_where_hdf5_says(padding, value, read):
     assert sample_ids(_padded_value(padding, value)) == [read]
+
+
+def test_a_datatype_longer_than_8_bytes_is_padded_to_8():
+    assert sample_ids(_fast5(_attribute("sample_id", "HG02723", datatype_length=12))) == ["HG02723"]
+
+
+def test_a_dataspace_declared_too_short_is_refused():
+    message = bytearray(REAL_MESSAGE)
+    struct.pack_into("<H", message, 14, 4)  # the attribute message's dataspace length
+    with pytest.raises(Fast5Error, match="cut short"):
+        sample_ids(_fast5(bytes(message)))
+
+
+def test_a_utf8_value_is_read_with_its_charset_bits_set():
+    """The padding type is the low nibble of the class bits; the charset (UTF-8 = 1) is the high one."""
+    message = _attribute("sample_id", "HG0272é", bits=1 << 4 | fast5.NULL_PAD)
+    assert sample_ids(_fast5(message)) == ["HG0272é"]
+
+
+def test_the_name_just_after_the_signature_has_no_room_for_a_header():
+    assert sample_ids(fast5.SIGNATURE + b"sample_id\x00" + b"\x00" * 64) == []
 
 
 def test_an_unknown_padding_type_is_refused():
@@ -197,6 +236,7 @@ def test_the_fetcher_reads_and_caches_the_header(monkeypatch, tmp_path):
 def test_a_cached_header_of_the_wrong_type_is_a_cache_miss():
     assert Fast5Evidence.from_json({"md5sum": MD5, "header": {"sample_ids": "HG02723"}}) is None
     assert Fast5Evidence.from_json({"md5sum": MD5, "header": {}}) is None
+    assert Fast5Evidence.from_json({"md5sum": MD5, "header": {"sample_ids": [1]}}) is None
 
 
 def test_bytes_that_are_no_fast5_are_a_fetch_error(monkeypatch, tmp_path):
@@ -272,6 +312,9 @@ def test_a_failed_read_keeps_what_the_name_gives_and_is_counted_unreadable(monke
     assert row["classifications"]["data_type"]["value"] == "raw_signal"
     assert row["classifications"]["reference_assembly"]["status"] == NOT_APPLICABLE
     assert reason_for(row) is CONTENT_UNREADABLE
+    slots = row["classifications"]
+    marked = {s for s, e in slots.items() if any(x.get("rule_id") == code_rules.FETCH_FAILED.id for x in e["evidence"])}
+    assert marked and marked == {s for s, e in slots.items() if e["status"] == "not_classified"}
     envelope = json.loads((tmp_path / "out.json").read_text())
     assert envelope["metadata"]["content_unreadable"] == 1
 

@@ -410,7 +410,7 @@ SEVERAL_SAMPLE_IDS = "(a FAST5 head naming several sample_id values)"
 
 
 def _fast5_strings(header: Fast5Header) -> list[str] | None:
-    """The head's ``sample_id``; None where it holds none."""
+    """The head's ``sample_id``; with :data:`SEVERAL_SAMPLE_IDS` beside them where it holds several; None where it holds none."""
     if not header.sample_ids:
         return None
     return header.sample_ids if len(header.sample_ids) == 1 else [*header.sample_ids, SEVERAL_SAMPLE_IDS]

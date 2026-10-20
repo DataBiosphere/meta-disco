@@ -81,11 +81,11 @@ def _attribute_value(head: bytes, at: int) -> str | None:
     )
     if kind != ATTRIBUTE_MESSAGE or name_length != len(_NAME):
         return None
-    if version != 1:
-        raise Fast5Error(f"a {SAMPLE_ID} attribute message of version {version}; only version 1 is read")
     message_end = start + _MESSAGE_PREFIX.size + body_length
     if message_end > len(head):
         return None
+    if version != 1:
+        raise Fast5Error(f"a {SAMPLE_ID} attribute message of version {version}; only version 1 is read")
     datatype = at + _padded(name_length)
     dataspace = datatype + _padded(datatype_length)
     data = dataspace + _padded(dataspace_length)

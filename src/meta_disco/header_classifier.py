@@ -596,7 +596,8 @@ FETCH_FAILED_RULE_ID = code_rules.FETCH_FAILED.id
 def classify_from_name_only(classifications: dict, reason: str) -> dict:
     """``classifications`` (a classifier's answers from the name) with the fetch failure ``reason``
     noted on each ``not_classified`` dimension, for a type that reads content only for samples (#605).
-    The note declares nothing; it is what the unprocessable report counts the file by."""
+    The note declares nothing; it is what the unprocessable report counts the file by, so a
+    type whose name leaves no dimension not_classified would be counted unreadable but not listed."""
     for entry in classifications.values():
         if isinstance(entry, dict) and entry.get("status") == NOT_CLASSIFIED:
             entry["evidence"].append({"rule_id": FETCH_FAILED_RULE_ID, "reason": reason})
