@@ -322,6 +322,7 @@ class TestTheEdge:
         assert output["unmatched_files"][0]["file_name"] == "orphan.bam.bai"
         assert output["unmatched_files"][0]["reason"] == NO_MATCHING_PARENT
         assert output["metadata"]["details"]["ambiguous_parent"] == 0
+        assert output["metadata"]["details"]["settled_by_folder"] == {}
 
     def test_ambiguous_parent_takes_no_parent_at_all(self, tmp_path):
         """Two files sharing the name an index points at: no parent is chosen (#438)."""
@@ -366,6 +367,7 @@ class TestTheEdge:
         assert output["unmatched_files"] == []
         parents = {r["entry_id"]: r["generated_by"]["inputs"][0]["parent_key"] for r in output["classifications"]}
         assert parents == {f"t{n}": _fid(f"{n}" * 32) for n in range(3)}
+        assert output["metadata"]["details"]["settled_by_folder"] == {"test": 3}
 
     def test_the_top_of_the_dataset_is_a_folder_too(self, tmp_path):
         records = [

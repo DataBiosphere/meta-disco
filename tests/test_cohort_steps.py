@@ -304,3 +304,30 @@ def test_the_tar_producer_writes_the_workspace_step(tmp_path):
 def test_the_edge_rules_are_declared_with_the_others():
     assert code_rules.MERGE_BY_WORKSPACE_HEADER in code_rules.EDGE_RULES
     assert code_rules.COHORT_BY_SAMPLE_MAP in code_rules.EDGE_RULES
+
+
+# --- the folder settling a shared name (#717) --------------------------------------------------
+
+
+def _in_folders(*entries) -> list[dict]:
+    """(file name, folder) records of dataset D, keyed f0, f1, …, each stored in its folder."""
+    return [
+        {"file_id": f"f{n}", "file_name": name, "dataset_id": "D", "file_path": f"{folder}/{name}"}
+        for n, (name, folder) in enumerate(entries)
+    ]
+
+
+def test_a_tar_takes_the_sample_map_of_that_name_in_its_own_folder():
+    reader = cs.TarSteps.for_run(_in_folders((MAP, "SGDP_CHM13v2"), (MAP, "SGDP_GRCh38")), KEY, EVIDENCE)
+    step, outcome = reader(tar_head(IMPORT), TAR, "D", "SGDP_GRCh38")
+    assert outcome == cs.STEPPED and step is not None
+    assert [i["parent_key"] for i in step["inputs"]] == ["f1"]
+    assert reader(tar_head(IMPORT), TAR, "D", "1KGP") == (None, cs.PARENT_AMBIGUOUS)
+
+
+def test_a_sample_map_takes_each_member_of_that_name_in_its_own_folder():
+    gvcfs = ("HG00096.chr1.hc.vcf.gz", "HG00097.chr1.hc.vcf.gz")
+    reader = cs.SampleMapSteps.for_run(_in_folders(*((g, f) for f in ("a", "b") for g in gvcfs)), KEY, EVIDENCE)
+    step, outcome = reader(cs.parse_sample_map(MAP_TEXT), MAP, "D", "b")
+    assert outcome == cs.STEPPED and step is not None
+    assert [i["parent_key"] for i in step["inputs"]] == ["f2", "f3"]

@@ -433,6 +433,19 @@ class TestManifestsAreRequestedByDatasetId:
         assert "'other'" in capsys.readouterr().err
         assert not dep.input_file.exists()
 
+    @pytest.mark.parametrize("source", [COMPACT, VERBATIM])
+    def test_a_manifest_of_the_declared_title_but_another_id_is_refused(self, tmp_path, source, capsys):
+        # The title agrees, so `derive_records`' title check passes; only the id refuses it.
+        dep = dataclasses.replace(fixture_deployment(tmp_path, ["ds"]), dataset_ids={"ds": dataset_id_of("other")})
+        session = session_for(tmp_path, {"other": 2})
+        session.datasets = {"ds": 2}
+        session.payloads = {
+            ("other", fmt): payload for (_, fmt), payload in session_for(tmp_path, {"ds": 2}).payloads.items()
+        }
+        assert download(dep, source, session) == 1
+        assert f"names dataset 'ds' ({dataset_id_of('ds')})" in capsys.readouterr().err
+        assert not dep.input_file.exists()
+
     def test_a_dataset_with_no_declared_id_is_refused_before_any_request(self, tmp_path, capsys):
         dep = dataclasses.replace(fixture_deployment(tmp_path, ["ds"]), dataset_ids={})
         session = session_for(tmp_path, {"ds": 2})

@@ -35,7 +35,7 @@ and stores the outputs under the same filename in different directories.
 Telling such files apart needs a path or a declared parent-child relationship. The
 input carries each file's storage path since #717, and an index sits beside the file it
 indexes: on the anvil15 input of 2026-10-21 the folder settles all 15,006 indexes
-declined before it (14,866 in ``ANVIL_T2T_CHRY``, 140 in ``ANVIL_T2T``). An input with
+declined as ambiguous before it (14,866 in ``ANVIL_T2T_CHRY``, 140 in ``ANVIL_T2T``). An input with
 no path, or a folder that holds no single carrier, still declines rather than guesses.
 The source tables' lineage also names a parent at reconcile: ``anvil_activity`` names
 one for every ``ANVIL_T2T_CHRY`` index declined here before #717, measured on anvil15 (#571).
@@ -306,6 +306,9 @@ def propagate_to_index_files(metadata_path: Path, output_path: Path):
     # extension says what they are, even when nothing says what they are of (#438).
     declined: list[tuple[dict, str, str]] = []
     stats = defaultdict(lambda: {"total": 0, "matched": 0, "unmatched": 0, "ambiguous": 0})
+    # Of the matched, those whose parent's name several files carry and the index's folder
+    # settled (#717), by dataset title: what the name alone would have declined.
+    settled_by_folder: defaultdict[str, int] = defaultdict(int)
 
     for ds, ds_files in by_dataset.items():
         for f in ds_files:
@@ -377,6 +380,8 @@ def propagate_to_index_files(metadata_path: Path, output_path: Path):
             # reaches the edge, which names the file as the catalog spells it (#455).
             stats[index_ext]["matched"] += 1
             matched.append((f, index_ext, parent_files[0]))
+            if len(edges.matches(files_by_folded_name, ds, candidate_tried, None)) > 1:
+                settled_by_folder[coerce_identity(f.get("dataset_title"))] += 1
 
     # Print stats
     print("\n" + "=" * 70)
@@ -474,6 +479,7 @@ def propagate_to_index_files(metadata_path: Path, output_path: Path):
                         "matched_to_parent": matched_all,
                         "unmatched": unmatched_all,
                         "ambiguous_parent": ambiguous_all,
+                        "settled_by_folder": dict(sorted(settled_by_folder.items())),
                     },
                 ).to_dict(),
                 "classifications": standard_results,

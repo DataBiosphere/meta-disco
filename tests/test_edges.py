@@ -18,6 +18,7 @@ from meta_disco.edges import (
     merge_steps,
     misfits,
 )
+from meta_disco.records import folder_of
 from tests.metadata_fixtures import valid_record
 from tests.producer_sweep import CATCH_ALL, run_producer
 
@@ -328,3 +329,12 @@ def test_a_record_s_own_folder_key_is_not_read_as_its_folder():
     a = {"file_name": "x.bam", "file_path": "a/x.bam", "folder": "b"}
     b = {"file_name": "x.bam", "file_path": "b/x.bam"}
     assert in_folder([a, b], "b") == [b]
+
+
+@pytest.mark.parametrize(
+    ("path", "folder"),
+    [("a/b/x.bam", "a/b"), ("a//b/x.bam", "a/b"), ("x.bam", ""), ("", None), (None, None)],
+    ids=["nested", "doubled-slash", "top-of-the-dataset", "empty", "no-path"],
+)
+def test_a_record_s_folder_is_its_path_less_the_name_normalised(path, folder):
+    assert folder_of({"file_path": path}) == folder

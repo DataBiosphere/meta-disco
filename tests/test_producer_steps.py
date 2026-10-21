@@ -644,3 +644,25 @@ def test_a_line_whose_contigs_are_not_relied_on_is_settled_by_the_folder(tmp_pat
     step, outcome = reader3(header(hc3, *CONTIGS), "HG00096.g.vcf.gz", "D", "b")
     assert outcome == ps.STEPPED and step is not None and step["inputs"][0]["parent_key"] == "f1"
     assert fetches == []
+
+
+def test_the_vcf_producer_hands_each_file_s_folder_to_the_step_reader(tmp_path, monkeypatch):
+    """Through the pipeline (#717): the work item's folder, from the input's `file_path`, settles a
+    name two alignments carry, on a line whose contigs are not relied on."""
+    gvcf = "HG04164.haplotypeCalls.er.raw.g.vcf.gz"
+    records: list[dict] = [
+        {"file_id": "a", "file_name": "HG04164.final.bam", "file_path": "a/HG04164.final.bam"},
+        {"file_id": "b", "file_name": "HG04164.final.bam", "file_path": "b/HG04164.final.bam"},
+        {"file_id": "v", "file_name": gvcf, "file_path": f"b/{gvcf}"},
+    ]
+    for n, record in enumerate(records):
+        record.update(dataset_id="D", dataset_title="T", file_md5sum=f"{n:032x}", file_size=1)
+        record["file_format"] = record["file_name"].split(".", 1)[1]
+    config = dataclasses.replace(
+        VCF_CONFIG, fetcher=lambda *_a, **_k: header_text(GATK3_HC), parser=parse_vcf_header, preflight=None
+    )
+    pipeline = ClassifyPipeline(
+        config, write_metadata(tmp_path / "in.json", records), tmp_path / "vcf.json", evidence_base=tmp_path / "ev"
+    )
+    [row] = [r for r in pipeline.run() if r["file_id"] == "v"]
+    assert row["generated_by"]["inputs"][0]["parent_key"] == "b"

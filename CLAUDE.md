@@ -379,8 +379,8 @@ evidence}` entry — plus the controlled vocabulary:
     of the input contract, read from `anvil_file.file_path` by every input source (Azul
     added it to both manifests by 2026-10-17; HPRC records have none). Its one use is a
     parent several files of the dataset carry by name: `edges.matches` keeps the one in
-    the child's own folder, for every name lookup (index, checksum, header and cohort
-    steps). It makes no claim, and no output record carries it.
+    the child's own folder, for every name lookup inference makes (index, checksum, header
+    and cohort steps; reconcile's external sample maps have no path). It makes no claim, and no output record carries it.
   - **Every producer builds `records.OutputRecord`** (#450) — the pipeline through
     `from_work_item`, the four standalone producers through `from_record`. A per-record
     field added there reaches all fourteen outputs; one wired into a producer does not.

@@ -30,7 +30,8 @@ each a dict keyed by TDR's column names. Two readers implement it:
   oracle, not the target — Azul's manifest is a product of Azul's index, and reading
   the snapshot is the path once runs happen in Terra. It presents TDR's shape by
   removing what Azul adds (:data:`AZUL_ADDED_COLUMNS`, :data:`AZUL_ADDED_FILE_COLUMNS`,
-  :data:`AZUL_ADDED_TABLES`). Both readers give ``anvil_file.file_path`` (#717).
+  :data:`AZUL_ADDED_TABLES`). Both readers give ``anvil_file.file_path`` where the
+  table or manifest has the column (#717).
 
 Which reader an input came through is recorded on the input's envelope as
 ``input_source`` (``azul_manifest.INPUT_SOURCES``), so nothing downstream infers it.
