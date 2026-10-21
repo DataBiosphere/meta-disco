@@ -333,8 +333,8 @@ def test_a_record_s_own_folder_key_is_not_read_as_its_folder():
 
 @pytest.mark.parametrize(
     ("path", "folder"),
-    [("a/b/x.bam", "a/b"), ("a//b/x.bam", "a/b"), ("x.bam", ""), ("", None), (None, None)],
-    ids=["nested", "doubled-slash", "top-of-the-dataset", "empty", "no-path"],
+    [("a/b/x.bam", "a/b"), ("a//b/x.bam", "a/b"), ("x.bam", ""), ("./x.bam", ""), ("", None), (None, None)],
+    ids=["nested", "doubled-slash", "top-of-the-dataset", "top-spelled-dot", "empty", "no-path"],
 )
 def test_a_record_s_folder_is_its_path_less_the_name_normalised(path, folder):
     assert folder_of({"file_path": path}) == folder

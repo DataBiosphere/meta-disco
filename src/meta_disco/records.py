@@ -145,9 +145,10 @@ def folder_of(record: dict) -> str | None:
     path = record.get("file_path")
     if not isinstance(path, str) or not path:
         return None
-    # Normalised so `a//b` is `a/b` (two ANVIL_HPRC paths have it); `normpath` makes "" ".", so not here.
-    folder = posixpath.dirname(path)
-    return sys.intern(posixpath.normpath(folder) if folder else "")
+    # Normalised so `a//b` is `a/b` (two ANVIL_HPRC paths have it) and `./x` is at the top, as `x` is:
+    # `normpath` spells the top ".", which is "" here.
+    folder = posixpath.normpath(posixpath.dirname(path))
+    return sys.intern("" if folder == "." else folder)
 
 
 @dataclass(frozen=True)
