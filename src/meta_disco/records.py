@@ -41,6 +41,8 @@ block (#205).
 
 from __future__ import annotations
 
+import posixpath
+import sys
 from dataclasses import dataclass, fields
 from typing import Any
 
@@ -134,6 +136,21 @@ def dataset_of(record: dict) -> Any:
     return record.get("dataset_id", UNKNOWN_DATASET)
 
 
+def folder_of(record: dict) -> str | None:
+    """The folder of an input record's storage path (``file_path``, #717), interned: ``""`` for a
+    file at the top of its dataset, None for a record with no path. What settles a parent several
+    files carry by name (``edges.matches``); interned because the corpus's 708,088 paths sit in
+    26,380 folders, so a run holds each once.
+    """
+    path = record.get("file_path")
+    if not isinstance(path, str) or not path:
+        return None
+    # Normalised so `a//b` is `a/b` (two ANVIL_HPRC paths have it) and `./x` is at the top, as `x` is:
+    # `normpath` spells the top ".", which is "" here.
+    folder = posixpath.normpath(posixpath.dirname(path))
+    return sys.intern("" if folder == "." else folder)
+
+
 @dataclass(frozen=True)
 class ClassifierRecord:
     """A filtered record whose classifier-relevant fields passed the input contract.
@@ -180,6 +197,9 @@ class ClassifierRecord:
     # The dataset a producer resolves a parent within (``edges.files_by_folded_name``
     # keys on it, #609). Not echoed to the output row: records carry no `dataset_id` (#450).
     dataset_id: Any = None
+    # The folder of the file's storage path, where the input carries one (:func:`folder_of`,
+    # #717): what settles a parent whose name several files carry. Not echoed to the output row.
+    folder: str | None = None
 
     @classmethod
     def from_record(cls, record: dict) -> ClassifierRecord:
@@ -208,6 +228,7 @@ class ClassifierRecord:
             name=FileName.parse(record["file_name"]),
             url=record.get("url"),
             dataset_id=dataset_of(record),
+            folder=folder_of(record),
         )
 
 

@@ -119,7 +119,7 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
 
 class AnvilFileMetadataRecord(ConfiguredBaseModel):
     """
-    One raw AnVIL file metadata record, before classification. Every slot but `entry_id` is required; the string slots are additionally non-empty (`file_size` allows 0 and `is_supplementary` is a plain required boolean). AnVIL's own published `data_modality` / `reference_assembly` are not slots here — see the schema description for why (#424).
+    One raw AnVIL file metadata record, before classification. Every slot but `entry_id` and `file_path` is required; the string slots are additionally non-empty (`file_size` allows 0 and `is_supplementary` is a plain required boolean). AnVIL's own published `data_modality` / `reference_assembly` are not slots here — see the schema description for why (#424).
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/metadata.yaml',
          'tree_root': True})
@@ -134,6 +134,7 @@ class AnvilFileMetadataRecord(ConfiguredBaseModel):
     dataset_id: str = Field(default=..., description="""Identifier of the dataset the file belongs to.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
     dataset_title: str = Field(default=..., description="""Title of the dataset the file belongs to.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
     is_supplementary: bool = Field(default=..., description="""Whether AnVIL flags the file as supplementary.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
+    file_path: Optional[str] = Field(default=None, description="""The file's storage path within its dataset, `anvil_file.file_path`, e.g. `SGDP_GRCh38/joint_vcfs/PASS/chr1.recalibrated.snp_indel.pass.vcf.gz` (#717). Both Azul manifests carry it since Azul added it (by 2026-10-17), and so does the snapshot read in place; a manifest fetched before, and an HPRC record, has none. It tells apart files a dataset stores under one name in different folders, and is used for nothing else: a producer that finds several files carrying a parent's name keeps the one in the child's own folder (`edges.matches`). Where present it is non-empty.""", json_schema_extra = { "linkml_meta": {'domain_of': ['AnvilFileMetadataRecord']} })
 
     @field_validator('entry_id')
     def pattern_entry_id(cls, v):
@@ -236,6 +237,19 @@ class AnvilFileMetadataRecord(ConfiguredBaseModel):
                     raise ValueError(err_msg)
         elif isinstance(v, str) and not pattern.match(v):
             err_msg = f"Invalid dataset_title format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('file_path')
+    def pattern_file_path(cls, v):
+        pattern=re.compile(r"^.+$")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid file_path format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid file_path format: {v}"
             raise ValueError(err_msg)
         return v
 

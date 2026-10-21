@@ -16,6 +16,10 @@ The input source (``--input-source``) names how the records are derived:
   BigQuery through ``snapshot_input.TdrDirect``, with whatever identity the
   environment supplies (see ``meta_disco.tdr``) and the ``tdr`` extra installed.
 
+Each manifest is requested by the dataset's declared ``dataset_id``
+(``Deployment.dataset_ids``, #717), and every record derived from it is checked to
+carry the declared title and id.
+
 An unknown deployment or input source is refused by the argument parser, before any
 request, query or write. Every kind writes the same two files under the root::
 
@@ -67,7 +71,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from datetime import datetime
 from typing import Any
 
@@ -101,6 +105,7 @@ from meta_disco.azul_manifest import (
     write_input_files,
 )
 from meta_disco.deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS, Deployment
+from meta_disco.records import dataset_of
 from meta_disco.snapshot_input import AzulVerbatim, TdrDirect, derive_records
 
 #: Which manifests each Azul kind fetches. ``tdr-direct`` fetches none and is not here.
@@ -109,13 +114,35 @@ MANIFEST_FORMATS = {INPUT_SOURCE_AZUL_COMPACT: FORMATS, INPUT_SOURCE_AZUL_VERBAT
 
 def _compact_records(dep: Deployment, datasets: list[Dataset]) -> Iterator[dict[str, Any]]:
     for dataset in datasets:
-        yield from iter_compact_records(manifest_path(dep.input_root, dep.catalog, dataset.title, FORMAT_COMPACT))
+        path = manifest_path(dep.input_root, dep.catalog, dataset.title, FORMAT_COMPACT)
+        yield from _of_declared_dataset(dep, dataset.title, iter_compact_records(path))
 
 
 def _verbatim_records(dep: Deployment, datasets: list[Dataset]) -> Iterator[dict[str, Any]]:
     for dataset in datasets:
         path = manifest_path(dep.input_root, dep.catalog, dataset.title, FORMAT_VERBATIM)
-        yield from derive_records(AzulVerbatim(path), dataset.title)
+        yield from _of_declared_dataset(dep, dataset.title, derive_records(AzulVerbatim(path), dataset.title))
+
+
+def _of_declared_dataset(dep: Deployment, title: str, records: Iterable[dict[str, Any]]) -> Iterator[dict[str, Any]]:
+    """``records``, each checked to be of the dataset ``title`` names, by title and declared id.
+
+    A manifest is requested by the declared ``dataset_id`` (#717), so a wrong id would
+    fetch another dataset's files under this title; checking each record's pair is what
+    refuses that rather than writing them.
+
+    Raises:
+        ValueError: a record names another dataset title or ``dataset_id``.
+    """
+    expected = (title, dep.dataset_ids[title])  # declared: `download` refused the title otherwise
+    for record in records:
+        named = (record.get("dataset_title"), dataset_of(record))
+        if named != expected:
+            raise ValueError(
+                f"{title}: a record names dataset {named[0]!r} ({named[1]}), but the {dep.name} deployment "
+                f"declares {expected[0]!r} ({expected[1]}). Update the declaration in meta_disco.deployments."
+            )
+        yield record
 
 
 #: How each Azul kind derives its records from the manifests on disk.
@@ -187,6 +214,11 @@ def download(
         except ValueError as exc:
             print(f"Refusing dataset title: {exc}", file=sys.stderr)
             return 1
+        try:
+            dataset_id = dep.dataset_id(title)
+        except ValueError as exc:
+            print(f"{exc}; it is what the manifests are requested by (#717)", file=sys.stderr)
+            return 1
         entry = stored.setdefault(title, {})
         on_disk = all(manifest_path(root, catalog, title, fmt).is_file() for fmt in formats)
         # A dataset is fetched whole: when any manifest this source needs is missing, or
@@ -226,7 +258,9 @@ def download(
                 started = datetime.now()
                 print(f"  {title} {fmt}: requesting ...", end="", flush=True)
                 path.parent.mkdir(parents=True, exist_ok=True)
-                size = fetch_manifest(dep.service, catalog, fmt, title, path, http, sleep, max_wait=max_wait, log=log)
+                size = fetch_manifest(
+                    dep.service, catalog, fmt, title, dataset_id, path, http, sleep, max_wait=max_wait, log=log
+                )
                 elapsed = (datetime.now() - started).total_seconds()
                 print(f" {size:,} bytes in {elapsed:.0f}s")
                 entry[fmt] = {"requested_at": started.isoformat(), "bytes": size, "seconds": round(elapsed)}

@@ -74,8 +74,8 @@ class FileTypeConfig:
     # The step that made a file, read from its fetched content (#609). Called once per run
     # with every loaded record, the source's record key and the run's evidence base (where a
     # reader finds another file's cached header, #620), it returns the per-file
-    # reader: given the parse, the file's name and dataset, ``(generated_by or None,
-    # outcome)``, the outcome None for a file the reader does not apply to (a tar that is no
+    # reader: given the parse, the file's name, dataset and folder (``records.folder_of``,
+    # #717), ``(generated_by or None, outcome)``, the outcome None for a file the reader does not apply to (a tar that is no
     # GenomicsDB workspace, #621), which is not counted. None means the type states no step;
     # a type with one needs a ``parser``.
     step: Callable | None = None

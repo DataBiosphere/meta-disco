@@ -16,7 +16,8 @@ catch-all writes.
 A filename does not always identify one file. Names are compared case-insensitively,
 as routing compares extensions (#449), so two files in a dataset whose names differ
 only by case identify neither (#455). Where two files in a dataset share — up to case —
-the name an index points at, no parent is chosen. Such a file still gets a record,
+the name an index points at, the one stored in the index's own folder is its parent
+(``edges.matches``, #717); where the folder does not settle it, no parent is chosen. Such a file still gets a record,
 with no edge: ``declined_record`` gives it ``data_type: index``, which the extension
 establishes without a parent, and ``not_classified`` on the others, which only a parent
 could supply. Why no parent was taken is listed separately in ``unmatched_files``, with
@@ -31,11 +32,13 @@ paths in the manifest's ``file_inventory`` table, which name the true parent.
 ``ANVIL_T2T_CHRY`` is why: it calls one sample against both CHM13v2 and GRCh38
 and stores the outputs under the same filename in different directories.
 
-Telling such files apart needs a path or a declared parent-child relationship,
-and this producer can see neither — the compact manifest it reads carries no
-storage path and no sibling relation. So it declines rather than guesses. The source
-tables' lineage does better at reconcile: ``anvil_activity`` names one parent for every
-``ANVIL_T2T_CHRY`` index declined here, measured on anvil15 (#571).
+Telling such files apart needs a path or a declared parent-child relationship. The
+input carries each file's storage path since #717, and an index sits beside the file it
+indexes: on the anvil15 input of 2026-10-21 the folder settles all 15,006 indexes
+declined as ambiguous before it (14,866 in ``ANVIL_T2T_CHRY``, 140 in ``ANVIL_T2T``). An input with
+no path, or a folder that holds no single carrier, still declines rather than guesses.
+The source tables' lineage also names a parent at reconcile: ``anvil_activity`` names
+one for every ``ANVIL_T2T_CHRY`` index declined here before #717, measured on anvil15 (#571).
 """
 
 import argparse
@@ -57,7 +60,7 @@ from meta_disco.pipeline import load_classifiable_records
 from meta_disco.producers import INDEX_TO_PARENT, PRODUCERS
 from meta_disco.provenance import run_provenance
 from meta_disco.record_keys import record_key, repeated_key_values
-from meta_disco.records import OutputRecord, RunMetadata, coerce_identity, dataset_of, identity_from
+from meta_disco.records import OutputRecord, RunMetadata, coerce_identity, dataset_of, folder_of, identity_from
 from meta_disco.rule_engine import make_claim
 from meta_disco.rule_loader import get_unified_rules
 
@@ -303,6 +306,9 @@ def propagate_to_index_files(metadata_path: Path, output_path: Path):
     # extension says what they are, even when nothing says what they are of (#438).
     declined: list[tuple[dict, str, str]] = []
     stats = defaultdict(lambda: {"total": 0, "matched": 0, "unmatched": 0, "ambiguous": 0})
+    # Of the matched, those whose parent's name several files carry and the index's folder
+    # settled (#717), by dataset title: what the name alone would have declined.
+    settled_by_folder: defaultdict[str, int] = defaultdict(int)
 
     for ds, ds_files in by_dataset.items():
         for f in ds_files:
@@ -329,7 +335,11 @@ def propagate_to_index_files(metadata_path: Path, output_path: Path):
             # the decision, not for a measured save.
             parent_candidates = get_parent_candidates(name, index_ext)
             candidate_tried, parent_files = next(
-                ((c, found) for c in parent_candidates if (found := edges.matches(files_by_folded_name, ds, c))),
+                (
+                    (c, found)
+                    for c in parent_candidates
+                    if (found := edges.matches(files_by_folded_name, ds, c, folder_of(f)))
+                ),
                 (None, []),
             )
 
@@ -370,6 +380,8 @@ def propagate_to_index_files(metadata_path: Path, output_path: Path):
             # reaches the edge, which names the file as the catalog spells it (#455).
             stats[index_ext]["matched"] += 1
             matched.append((f, index_ext, parent_files[0]))
+            if len(edges.matches(files_by_folded_name, ds, candidate_tried, None)) > 1:
+                settled_by_folder[coerce_identity(f.get("dataset_title"))] += 1
 
     # Print stats
     print("\n" + "=" * 70)
@@ -467,6 +479,7 @@ def propagate_to_index_files(metadata_path: Path, output_path: Path):
                         "matched_to_parent": matched_all,
                         "unmatched": unmatched_all,
                         "ambiguous_parent": ambiguous_all,
+                        "settled_by_folder": dict(sorted(settled_by_folder.items())),
                     },
                 ).to_dict(),
                 "classifications": standard_results,

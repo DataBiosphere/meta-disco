@@ -189,7 +189,9 @@ class TarSteps(_StepReader):
     def keeps(name: str) -> bool:
         return name.lower().endswith(SAMPLE_MAP_SUFFIX)
 
-    def __call__(self, head: ParsedTarHead, file_name: str, dataset_id: str) -> tuple[dict | None, str | None]:
+    def __call__(
+        self, head: ParsedTarHead, file_name: str, dataset_id: str, folder: str | None
+    ) -> tuple[dict | None, str | None]:
         """A tar's ``generated_by`` from its ``vcfheader.vcf``, and the outcome (one of :data:`OUTCOMES`).
 
         A tar whose members are no GenomicsDB store has no step to read, and gives no outcome
@@ -197,12 +199,13 @@ class TarSteps(_StepReader):
 
         The map its header names (:func:`sample_name_map`, whose outcomes it gives where the
         header names none) is the one sample map of ``dataset_id`` carrying its base name,
-        case-folded (:data:`PARENT_NOT_FOUND`, :data:`PARENT_AMBIGUOUS`).
+        case-folded, as ``edges.matches`` settles it by the tar's ``folder``
+        (:data:`PARENT_NOT_FOUND`, :data:`PARENT_AMBIGUOUS`).
         """
         named, outcome = sample_name_map(head, file_name)
         if named is None:
             return None, outcome
-        parents, outcome = resolve_names(self.index, dataset_id, [PurePosixPath(named).name])
+        parents, outcome = resolve_names(self.index, dataset_id, [PurePosixPath(named).name], folder)
         if parents is None:
             return None, outcome
         return edges.generated_by(code_rules.MERGE_BY_WORKSPACE_HEADER, parents, self.key), STEPPED
@@ -216,19 +219,20 @@ class SampleMapSteps(_StepReader):
         return edges.parent_kind_of(name) == MEMBER_KIND
 
     def __call__(
-        self, rows: tuple[tuple[str, str], ...] | None, file_name: str, dataset_id: str
+        self, rows: tuple[tuple[str, str], ...] | None, file_name: str, dataset_id: str, folder: str | None
     ) -> tuple[dict | None, str]:
         """A sample map's ``generated_by`` from its rows, and the outcome (one of :data:`OUTCOMES`).
 
         Each row's path gives a ``member``: the one file of ``dataset_id`` carrying its base
-        name, case-folded. A file that is not a sample map gives :data:`NOT_A_LIST`; a member
+        name, case-folded, as ``edges.matches`` settles it by the map's ``folder``. A file that is not a sample map gives :data:`NOT_A_LIST`; a member
         no file carries, :data:`PARENT_NOT_FOUND`; otherwise a member several files carry,
         or two rows naming one base name, :data:`PARENT_AMBIGUOUS`. Any of these gives no
         step, since a cohort missing a member is not the cohort.
         """
         if rows is None:
             return None, NOT_A_LIST
-        parents, outcome = resolve_names(self.index, dataset_id, [PurePosixPath(path).name for _, path in rows])
+        names = [PurePosixPath(path).name for _, path in rows]
+        parents, outcome = resolve_names(self.index, dataset_id, names, folder)
         if parents is None:
             return None, outcome
         return edges.generated_by(code_rules.COHORT_BY_SAMPLE_MAP, parents, self.key), STEPPED

@@ -143,8 +143,9 @@ SOURCE_TYPES = frozenset(
 # Azul's per-index id and no such record carries it. What separates
 # them is uniqueness: `file_md5sum` is non-unique on 1.72% of rows and `file_name` on
 # 69.4%, so a filename is usable only inside a dataset scope (2 collisions in 16,271
-# within AnVIL_HPRC_R2, against 99.3% within ANVIL_1000G_PRIMED_data_model). No
-# record publishes `file_path` — it is here for a target that does.
+# within AnVIL_HPRC_R2, against 99.3% within ANVIL_1000G_PRIMED_data_model). An input
+# record carries `file_path` since #717, but no output row does, so no evidence line is
+# matched by it (`records.JOIN_KEY_OUTPUT_FIELDS`).
 JOIN_KEY_FILE_PATH = "file_path"
 JOIN_KEY_FILE_MD5SUM = "file_md5sum"
 JOIN_KEY_DRS_URI = "drs_uri"

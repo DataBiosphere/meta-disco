@@ -55,7 +55,7 @@ classes:
     tree_root: true
     description: >-
       One raw AnVIL file metadata record, before classification. Every slot but
-      `entry_id` is required; the string slots are additionally non-empty
+      `entry_id` and `file_path` is required; the string slots are additionally non-empty
       (`file_size` allows 0 and `is_supplementary` is a plain required boolean).
       AnVIL's own published `data_modality` / `reference_assembly` are not slots
       here — see the schema description for why (#424).
@@ -70,6 +70,7 @@ classes:
       - dataset_id
       - dataset_title
       - is_supplementary
+      - file_path
 
 # =============================================================================
 # SLOTS
@@ -129,3 +130,15 @@ slots:
     description: Whether AnVIL flags the file as supplementary.
     range: boolean
     required: true
+  file_path:
+    description: >-
+      The file's storage path within its dataset, `anvil_file.file_path`, e.g.
+      `SGDP_GRCh38/joint_vcfs/PASS/chr1.recalibrated.snp_indel.pass.vcf.gz` (#717).
+      Both Azul manifests carry it since Azul added it (by 2026-10-17), and so does the
+      snapshot read in place; a manifest fetched before, and an HPRC record, has none.
+      It tells apart files a dataset stores under one name in different folders, and is
+      used for nothing else: a producer that finds several files carrying a parent's name
+      keeps the one in the child's own folder (`edges.matches`). Where present it is
+      non-empty.
+    required: false
+    pattern: "^.+$"

@@ -228,7 +228,9 @@ def reader(*entries) -> ps.HeaderSteps:
 
 
 def test_a_haplotypecaller_calls_from_the_one_alignment_of_that_name_in_the_dataset():
-    step, outcome = reader(("HG00096.cram", "D"), ("HG00096.cram", "OTHER"))(header(HC), "HG00096.chr10.hc.vcf.gz", "D")
+    step, outcome = reader(("HG00096.cram", "D"), ("HG00096.cram", "OTHER"))(
+        header(HC), "HG00096.chr10.hc.vcf.gz", "D", None
+    )
     assert outcome == ps.STEPPED
     assert step is not None and step["activity"] == "VariantCallActivity"
     (used,) = step["inputs"]
@@ -249,11 +251,13 @@ def test_a_haplotypecaller_calls_from_the_one_alignment_of_that_name_in_the_data
     ],
 )
 def test_a_parent_no_file_or_two_files_of_the_dataset_carry_gives_no_step(entries, outcome):
-    assert reader(*entries)(header(HC), "HG00096.chr10.hc.vcf.gz", "D") == (None, outcome)
+    assert reader(*entries)(header(HC), "HG00096.chr10.hc.vcf.gz", "D", None) == (None, outcome)
 
 
 def test_a_gatk3_haplotypecaller_resolves_by_the_inputs_base_name():
-    step, outcome = reader(("HG04164.final.bam", "D"))(header(GATK3_HC), "HG04164.haplotypeCalls.er.raw.g.vcf.gz", "D")
+    step, outcome = reader(("HG04164.final.bam", "D"))(
+        header(GATK3_HC), "HG04164.haplotypeCalls.er.raw.g.vcf.gz", "D", None
+    )
     assert outcome == ps.STEPPED and step is not None
     assert step["inputs"][0]["parent_file"] == "HG04164.final.bam"
 
@@ -261,26 +265,26 @@ def test_a_gatk3_haplotypecaller_resolves_by_the_inputs_base_name():
 def test_a_haplotypecaller_with_two_inputs_gives_no_step():
     two = HC.replace("--input ./HG00096.cram", "--input ./HG00096.cram --input ./HG00097.cram")
     entries = (("HG00096.cram", "D"), ("HG00097.cram", "D"))
-    assert reader(*entries)(header(two), "HG00096.chr10.hc.vcf.gz", "D") == (None, ps.NO_ACTIVITY)
+    assert reader(*entries)(header(two), "HG00096.chr10.hc.vcf.gz", "D", None) == (None, ps.NO_ACTIVITY)
 
 
 def test_a_path_listed_twice_is_one_input():
     twice = HC.replace("--input ./HG00096.cram", "--input ./HG00096.cram --input ./HG00096.cram")
-    step, outcome = reader(("HG00096.cram", "D"))(header(twice), "HG00096.chr10.hc.vcf.gz", "D")
+    step, outcome = reader(("HG00096.cram", "D"))(header(twice), "HG00096.chr10.hc.vcf.gz", "D", None)
     assert outcome == ps.STEPPED and step is not None and len(step["inputs"]) == 1
 
 
 def test_a_tool_of_a_family_its_rule_does_not_name_gives_no_step(monkeypatch):
     bcftools_only = dataclasses.replace(ps.STEP_RULES["HaplotypeCaller"], families=frozenset({"bcftools"}))
     monkeypatch.setitem(ps.STEP_RULES, "HaplotypeCaller", bcftools_only)
-    assert reader(("HG00096.cram", "D"))(header(HC), "HG00096.chr10.hc.vcf.gz", "D") == (None, ps.NO_ACTIVITY)
+    assert reader(("HG00096.cram", "D"))(header(HC), "HG00096.chr10.hc.vcf.gz", "D", None) == (None, ps.NO_ACTIVITY)
 
 
 REGIONS = (("chr1.1_100000.genotyped.vcf.gz", "D"), ("chr1.100000001_100100000.genotyped.vcf.gz", "D"))
 
 
 def test_a_concat_merges_every_region_vcf_it_names_as_a_shard():
-    step, outcome = reader(*REGIONS)(header(IMPORT, SELECT, CONCAT), "chr1.genotyped.vcf.gz", "D")
+    step, outcome = reader(*REGIONS)(header(IMPORT, SELECT, CONCAT), "chr1.genotyped.vcf.gz", "D", None)
     assert outcome == ps.STEPPED and step is not None
     assert step["activity"] == "MergeActivity"
     assert [(i["role"], i["parent_file"], i["parent_key"]) for i in step["inputs"]] == [
@@ -298,36 +302,36 @@ def test_a_concat_merges_every_region_vcf_it_names_as_a_shard():
     ],
 )
 def test_a_concat_with_an_input_no_file_or_two_files_carry_gives_no_step(entries, outcome):
-    assert reader(*entries)(header(IMPORT, SELECT, CONCAT), "chr1.genotyped.vcf.gz", "D") == (None, outcome)
+    assert reader(*entries)(header(IMPORT, SELECT, CONCAT), "chr1.genotyped.vcf.gz", "D", None) == (None, outcome)
 
 
 def test_a_concat_of_two_paths_with_one_name_gives_no_step():
     """Scatter shards share a name (`shard-0/out.vcf.gz`, `shard-1/out.vcf.gz`): one file carrying it is not both."""
     shards = CONCAT.replace("/cromwell_root/y/chr1.100000001_100100000", "/cromwell_root/y/chr1.1_100000")
-    assert reader(*REGIONS)(header(shards), "chr1.genotyped.vcf.gz", "D") == (None, ps.PARENT_AMBIGUOUS)
+    assert reader(*REGIONS)(header(shards), "chr1.genotyped.vcf.gz", "D", None) == (None, ps.PARENT_AMBIGUOUS)
 
 
 def test_a_concat_reading_an_input_from_stdin_gives_no_step():
     piped = CONCAT.replace(" /cromwell_root/x/chr1.1_100000.genotyped.vcf.gz", " -")
     assert steps(header(piped))[0].stdin
-    assert reader(*REGIONS)(header(piped), "chr1.genotyped.vcf.gz", "D") == (None, ps.NO_ACTIVITY)
+    assert reader(*REGIONS)(header(piped), "chr1.genotyped.vcf.gz", "D", None) == (None, ps.NO_ACTIVITY)
 
 
 def test_a_concat_of_one_vcf_is_not_a_merge():
     """`concat -o out.vcf.gz in.vcf.gz` recompresses one file; a merge joins two or more."""
     one = CONCAT.replace(" /cromwell_root/y/chr1.100000001_100100000.genotyped.vcf.gz", "")
-    assert reader(*REGIONS)(header(one), "chr1.genotyped.vcf.gz", "D") == (None, ps.NO_ACTIVITY)
+    assert reader(*REGIONS)(header(one), "chr1.genotyped.vcf.gz", "D", None) == (None, ps.NO_ACTIVITY)
 
 
 def test_a_concat_naming_an_input_that_is_not_a_vcf_gives_no_step():
     listed = CONCAT.replace("/cromwell_root/x/chr1.1_100000.genotyped.vcf.gz", "/cromwell_root/x/shards.txt")
     entries = (("shards.txt", "D"), *REGIONS)
-    assert reader(*entries)(header(listed), "chr1.genotyped.vcf.gz", "D") == (None, ps.NO_ACTIVITY)
+    assert reader(*entries)(header(listed), "chr1.genotyped.vcf.gz", "D", None) == (None, ps.NO_ACTIVITY)
 
 
 def test_any_other_producing_step_gives_no_step():
     file_name = "1kgp.chr1.recalibrated.snp_indel.vcf.gz"
-    step = reader(("chr1.genotyped.vcf.gz", "D"))(header(VQSR_SNP, VQSR_INDEL), file_name, "D")
+    step = reader(("chr1.genotyped.vcf.gz", "D"))(header(VQSR_SNP, VQSR_INDEL), file_name, "D", None)
     assert step == (None, ps.NO_ACTIVITY)
 
 
@@ -370,20 +374,23 @@ def fetches(monkeypatch) -> list[str]:
     return read
 
 
-def carriers(tmp_path, *headers: str | None) -> ps.HeaderSteps:
+def carriers(tmp_path, *headers: str | None, folders: tuple[str, ...] = ()) -> ps.HeaderSteps:
     """A step reader over one HG00096.cram of dataset D per header, keyed f0, f1, …, each header
-    in the BAM producer's cache under ``tmp_path`` (None: not cached, so unreadable)."""
+    in the BAM producer's cache under ``tmp_path`` (None: not cached, so unreadable), the n-th
+    stored in ``folders[n]`` where given."""
     records = []
     for n, text in enumerate(headers):
         md5 = f"{n:032x}"
         records.append({"file_id": f"f{n}", "file_name": "HG00096.cram", "dataset_id": "D", "file_md5sum": md5})
+        if folders:
+            records[-1]["file_path"] = f"{folders[n]}/HG00096.cram"
         if text is not None:
             BamEvidence(md5sum=md5, file_name="HG00096.cram", header_text=text).save(tmp_path / BAM_CONFIG.name)
     return ps.HeaderSteps.for_run(records, KEY, tmp_path, alignments=BAM_CONFIG.name)
 
 
 def test_of_alignments_sharing_a_name_the_parent_is_the_one_with_the_vcfs_contigs(tmp_path, fetches):
-    step, outcome = carriers(tmp_path, HG002_Y, GRCH38_Y)(header(HC, *CONTIGS), GVCF, "D")
+    step, outcome = carriers(tmp_path, HG002_Y, GRCH38_Y)(header(HC, *CONTIGS), GVCF, "D", None)
     assert outcome == ps.STEPPED and step is not None
     (used,) = step["inputs"]
     assert (used["parent_file"], used["parent_key"]) == ("HG00096.cram", "f1")
@@ -400,7 +407,7 @@ def test_of_alignments_sharing_a_name_the_parent_is_the_one_with_the_vcfs_contig
     ],
 )
 def test_alignments_sharing_a_name_that_contigs_do_not_tell_apart_give_no_step(tmp_path, fetches, headers, contigs):
-    assert carriers(tmp_path, *headers)(header(HC, *contigs), GVCF, "D") == (None, ps.PARENT_AMBIGUOUS)
+    assert carriers(tmp_path, *headers)(header(HC, *contigs), GVCF, "D", None) == (None, ps.PARENT_AMBIGUOUS)
 
 
 @pytest.mark.parametrize(
@@ -412,14 +419,14 @@ def test_alignments_sharing_a_name_that_contigs_do_not_tell_apart_give_no_step(t
 )
 def test_a_carrier_whose_contigs_cannot_be_read_gives_no_step_and_says_so(tmp_path, fetches, headers):
     """It may be the parent, so the other is not taken, and the outcome is not a tie (#620)."""
-    assert carriers(tmp_path, *headers)(header(HC, *CONTIGS), GVCF, "D") == (None, ps.PARENT_UNREADABLE)
+    assert carriers(tmp_path, *headers)(header(HC, *CONTIGS), GVCF, "D", None) == (None, ps.PARENT_UNREADABLE)
 
 
 def test_an_alignment_to_part_of_the_vcfs_reference_fits_it(tmp_path, fetches):
     """GATK takes an alignment whose every contig is the reference's, at its length: the VCF
     may name more (a decoy the alignment's reference left out)."""
     decoy = "##contig=<ID=chrEBV,length=171823>"
-    step, outcome = carriers(tmp_path, HG002_Y, GRCH38_Y)(header(HC, *CONTIGS, decoy), GVCF, "D")
+    step, outcome = carriers(tmp_path, HG002_Y, GRCH38_Y)(header(HC, *CONTIGS, decoy), GVCF, "D", None)
     assert outcome == ps.STEPPED and step is not None and step["inputs"][0]["parent_key"] == "f1"
 
 
@@ -427,17 +434,17 @@ def test_a_gatk3_line_naming_an_alignment_two_files_carry_is_not_settled_by_cont
     """GATK 3's own contig check may accept a partial overlap, so its lines keep the name rule."""
     hc3 = GATK3_HC.replace("/data/analysis/Sample_HG04164/analysis/HG04164.final.bam", "/x/HG00096.cram")
     reader3 = carriers(tmp_path, HG002_Y, GRCH38_Y)
-    assert reader3(header(hc3, *CONTIGS), "HG00096.g.vcf.gz", "D") == (None, ps.PARENT_AMBIGUOUS)
+    assert reader3(header(hc3, *CONTIGS), "HG00096.g.vcf.gz", "D", None) == (None, ps.PARENT_AMBIGUOUS)
     assert fetches == []
 
 
 def test_a_vcf_naming_no_contigs_reads_no_alignment(tmp_path, fetches):
-    assert carriers(tmp_path, GRCH38_Y, HG002_Y)(header(HC), GVCF, "D") == (None, ps.PARENT_AMBIGUOUS)
+    assert carriers(tmp_path, GRCH38_Y, HG002_Y)(header(HC), GVCF, "D", None) == (None, ps.PARENT_AMBIGUOUS)
     assert fetches == []
 
 
 def test_an_alignment_name_one_file_carries_is_taken_without_reading_it(tmp_path, fetches):
-    step, outcome = carriers(tmp_path, HG002_Y)(header(HC, *CONTIGS), GVCF, "D")
+    step, outcome = carriers(tmp_path, HG002_Y)(header(HC, *CONTIGS), GVCF, "D", None)
     assert outcome == ps.STEPPED and step is not None and step["inputs"][0]["parent_key"] == "f0"
     assert fetches == []
 
@@ -446,7 +453,7 @@ def test_each_alignment_is_read_once_for_all_of_its_samples_vcfs(tmp_path, fetch
     reader = carriers(tmp_path, HG002_Y, GRCH38_Y)
     for chrom in ("chr10", "chr11"):
         hc = HC.replace("chr10", chrom)
-        assert reader(header(hc, *CONTIGS), f"HG00096.{chrom}.hc.vcf.gz", "D")[1] == ps.STEPPED
+        assert reader(header(hc, *CONTIGS), f"HG00096.{chrom}.hc.vcf.gz", "D", None)[1] == ps.STEPPED
     assert sorted(fetches) == [f"{0:032x}", f"{1:032x}"]
 
 
@@ -606,3 +613,56 @@ def test_a_step_whose_input_is_its_own_output_less_gz_is_still_an_end():
 def test_a_file_type_that_reads_a_step_must_declare_the_parser_it_reads_it_from():
     with pytest.raises(ValueError, match="parser"):
         dataclasses.replace(VCF_CONFIG, parser=None)
+
+
+# --- the folder, which settles a shared name only where content does not (#717) ------------
+
+
+def test_the_contigs_outrank_the_folder(tmp_path, fetches):
+    """The CRAM beside the gVCF has another reference's chrY: the one that fits is the parent."""
+    reader_ = carriers(tmp_path, HG002_Y, GRCH38_Y, folders=("b", "a"))
+    step, outcome = reader_(header(HC, *CONTIGS), GVCF, "D", "b")
+    assert outcome == ps.STEPPED and step is not None and step["inputs"][0]["parent_key"] == "f1"
+
+
+def test_the_folder_breaks_a_tie_the_contigs_leave(tmp_path, fetches):
+    reader_ = carriers(tmp_path, GRCH38_Y, GRCH38_Y, folders=("a", "b"))
+    step, outcome = reader_(header(HC, *CONTIGS), GVCF, "D", "b")
+    assert outcome == ps.STEPPED and step is not None and step["inputs"][0]["parent_key"] == "f1"
+    assert reader_(header(HC, *CONTIGS), GVCF, "D", "c") == (None, ps.PARENT_AMBIGUOUS)
+
+
+def test_the_folder_does_not_stand_in_for_an_unreadable_carrier(tmp_path, fetches):
+    reader_ = carriers(tmp_path, GRCH38_Y, None, folders=("a", "b"))
+    assert reader_(header(HC, *CONTIGS), GVCF, "D", "a") == (None, ps.PARENT_UNREADABLE)
+
+
+def test_a_line_whose_contigs_are_not_relied_on_is_settled_by_the_folder(tmp_path, fetches):
+    """GATK 3 keeps the name rule (#620), and the folder settles a name two files carry."""
+    hc3 = GATK3_HC.replace("/data/analysis/Sample_HG04164/analysis/HG04164.final.bam", "/x/HG00096.cram")
+    reader3 = carriers(tmp_path, HG002_Y, GRCH38_Y, folders=("a", "b"))
+    step, outcome = reader3(header(hc3, *CONTIGS), "HG00096.g.vcf.gz", "D", "b")
+    assert outcome == ps.STEPPED and step is not None and step["inputs"][0]["parent_key"] == "f1"
+    assert fetches == []
+
+
+def test_the_vcf_producer_hands_each_file_s_folder_to_the_step_reader(tmp_path, monkeypatch):
+    """Through the pipeline (#717): the work item's folder, from the input's `file_path`, settles a
+    name two alignments carry, on a line whose contigs are not relied on."""
+    gvcf = "HG04164.haplotypeCalls.er.raw.g.vcf.gz"
+    records: list[dict] = [
+        {"file_id": "a", "file_name": "HG04164.final.bam", "file_path": "a/HG04164.final.bam"},
+        {"file_id": "b", "file_name": "HG04164.final.bam", "file_path": "b/HG04164.final.bam"},
+        {"file_id": "v", "file_name": gvcf, "file_path": f"b/{gvcf}"},
+    ]
+    for n, record in enumerate(records):
+        record.update(dataset_id="D", dataset_title="T", file_md5sum=f"{n:032x}", file_size=1)
+        record["file_format"] = record["file_name"].split(".", 1)[1]
+    config = dataclasses.replace(
+        VCF_CONFIG, fetcher=lambda *_a, **_k: header_text(GATK3_HC), parser=parse_vcf_header, preflight=None
+    )
+    pipeline = ClassifyPipeline(
+        config, write_metadata(tmp_path / "in.json", records), tmp_path / "vcf.json", evidence_base=tmp_path / "ev"
+    )
+    [row] = [r for r in pipeline.run() if r["file_id"] == "v"]
+    assert row["generated_by"]["inputs"][0]["parent_key"] == "b"

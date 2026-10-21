@@ -618,6 +618,17 @@ CODE_RULES = (
     INHERITED_FROM_PARENT,
 )
 
+# How a name rule settles a name several files of the dataset carry (#717, ``edges.matches``),
+# in each rule's ``reads`` and ``rationale``.
+_FOLDER_READ = (
+    "; where several files carry the name, the folder of each one's storage path (the input's "
+    "file_path) against the child's"
+)
+_FOLDER_RATIONALE = (
+    "unless exactly one of them is in the child's own folder (#717): a dataset can store one "
+    "pipeline's outputs under the same names in a folder per cohort, as ANVIL_T2T_CHRY does"
+)
+
 INDEX_BY_NAME = EdgeRule(
     id="index_by_name",
     module=INDEX_PRODUCER,
@@ -627,12 +638,12 @@ INDEX_BY_NAME = EdgeRule(
     reads=(
         "the index file's name: the name without its index extension (sample.bam.bai -> "
         "sample.bam), or with it replaced by a parent extension INDEX_TO_PARENT declares "
-        "(sample.bai -> sample.bam), matched case-insensitively within the dataset"
+        "(sample.bai -> sample.bam), matched case-insensitively within the dataset" + _FOLDER_READ
     ),
     rationale=(
         "An index is named after the file it indexes, so the first candidate name any file "
         "of the dataset carries names its parent. Where two files carry that name it names "
-        "neither and no edge is written; a later candidate is not tried (#438)."
+        "neither and no edge is written, " + _FOLDER_RATIONALE + "; a later candidate is not tried (#438)."
     ),
 )
 CHECKSUM_BY_NAME = EdgeRule(
@@ -644,12 +655,12 @@ CHECKSUM_BY_NAME = EdgeRule(
     reads=(
         "the name of a file whose extension EXTENSION_MAP calls a checksum, less that "
         "extension and any wrapper (sample.bam.md5 -> sample.bam), matched "
-        "case-insensitively within the dataset"
+        "case-insensitively within the dataset" + _FOLDER_READ
     ),
     rationale=(
         "A checksum file is its file's name plus .md5, so the name without it, carried by "
         "exactly one file of the dataset, is the file it checks. A name two files carry "
-        "names neither, and no edge is written."
+        "names neither, and no edge is written, " + _FOLDER_RATIONALE + "."
     ),
 )
 
@@ -664,7 +675,8 @@ VARIANT_CALL_BY_HEADER = EdgeRule(
         "chained by matching outputs to inputs, the one end of that flow being the step that made the "
         "file; where that step is HaplotypeCaller with one alignment input, the input's base name, "
         "matched case-insensitively within the dataset; where several alignments carry that name, the "
-        "VCF's ##contig names and lengths and each of those alignments' @SQ names and lengths"
+        "VCF's ##contig names and lengths and each of those alignments' @SQ names and lengths (on a "
+        "GATK 4 line)" + _FOLDER_READ
     ),
     rationale=(
         "HaplotypeCaller records the alignment it called from in its own command line, written into "
@@ -675,7 +687,9 @@ VARIANT_CALL_BY_HEADER = EdgeRule(
         "with a contig its reference lacks or gives another length (unless the line turns that check "
         "off, which no header we hold does), and writes that reference's contigs into the VCF, so of two "
         "re-alignments of one sample's reads the one whose every contig is the VCF's, at its length, is "
-        "its parent (#620)."
+        "its parent (#620). Where the contigs leave several, or a GATK 3 line (whose contigs are not "
+        "relied on) names a shared name, it names neither " + _FOLDER_RATIONALE + "; the folder "
+        "never overrides the contigs."
     ),
 )
 
@@ -688,13 +702,15 @@ MERGE_BY_HEADER = EdgeRule(
     reads=(
         "the VCF's own header, its producing step found as for variant_call_by_header; where that "
         "step is bcftools concat, each of its input VCFs' base names, matched case-insensitively "
-        "within the dataset"
+        "within the dataset" + _FOLDER_READ
     ),
     rationale=(
         "bcftools concat records its inputs in its own command line, written into the VCF it writes: "
         "T2T's chromosome VCFs name every region VCF they join. The step is taken only when it joins "
         "two or more VCFs, none read from stdin, and every input is a VCF that exactly one file of the "
-        "dataset carries, so a merge never names part of its inputs (#610)."
+        "dataset carries (or, of several, exactly one in the merged VCF's own folder, #717), so a merge "
+        "never names part of "
+        "its inputs (#610)."
     ),
 )
 
@@ -708,7 +724,7 @@ MERGE_BY_WORKSPACE_HEADER = EdgeRule(
         "a GenomicsDB workspace tar's own vcfheader.vcf member: its one GenomicsDBImport command line, "
         "whose --genomicsdb-workspace-path names the tar (its name less .tar) and whose --sample-name-map "
         "names the list of gVCFs it imported, that list's base name matched case-insensitively among the "
-        "dataset's sample maps"
+        "dataset's sample maps" + _FOLDER_READ
     ),
     rationale=(
         "GenomicsDBImport writes its own command line into the workspace it builds, so the tar says "
@@ -727,13 +743,13 @@ COHORT_BY_SAMPLE_MAP = EdgeRule(
     source_type=SOURCE_CONTENT_READ,
     reads=(
         "a GATK sample-name map's own rows, each a sample name and a VCF path, tab-separated; each path's "
-        "base name matched case-insensitively within the dataset"
+        "base name matched case-insensitively within the dataset" + _FOLDER_READ
     ),
     rationale=(
         "A sample-name map lists the gVCFs one joint calling imports: it is the record of who was "
         "computed together. The paths are where the workflow ran, so only the name is matched. A file "
-        "that is not such a list, or a member no file or two files of the dataset carry, gives no step: "
-        "a cohort missing a member is not the cohort (#621)."
+        "that is not such a list, or a member no file or two files of the dataset carry (the folder not "
+        "settling it, #717), gives no step: a cohort missing a member is not the cohort (#621)."
     ),
 )
 

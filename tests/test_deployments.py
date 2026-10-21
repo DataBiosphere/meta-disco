@@ -29,6 +29,7 @@ from tests.test_azul_manifest import (
     SOURCE_ID,
     FakeSession,
     compact_payload,
+    dataset_id_of,
     entry,
     no_sleep,
 )
@@ -40,7 +41,8 @@ COMPACT, VERBATIM, DIRECT = am.INPUT_SOURCE_AZUL_COMPACT, am.INPUT_SOURCE_AZUL_V
 
 def tables(title: str, n: int) -> dict[str, list[dict]]:
     """A snapshot of dataset ``title`` holding ``n`` files, in TDR's column names."""
-    return {"anvil_dataset": [{**DATASET_ROW, "title": title}], "anvil_file": [file_row(i) for i in range(n)]}
+    dataset = {**DATASET_ROW, "title": title, "dataset_id": dataset_id_of(title)}
+    return {"anvil_dataset": [dataset], "anvil_file": [file_row(i) for i in range(n)]}
 
 
 def verbatim_bytes(tmp_path: Path, title: str, n: int) -> bytes:
@@ -212,7 +214,8 @@ class TestTheVerbatimKind:
         assert not am.manifest_path(tmp_path, "anvil15", "ds", am.FORMAT_COMPACT).exists()
         records = load_records(dep.input_file)
         assert [r["file_id"] for r in records] == ["file-0", "file-1"]
-        assert all("entry_id" not in r and "file_path" not in r for r in records)
+        assert all("entry_id" not in r for r in records)
+        assert [r["file_path"] for r in records] == [file_row(i)["file_path"] for i in range(2)]
 
     def test_a_manifest_holding_another_dataset_is_refused_and_writes_no_input(self, tmp_path, capsys):
         session = session_for(tmp_path, {"ds": 2})
@@ -237,7 +240,11 @@ class TestDevThroughTheVerbatimManifest:
         assert puts == [
             (
                 am.manifest_url(DEV.service),
-                {"catalog": "anvil", "format": am.FORMAT_VERBATIM, "filters": am.manifest_filters(title)},
+                {
+                    "catalog": "anvil",
+                    "format": am.FORMAT_VERBATIM,
+                    "filters": am.manifest_filters(DEV.dataset_id(title)),
+                },
             )
         ]
 
@@ -350,7 +357,7 @@ class TestTheDeclarationIsChecked:
         assert download(dep, COMPACT, session) == 0
         assert "Not declared by the test deployment, skipped: placeholders (50 files)" in capsys.readouterr().out
         assert all(
-            json.loads(p["filters"])["datasets.title"]["is"] == ["ds"]
+            json.loads(p["filters"])["datasets.dataset_id"]["is"] == [dataset_id_of("ds")]
             for _, _, p in session.calls
             if p and "filters" in p
         )
@@ -395,3 +402,53 @@ class TestTheDeclarations:
         metadata = load_envelope(PROD.input_file)
         named = {title: tdr.Snapshot.from_source_spec(e["source_spec"]) for title, e in metadata["datasets"].items()}
         assert named == dict(PROD.snapshots)
+
+    def test_every_declared_dataset_declares_its_id(self):
+        for dep in DEPLOYMENTS.values():
+            assert set(dep.dataset_ids) == set(dep.snapshots)
+            assert len(set(dep.dataset_ids.values())) == len(dep.dataset_ids)
+
+
+class TestManifestsAreRequestedByDatasetId:
+    """#717: a manifest is requested by the declared ``dataset_id``, and every record
+    derived from it must name the declared title and id."""
+
+    def test_each_request_names_the_declared_id(self, tmp_path):
+        dep = fixture_deployment(tmp_path, ["a", "b"])
+        session = session_for(tmp_path, {"a": 2, "b": 1})
+        assert download(dep, COMPACT, session) == 0
+        requested = [json.loads(p["filters"]) for method, _, p in session.calls if method == "PUT" and p]
+        assert requested == [{"datasets.dataset_id": {"is": [dataset_id_of(title)]}} for title in ("a", "a", "b", "b")]
+
+    @pytest.mark.parametrize("source", [COMPACT, VERBATIM])
+    def test_a_manifest_of_another_dataset_is_refused(self, tmp_path, source, capsys):
+        # "ds" is declared with the id of the dataset "other", so Azul serves other's
+        # manifests for it; writing their records under "ds" would be another dataset's.
+        dep = dataclasses.replace(fixture_deployment(tmp_path, ["ds"]), dataset_ids={"ds": dataset_id_of("other")})
+        session = session_for(tmp_path, {"other": 2})
+        session.datasets = {"ds": 2}
+        assert download(dep, source, session) == 1
+        # The compact path refuses on the pair here; the verbatim path on the title already,
+        # in `derive_records`. Either way the other dataset is named and nothing is written.
+        assert "'other'" in capsys.readouterr().err
+        assert not dep.input_file.exists()
+
+    @pytest.mark.parametrize("source", [COMPACT, VERBATIM])
+    def test_a_manifest_of_the_declared_title_but_another_id_is_refused(self, tmp_path, source, capsys):
+        # The title agrees, so `derive_records`' title check passes; only the id refuses it.
+        dep = dataclasses.replace(fixture_deployment(tmp_path, ["ds"]), dataset_ids={"ds": dataset_id_of("other")})
+        session = session_for(tmp_path, {"other": 2})
+        session.datasets = {"ds": 2}
+        session.payloads = {
+            ("other", fmt): payload for (_, fmt), payload in session_for(tmp_path, {"ds": 2}).payloads.items()
+        }
+        assert download(dep, source, session) == 1
+        assert f"names dataset 'ds' ({dataset_id_of('ds')})" in capsys.readouterr().err
+        assert not dep.input_file.exists()
+
+    def test_a_dataset_with_no_declared_id_is_refused_before_any_request(self, tmp_path, capsys):
+        dep = dataclasses.replace(fixture_deployment(tmp_path, ["ds"]), dataset_ids={})
+        session = session_for(tmp_path, {"ds": 2})
+        assert download(dep, COMPACT, session) == 1
+        assert "declares no dataset_id for 'ds'" in capsys.readouterr().err
+        assert not [c for c in session.calls if c[0] == "PUT"]

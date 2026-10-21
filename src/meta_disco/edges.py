@@ -9,9 +9,10 @@ producers from a GenomicsDB workspace's ``vcfheader.vcf`` and a sample map's row
 that lookup and the edge it yields are built here.
 
 **An edge is written only where the parent resolves**: exactly one file of the child's
-dataset carries the name. The edge then carries the parent's record key
-(``record_keys.SOURCE_RECORD_KEYS``) as ``parent_key``. Where no file carries it, or two do,
-no edge is written. ADR-0002 keeps an edge whose parent does not resolve (an ``external``
+dataset carries the name, or, where several do, exactly one of them is in the child's
+own folder (:func:`matches`, #717). The edge then carries the parent's record key
+(``record_keys.SOURCE_RECORD_KEYS``) as ``parent_key``. Where no file carries it, or the
+folder does not settle two that do, no edge is written. ADR-0002 keeps an edge whose parent does not resolve (an ``external``
 one) only for a source that names the parent independently of the child: a header line, a
 table row. The two name rules work the name out from the child's own — its name less a
 suffix, or with the suffix replaced (``sample.bai`` -> ``sample.bam``) — so an unresolved
@@ -36,11 +37,15 @@ from .code_rules import EdgeRule
 from .file_name import EXTENSION_MAP, FileName
 from .models import ClaimSource
 from .record_keys import RecordKey, input_key_value
-from .records import dataset_of
+from .records import dataset_of, folder_of
 
 # The `EXTENSION_MAP` category of a checksum file's extension. The extension decides
 # whether a checksum edge is looked for, not whether a rule fired on the file.
 CHECKSUM_CATEGORY = "checksum"
+
+# Where a name index built by :func:`parent_index` keeps a record's folder (``records.folder_of``):
+# a key no input record can carry, since a record read from JSON has only string keys.
+FOLDER = object()
 
 # An extension category (``file_name.EXTENSION_MAP``) to the derivation model's
 # ``parent_kind_enum``: the two vocabularies overlap but are not the same words. A
@@ -99,6 +104,7 @@ def parent_index(
             "file_name": r["file_name"],
             key.input_field: input_key_value(r, key, purpose),
             "dataset_id": dataset_of(r),
+            **({FOLDER: folder} if (folder := folder_of(r)) is not None else {}),
             **{field: r[field] for field in also if field in r},
         }
         for r in records
@@ -154,14 +160,33 @@ def generated_by(rule: EdgeRule, parents: Sequence[dict], key: RecordKey) -> dic
     return {"activity": rule.activity, "named_by": [dict(n) for n in named_by], "inputs": inputs}
 
 
-def matches(index: NameIndex, dataset_id: str, name: str) -> list[dict]:
-    """Every input record of ``dataset_id`` carrying ``name`` up to case."""
-    return index.get((dataset_id, name.lower()), [])
+def matches(index: NameIndex, dataset_id: str, name: str, folder: str | None) -> list[dict]:
+    """Every input record of ``dataset_id`` carrying ``name`` up to case, or the one of them in ``folder``.
+
+    ``folder`` is the child's (``records.folder_of``, #717): ``""`` at the top of the dataset,
+    None where the input has no path.
+    Where several records carry ``name`` and exactly one of them is in ``folder``, only that
+    one is returned: ANVIL_T2T_CHRY stores one pipeline's outputs under the same names in a
+    folder per cohort (``1KGP/``, ``SGDP_CHM13v2/``, ``SGDP_GRCh38/``), and an index sits
+    beside the file it indexes. Otherwise every carrier is returned, so a caller that takes
+    no parent from several still takes none. The folder narrows candidates the name already
+    found; it names no parent of its own.
+    """
+    return in_folder(index.get((dataset_id, name.lower()), []), folder)
 
 
-def resolve(index: NameIndex, dataset_id: str, name: str) -> dict | None:
-    """The one input record of ``dataset_id`` carrying ``name`` up to case, or None if none or several do."""
-    found = matches(index, dataset_id, name)
+def in_folder(candidates: list[dict], folder: str | None) -> list[dict]:
+    """``candidates``, or the one of several in ``folder`` where exactly one is; see :func:`matches`."""
+    if len(candidates) > 1 and folder is not None:
+        beside = [r for r in candidates if (r[FOLDER] if FOLDER in r else folder_of(r)) == folder]
+        if len(beside) == 1:
+            return beside
+    return candidates
+
+
+def resolve(index: NameIndex, dataset_id: str, name: str, folder: str | None) -> dict | None:
+    """The one input record :func:`matches` gives for ``name``, or None if it gives none or several."""
+    found = matches(index, dataset_id, name, folder)
     return found[0] if len(found) == 1 else None
 
 
@@ -171,12 +196,12 @@ def checksum_generated_by(record: dict, name: FileName, index: NameIndex, key: R
     A file is a checksum when ``EXTENSION_MAP`` calls its extension one (``.md5``), read
     off ``name`` as ``FileName.parse`` peeled it. Its parent is ``name``'s stem, the name
     less that extension and any wrapper (``sample.bam.md5`` and ``sample.bam.md5.gz`` ->
-    ``sample.bam``), taken only when exactly one file of its dataset carries it;
+    ``sample.bam``), taken only where :func:`resolve` finds one file of its dataset for it;
     otherwise None, as for any other file.
     """
     if EXTENSION_MAP.get(name.extension or "") != CHECKSUM_CATEGORY or not name.stem:
         return None
-    parent = resolve(index, dataset_of(record), name.stem)
+    parent = resolve(index, dataset_of(record), name.stem, folder_of(record))
     if parent is None:
         return None
     return generated_by(code_rules.CHECKSUM_BY_NAME, [parent], key)

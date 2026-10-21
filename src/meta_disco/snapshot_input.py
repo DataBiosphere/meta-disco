@@ -30,8 +30,8 @@ each a dict keyed by TDR's column names. Two readers implement it:
   oracle, not the target — Azul's manifest is a product of Azul's index, and reading
   the snapshot is the path once runs happen in Terra. It presents TDR's shape by
   removing what Azul adds (:data:`AZUL_ADDED_COLUMNS`, :data:`AZUL_ADDED_FILE_COLUMNS`,
-  :data:`AZUL_ADDED_TABLES`), and it lacks the one column Azul drops,
-  ``anvil_file.file_path``; a record derived through it therefore carries none.
+  :data:`AZUL_ADDED_TABLES`). Both readers give ``anvil_file.file_path`` where the
+  table or manifest has the column (#717).
 
 Which reader an input came through is recorded on the input's envelope as
 ``input_source`` (``azul_manifest.INPUT_SOURCES``), so nothing downstream infers it.
@@ -80,8 +80,9 @@ REQUIRED_TABLES = (TABLE_DATASET, VERBATIM_FILE)
 # a ``version`` on every entity, ``drs_uri`` on ``anvil_file`` — a copy of TDR's
 # ``file_ref``, equal on every row, which the twelve-manifest parity test checks across
 # the corpus — and one entity type of its own. :class:`AzulVerbatim` removes each so the
-# tables come out in TDR's shape. The one column Azul *drops*, ``anvil_file.file_path``,
-# cannot be put back. Nothing offline can re-derive this list: a manifest alone cannot
+# tables come out in TDR's shape. The one column Azul then *dropped*, ``anvil_file.file_path``,
+# it carries since 2026-10 (on every ``anvil_file`` of the twelve anvil15 manifests fetched
+# 2026-10-21, #717). Nothing offline can re-derive this list: a manifest alone cannot
 # tell an Azul addition from a TDR column.
 AZUL_ADDED_COLUMNS = frozenset({"version"})
 AZUL_ADDED_FILE_COLUMNS = frozenset({"drs_uri"})
@@ -241,15 +242,14 @@ def record_from_file_row(row: dict[str, Any], dataset: dict[str, Any]) -> dict[s
     """One classifier input record from one ``anvil_file`` row and the dataset row.
 
     The keys are the input contract (``schema/metadata.yaml``) less ``entry_id``, which
-    the snapshot does not hold, plus, where the row carries it, ``file_path`` — the column Azul's
-    manifests drop, kept as an extra key because it is the full path #277's uniform
-    cache key wanted and never had. ``drs_uri`` is read from ``file_ref``, TDR's name
+    the snapshot does not hold, plus, where the row carries it, ``file_path``, the file's
+    storage path within its dataset (an optional slot of the contract, #717). ``drs_uri`` is read from ``file_ref``, TDR's name
     for it; ``dataset_id`` and ``dataset_title`` come from the dataset row.
 
     Every other value is transcribed as the reader delivered it, nulls included: a
     null ``file_md5sum`` stays null and is excluded at load (#376), exactly as the
     compact path's empty cell is. A row lacking any column the record reads raises
-    naming the column and its table; only ``file_path`` is optional. The two dimensions
+    naming the column and its table; only ``file_path`` is optional, and an empty one is null. The two dimensions
     ``anvil_file`` publishes (``data_modality`` / ``reference_assembly``) are not read:
     they enter as the published importer's evidence (contract 7.12, #513), which the
     reconcile stage reads (#432).
@@ -273,5 +273,6 @@ def record_from_file_row(row: dict[str, Any], dataset: dict[str, Any]) -> dict[s
     except KeyError as exc:
         raise ValueError(f"cannot map an {VERBATIM_FILE} row to a record: no {exc.args[0]!r} column") from None
     if "file_path" in row:
-        record["file_path"] = row["file_path"]
+        # An empty path is none, as the compact path reads an empty cell (#717).
+        record["file_path"] = row["file_path"] or None
     return record

@@ -322,6 +322,7 @@ class TestTheEdge:
         assert output["unmatched_files"][0]["file_name"] == "orphan.bam.bai"
         assert output["unmatched_files"][0]["reason"] == NO_MATCHING_PARENT
         assert output["metadata"]["details"]["ambiguous_parent"] == 0
+        assert output["metadata"]["details"]["settled_by_folder"] == {}
 
     def test_ambiguous_parent_takes_no_parent_at_all(self, tmp_path):
         """Two files sharing the name an index points at: no parent is chosen (#438)."""
@@ -346,6 +347,53 @@ class TestTheEdge:
         assert entry["files_sharing_that_name"] == 2
         assert output["metadata"]["details"]["ambiguous_parent"] == 1
         assert output["metadata"]["details"]["unmatched"] == 0
+
+    def test_a_shared_name_is_settled_by_the_index_s_own_folder(self, tmp_path):
+        """#717: ANVIL_T2T_CHRY stores each cohort's outputs under one name in its own folder,
+        and each index beside the file it indexes."""
+        name = "chr1.recalibrated.snp_indel.pass.vcf.gz"
+        folders = (
+            "1KGP/joint_vcfs/PASS/all_samples_3202",
+            "SGDP_CHM13v2/joint_vcfs/PASS",
+            "SGDP_GRCh38/joint_vcfs/PASS",
+        )
+        records = []
+        for n, folder in enumerate(folders):
+            records.append({**_file(name, ".vcf.gz", f"{n}" * 32, f"v{n}"), "file_path": f"{folder}/{name}"})
+            records.append(
+                {**_file(f"{name}.tbi", ".tbi", f"{n + 5}" * 32, f"t{n}"), "file_path": f"{folder}/{name}.tbi"}
+            )
+        output = run_index_producer(tmp_path, records)
+        assert output["unmatched_files"] == []
+        parents = {r["entry_id"]: r["generated_by"]["inputs"][0]["parent_key"] for r in output["classifications"]}
+        assert parents == {f"t{n}": _fid(f"{n}" * 32) for n in range(3)}
+        assert output["metadata"]["details"]["settled_by_folder"] == {"test": 3}
+
+    def test_the_top_of_the_dataset_is_a_folder_too(self, tmp_path):
+        records = [
+            {**_file("sample.bam", ".bam", "1" * 32, "e1"), "file_path": "sample.bam"},
+            {**_file("sample.bam", ".bam", "2" * 32, "e2"), "file_path": "SGDP_GRCh38/sample.bam"},
+            {**_file("sample.bam.bai", ".bai", "3" * 32, "e3"), "file_path": "sample.bam.bai"},
+        ]
+        output = run_index_producer(tmp_path, records)
+        assert _assert_matched(output, "sample.bam.bai")["generated_by"]["inputs"][0]["parent_key"] == _fid("1" * 32)
+
+    @pytest.mark.parametrize(
+        ("index_folder", "parent_folders"),
+        [("elsewhere", ("a", "b")), ("a", ("a", "a")), (None, ("a", "b"))],
+        ids=["no-carrier-in-the-folder", "two-carriers-in-the-folder", "index-without-a-path"],
+    )
+    def test_a_folder_that_does_not_settle_it_takes_no_parent(self, tmp_path, index_folder, parent_folders):
+        records = [
+            {**_file("sample.bam", ".bam", f"{n + 1}" * 32, f"e{n}"), "file_path": f"{folder}/sample.bam"}
+            for n, folder in enumerate(parent_folders)
+        ]
+        index = _file("sample.bam.bai", ".bai", "3" * 32, "ebai")
+        if index_folder:
+            index["file_path"] = f"{index_folder}/sample.bam.bai"
+        output = run_index_producer(tmp_path, [*records, index])
+        _assert_declined(output, "sample.bam.bai")
+        assert [u["reason"] for u in output["unmatched_files"]] == [AMBIGUOUS_PARENT]
 
     def test_same_name_in_another_dataset_is_not_ambiguous(self, tmp_path):
         """The lookup key is per dataset, so a name reused across datasets still matches."""

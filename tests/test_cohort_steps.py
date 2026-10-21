@@ -55,7 +55,7 @@ def test_the_sample_name_map_is_an_input_list_not_an_input():
 
 def test_a_workspace_tar_merges_the_gvcfs_its_sample_map_lists():
     reader = cs.TarSteps.for_run(records((MAP, "D"), (MAP, "OTHER"), ("HG00096.chr1.hc.vcf.gz", "D")), KEY, EVIDENCE)
-    step, outcome = reader(tar_head(IMPORT), TAR, "D")
+    step, outcome = reader(tar_head(IMPORT), TAR, "D", None)
     assert outcome == cs.STEPPED
     assert step is not None and step["activity"] == "CohortMergeActivity"
     (used,) = step["inputs"]
@@ -75,12 +75,12 @@ def test_a_workspace_tar_merges_the_gvcfs_its_sample_map_lists():
     ],
 )
 def test_a_list_no_sample_map_or_two_of_the_dataset_carry_gives_no_step(entries, outcome):
-    assert cs.TarSteps.for_run(records(*entries), KEY, EVIDENCE)(tar_head(IMPORT), TAR, "D") == (None, outcome)
+    assert cs.TarSteps.for_run(records(*entries), KEY, EVIDENCE)(tar_head(IMPORT), TAR, "D", None) == (None, outcome)
 
 
 def test_a_workspace_naming_another_directory_is_not_this_tars():
     reader = cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)
-    assert reader(tar_head(IMPORT), "chr1.1_100000.tar", "D") == (None, cs.OUTPUT_NOT_THIS_FILE)
+    assert reader(tar_head(IMPORT), "chr1.1_100000.tar", "D", None) == (None, cs.OUTPUT_NOT_THIS_FILE)
 
 
 @pytest.mark.parametrize(
@@ -95,18 +95,18 @@ def test_a_workspace_naming_another_directory_is_not_this_tars():
     ],
 )
 def test_any_other_header_gives_no_step(lines, outcome):
-    assert cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(tar_head(*lines), TAR, "D") == (None, outcome)
+    assert cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(tar_head(*lines), TAR, "D", None) == (None, outcome)
 
 
 def test_an_identical_import_line_twice_is_one_step():
-    step, outcome = cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(tar_head(IMPORT, IMPORT), TAR, "D")
+    step, outcome = cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(tar_head(IMPORT, IMPORT), TAR, "D", None)
     assert outcome == cs.STEPPED and step is not None
 
 
 @pytest.mark.parametrize("name", [TAR, "CHR1.100000001_100100000.TAR.GZ"])
 def test_a_tar_is_matched_to_its_workspace_case_folded_less_tar_and_gz(name):
     """The workspace path names the directory: the tar's name less .tar and any .gz, either case (#678)."""
-    step, outcome = cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(tar_head(IMPORT), name, "D")
+    step, outcome = cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(tar_head(IMPORT), name, "D", None)
     assert outcome == cs.STEPPED and step is not None
 
 
@@ -120,12 +120,15 @@ def test_unread_names_why_only_for_a_workspace_whose_header_was_not_parsed():
 
 def test_a_tar_whose_header_was_not_read_gives_no_step():
     head = cs.ParsedTarHead(["x/callset.json"], None)
-    assert cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(head, TAR, "D") == (None, cs.NO_VCF_HEADER)
+    assert cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(head, TAR, "D", None) == (None, cs.NO_VCF_HEADER)
     # A tar that is no GenomicsDB workspace has no step to read, and is not counted.
     other = cs.ParsedTarHead(["reads/a.fastq"], None)
-    assert cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(other, TAR, "D") == (None, None)
+    assert cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(other, TAR, "D", None) == (None, None)
     failed = cs.ParsedTarHead(["x/callset.json"], None, "ConnectionError: reset")
-    assert cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(failed, TAR, "D") == (None, cs.VCF_HEADER_UNREADABLE)
+    assert cs.TarSteps.for_run(records((MAP, "D")), KEY, EVIDENCE)(failed, TAR, "D", None) == (
+        None,
+        cs.VCF_HEADER_UNREADABLE,
+    )
     assert cs.parse_tar_head(TarHead(["a"], None, "reset")).vcf_header_unread == "reset"
 
 
@@ -185,7 +188,7 @@ def map_reader(*entries) -> cs.SampleMapSteps:
 
 def test_a_sample_map_lists_each_gvcf_of_that_name_in_the_dataset_as_a_member():
     reader = map_reader(("HG00096.chr1.hc.vcf.gz", "D"), ("HG00097.chr1.hc.vcf.gz", "D"), ("HG00096.cram", "D"))
-    step, outcome = reader(cs.parse_sample_map(MAP_TEXT), MAP, "D")
+    step, outcome = reader(cs.parse_sample_map(MAP_TEXT), MAP, "D", None)
     assert outcome == cs.STEPPED
     assert step is not None and step["activity"] == "CohortDefinitionActivity"
     assert [(i["role"], i["parent_key"], i["parent_kind"]) for i in step["inputs"]] == [
@@ -206,16 +209,16 @@ def test_a_sample_map_lists_each_gvcf_of_that_name_in_the_dataset_as_a_member():
     ],
 )
 def test_a_member_missing_or_ambiguous_declines_the_whole_cohort(entries, outcome):
-    assert map_reader(*entries)(cs.parse_sample_map(MAP_TEXT), MAP, "D") == (None, outcome)
+    assert map_reader(*entries)(cs.parse_sample_map(MAP_TEXT), MAP, "D", None) == (None, outcome)
 
 
 def test_two_rows_naming_one_file_decline_the_cohort():
     rows = cs.parse_sample_map(MAP_TEXT.replace("HG00097.chr1", "HG00096.chr1"))
-    assert map_reader(("HG00096.chr1.hc.vcf.gz", "D"))(rows, MAP, "D") == (None, cs.PARENT_AMBIGUOUS)
+    assert map_reader(("HG00096.chr1.hc.vcf.gz", "D"))(rows, MAP, "D", None) == (None, cs.PARENT_AMBIGUOUS)
 
 
 def test_a_file_that_is_no_sample_map_gives_no_step():
-    assert map_reader(("HG00096.chr1.hc.vcf.gz", "D"))(None, MAP, "D") == (None, cs.NOT_A_LIST)
+    assert map_reader(("HG00096.chr1.hc.vcf.gz", "D"))(None, MAP, "D", None) == (None, cs.NOT_A_LIST)
 
 
 # --- the two producers -----------------------------------------------------------------------
@@ -301,3 +304,30 @@ def test_the_tar_producer_writes_the_workspace_step(tmp_path):
 def test_the_edge_rules_are_declared_with_the_others():
     assert code_rules.MERGE_BY_WORKSPACE_HEADER in code_rules.EDGE_RULES
     assert code_rules.COHORT_BY_SAMPLE_MAP in code_rules.EDGE_RULES
+
+
+# --- the folder settling a shared name (#717) --------------------------------------------------
+
+
+def _in_folders(*entries) -> list[dict]:
+    """(file name, folder) records of dataset D, keyed f0, f1, …, each stored in its folder."""
+    return [
+        {"file_id": f"f{n}", "file_name": name, "dataset_id": "D", "file_path": f"{folder}/{name}"}
+        for n, (name, folder) in enumerate(entries)
+    ]
+
+
+def test_a_tar_takes_the_sample_map_of_that_name_in_its_own_folder():
+    reader = cs.TarSteps.for_run(_in_folders((MAP, "SGDP_CHM13v2"), (MAP, "SGDP_GRCh38")), KEY, EVIDENCE)
+    step, outcome = reader(tar_head(IMPORT), TAR, "D", "SGDP_GRCh38")
+    assert outcome == cs.STEPPED and step is not None
+    assert [i["parent_key"] for i in step["inputs"]] == ["f1"]
+    assert reader(tar_head(IMPORT), TAR, "D", "1KGP") == (None, cs.PARENT_AMBIGUOUS)
+
+
+def test_a_sample_map_takes_each_member_of_that_name_in_its_own_folder():
+    gvcfs = ("HG00096.chr1.hc.vcf.gz", "HG00097.chr1.hc.vcf.gz")
+    reader = cs.SampleMapSteps.for_run(_in_folders(*((g, f) for f in ("a", "b") for g in gvcfs)), KEY, EVIDENCE)
+    step, outcome = reader(cs.parse_sample_map(MAP_TEXT), MAP, "D", "b")
+    assert outcome == cs.STEPPED and step is not None
+    assert [i["parent_key"] for i in step["inputs"]] == ["f2", "f3"]
