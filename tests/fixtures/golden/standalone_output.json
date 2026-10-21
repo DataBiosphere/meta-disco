@@ -484,6 +484,7 @@
       "details": {
         "ambiguous_parent": 0,
         "matched_to_parent": 1,
+        "settled_by_folder": {},
         "unmatched": 1
       },
       "dropped": 0,
