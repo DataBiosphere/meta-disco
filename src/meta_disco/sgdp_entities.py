@@ -256,8 +256,9 @@ def import_sgdp(
     A T2T_CHRY file's source is the table, its url ``service`` (the Azul service the manifest came from), its
     ``fetched_at`` the verbatim manifest's request time; SGDP's file's version is its sha256, since SGDP
     publishes none, and its ``fetched_at`` when it was downloaded. Raises, writing nothing, where T2T_CHRY's
-    verbatim manifest cannot be read or has no request time, or no sample is confirmed: an evidence file with no
-    lines is refused by reconcile (contract 5.3), and no generation would leave an older one current.
+    verbatim manifest cannot be read or has no request time, or no sample is confirmed: a generation confirming no
+    sample would supersede an older one with no links at all, so the import is refused and any older generation
+    stays current for a person to look at.
     """
     manifest = verbatim_manifest(manifest_root, catalog, DATASET, sidecar_datasets(manifest_root, catalog))
     if isinstance(manifest, str):
