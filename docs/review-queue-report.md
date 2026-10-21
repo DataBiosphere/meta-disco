@@ -1,6 +1,6 @@
 # Review queue
 
-Source values the slot map or the entity map routed to a slot but that no authored translation rule reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per source, dataset, table and column it was found in; "rule it would use" names the seeded rule that matches it, or — where none does. For a donor's slot (phenotypic_sex, genetic_ancestry, organism_type, reported_ethnicity), files counts donors, and for a sample's slot (biosample_type), samples, each dataset's identifiers apart. 27 listed, from evidence under data/source_evidence and data/entity_evidence.
+Source values the slot map or the entity map routed to a slot but that no authored translation rule reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per source, dataset, table and column it was found in; "rule it would use" names the seeded rule that matches it, or — where none does. For a donor's slot (phenotypic_sex, genetic_ancestry, organism_type, reported_ethnicity), files counts donors, and for a sample's slot (biosample_type), samples, each dataset's identifiers apart. 156 listed, from evidence under data/source_evidence and data/entity_evidence.
 
 ## Published: the catalog's published columns
 
@@ -75,7 +75,139 @@ Source values the slot map or the entity map routed to a slot but that no author
 
 ## External: other catalogs
 
-No unreviewed values.
+### genetic_ancestry
+
+| files | raw value | source | dataset | table | column | rule it would use |
+| --- | --- | --- | --- | --- | --- | --- |
+| 15 | `'Papuan'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 4 | `'Dai'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 4 | `'Ju_hoan_North'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 4 | `'Mbuti'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 4 | `'Punjabi'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 3 | `'Dinka'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 3 | `'Even'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 3 | `'Finnish'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 3 | `'French'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 3 | `'Han'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 3 | `'Japanese'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 3 | `'Jordanian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 3 | `'Karitiana'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 3 | `'Mandenka'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 3 | `'Mixe'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 3 | `'Quechua'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 3 | `'Sardinian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 3 | `'Yoruba'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Abkhasian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Adygei'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Aleut'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Ami'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Armenian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Balochi'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'BantuHerero'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'BantuKenya'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'BantuTswana'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Basque'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'BedouinB'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Bengali'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Bergamo'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Biaka'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Bougainville'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Brahmin'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Brahui'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Bulgarian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Burmese'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Burusho'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Cambodian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Crete'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Druze'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Dusun'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'English'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Esan'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Eskimo_Naukan'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Eskimo_Sireniki'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Estonian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Gambian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Georgian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Greek'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Hazara'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Hezhen'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Hungarian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Icelandic'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Igorot'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Iranian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Iraqi_Jew'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Irula'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Kalash'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Kapu'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Khomani_San'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Kinh'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Korean'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Kusunda'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Kyrgyz'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Lahu'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Lezgin'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Luhya'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Luo'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Madiga'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Makrani'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Mala'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Mansi'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Masai'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Mayan'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Mende'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Miao'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Mixtec'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Mongola'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Mozabite'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Naxi'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'North_Ossetian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Orcadian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Oroqen'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Palestinian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Pathan'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Piapoco'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Pima'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Relli'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Russian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Saami'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Saharawi'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'She'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Sindhi'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Spanish'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Surui'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Tajik'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Thai'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Tlingit'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Tu'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Tubalar'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Tujia'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Turkish'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Tuscan'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Ulchi'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Uygur'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Xibo'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Yadava'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Yakut'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Yemenite_Jew'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Yi'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Zapotec'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Albanian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Altaian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Atayal'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Australian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Chane'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Chechen'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Chukchi'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Czech'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Daur'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Eskimo_Chaplin'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Hawaiian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Itelman'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Khonda_Dora'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Maori'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Polish'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Samaritan'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Somali'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 
 ## Authored mappings: what each translation rule declares
 
@@ -170,6 +302,8 @@ Every authored translation rule, by slot and most files first: the source values
 | 5,243 | 1,822 | 3,421 | 0 | phenotypic_sex.male | `any` | `'male'` | phenotypic_sex: Male | The term itself, as T2T, HPRC and NIA_CARD write it lower case and PRIMED and AnVIL capitalised. |
 | 1,603 | 0 | 1,603 | 0 | phenotypic_sex.pedigree_2 | `anvil / ANVIL_1000G_high_coverage_2019` | `'2'` | phenotypic_sex: Female | 1000 Genomes' `pedigree.sex` is a PED file's sex column, where 1 is male and 2 female; scoped to the dataset, since a bare `2` means this only in a PED file. |
 | 1,599 | 0 | 1,599 | 0 | phenotypic_sex.pedigree_1 | `anvil / ANVIL_1000G_high_coverage_2019` | `'1'` | phenotypic_sex: Male | 1000 Genomes' `pedigree.sex` is a PED file's sex column, where 1 is male and 2 female; scoped to the dataset, since a bare `1` means this only in a PED file. |
+| 174 | 0 | 0 | 174 | phenotypic_sex.sgdp_m | `sgdp` | `'M'` | phenotypic_sex: Male | SGDP's metadata file writes a genome's sex in `Gender` as M, F or U (not known); scoped to SGDP, since a bare `M` means male only there (#559). Its U has no row and makes no claim. |
+| 101 | 0 | 0 | 101 | phenotypic_sex.sgdp_f | `sgdp` | `'F'` | phenotypic_sex: Female | SGDP's metadata file writes a genome's sex in `Gender` as M, F or U (not known); scoped to SGDP, since a bare `F` means female only there (#559). Its U has no row and makes no claim. |
 
 ### genetic_ancestry
 
