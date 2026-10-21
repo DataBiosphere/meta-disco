@@ -231,10 +231,6 @@ def _link_attribution(source_type: str, rule_id: str, entry: EvidenceEntry) -> d
     return attributions(source_type, (rule_id,), entry.source)[0]
 
 
-# How a file with a `same_donor_as` line spells it; a file without one is not read for synonyms.
-_SAME_DONOR_AS_BYTES = json.dumps(SAME_DONOR_AS).encode()
-
-
 def _main_identifiers(paths: Iterable[Path], rules: IdentifierRuleSet) -> IdentityLinks:
     """Every ``same_donor_as`` line of ``paths``: which donor identifier is whose synonym (#559).
 
@@ -249,9 +245,6 @@ def _main_identifiers(paths: Iterable[Path], rules: IdentifierRuleSet) -> Identi
     named: dict[Identifier, dict[Identifier, list[dict]]] = defaultdict(lambda: defaultdict(list))
     unrecognised_links: dict[tuple[str | None, str | None], Counter] = defaultdict(Counter)
     for path in paths:
-        with path.open("rb") as f:
-            if not any(_SAME_DONOR_AS_BYTES in line for line in f):
-                continue  # :func:`gather` still reads and checks every line
         envelope = read_entity_envelope(path)
         dataset = envelope.target.dataset
         for entry in entries(path, envelope, (SAME_DONOR_AS,)):

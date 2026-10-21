@@ -556,3 +556,16 @@ def test_a_blank_or_missing_cell_writes_no_line_and_a_row_naming_no_sample_is_pa
     write_dataset(tmp_path / "m", T2T, [(CHM13, {"sgdp_id": "S_X-1", "karyotype": "XY"}), *T2T_ROWS[:1]])
     manifest = manifest_path(tmp_path / "m", CATALOG, T2T, FORMAT_VERBATIM)
     assert list(se.t2t_rows(manifest)) == ["simons_data_sample_1"]
+
+
+def test_a_link_whose_field_is_spelled_with_a_json_escape_is_still_read(tmp_path):
+    """JSON may escape any character of a key: `same\\u005fdonor_as` is `same_donor_as`, and is read as one."""
+    root = tmp_path / "entity_evidence"
+    lines_file(root, "D", [(SAME_DONOR_AS, "S_Spanish-2", "HG01504")], SOURCE_EXTERNAL_GROUND_TRUTH, "ext")
+    (path,) = root.rglob("*.ndjson")
+    text = path.read_text()
+    assert '"same_donor_as"' in text
+    path.write_text(text.replace('"same_donor_as"', '"same\\u005fdonor_as"'))
+    assert '"same_donor_as"' not in path.read_text()
+    donors = by_id(settled(root, tmp_path).donors)
+    assert [s["identifier"]["id"] for s in donors["HG01504"][SYNONYMS]] == ["S_Spanish-2"]
