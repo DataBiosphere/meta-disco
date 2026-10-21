@@ -64,11 +64,18 @@ and a parent not found there is `external` (decision 2). Only sample and donor i
    sample and a donor says the sample was collected from the donor with the same identifier: the
    sample's `collected_from`. `coriell` and `giab` name both; `sra_sample`, `biosample` and T2T_CHRY's
    `dataset_local` names name samples; `igvf`'s donor accessions name donors and its sample accessions
-   samples. A person's facts (sex,
+   samples; `sgdp` (SGDP's names for its genomes) and `hgdp` (CEPH-HGDP cell lines) name donors (#559).
+   A person's facts (sex,
    ancestry, family) go on the donor; a sample's (karyotype, tissue, age at collection) on the sample.
    This replaces, for a rule naming both, the sentence below that equal identifiers say nothing about
    whether a sample and a donor are one person. Where a sample's own row names its donor
    (`anvil_biosample.donor_id`, a submitter donor column), reading that link is #361's and #559's.
+   *Extended by #559:* a source's line naming a sample's donor is a source of `collected_from` beside
+   the rule (T2T_CHRY's SGDP tables, for its SGDP genomes), and a donor a source names two ways is keyed
+   by the identifier at the end of the chain, the others kept on the record as synonyms
+   (`sgdp:S_Spanish-2` on `coriell:HG01504`, as SGDP's metadata file says), so a reader can show the
+   dataset's name and find the record by either (the explorer's search is a follow-up). Joining namespaces by rule (`giab:HG002` and
+   `coriell:NA24385`) stays #361's, and one canonical-identity resolver #674's.
 4. **The AnVIL model is followed**: its donor fields (`phenotypic_sex`, `reported_ethnicity`,
    `genetic_ancestry`) and the vocabularies its submission guide suggests. `phenotypic_sex` takes
    AnVIL's values, `Female` and `Male`, with PATO's terms as their `meaning`; population codes are
@@ -109,8 +116,8 @@ reference to it, a file's `samples.named_by` (below), since one identifier is na
 - `namespace` is the authority that issued it. *Settled by #357*, in `rules/sample_namespaces.yaml`:
   `coriell` (`HG`/`NA`/`GM` and five digits), `giab` (`HG001` to `HG007`, kept apart from the
   `coriell` numbers of the same people until #361), `sra_sample` (`SRS…`/`ERS…`/`DRS…`), `biosample`
-  (`SAMN…`/`SAMEA…`/`SAMD…`), and `dataset_local` only where a rule declared for that dataset says
-  its names are per-sample. A string no rule matches (`Sample`, `BioSample_3`, a BAM path) is no
+  (`SAMN…`/`SAMEA…`/`SAMD…`), `igvf`, `sgdp` and `hgdp` (#693, #559), and `dataset_local` only where a
+  rule declared for that dataset says its names are per-sample. A string no rule matches (`Sample`, `BioSample_3`, a BAM path) is no
   sample.
 - `source_type` is where we read it, from `source_type_enum`, with the exact place (`@RG SM`, a VCF
   sample column, a table and column) as provenance beside it, the way a claim records it (`source`

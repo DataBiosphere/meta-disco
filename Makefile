@@ -1,4 +1,4 @@
-.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-sample_map classify-idat classify-fast5 classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published check-lineage-map import-anvil-lineage check-entity-map import-anvil-entities import-ena-evidence check-ena-lineage-map import-ena-lineage fetch-external-files check-external-files import-external-lineage seed-activity-map seed-value-map review-queue corpus-diff reconcile reconcile-report rules-report all-reports download-hprc validate-hprc clean help
+.PHONY: test test-network probe-tdr test-schema test-all lint lint-schema lint-all type format format-check classify classify-hprc classify-and-report download validate-metadata classify-bam classify-vcf classify-fastq classify-fasta classify-gfa classify-tar classify-sample_map classify-idat classify-fast5 classify-headers classify-bed consistency-report coverage-report validation-report unprocessable-report manifest-survey download-and-survey check-slot-map import-anvil-evidence check-published-map import-anvil-published check-lineage-map import-anvil-lineage check-entity-map import-anvil-entities import-sgdp-entities import-ena-evidence check-ena-lineage-map import-ena-lineage fetch-external-files check-external-files import-external-lineage seed-activity-map seed-value-map review-queue corpus-diff reconcile reconcile-report rules-report all-reports download-hprc validate-hprc clean help
 
 help:
 	@echo "meta-disco — AnVIL file metadata classification"
@@ -39,6 +39,7 @@ help:
 	@echo "  make import-anvil-lineage Import AnVIL's lineage (anvil_activity, sample rows, IGVF derived_from) as lineage evidence"
 	@echo "  make check-entity-map   Check the AnVIL entity map (donors' and samples' facts) against the manifests (offline)"
 	@echo "  make import-anvil-entities Import AnVIL's donor and sample facts (submitter tables, anvil_donor, anvil_biosample) as entity evidence"
+	@echo "  make import-sgdp-entities Import SGDP's metadata file for T2T_CHRY's SGDP genomes whose sex both agree on (network)"
 	@echo "  make import-ena-evidence Import ENA's run records for the FASTQs ENA generated, where the md5 matches (network)"
 	@echo "  make check-ena-lineage-map Check the ENA run lineage map against the deployment and the manifests (offline)"
 	@echo "  make import-ena-lineage Link declared alignments to the ENA run whose reads they hold, by read and base counts (network)"
@@ -292,6 +293,13 @@ check-entity-map:
 
 import-anvil-entities:
 	uv run python scripts/import_anvil_entities.py $(ARGS)
+
+# SGDP's metadata file (#559), for ANVIL_T2T_CHRY's SGDP genomes: each sample's donor, and the
+# donor's sex, population and main identifier, written only for a sample whose sex SGDP and
+# T2T_CHRY's karyotype agree on. A generation under data/entity_evidence/sgdp/, with the file
+# kept beside it. Network; `ARGS="--file <kept copy>"` re-imports offline.
+import-sgdp-entities:
+	uv run python scripts/import_sgdp_entities.py $(ARGS)
 
 # ENA's run records (#606), for the files named as ENA names its generated FASTQs and
 # whose md5 ENA's equals: a generation per dataset under data/source_evidence/ena/, with

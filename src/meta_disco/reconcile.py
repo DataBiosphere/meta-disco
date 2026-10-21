@@ -1196,7 +1196,7 @@ def reconcile_run(
     ``entity_root``, by default the ``entity_evidence`` directory beside ``evidence_root``,
     settles each donor's slots into ``donors.ndjson.gz``, and each sample the reconciled files
     name or the entity evidence names is written to ``samples.ndjson.gz``, its slots settled
-    (#699) and with the donor it was collected from where an identifier rule says.
+    (#699) and with the donor it was collected from where an identifier rule or a ``collected_from`` line says (#559).
     ``evidence_root=None`` excludes the entity evidence too: the samples the files name and the
     donors they point to are still written, each record's slots ``not_classified``.
 

@@ -94,6 +94,9 @@ make lint
 make check-entity-map
 make import-anvil-entities
 
+# SGDP's donors for ANVIL_T2T_CHRY's SGDP genomes (#559), from SGDP's metadata file (network)
+make import-sgdp-entities
+
 # Probe a TDR snapshot in place in BigQuery (#498): list its tables, COUNT(*)
 # each, stream one and time it. Syncs the `tdr` extra in for the run; identity
 # is the environment's, see Environment below.
@@ -133,7 +136,7 @@ evidence}` entry — plus the controlled vocabulary:
   `variant_origin` (#658); read from the same caller (`variant_origins`, found by `callers`),
   a caller with a somatic mode (Sniffles2) only where its command line shows the mode off
 - **identifier_namespace_enum**: who issued a sample or donor identifier (#357, #693): `coriell`,
-  `giab`, `sra_sample`, `biosample`, `igvf`, `dataset_local`; which strings each recognises, and
+  `giab`, `sra_sample`, `biosample`, `igvf`, `dataset_local`, and SGDP's `sgdp` and CEPH-HGDP's `hgdp` (#559); which strings each recognises, and
   whether they name a sample, a donor or both (`names`), is `rules/sample_namespaces.yaml`'s
 - **phenotypic_sex_enum** and **genetic_ancestry_enum**: a donor's slots (#693), AnVIL's
   `Female`/`Male` (PATO `meaning`s) and 1000 Genomes' population codes as a HANCESTRO `is_a`
@@ -463,6 +466,15 @@ evidence}` entry — plus the controlled vocabulary:
     settled on the `SampleRecord`. Every donor and sample slot carries `use` (`resolution.use_for`, which
     `reconcile` re-exports); `published` means show what the repository publishes, which is in the
     slot's evidence where AnVIL has a value (no AnVIL field holds a family).
+    **ANVIL_T2T_CHRY's SGDP genomes** (#559) get their donors from SGDP's own metadata file,
+    `sgdp_entities` (`make import-sgdp-entities`, network, sha256-pinned, a generation under
+    `data/entity_evidence/sgdp/`), written only for a sample whose SGDP sex and T2T_CHRY karyotype agree
+    (275 of 279; the rest are #718), each line cited to its source: T2T_CHRY's tables' pairing as
+    `repository_metadata`, SGDP's facts as `external_ground_truth`. Its links are the two **identity
+    links** (`models.IDENTITY_LINK_FIELDS`): `collected_from` names a sample's donor, beside the
+    identifier rule's link, and `same_donor_as` names another identifier for a donor, followed to the end
+    of its chain, so the record is keyed by `coriell:HG01504` or `hgdp:HGDP01163` and lists SGDP's own
+    `sgdp:S_Spanish-2` under `synonyms`.
     No donor value is copied onto a file record.
   - **A producer is declared once**, in `producers.PRODUCERS` — the fourteen writers of a
     run's `*_classifications.json` files. Add one there, never to a second list:

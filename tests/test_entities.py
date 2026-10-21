@@ -33,6 +33,7 @@ from meta_disco.models import (
     DONOR_REPOSITORY_ID,
     DONOR_SLOTS,
     FAMILY_FIELDS,
+    IDENTITY_LINK_FIELDS,
     JOIN_KEY_DRS_URI,
     JOIN_KEY_ENTITY_IDENTIFIER,
     NOT_CLASSIFIED,
@@ -473,9 +474,13 @@ def envelope(
     target_key: str = JOIN_KEY_ENTITY_IDENTIFIER,
     source_type: str = SOURCE_REPOSITORY_METADATA,
     dataset: str | None = "D",
+    repository: str = "anvil",
+    table: str = "t",
 ) -> EvidenceFileEnvelope:
     return EvidenceFileEnvelope(
-        source=EvidenceFileSource(repository="anvil", dataset=dataset or "D", table="t", url="https://example.org"),
+        source=EvidenceFileSource(
+            repository=repository, dataset=dataset or "D", table=table, url="https://example.org"
+        ),
         source_type=ImporterSourceTypeEnum(source_type),
         source_version="anvil15",
         source_key="id",
@@ -504,7 +509,7 @@ def test_a_file_reads_back_as_it_was_written_and_as_entries(tmp_path):
     [
         (lambda: envelope(target_key=JOIN_KEY_DRS_URI), "keyed by an identifier"),
         (lambda: envelope(dataset=None), "names no target dataset"),
-        (lambda: envelope(source_type="external_ground_truth"), "not an entity source"),
+        (lambda: envelope(source_type="repository_activity"), "not an entity source"),
     ],
 )
 def test_an_envelope_an_entity_reader_cannot_read_is_never_written(tmp_path, built, message):
@@ -541,7 +546,13 @@ def test_the_entity_row_field_pattern_lists_every_entity_field():
     pattern = schema["classes"]["EntityEvidenceRow"]["attributes"]["field"]["pattern"]
     match = re.fullmatch(r"\^\((.*)\)\\Z", pattern)
     assert match is not None, pattern
-    assert set(match.group(1).split("|")) == {*DONOR_FIELDS, *FAMILY_FIELDS, *SAMPLE_SLOTS, *REPOSITORY_ID_FIELDS}
+    assert set(match.group(1).split("|")) == {
+        *DONOR_FIELDS,
+        *FAMILY_FIELDS,
+        *SAMPLE_SLOTS,
+        *REPOSITORY_ID_FIELDS,
+        *IDENTITY_LINK_FIELDS,
+    }
 
 
 # --- the vocabulary and the value map ------------------------------------------------
@@ -599,10 +610,10 @@ def test_the_seeder_and_the_queue_read_the_entity_root_beside_the_slot_root(impo
 # --- reconcile -----------------------------------------------------------------------
 
 
-def settled(imported_root: Path, tmp_path: Path, sample_lists=()):
+def settled(imported_root: Path, tmp_path: Path, sample_lists=(), table: str = TABLE):
     paths, skipped = select_entity_evidence(imported_root, "anvil", CATALOG)
     rules = identifier_rules()
-    return reconcile_entities(gather(paths, imported_root, load(tmp_path, TABLE), rules), rules, sample_lists, skipped)
+    return reconcile_entities(gather(paths, imported_root, load(tmp_path, table), rules), rules, sample_lists, skipped)
 
 
 def by_id(records: list[dict]) -> dict[str, dict]:
@@ -666,6 +677,8 @@ def test_a_sample_is_collected_from_its_same_identifier_donor_which_then_has_a_r
         "total": 4,
         "named_by_files": 3,
         "collected_from": {"coriell": 3},
+        "collected_from_by_source": {SOURCE_IDENTIFIER_RULE: 3},
+        "collected_from_conflicts": [],
         "statuses": {slot: {NOT_CLASSIFIED: 4} for slot in SAMPLE_SLOTS},
         "unknown_site_lines": [],
         "unreviewed": {},

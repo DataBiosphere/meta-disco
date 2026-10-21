@@ -32,12 +32,24 @@ from: recognised as a donor or a sample by the line's field, it is listed on tha
 in each dataset whose donors are made from a row naming them, under one or more distinct
 ids); one tying to two records is refused, never chosen.
 
+**A donor may be named by more than one identifier** (#559). A ``same_donor_as`` line, about the
+donor it names, names another identifier for it: SGDP's metadata file says its genome
+``S_Spanish-2`` is the person of Coriell's ``HG01504``. The links are followed to the end of their
+chain, whose identifier is the main one: the record is keyed by it and lists the others under
+``synonyms``, each with its own line's source; whatever a line keyed by a synonym says, and wherever a
+parent, a sample's donor or a repository identifier names it, is read as the main identifier. A
+synonym whose chain branches or comes back on itself is joined to none, and counted.
+
 A sample record is written for every sample a reconciled file names (the run's sample
-lists), every sample a repository's identifier ties to and every sample a slot line names, with the donor it was collected
-from where an identifier rule naming both says so (``IdentifierRuleSet.collected_from``). A
-donor record is written for every donor the evidence names and every donor a sample's
-``collected_from`` or a donor's ``mother`` or ``father`` points to, so a join from a file to its
-donors, or from a donor to its parents, finds a record for each.
+lists), every sample a repository's identifier ties to and every sample a slot or ``collected_from``
+line names, with the donor it was collected from where its sources say so: an identifier rule
+naming both (``IdentifierRuleSet.collected_from``), and a ``collected_from`` line naming the
+donor (#559), each read as the main identifier. Sources naming different donors give none, and
+the sample is counted with each donor and who named it. A donor record is written for every donor
+the evidence names, every donor a sample's sources name (linked or in conflict), every identifier a
+``same_donor_as`` line about a recognised donor names (joined or not; a line whose own identifier no
+rule recognises is counted and read no further), and every donor a donor's ``mother`` or ``father``
+points to, so a join from a file to its donors, or from a donor to its parents, finds a record for each.
 
 Nothing here reads or writes a file record: a file reaches its donors through its
 ``samples`` (epic #692, decision 5).
@@ -49,31 +61,38 @@ import json
 import re
 from collections import Counter, defaultdict
 from collections.abc import Iterable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from . import code_rules
+from .edges import distinct
 from .entity_evidence import entries, read_entity_envelope
 from .models import (
     ANATOMICAL_SITE,
+    COLLECTED_FROM,
     CONFLICT,
     DONOR_SLOTS,
     FAMILY_FIELDS,
     FAMILY_ID,
+    IDENTITY_LINK_FIELDS,
     JOIN_KEY_ENTITY_IDENTIFIER,
+    KIND_OF_ENTITY_FIELD,
     KIND_OF_SLOT,
     PARENT_FIELDS,
     REPOSITORY_ID_FIELDS,
     REPOSITORY_IDS,
+    SAME_DONOR_AS,
     SAMPLE_SLOTS,
     SOURCE_IDENTIFIER_RULE,
     SOURCE_PUBLISHED_VALUE,
+    SYNONYMS,
     UNKNOWN_PARENT,
     UNKNOWN_SITE,
     UNTRANSLATED_SLOTS,
 )
 from .output_utils import relative_to
 from .reconcile_lineage import applies
+from .reconcile_samples import attributions
 from .resolution import NO_EVIDENCE, SlotEvidence, declaration, settle, translate, use_for
 from .rule_engine import make_claim
 from .sample_identity import (
@@ -93,8 +112,10 @@ from .value_map import ValueMap
 # How many unrecognised identifiers the report names per table.
 MAX_EXAMPLES = 5
 
-# Every field an entity line may name, for :func:`gather`'s one read of each file.
-_ENTITY_FIELDS = (*DONOR_SLOTS, *SAMPLE_SLOTS, *REPOSITORY_ID_FIELDS)
+# Every field an entity line may name, for :func:`gather`'s read of each file; its ``same_donor_as``
+# lines are read first, on their own (:func:`_main_identifiers`), so every later line can be read
+# as its donor's main identifier.
+_ENTITY_FIELDS = (*DONOR_SLOTS, *SAMPLE_SLOTS, *REPOSITORY_ID_FIELDS, *IDENTITY_LINK_FIELDS)
 # The entity rule a slot taken as written cites.
 _AS_WRITTEN_RULES = {slot: rule.id for rule in code_rules.ENTITY_RULES for slot in rule.sets}
 # The report's labels for the lines that name no value (:func:`_names_no_value`).
@@ -137,6 +158,7 @@ class EntityEvidence:
     label (:data:`UNKNOWN_PARENT_LINES`, :data:`BLANK_FAMILY_ID_LINES`, :data:`UNKNOWN_SITE_LINES`), the
     lines that name no value, and ``unrecognised_parents`` the parent strings no rule recognises, each
     per dataset and table.
+    ``links`` holds the identity links (:class:`IdentityLinks`, #559).
     """
 
     slots: dict[Identifier, dict[str, SlotEvidence]]
@@ -147,6 +169,7 @@ class EntityEvidence:
     repository_ids: dict[tuple[EntityKind, Identifier], set[RepositoryId]]
     no_value_lines: dict[str, Counter]
     unrecognised_parents: dict[tuple[str | None, str | None], Counter]
+    links: IdentityLinks
 
 
 @dataclass
@@ -175,6 +198,98 @@ def select_entity_evidence(entity_root: Path, repository: str, catalog: str | No
     return applicable, skipped
 
 
+@dataclass
+class IdentityLinks:
+    """What the ``collected_from`` and ``same_donor_as`` lines said (#559).
+
+    ``synonyms`` holds, per main identifier, each synonym joined to it and the attributions naming it
+    (:func:`_main_identifiers`); ``unjoined`` each synonym joined to none, and why. ``collected_from`` holds, per
+    sample, each line's donor, as its main identifier, and attribution. ``unrecognised`` counts, per dataset and
+    table, a link's value no rule recognises as a donor.
+    """
+
+    synonyms: dict[Identifier, dict[Identifier, tuple[dict, ...]]]
+    unjoined: list[dict]
+    unrecognised: dict[tuple[str | None, str | None], Counter]
+    collected_from: dict[Identifier, list[tuple[Identifier, dict]]] = field(default_factory=lambda: defaultdict(list))
+
+    def __post_init__(self) -> None:
+        self._main_of = {synonym: main for main, joined in self.synonyms.items() for synonym in joined}
+
+    def main(self, donor: Identifier) -> Identifier:
+        """``donor``'s main identifier: the one it is a synonym of, or itself."""
+        return self._main_of.get(donor, donor)
+
+    @property
+    def joined(self) -> int:
+        """How many synonyms are joined to a main identifier."""
+        return len(self._main_of)
+
+
+def _link_attribution(source_type: str, rule_id: str, entry: EvidenceEntry) -> dict:
+    """The attribution an identity link's line gives: its source type, the identifier rule that recognised the donor
+    it names, and its source."""
+    return attributions(source_type, (rule_id,), entry.source)[0]
+
+
+def _main_identifiers(paths: Iterable[Path], rules: IdentifierRuleSet) -> IdentityLinks:
+    """Every ``same_donor_as`` line of ``paths``: which donor identifier is whose synonym (#559).
+
+    A line about the donor it names (the synonym) names an identifier for the same donor, both recognised
+    as donors in the line's dataset. The links are followed to the end of their chain, transitively
+    (``S_Spanish-2`` → ``HG01504`` → ``NA99999`` puts both on ``NA99999``), and each synonym keeps the
+    attributions of its own step. A synonym whose chain reaches an identifier naming more than one other, or comes
+    back on itself, joins none and is listed in ``unjoined`` with why. A line naming its own identifier says
+    nothing and is passed over. A line whose synonym no rule recognises is left for :func:`gather` to count;
+    one whose named identifier none recognises is counted here.
+    """
+    named: dict[Identifier, dict[Identifier, list[dict]]] = defaultdict(lambda: defaultdict(list))
+    unrecognised_links: dict[tuple[str | None, str | None], Counter] = defaultdict(Counter)
+    for path in paths:
+        envelope = read_entity_envelope(path)
+        dataset = envelope.target.dataset
+        for entry in entries(path, envelope, (SAME_DONOR_AS,)):
+            synonym = rules.recognise(entry.target_key_value, dataset, DONOR)
+            if synonym is None:
+                continue
+            main = rules.recognise(entry.raw_value, dataset, DONOR)
+            if main is None:
+                unrecognised_links[(dataset, envelope.source.table)][entry.raw_value] += 1
+                continue
+            if main.identifier == synonym.identifier:
+                continue
+            named[synonym.identifier][main.identifier].append(
+                _link_attribution(envelope.source_type, main.rule_id, entry)
+            )
+    synonyms: dict[Identifier, dict[Identifier, tuple[dict, ...]]] = defaultdict(dict)
+    unjoined = []
+    for synonym in sorted(named, key=identifier_order):
+        main, reason = _end_of_chain(synonym, named)
+        if main is None:
+            unjoined.append({"identifier": synonym.to_dict(), "reason": reason})
+            continue
+        (said,) = named[synonym].values()  # one, or the chain would have branched here
+        synonyms[main][synonym] = distinct(said)
+    return IdentityLinks(synonyms, unjoined, unrecognised_links)
+
+
+def _end_of_chain(
+    start: Identifier, named: dict[Identifier, dict[Identifier, list[dict]]]
+) -> tuple[Identifier | None, str]:
+    """The identifier ``start``'s chain of ``same_donor_as`` links ends at, or None and why."""
+    seen = [start]
+    current = start
+    while current in named:
+        nexts = named[current]
+        if len(nexts) > 1:
+            return None, f"its chain reaches {current.namespace}:{current.id}, which names {len(nexts)} identifiers"
+        (current,) = nexts
+        if current in seen:
+            return None, "its chain comes back on itself"
+        seen.append(current)
+    return current, ""
+
+
 def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: IdentifierRuleSet) -> EntityEvidence:
     """Every line of ``paths`` (:func:`select_entity_evidence`), recognised, and translated into its donor's or
     sample's slots, read as an untranslated slot's (:func:`_untranslated_claim`: a donor's family, a sample's
@@ -187,7 +302,15 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
     that recognised the parent, and a family id's or a site's its entity rule (``code_rules.ENTITY_RULES``); each carries
     the line's source and raw value, joined by ``entity_identifier``. A repository identifier is one record's by its kind,
     repository and id: the same one in two datasets ties to one record, or raises.
+
+    An identity link (#559) may come from any kind of entity file; only the SGDP importer writes one today.
+    A donor is read as its main identifier wherever a line names it (:func:`_main_identifiers`): the
+    donor a line is about, a parent, a ``collected_from`` line's donor, and a repository identifier's donor. A
+    claim made by a line keyed by a synonym is not an exact match, as one joined through a rewritten
+    identifier is not.
     """
+    paths = list(paths)  # read twice: the main identifiers first
+    links = _main_identifiers(paths, rules)
     slots: dict[Identifier, dict[str, SlotEvidence]] = defaultdict(lambda: defaultdict(SlotEvidence))
     sample_slots: dict[Identifier, dict[str, SlotEvidence]] = defaultdict(lambda: defaultdict(SlotEvidence))
     named_in: dict[tuple[str, str], set[Identifier]] = defaultdict(set)
@@ -223,39 +346,57 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
                     f"{relative_to(path, entity_root)}: {entry.field} {entry.raw_value!r} for "
                     f"{entry.target_key_value!r} is not an identifier: empty, or more than one line"
                 )
-            kind = alias_kind or KIND_OF_SLOT[entry.field]  # whose slot the line names
+            kind = KIND_OF_ENTITY_FIELD[entry.field]  # whose identifier the line is keyed by
             got = rules.recognise(entry.target_key_value, dataset, kind)
             if got is None:
                 misses += 1
                 unrecognised[(dataset, envelope.source.table)][entry.target_key_value] += 1
                 continue
+            ident = links.main(got.identifier) if kind == DONOR else got.identifier
+            where = (dataset, envelope.source.table)
+            if entry.field in IDENTITY_LINK_FIELDS:
+                # The donor or sample a link names has a record, whether or not the link joins it to another.
+                (sample_slots if kind == SAMPLE else slots)[ident]
+            if entry.field == SAME_DONOR_AS:
+                named = rules.recognise(entry.raw_value, dataset, DONOR)
+                if named is not None:
+                    slots[links.main(named.identifier)]  # the identifier it names has a record, joined or not
+                continue  # the link itself is read by _main_identifiers
+            if entry.field == COLLECTED_FROM:
+                donor = rules.recognise(entry.raw_value, dataset, DONOR)
+                if donor is None:
+                    links.unrecognised[where][entry.raw_value] += 1
+                    continue
+                attribution = _link_attribution(envelope.source_type, donor.rule_id, entry)
+                links.collected_from[ident].append((links.main(donor.identifier), attribution))
+                continue
             if alias_kind is not None:
                 alias = RepositoryId(
                     envelope.source.repository, str(dataset), str(envelope.source.table), entry.raw_value
                 )
-                earlier, earlier_path = tied.setdefault((kind, *alias.key), (got.identifier, path))
-                if earlier != got.identifier:
+                earlier, earlier_path = tied.setdefault((kind, *alias.key), (ident, path))
+                if earlier != ident:
                     raise ValueError(
                         f"{relative_to(path, entity_root)}: {alias.repository} {kind} {alias.id!r} ties to "
-                        f"{got.identifier.to_dict()} here and to {earlier.to_dict()} on an earlier line of "
+                        f"{ident.to_dict()} here and to {earlier.to_dict()} on an earlier line of "
                         f"{relative_to(earlier_path, entity_root)}; a repository's identifier names one record, "
                         "and which is not chosen"
                     )
-                repository_ids[(kind, got.identifier)].add(alias)
+                repository_ids[(kind, ident)].add(alias)
                 continue
-            exact = got.identifier.id == entry.target_key_value  # not where a rule rewrote it (GM19908 -> NA19908)
+            # Not where a rule rewrote it (GM19908 -> NA19908), nor where it is a synonym of the record's identifier.
+            exact = ident.id == entry.target_key_value and ident == got.identifier
             # The donor or sample the line names counts toward its dataset's slot, whatever the line's value gives.
-            named_in[(str(dataset), entry.field)].add(got.identifier)
+            named_in[(str(dataset), entry.field)].add(ident)
             # A donor or sample a line names has a record, whatever the line's value gives.
-            record_slots = (sample_slots if kind == SAMPLE else slots)[got.identifier]
+            record_slots = (sample_slots if kind == SAMPLE else slots)[ident]
             if entry.field not in UNTRANSLATED_SLOTS:
                 translate(record_slots, entry, envelope.source_type, JOIN_KEY_ENTITY_IDENTIFIER, table, exact)
                 continue
-            where = (dataset, envelope.source.table)
             if (label := _names_no_value(entry)) is not None:
                 no_value_lines[label][where] += 1
                 continue
-            claim = _untranslated_claim(entry, envelope.source_type, dataset, rules, exact)
+            claim = _untranslated_claim(entry, envelope.source_type, dataset, rules, exact, links)
             if claim is None:
                 unrecognised_parents[where][entry.raw_value] += 1
                 continue
@@ -280,6 +421,7 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
         repository_ids=repository_ids,
         no_value_lines=no_value_lines,
         unrecognised_parents=unrecognised_parents,
+        links=links,
     )
 
 
@@ -297,19 +439,24 @@ def _names_no_value(entry: EvidenceEntry) -> str | None:
 
 
 def _untranslated_claim(
-    entry: EvidenceEntry, source_type: str, dataset: str | None, rules: IdentifierRuleSet, exact: bool
+    entry: EvidenceEntry,
+    source_type: str,
+    dataset: str | None,
+    rules: IdentifierRuleSet,
+    exact: bool,
+    links: IdentityLinks,
 ) -> dict | None:
     """The claim one untranslated line makes (``models.UNTRANSLATED_SLOTS``); None for a parent no rule recognises.
 
     A parent is recognised as a donor in the line's dataset, and its claim declares the parent's
-    identifier and cites the rule that recognised it. A family id or a site is the answer as written,
-    citing its entity rule.
+    identifier, read as its main identifier (:meth:`IdentityLinks.main`, #559), and cites the rule that recognised it.
+    A family id or a site is the answer as written, citing its entity rule.
     """
     if entry.field in PARENT_FIELDS:
         recognised = rules.recognise(entry.raw_value, dataset, DONOR)
         if recognised is None:
             return None
-        rule_id, value = recognised.rule_id, recognised.identifier.to_dict()
+        rule_id, value = recognised.rule_id, links.main(recognised.identifier).to_dict()
     else:
         rule_id, value = _AS_WRITTEN_RULES[entry.field], entry.raw_value
     return make_claim(
@@ -357,6 +504,29 @@ def _settle_record(
     return statuses
 
 
+def _collected_from(
+    sample: Identifier, rules: IdentifierRuleSet, evidence: EntityEvidence
+) -> dict[Identifier, list[dict]]:
+    """Every donor ``sample``'s sources say it was collected from, each as its main identifier, with the sources naming
+    it, the identifier rule first (#559).
+
+    The sources are an identifier rule naming both a sample and a donor (``IdentifierRuleSet.collected_from``)
+    and each ``collected_from`` line about the sample (:func:`gather`). One donor is the sample's; two are a
+    conflict, and the caller links none.
+    """
+    named: list[tuple[Identifier, dict]] = []
+    found = rules.collected_from(sample)
+    if found is not None:
+        named.append(
+            (evidence.links.main(found.identifier), {"source_type": SOURCE_IDENTIFIER_RULE, "rule_id": found.rule_id})
+        )
+    named.extend(evidence.links.collected_from.get(sample, []))
+    by_donor: dict[Identifier, list[dict]] = {}
+    for donor, attribution in named:
+        by_donor.setdefault(donor, []).append(attribution)
+    return {donor: list(distinct(attributions)) for donor, attributions in by_donor.items()}
+
+
 def _parents(slots: dict[Identifier, dict[str, SlotEvidence]]) -> set[Identifier]:
     """Every donor a ``mother`` or ``father`` claim in ``slots`` names."""
     return {
@@ -381,7 +551,8 @@ def reconcile_entities(
 
     ``evidence`` is :func:`gather`'s; ``sample_lists`` are the run's reconciled ``SampleList``
     dicts. A donor a sample's ``collected_from`` points to, or a donor's ``mother`` or ``father``
-    claim names, gets a record, evidence or none.
+    claim names, gets a record, evidence or none; so does a main identifier with a synonym (#559).
+    A sample's donor is :func:`_collected_from`'s.
     """
     slots, named_in, files, unrecognised = evidence.slots, evidence.named_in, evidence.files, evidence.unrecognised
     repository_ids = evidence.repository_ids
@@ -389,18 +560,31 @@ def reconcile_entities(
     tied_samples = {ident for kind, ident in repository_ids if kind == SAMPLE}
     sample_slots = evidence.sample_slots
     sample_records, linked, conflicts = [], Counter(), []
+    linked_by: Counter = Counter()
+    collected_conflicts: list[dict] = []
     sample_settled: dict[Identifier, dict[str, str]] = {}
     unreviewed: dict[EntityKind, Counter] = {DONOR: Counter(), SAMPLE: Counter()}
-    for sample in sorted(named_by_files | tied_samples | set(sample_slots), key=identifier_order):
+    links = evidence.links
+    samples = named_by_files | tied_samples | set(sample_slots)  # gather gives every link's sample a slot entry
+    for sample in sorted(samples, key=identifier_order):
         record: dict = {"identifier": sample.to_dict()}
-        found = rules.collected_from(sample)
-        if found is not None:
-            record["collected_from"] = {
-                "donor": found.identifier.to_dict(),
-                "named_by": [{"source_type": SOURCE_IDENTIFIER_RULE, "rule_id": found.rule_id}],
-            }
+        by_donor = _collected_from(sample, rules, evidence)
+        for donor in by_donor:
+            slots[donor]  # a donor a source names for a sample has a record, evidence or none, link or conflict
+        if len(by_donor) == 1:
+            ((donor, named_by),) = by_donor.items()
+            record[COLLECTED_FROM] = {"donor": donor.to_dict(), "named_by": named_by}
             linked[sample.namespace] += 1
-            slots[found.identifier]  # a donor a sample points to has a record, evidence or none
+            linked_by.update({a["source_type"] for a in named_by})
+        elif by_donor:
+            collected_conflicts.append(
+                {
+                    "identifier": sample.to_dict(),
+                    "donors": [
+                        {"donor": d.to_dict(), "named_by": by_donor[d]} for d in sorted(by_donor, key=identifier_order)
+                    ],
+                }
+            )
         sample_settled[sample] = _settle_record(
             record, sample_slots.get(sample, {}), SAMPLE_SLOTS, conflicts, unreviewed[SAMPLE]
         )
@@ -419,6 +603,11 @@ def reconcile_entities(
         record = {"identifier": donor.to_dict()}
         settled[donor] = _settle_record(record, slots[donor], DONOR_SLOTS, conflicts, unreviewed[DONOR])
         _list_repository_ids(record, repository_ids.get((DONOR, donor)))
+        if synonyms := links.synonyms.get(donor):
+            record[SYNONYMS] = [
+                {"identifier": synonym.to_dict(), "named_by": list(synonyms[synonym])}
+                for synonym in sorted(synonyms, key=identifier_order)
+            ]
         donors.append(record)
 
     # Per dataset and slot: the donors (or samples) the dataset's lines name, each counted at its overall
@@ -445,10 +634,21 @@ def reconcile_entities(
             },
             "unrecognised_parents": _per_table(evidence.unrecognised_parents),
         },
+        SYNONYMS: {
+            "records": len(links.synonyms),
+            "synonyms": links.joined,
+            "by_namespace": dict(
+                sorted(Counter(main.namespace for main, by_main in links.synonyms.items() for _ in by_main).items())
+            ),
+            "unjoined": links.unjoined,
+        },
+        "unrecognised_links": _per_table(links.unrecognised),
         "samples": {
             "total": len(sample_records),
             "named_by_files": len(named_by_files),
             "collected_from": dict(linked),
+            "collected_from_by_source": dict(sorted(linked_by.items())),
+            "collected_from_conflicts": collected_conflicts,
             "statuses": {slot: dict(Counter(s[slot] for s in sample_settled.values())) for slot in SAMPLE_SLOTS},
             UNKNOWN_SITE_LINES: _lines_per_table(evidence.no_value_lines.get(UNKNOWN_SITE_LINES, Counter())),
             "unreviewed": {slot: n for slot, n in unreviewed[SAMPLE].items() if n},
