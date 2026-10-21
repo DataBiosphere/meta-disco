@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from meta_disco import sgdp_entities as se
+from meta_disco.azul_manifest import FORMAT_VERBATIM, manifest_path
 from meta_disco.entity_evidence import iter_entity_evidence, write_entity_file
 from meta_disco.models import (
     CLASSIFIED,
@@ -336,17 +337,27 @@ def test_a_line_and_an_identifier_rule_naming_one_donor_are_both_listed(tmp_path
     assert [a["source_type"] for a in linked["named_by"]] == [SOURCE_IDENTIFIER_RULE, SOURCE_EXTERNAL_GROUND_TRUTH]
 
 
-def test_sources_naming_different_donors_give_a_sample_none_and_are_counted(tmp_path):
+def test_sources_naming_different_donors_give_a_sample_none_each_donor_a_record_and_are_counted(tmp_path):
     root = tmp_path / "entity_evidence"
     lines_file(root, "D", [(COLLECTED_FROM, "HG00096", "HG00097")], SOURCE_EXTERNAL_GROUND_TRUTH, "ext")
     result = settled(root, tmp_path)
     assert COLLECTED_FROM not in by_id(result.samples)["HG00096"]
-    assert result.report["samples"]["collected_from_conflicts"] == [
-        {
-            "identifier": {"id": "HG00096", "namespace": "coriell"},
-            "donors": [{"id": "HG00096", "namespace": "coriell"}, {"id": "HG00097", "namespace": "coriell"}],
-        }
+    # Each donor a source named has a record, though the sample is linked to neither.
+    assert {"HG00096", "HG00097"} <= set(by_id(result.donors))
+    (conflict,) = result.report["samples"]["collected_from_conflicts"]
+    assert conflict["identifier"] == {"id": "HG00096", "namespace": "coriell"}
+    # Who named which donor.
+    assert [(d["donor"]["id"], [a["source_type"] for a in d["named_by"]]) for d in conflict["donors"]] == [
+        ("HG00096", [SOURCE_IDENTIFIER_RULE]),
+        ("HG00097", [SOURCE_EXTERNAL_GROUND_TRUTH]),
     ]
+
+
+def test_each_identifier_a_branching_chain_names_has_a_record(tmp_path):
+    root = tmp_path / "entity_evidence"
+    rows = [(SAME_DONOR_AS, "S_Tuscan-2", "HG01504"), (SAME_DONOR_AS, "S_Tuscan-2", "HG01503")]
+    lines_file(root, "D", rows, SOURCE_EXTERNAL_GROUND_TRUTH, "ext")
+    assert {"S_Tuscan-2", "HG01503", "HG01504"} <= set(by_id(settled(root, tmp_path).donors))
 
 
 def test_synonyms_are_followed_to_the_end_of_their_chain_each_keeping_its_own_steps_source(tmp_path):
@@ -487,3 +498,61 @@ def test_a_dataset_local_sample_a_failed_link_names_still_has_a_record(tmp_path)
     lines_file(root, T2T, [(COLLECTED_FROM, "simons_data_sample_9", "NOT_A_DONOR")], SOURCE_REPOSITORY_METADATA)
     sample = by_id(settled(root, tmp_path).samples)["simons_data_sample_9"]
     assert COLLECTED_FROM not in sample
+
+
+def test_a_chain_whose_tail_loops_joins_none_and_does_not_hang(tmp_path):
+    root = tmp_path / "entity_evidence"
+    rows = [
+        (SAME_DONOR_AS, "S_Spanish-2", "HG01504"),
+        (SAME_DONOR_AS, "HG01504", "NA99999"),
+        (SAME_DONOR_AS, "NA99999", "HG01504"),
+    ]
+    lines_file(root, "D", rows, SOURCE_EXTERNAL_GROUND_TRUTH, "sgdp")
+    unjoined = {u["identifier"]["id"]: u["reason"] for u in settled(root, tmp_path).report[SYNONYMS]["unjoined"]}
+    assert unjoined == dict.fromkeys(["HG01504", "NA99999", "S_Spanish-2"], "its chain comes back on itself")
+
+
+def test_a_line_naming_its_own_identifier_says_nothing(tmp_path):
+    """`GM19908` is written `NA19908`: one identifier, so the line joins nothing and is not a loop."""
+    root = tmp_path / "entity_evidence"
+    lines_file(root, "D", [(SAME_DONOR_AS, "GM19908", "NA19908")], SOURCE_EXTERNAL_GROUND_TRUTH, "ext")
+    result = settled(root, tmp_path)
+    assert result.report[SYNONYMS]["unjoined"] == [] and result.report[SYNONYMS]["synonyms"] == 0
+
+
+def test_the_identifier_rules_donor_is_read_as_its_main_identifier_too(tmp_path):
+    """A file's sample `coriell:HG01504` is its own donor by rule; HG01504 being a synonym, the link points to the
+    main identifier and agrees with a line naming it."""
+    root = tmp_path / "entity_evidence"
+    rows = [(SAME_DONOR_AS, "HG01504", "NA99999"), (COLLECTED_FROM, "HG01504", "NA99999")]
+    lines_file(root, "D", rows, SOURCE_EXTERNAL_GROUND_TRUTH, "ext")
+    result = settled(root, tmp_path, [sample_list([Identifier("coriell", "HG01504")])])
+    linked = by_id(result.samples)["HG01504"][COLLECTED_FROM]
+    assert linked["donor"] == {"id": "NA99999", "namespace": "coriell"}
+    assert [a["source_type"] for a in linked["named_by"]] == [SOURCE_IDENTIFIER_RULE, SOURCE_EXTERNAL_GROUND_TRUTH]
+    assert "HG01504" not in by_id(result.donors)
+
+
+def test_a_line_repeated_is_cited_once(tmp_path):
+    root = tmp_path / "entity_evidence"
+    rows = [(SAME_DONOR_AS, "S_Spanish-2", "HG01504")] * 2 + [
+        (COLLECTED_FROM, "simons_data_sample_1", "S_Spanish-2")
+    ] * 2
+    lines_file(root, T2T, rows, SOURCE_EXTERNAL_GROUND_TRUTH, "ext")
+    result = settled(root, tmp_path)
+    (synonym,) = by_id(result.donors)["HG01504"][SYNONYMS]
+    assert len(synonym["named_by"]) == 1
+    assert len(by_id(result.samples)["simons_data_sample_1"][COLLECTED_FROM]["named_by"]) == 1
+
+
+def test_each_table_names_its_samples_by_its_own_column(imported, tmp_path):
+    for table, column in se.SAMPLE_TABLES.items():
+        assert {g["identifier_column"] for g in written(tmp_path / "entity_evidence", table)} == {column}
+
+
+def test_a_blank_or_missing_cell_writes_no_line_and_a_row_naming_no_sample_is_passed_over(tmp_path):
+    sgdp = {"S_X-1": {"Gender": "M", "Population_ID": "  ", "Sample_ID": None}}
+    assert [r.field for r in se.donor_lines(["S_X-1"], sgdp)] == ["phenotypic_sex"]  # type: ignore[arg-type]
+    write_dataset(tmp_path / "m", T2T, [(CHM13, {"sgdp_id": "S_X-1", "karyotype": "XY"}), *T2T_ROWS[:1]])
+    manifest = manifest_path(tmp_path / "m", CATALOG, T2T, FORMAT_VERBATIM)
+    assert list(se.t2t_rows(manifest)) == ["simons_data_sample_1"]

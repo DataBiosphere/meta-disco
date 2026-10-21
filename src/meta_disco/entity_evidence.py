@@ -15,8 +15,8 @@ value translated by the value map, and a line carrying an answer is refused by n
 translates (a donor's slots, and a sample's translated ones, #699). Every other line goes only
 to a reader that asks for it, which today is reconcile: an untranslated slot's (a family's, #582;
 a sample's site), one carrying a repository's own identifier for a donor or sample
-(``models.REPOSITORY_ID_FIELDS``, #669), and one naming another identifier for a donor
-(``models.IDENTITY_LINK_FIELDS``, #559).
+(``models.REPOSITORY_ID_FIELDS``, #669), and an identity link naming a donor: a sample's donor or
+another identifier for a donor (``models.IDENTITY_LINK_FIELDS``, #559).
 """
 
 from __future__ import annotations

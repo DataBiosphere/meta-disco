@@ -76,7 +76,7 @@ rules:
       its donors have accessions of their own (IGVFDO…), so the accession names no donor.
   # The Simons Genome Diversity Project's own names for its genomes: its metadata file's
   # `SGDP_ID` (https://sharehost.hms.harvard.edu/genetics/reich_lab/sgdp/, Mallick et al. 2016),
-  # which T2T_CHRY's `SGDP_*_sample` tables write as `sgdp_id`. Measured 2026-10-20: all 345 of
+  # which T2T_CHRY's `SGDP_*_sample` tables write as `sgdp_id`. Measured 2026-10-20: all 344 of
   # the file's are a panel code (S, B, T or BR), `_`, a population name and
   # `-` a number (`S_Tuscan-2`, `B_Australian-3`, `S_Ju_hoan_North-1`, `BR_Onge-1`), none repeated.
   - id: sgdp_id
@@ -88,7 +88,7 @@ rules:
       genome is one person, so the name names that person. The sample a dataset sequenced is
       named by the dataset (`simons_data_sample_N` in T2T_CHRY), not by this name.
   # The CEPH-HGDP panel's cell lines, as SGDP's metadata file gives the person behind a genome in
-  # `Sample_ID` (`HGDP01163` = `S_Tuscan-2`). Measured 2026-10-20: 132 of the file's 345 rows, 131 of
+  # `Sample_ID` (`HGDP01163` = `S_Tuscan-2`). Measured 2026-10-20: 132 of the file's 344 rows, 131 of
   # them T2T_CHRY's, are `HGDP` and five digits.
   - id: hgdp_cell_line
     namespace: hgdp

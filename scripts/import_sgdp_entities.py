@@ -30,7 +30,7 @@ def main() -> int:
     read: Fetch = fetch if args.file is None else (lambda: load_kept(args.file))
     try:
         result = import_sgdp(args.data_dir, args.catalog, args.entity_root, args.service, read)
-    except ValueError as exc:
+    except (ValueError, OSError) as exc:  # OSError covers a generation already written, a missing file, the network
         print(f"import refused: {exc}", file=sys.stderr)
         return 1
     for line in describe(result):

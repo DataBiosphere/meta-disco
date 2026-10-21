@@ -244,8 +244,9 @@ REPOSITORY_IDS = "repository_ids"
 
 # The entity evidence fields whose value names a donor (#559), recognised through
 # `rules/sample_namespaces.yaml` as a parent's is: `collected_from`, about a sample, names the
-# donor it was collected from; `same_donor_as`, about a donor, names its main identifier, the
-# line's own identifier kept on that record as a synonym. Links, not slots: never translated,
+# donor it was collected from; `same_donor_as`, about a donor, names another identifier for it,
+# followed to the end of the chain, whose identifier is the main one; the others are kept on that
+# record as synonyms. Links, not slots: never translated,
 # never settled as a slot is. Each maps to whose identifier the line is keyed by.
 COLLECTED_FROM = "collected_from"
 SAME_DONOR_AS = "same_donor_as"

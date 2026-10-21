@@ -67,7 +67,7 @@ from .source_evidence import (
 SOURCE = "sgdp"
 DATASET = "ANVIL_T2T_CHRY"
 # SGDP's metadata file, from the Reich lab's SGDP page (https://reichdata.hms.harvard.edu/pub/datasets/sgdp/),
-# as downloaded on 2026-10-20: 345 rows, Latin-1, tab-separated.
+# as downloaded on 2026-10-20: a header and 344 rows, Latin-1, tab-separated.
 URL = (
     "https://sharehost.hms.harvard.edu/genetics/reich_lab/sgdp/SGDP_metadata.279public.21signedLetter.44Fan.samples.txt"
 )

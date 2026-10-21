@@ -45,9 +45,10 @@ lists), every sample a repository's identifier ties to and every sample a slot o
 line names, with the donor it was collected from where its sources say so: an identifier rule
 naming both (``IdentifierRuleSet.collected_from``), and a ``collected_from`` line naming the
 donor (#559), each read as the main identifier. Sources naming different donors give none, and
-the sample is counted. A donor record is written for every donor the evidence names and every
-donor a sample's ``collected_from`` or a donor's ``mother`` or ``father`` points to, so a join from
-a file to its donors, or from a donor to its parents, finds a record for each.
+the sample is counted with each donor and who named it. A donor record is written for every donor
+the evidence names, every donor a sample's sources name (linked or in conflict), every identifier a
+``same_donor_as`` line names (joined or not), and every donor a donor's ``mother`` or ``father``
+points to, so a join from a file to its donors, or from a donor to its parents, finds a record for each.
 
 Nothing here reads or writes a file record: a file reaches its donors through its
 ``samples`` (epic #692, decision 5).
@@ -308,7 +309,8 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
     the line's source and raw value, joined by ``entity_identifier``. A repository identifier is one record's by its kind,
     repository and id: the same one in two datasets ties to one record, or raises.
 
-    A donor is read as its main identifier wherever a line names it (:func:`_main_identifiers`, #559): the
+    An identity link (#559) may come from any kind of entity file; only the SGDP importer writes one today.
+    A donor is read as its main identifier wherever a line names it (:func:`_main_identifiers`): the
     donor a line is about, a parent, a ``collected_from`` line's donor, and a repository identifier's donor. A
     claim made by a line keyed by a synonym is not an exact match, as one joined through a rewritten
     identifier is not.
@@ -362,7 +364,10 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
                 # The donor or sample a link names has a record, whether or not the link joins it to another.
                 (sample_slots if kind == SAMPLE else slots)[ident]
             if entry.field == SAME_DONOR_AS:
-                continue  # read by _main_identifiers
+                named = rules.recognise(entry.raw_value, dataset, DONOR)
+                if named is not None:
+                    slots[links.main(named.identifier)]  # the identifier it names has a record, joined or not
+                continue  # the link itself is read by _main_identifiers
             if entry.field == COLLECTED_FROM:
                 donor = rules.recognise(entry.raw_value, dataset, DONOR)
                 if donor is None:
@@ -507,13 +512,13 @@ def _settle_record(
 
 def _collected_from(
     sample: Identifier, rules: IdentifierRuleSet, evidence: EntityEvidence
-) -> tuple[set[Identifier], list[dict]]:
-    """Every donor ``sample``'s sources say it was collected from, each as its main identifier, and every source,
-    the identifier rule first (#559).
+) -> dict[Identifier, list[dict]]:
+    """Every donor ``sample``'s sources say it was collected from, each as its main identifier, with the sources naming
+    it, the identifier rule first (#559).
 
     The sources are an identifier rule naming both a sample and a donor (``IdentifierRuleSet.collected_from``)
     and each ``collected_from`` line about the sample (:func:`gather`). One donor is the sample's; two are a
-    conflict, and the caller writes none.
+    conflict, and the caller links none.
     """
     named: list[tuple[Identifier, dict]] = []
     found = rules.collected_from(sample)
@@ -522,7 +527,10 @@ def _collected_from(
             (evidence.links.main(found.identifier), {"source_type": SOURCE_IDENTIFIER_RULE, "rule_id": found.rule_id})
         )
     named.extend(evidence.links.collected_from.get(sample, []))
-    return {donor for donor, _ in named}, list(distinct(a for _, a in named))
+    by_donor: dict[Identifier, list[dict]] = {}
+    for donor, attribution in named:
+        by_donor.setdefault(donor, []).append(attribution)
+    return {donor: list(distinct(attributions)) for donor, attributions in by_donor.items()}
 
 
 def _parents(slots: dict[Identifier, dict[str, SlotEvidence]]) -> set[Identifier]:
@@ -566,18 +574,21 @@ def reconcile_entities(
     samples = named_by_files | tied_samples | set(sample_slots) | set(links.collected_from)
     for sample in sorted(samples, key=identifier_order):
         record: dict = {"identifier": sample.to_dict()}
-        named_donors, named_by = _collected_from(sample, rules, evidence)
-        if len(named_donors) == 1:
-            (donor,) = named_donors
+        by_donor = _collected_from(sample, rules, evidence)
+        for donor in by_donor:
+            slots[donor]  # a donor a source names for a sample has a record, evidence or none, link or conflict
+        if len(by_donor) == 1:
+            ((donor, named_by),) = by_donor.items()
             record[COLLECTED_FROM] = {"donor": donor.to_dict(), "named_by": named_by}
             linked[sample.namespace] += 1
             linked_by.update({a["source_type"] for a in named_by})
-            slots[donor]  # a donor a sample points to has a record, evidence or none
-        elif named_donors:
+        elif by_donor:
             collected_conflicts.append(
                 {
                     "identifier": sample.to_dict(),
-                    "donors": [d.to_dict() for d in sorted(named_donors, key=identifier_order)],
+                    "donors": [
+                        {"donor": d.to_dict(), "named_by": by_donor[d]} for d in sorted(by_donor, key=identifier_order)
+                    ],
                 }
             )
         sample_settled[sample] = _settle_record(
@@ -588,8 +599,6 @@ def reconcile_entities(
     for kind, ident in repository_ids:
         if kind == DONOR:
             slots[ident]  # a donor a repository identifier ties to has a record, slots or none
-    for main in links.synonyms:
-        slots[main]  # a main identifier has a record, slots or none
     parents = _parents(slots)
     for parent in parents:
         slots[parent]  # a donor named as a parent has a record, slots or none

@@ -683,8 +683,8 @@ classes:
           donor or sample (#669), which reconcile lists on the record and never translates.
           `collected_from` (about a sample) and `same_donor_as` (about a donor) name another
           identifier in `raw_value`, which reconcile recognises as a donor (#559): the donor the
-          sample was collected from, and the donor's main identifier, under which the line's
-          own identifier is kept as a synonym.
+          sample was collected from, and another identifier for the donor, followed to the end
+          of the chain to the main identifier, under which the others are kept as synonyms.
           Pinned to `models.DONOR_FIELDS`, `models.FAMILY_FIELDS`, `models.SAMPLE_SLOTS`,
           `models.REPOSITORY_ID_FIELDS` and `models.IDENTITY_LINK_FIELDS` by
           `test_the_entity_row_field_pattern_lists_every_entity_field`.
@@ -1235,7 +1235,8 @@ classes:
         multivalued: true
         inlined_as_list: true
         description: >-
-          Every other identifier a source says names this donor (#559): SGDP's own name
+          Every other identifier joined to this donor by a chain of `same_donor_as` links that
+          neither branches nor comes back on itself (#559): SGDP's own name
           (`sgdp:S_Spanish-2`) on the record its metadata file keys by the cell line's
           repository number (`coriell:HG01504`). What a source said under a synonym is settled
           on this record. Absent where none does.
@@ -1245,8 +1246,8 @@ classes:
       Another identifier for a donor, and every source that said so (#559): a source's
       `same_donor_as` line, about the donor it names by `identifier`, naming another identifier for
       it, followed to the end of the chain (the record's own identifier). Each synonym is cited by
-      its own line, so the record is listed under the repository's number, and a search on either
-      finds it.
+      its own line. The record is listed under the repository's number and carries the synonyms, so
+      a reader can find it by either; the explorer's search on synonyms is a follow-up.
     attributes:
       identifier:
         range: EntityIdentifier
