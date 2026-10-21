@@ -11,7 +11,7 @@ import pytest
 import requests
 
 from meta_disco import azul_manifest as am
-from meta_disco.deployments import Deployment
+from meta_disco.deployments import DEV, PROD, Deployment
 from meta_disco.inputs import load_records
 from meta_disco.metadata_schema import validate_record
 from meta_disco.tdr import Snapshot
@@ -29,10 +29,20 @@ SNAPSHOT = Snapshot.from_source_spec(SOURCE_SPEC)
 SERVICE = "https://azul.test"
 
 
+def dataset_id_of(title: str) -> str:
+    """A fixture dataset's ``dataset_id``: a real deployment's declared one for its titles,
+    else ``id-<title>``. Compact fixture rows carry it, test deployments declare it, and the
+    fake session maps a manifest request's id back to its title through it (#717)."""
+    return {**PROD.dataset_ids, **DEV.dataset_ids}.get(title, f"id-{title}")
+
+
 def deployment(root: Path, titles=("ds",), catalog: str = "anvil15", snapshot: Snapshot = SNAPSHOT) -> Deployment:
     """A deployment rooted at ``root`` declaring ``titles``, each from ``snapshot`` — the
-    one every compact fixture row names, so the declaration agrees with the manifests."""
-    return Deployment("test", SERVICE, catalog, root, dict.fromkeys(titles, snapshot))
+    one every compact fixture row names, so the declaration agrees with the manifests —
+    and with the id :func:`dataset_id_of` gives it."""
+    return Deployment(
+        "test", SERVICE, catalog, root, dict.fromkeys(titles, snapshot), {t: dataset_id_of(t) for t in titles}
+    )
 
 
 def entry(file_count: int, source_id: str | None = SOURCE_ID, snapshot: Snapshot = SNAPSHOT) -> dict:
@@ -82,7 +92,7 @@ def compact_payload(dataset: str, n: int) -> bytes:
                     "GRCh38",
                     "False",
                     f"drs://drs.anv0:v2_{i}",
-                    "ds-1",
+                    dataset_id_of(dataset),
                     dataset,
                     "Human",
                     "Female",
@@ -166,7 +176,8 @@ class FakeSession:
         if self.rate_limits > 0:
             self.rate_limits -= 1
             return FakeResponse(json_body={"message": "slow down"}, status_code=429, headers={"Retry-After": "7"})
-        title = json.loads(params["filters"])["datasets.title"]["is"][0]
+        [requested] = json.loads(params["filters"])["datasets.dataset_id"]["is"]
+        title = next(t for t, _ in self.payloads if dataset_id_of(t) == requested)
         key = (title, params["format"])
         job_url = f"job://{title}/{params['format']}"
         self._jobs[job_url] = {"left": self.polls, "payload": self.payloads[key]}
@@ -213,14 +224,14 @@ class TestFetchManifest:
         session = FakeSession({}, {("ds", "compact"): b"h\nr\n"}, polls=3)
         sleeps = []
         out = tmp_path / "m.tsv"
-        assert am.fetch_manifest(SERVICE, "anvil15", "compact", "ds", out, session, sleep=sleeps.append) == 4
+        assert am.fetch_manifest(SERVICE, "anvil15", "compact", "ds", "id-ds", out, session, sleep=sleeps.append) == 4
         assert out.read_bytes() == b"h\nr\n" and not out.with_name("m.tsv.tmp").exists()
         assert [c[0] for c in session.calls] == ["PUT", "GET", "GET", "GET", "GET"]
         assert sleeps == [1.0, 3.0, 3.0]
         put_params = session.calls[0][2]
         assert put_params is not None
         assert put_params["catalog"] == "anvil15" and put_params["format"] == "compact"
-        assert json.loads(put_params["filters"]) == {"datasets.title": {"is": ["ds"]}}
+        assert json.loads(put_params["filters"]) == {"datasets.dataset_id": {"is": ["id-ds"]}}
 
     def test_a_rate_limited_request_is_retried_after_the_named_wait(self, tmp_path):
         """The seventeenth consecutive job of the first real run drew 429 with Retry-After: 30."""
@@ -236,7 +247,12 @@ class TestFetchManifest:
             return resp
 
         session.put = put
-        assert am.fetch_manifest(SERVICE, "anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append) == 4
+        assert (
+            am.fetch_manifest(
+                SERVICE, "anvil15", "compact", "ds", "id-ds", tmp_path / "m", session, sleep=sleeps.append
+            )
+            == 4
+        )
         assert [c[0] for c in session.calls][:3] == ["PUT", "PUT", "PUT"]
         assert sleeps[:2] == [7.0, 7.0]
         assert [getattr(r, "closed", False) for r in throttled] == [True, True]
@@ -247,7 +263,7 @@ class TestFetchManifest:
         sleeps = []
         with pytest.raises(RuntimeError, match=r"still returning HTTP 429 after 28s of waiting"):
             am.fetch_manifest(
-                SERVICE, "anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append, max_wait=30
+                SERVICE, "anvil15", "compact", "ds", "id-ds", tmp_path / "m", session, sleep=sleeps.append, max_wait=30
             )
         assert sleeps == [7.0] * 4
         assert session.puts() == 5
@@ -269,14 +285,14 @@ class TestFetchManifest:
         sleeps = []
         with pytest.raises(RuntimeError):
             am.fetch_manifest(
-                SERVICE, "anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append, max_wait=3
+                SERVICE, "anvil15", "compact", "ds", "id-ds", tmp_path / "m", session, sleep=sleeps.append, max_wait=3
             )
         assert sleeps == [1.0, 1.0, 1.0]
         session = Throttled("Wed, 21 Oct 2026 07:28:00 GMT")
         sleeps = []
         with pytest.raises(RuntimeError):
             am.fetch_manifest(
-                SERVICE, "anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append, max_wait=12
+                SERVICE, "anvil15", "compact", "ds", "id-ds", tmp_path / "m", session, sleep=sleeps.append, max_wait=12
             )
         assert sleeps == [5.0]
 
@@ -284,7 +300,7 @@ class TestFetchManifest:
         session = FakeSession({}, {("ds", "compact"): b"h\nr\n"}, polls=1, rate_limits=1)
         messages = []
         am.fetch_manifest(
-            SERVICE, "anvil15", "compact", "ds", tmp_path / "m", session, sleep=no_sleep, log=messages.append
+            SERVICE, "anvil15", "compact", "ds", "id-ds", tmp_path / "m", session, sleep=no_sleep, log=messages.append
         )
         assert messages == ["HTTP 429; waiting 7s (7s of 1800s)"]
 
@@ -298,7 +314,12 @@ class TestFetchManifest:
 
         session = Flaky({}, {("ds", "compact"): b"h\nr\n"}, polls=1)
         sleeps = []
-        assert am.fetch_manifest(SERVICE, "anvil15", "compact", "ds", tmp_path / "m", session, sleep=sleeps.append) == 4
+        assert (
+            am.fetch_manifest(
+                SERVICE, "anvil15", "compact", "ds", "id-ds", tmp_path / "m", session, sleep=sleeps.append
+            )
+            == 4
+        )
         assert sleeps[:5] == [5.0, 10.0, 20.0, 40.0, 60.0]
 
     def test_a_download_that_dies_midway_leaves_no_manifest(self, tmp_path):
@@ -322,19 +343,21 @@ class TestFetchManifest:
         session = Session({}, {("ds", "compact"): b"h\nr\n"}, polls=1)
         out = tmp_path / "m.tsv"
         with pytest.raises(requests.ConnectionError):
-            am.fetch_manifest(SERVICE, "anvil15", "compact", "ds", out, session, sleep=no_sleep)
+            am.fetch_manifest(SERVICE, "anvil15", "compact", "ds", "id-ds", out, session, sleep=no_sleep)
         assert not out.exists() and not out.with_name("m.tsv.tmp").exists()
         assert session.dying is not None and getattr(session.dying, "closed", False)
 
     def test_a_job_that_never_finishes_times_out(self, tmp_path):
         session = FakeSession({}, {("ds", "compact"): b""}, polls=10**6)
         with pytest.raises(TimeoutError):
-            am.fetch_manifest(SERVICE, "anvil15", "compact", "ds", tmp_path / "m", session, sleep=no_sleep, timeout=5)
+            am.fetch_manifest(
+                SERVICE, "anvil15", "compact", "ds", "id-ds", tmp_path / "m", session, sleep=no_sleep, timeout=5
+            )
 
     def test_an_unknown_format_is_refused_before_any_request(self, tmp_path):
         session = FakeSession({}, {})
         with pytest.raises(ValueError):
-            am.fetch_manifest(SERVICE, "anvil15", "terra.bdbag", "ds", tmp_path / "m", session)
+            am.fetch_manifest(SERVICE, "anvil15", "terra.bdbag", "ds", "id-ds", tmp_path / "m", session)
         assert session.calls == []
 
 
@@ -478,7 +501,7 @@ class TestRecordMapping:
             file_size=1000,
             file_md5sum="0" * 32,
             drs_uri="drs://drs.anv0:v2_0",
-            dataset_id="ds-1",
+            dataset_id="id-ds",
             dataset_title="ds",
             organism_type="Human",
             phenotypic_sex="Female",
@@ -490,6 +513,20 @@ class TestRecordMapping:
         (tmp_path / "c.tsv").write_bytes(compact_payload("ds", 1))
         [record] = am.iter_compact_records(tmp_path / "c.tsv")
         assert "data_modality" not in record and "reference_assembly" not in record
+
+    @pytest.mark.parametrize(("cell", "expected"), [("a/b/sample0.bam", "a/b/sample0.bam"), ("", None)])
+    def test_the_storage_path_is_read_where_the_column_is(self, tmp_path, cell, expected):
+        # #717: Azul added `files.file_path`; an empty cell is how it writes no value.
+        header, row = compact_payload("ds", 1).decode().splitlines()
+        (tmp_path / "c.tsv").write_text(f"{header}\tfiles.file_path\n{row}\t{cell}\n")
+        [record] = am.iter_compact_records(tmp_path / "c.tsv")
+        assert record["file_path"] == expected
+        assert validate_record(record) == []
+
+    def test_a_manifest_without_the_storage_path_column_gives_no_key(self, tmp_path):
+        (tmp_path / "c.tsv").write_bytes(compact_payload("ds", 1))
+        [record] = am.iter_compact_records(tmp_path / "c.tsv")
+        assert "file_path" not in record
 
     def test_a_multi_valued_cell_takes_its_first_value(self):
         # _first survives for the two donor fields only.

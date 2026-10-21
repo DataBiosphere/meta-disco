@@ -244,9 +244,10 @@ def discover_datasets(
     return sorted(datasets, key=lambda d: (-d.file_count, d.title))
 
 
-def manifest_filters(dataset_title: str) -> str:
-    """The ``filters`` query value scoping a manifest to one dataset."""
-    return json.dumps({"datasets.title": {"is": [dataset_title]}})
+def manifest_filters(dataset_id: str) -> str:
+    """The ``filters`` query value scoping a manifest to one dataset, by its ``dataset_id``
+    (#717): the dataset's stable name, which its title is not (``deployments``)."""
+    return json.dumps({"datasets.dataset_id": {"is": [dataset_id]}})
 
 
 def fetch_manifest(
@@ -254,6 +255,7 @@ def fetch_manifest(
     catalog: str,
     fmt: str,
     dataset_title: str,
+    dataset_id: str,
     destination: Path,
     session: HttpSession | None = None,
     sleep: Sleep = time.sleep,
@@ -261,8 +263,9 @@ def fetch_manifest(
     max_wait: float = DEFAULT_MAX_WAIT,
     log: Log | None = None,
 ) -> int:
-    """Request one manifest from the Azul service at ``service``, follow its job, and
-    stream the payload to ``destination``.
+    """Request one dataset's manifest from the Azul service at ``service``, scoped by
+    ``dataset_id`` (:func:`manifest_filters`), follow its job, and stream the payload to
+    ``destination``. ``dataset_title`` names the dataset in messages.
 
     Polls while the job reports ``Status`` 301, waiting ``Retry-After`` seconds
     (at least one) between polls, and downloads the 302 ``Location`` at once,
@@ -283,7 +286,7 @@ def fetch_manifest(
     resp = call(
         "put",
         manifest_url(service),
-        params={"catalog": catalog, "format": fmt, "filters": manifest_filters(dataset_title)},
+        params={"catalog": catalog, "format": fmt, "filters": manifest_filters(dataset_id)},
         timeout=120,
     )
     body = resp.json()
@@ -467,6 +470,8 @@ def _first(cell: str) -> str | None:
 
 SOURCE_ID_COLUMN = "sources.source_id"
 SOURCE_SPEC_COLUMN = "sources.source_spec"
+#: The compact manifest's storage-path column (#717): ``anvil_file.file_path``.
+FILE_PATH_COLUMN = "files.file_path"
 
 
 def dataset_source(path: Path) -> tuple[str, str] | None:
@@ -542,7 +547,9 @@ def record_from_compact_manifest_row(row: dict[str, str]) -> dict[str, Any]:
 
     The keys are the input contract (``schema/metadata.yaml``) plus two fields the
     contract does not model and ignores as extra keys: the donor fields the page
-    downloader also emitted.
+    downloader also emitted. ``file_path``, the file's storage path within its dataset,
+    is a key where the manifest has the column (Azul added it by 2026-10-17; a manifest
+    fetched before has none, #717), null where its cell is empty.
     ``file_size`` is an int and ``is_supplementary`` a bool, as the contract's strict
     validation requires; a cell that is not one of Azul's ``True`` / ``False``
     spellings raises rather than silently becoming ``False``.
@@ -557,7 +564,7 @@ def record_from_compact_manifest_row(row: dict[str, str]) -> dict[str, Any]:
     evidence, read from ``anvil_file`` (contract 7.12, #513), not off this join; the
     reconcile stage reads it (#432).
     """
-    return {
+    record = {
         "entry_id": row["files.document_id"],
         "file_id": row["files.file_id"],
         "file_name": row["files.file_name"],
@@ -571,6 +578,9 @@ def record_from_compact_manifest_row(row: dict[str, str]) -> dict[str, Any]:
         "organism_type": _first(row.get("donors.organism_type", "")),
         "phenotypic_sex": _first(row.get("donors.phenotypic_sex", "")),
     }
+    if FILE_PATH_COLUMN in row:
+        record["file_path"] = row[FILE_PATH_COLUMN] or None
+    return record
 
 
 def _fields(count: int) -> str:

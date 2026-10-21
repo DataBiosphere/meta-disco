@@ -369,7 +369,18 @@ evidence}` entry — plus the controlled vocabulary:
     consulted: a compact manifest naming another snapshot than the declared one refuses
     the download. The envelope names the `deployment`, its `catalog` for every kind of
     input, and per dataset `tdr_project` and `snapshot`. Only the input is the
-    deployment's: output and the header cache stay prod's paths until #480/#479.
+    deployment's: output and the header cache stay prod's paths until #480/#479. Each
+    dataset's `dataset_id` is declared too, and a manifest is requested by it, not by
+    title (#717); every record an Azul manifest gives must carry the declared title and id
+    (`tdr-direct` reads the declared snapshot itself, and checks the title in `derive_records`). The row-count check
+    is what refuses a short manifest: on 2026-10-21 two title filters returned manifests
+    Azul had stored days earlier, missing files.
+  - **The input carries each file's storage path**, `file_path` (#717): an optional slot
+    of the input contract, read from `anvil_file.file_path` by every input source (Azul
+    added it to both manifests by 2026-10-17; HPRC records have none). Its one use is a
+    parent several files of the dataset carry by name: `edges.matches` keeps the one in
+    the child's own folder, for every name lookup (index, checksum, header and cohort
+    steps). It makes no claim, and no output record carries it.
   - **Every producer builds `records.OutputRecord`** (#450) — the pipeline through
     `from_work_item`, the four standalone producers through `from_record`. A per-record
     field added there reaches all fourteen outputs; one wired into a producer does not.

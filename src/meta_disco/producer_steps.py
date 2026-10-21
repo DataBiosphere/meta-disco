@@ -250,13 +250,16 @@ class HeaderSteps:
         )
         return cls(index, key, AlignmentContigs(evidence_base / alignments))
 
-    def __call__(self, header: VCFHeader, file_name: str, dataset_id: str) -> tuple[dict | None, str]:
+    def __call__(
+        self, header: VCFHeader, file_name: str, dataset_id: str, folder: str | None
+    ) -> tuple[dict | None, str]:
         """A VCF's ``generated_by`` from its header, and the outcome (one of :data:`OUTCOMES`).
 
         A producing step in :data:`STEP_RULES`, of a family its rule names, reading nothing
         from stdin, whose inputs are all of the kind its rule names (exactly one, or two or
         more where the rule takes several) gives that rule's step, each parent the one file of
-        ``dataset_id`` carrying the input's base name, case-folded. A path listed twice is
+        ``dataset_id`` carrying the input's base name, case-folded, as ``edges.matches``
+        settles it by the VCF's ``folder``. A path listed twice is
         one input. An input no such file carries gives no step, as :data:`PARENT_NOT_FOUND`;
         otherwise an input several files carry, or two inputs at different paths with one
         name, give none, as :data:`PARENT_AMBIGUOUS` — except that, for a rule that settles a
@@ -276,44 +279,56 @@ class HeaderSteps:
         names = [PurePosixPath(path).name for path in paths]
         if any(edges.parent_kind_of(name) != rule.kind for name in names):
             return None, NO_ACTIVITY
-        parents, outcome = resolve_names(self.index, dataset_id, names)
         # GATK 4 refuses an alignment with a contig its reference lacks; GATK 3's check is
         # not relied on (it may accept a partial overlap), so its lines keep the name rule.
-        if outcome == PARENT_AMBIGUOUS and rule.same_contigs and step.family == GATK:
-            parents, outcome = self.by_contigs(header, dataset_id, names[0])
+        # Where the contigs can settle a shared name they do, before the folder: content
+        # outranks the storage layout, which only breaks a tie the contigs leave (#717).
+        by_content = rule.same_contigs and step.family == GATK
+        parents, outcome = resolve_names(self.index, dataset_id, names, None if by_content else folder)
+        if outcome == PARENT_AMBIGUOUS and by_content:
+            parents, outcome = self.by_contigs(header, dataset_id, names[0], folder)
         if parents is None:
             return None, outcome
         return edges.generated_by(rule.edge_rule, parents, self.key), STEPPED
 
-    def by_contigs(self, header: VCFHeader, dataset_id: str, name: str) -> tuple[list[dict] | None, str]:
+    def by_contigs(
+        self, header: VCFHeader, dataset_id: str, name: str, folder: str | None
+    ) -> tuple[list[dict] | None, str]:
         """The one file of ``dataset_id`` carrying ``name`` whose contigs fit the VCF's, and :data:`STEPPED`.
 
-        A carrier fits where each of its contigs is among the VCF's, with the same length.
+        A carrier fits where each of its contigs is among the VCF's, with the same length;
+        where several fit, the one of them in the VCF's ``folder`` is taken (``edges.in_folder``).
         ``(None, PARENT_AMBIGUOUS)`` where the VCF names no contig or any contig without a
         length (no carrier is then read); otherwise ``(None, PARENT_UNREADABLE)`` where a
         carrier's header cannot be read, or names no contig or any contig without a length;
-        otherwise ``(None, PARENT_AMBIGUOUS)`` where none or several carriers fit.
+        otherwise ``(None, PARENT_AMBIGUOUS)`` where none fit, or several do and the folder
+        does not settle them.
         """
         contigs = vcf_contigs(header)
         if contigs is None:
             return None, PARENT_AMBIGUOUS
         fits = []
-        for carrier in edges.matches(self.index, dataset_id, name):
+        for carrier in edges.matches(self.index, dataset_id, name, None):
             read = self.contigs_of(carrier)
             if read is None:
                 return None, PARENT_UNREADABLE
             if read <= contigs:
                 fits.append(carrier)
+        fits = edges.in_folder(fits, folder)
         return ([fits[0]], STEPPED) if len(fits) == 1 else (None, PARENT_AMBIGUOUS)
 
 
-def resolve_names(index: edges.NameIndex, dataset_id: str, names: list[str]) -> tuple[list[dict] | None, str]:
+def resolve_names(
+    index: edges.NameIndex, dataset_id: str, names: list[str], folder: str | None
+) -> tuple[list[dict] | None, str]:
     """Each of ``names``' one file in ``dataset_id``, up to case, and :data:`STEPPED`; or None and why not.
+
+    Each name's files are those :func:`edges.matches` gives with the child's ``folder`` (#717).
 
     A name no file carries gives :data:`PARENT_NOT_FOUND`; otherwise a name several files
     carry, or two of ``names`` that are one name, give :data:`PARENT_AMBIGUOUS` (#438's rule).
     """
-    found = [edges.matches(index, dataset_id, name) for name in names]
+    found = [edges.matches(index, dataset_id, name, folder) for name in names]
     if any(not parents for parents in found):
         return None, PARENT_NOT_FOUND
     # Two paths with one name (scatter shards all called `out.vcf.gz`) cannot be told

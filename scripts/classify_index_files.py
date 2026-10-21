@@ -16,7 +16,8 @@ catch-all writes.
 A filename does not always identify one file. Names are compared case-insensitively,
 as routing compares extensions (#449), so two files in a dataset whose names differ
 only by case identify neither (#455). Where two files in a dataset share — up to case —
-the name an index points at, no parent is chosen. Such a file still gets a record,
+the name an index points at, the one stored in the index's own folder is its parent
+(``edges.matches``, #717); where the folder does not settle it, no parent is chosen. Such a file still gets a record,
 with no edge: ``declined_record`` gives it ``data_type: index``, which the extension
 establishes without a parent, and ``not_classified`` on the others, which only a parent
 could supply. Why no parent was taken is listed separately in ``unmatched_files``, with
@@ -31,11 +32,13 @@ paths in the manifest's ``file_inventory`` table, which name the true parent.
 ``ANVIL_T2T_CHRY`` is why: it calls one sample against both CHM13v2 and GRCh38
 and stores the outputs under the same filename in different directories.
 
-Telling such files apart needs a path or a declared parent-child relationship,
-and this producer can see neither — the compact manifest it reads carries no
-storage path and no sibling relation. So it declines rather than guesses. The source
-tables' lineage does better at reconcile: ``anvil_activity`` names one parent for every
-``ANVIL_T2T_CHRY`` index declined here, measured on anvil15 (#571).
+Telling such files apart needs a path or a declared parent-child relationship. The
+input carries each file's storage path since #717, and an index sits beside the file it
+indexes: on the anvil15 input of 2026-10-21 the folder settles all 15,006 indexes
+declined before it (14,866 in ``ANVIL_T2T_CHRY``, 140 in ``ANVIL_T2T``). An input with
+no path, or a folder that holds no single carrier, still declines rather than guesses.
+The source tables' lineage also names a parent at reconcile: ``anvil_activity`` names
+one for every ``ANVIL_T2T_CHRY`` index declined here before #717, measured on anvil15 (#571).
 """
 
 import argparse
@@ -57,7 +60,7 @@ from meta_disco.pipeline import load_classifiable_records
 from meta_disco.producers import INDEX_TO_PARENT, PRODUCERS
 from meta_disco.provenance import run_provenance
 from meta_disco.record_keys import record_key, repeated_key_values
-from meta_disco.records import OutputRecord, RunMetadata, coerce_identity, dataset_of, identity_from
+from meta_disco.records import OutputRecord, RunMetadata, coerce_identity, dataset_of, folder_of, identity_from
 from meta_disco.rule_engine import make_claim
 from meta_disco.rule_loader import get_unified_rules
 
@@ -329,7 +332,11 @@ def propagate_to_index_files(metadata_path: Path, output_path: Path):
             # the decision, not for a measured save.
             parent_candidates = get_parent_candidates(name, index_ext)
             candidate_tried, parent_files = next(
-                ((c, found) for c in parent_candidates if (found := edges.matches(files_by_folded_name, ds, c))),
+                (
+                    (c, found)
+                    for c in parent_candidates
+                    if (found := edges.matches(files_by_folded_name, ds, c, folder_of(f)))
+                ),
                 (None, []),
             )
 

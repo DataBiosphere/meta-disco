@@ -72,6 +72,14 @@ class TestFieldConstraints:
         assert validate_record(_valid(entry_id=None)) == []
         assert any("entry_id" in r for r in validate_record(_valid(entry_id="")))
 
+    def test_file_path_is_optional_but_non_empty_where_present(self):
+        # The storage path (#717): absent from an HPRC record and a manifest fetched
+        # before Azul carried it, null where Azul wrote an empty cell.
+        assert validate_record(_valid()) == []
+        assert validate_record(_valid(file_path=None)) == []
+        assert validate_record(_valid(file_path="a/b.bam")) == []
+        assert any("file_path" in r for r in validate_record(_valid(file_path="")))
+
     @pytest.mark.parametrize(
         "field",
         [

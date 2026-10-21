@@ -42,8 +42,9 @@ CATALOG = PROD.catalog
 ROOT = PROD.input_root
 REAL_MANIFESTS = manifest_dir(ROOT, CATALOG)
 
-# The six per-file fields the issue's parity criteria compare — what the compact join
-# and the snapshot's `anvil_file` row both carry for a file, under the record's names.
+# The per-file fields the issue's parity criteria compare — what the compact join and
+# the snapshot's `anvil_file` row both carry for a file, under the record's names — and
+# `file_path`, which both carry since Azul added it (#717).
 COMPARED_FIELDS = (
     "file_name",
     "file_format",
@@ -51,6 +52,7 @@ COMPARED_FIELDS = (
     "file_md5sum",
     "drs_uri",
     "is_supplementary",
+    "file_path",
 )
 
 DATASET_ROW: dict[str, Any] = {
@@ -88,14 +90,15 @@ TABLES = {"anvil_dataset": [DATASET_ROW], "anvil_file": FILE_ROWS, "anvil_donor"
 
 def verbatim_manifest(path: Path, tables: dict[str, list[dict]]) -> Path:
     """Write the tables as Azul's verbatim manifest would carry them: `version` on
-    every entity, `drs_uri` beside `file_ref` on `anvil_file`, `file_path` dropped,
-    and Azul's own `duos_dataset_registration` entity. This applies the same three
-    additions the adapter removes, so a test over it checks the round trip, not that
-    the list of additions is right — that is the #477 measurement the module cites."""
+    every entity, `drs_uri` beside `file_ref` on `anvil_file`, and Azul's own
+    `duos_dataset_registration` entity. This applies the same three additions the
+    adapter removes, so a test over it checks the round trip, not that the list of
+    additions is right — that is the #477 measurement the module cites. `file_path`
+    is kept: Azul carries it since 2026-10 (#717)."""
     lines = []
     for table, rows in tables.items():
         for row in rows:
-            value = {k: v for k, v in row.items() if k != "file_path"}
+            value = dict(row)
             value["version"] = "2022-06-01T00:00:00.000000Z"
             if table == "anvil_file":
                 value["drs_uri"] = row["file_ref"]
@@ -242,12 +245,12 @@ class TestVerbatimAdapter:
         with pytest.raises(ValueError, match=r"bad\.verbatim\.jsonl line 2: not a verbatim entity"):
             si.AzulVerbatim(path).tables()
 
-    def test_both_readers_derive_the_same_records_but_for_file_path(self, client, verbatim):
-        # AC 10: the same snapshot through both readers.
+    def test_both_readers_derive_the_same_records(self, client, verbatim):
+        # AC 10: the same snapshot through both readers, `file_path` included (#717).
         direct = list(si.derive_records(si.TdrDirect(client, SNAPSHOT)))
         adapted = list(si.derive_records(si.AzulVerbatim(verbatim)))
-        assert all("file_path" not in record for record in adapted)
-        assert [{k: v for k, v in record.items() if k != "file_path"} for record in direct] == adapted
+        assert [record["file_path"] for record in adapted] == [row["file_path"] for row in FILE_ROWS]
+        assert direct == adapted
 
 
 class TestDerivationRefusals:
@@ -286,6 +289,10 @@ class TestDerivationRefusals:
         with pytest.raises(ValueError, match="cannot map an anvil_dataset row: no 'title' column"):
             si.derive_records(si.TdrDirect(FakeClient(tables), SNAPSHOT), "X")
 
+    def test_an_empty_storage_path_is_none_as_on_the_compact_path(self):
+        record = si.record_from_file_row(file_row(1, file_path=""), DATASET_ROW)
+        assert record["file_path"] is None
+
     def test_a_null_value_is_transcribed_not_refused(self):
         # A null md5 stays null: the load path excludes it (#376), the way the compact
         # path's empty cell is excluded, and this is not the place to decide that.
@@ -294,7 +301,7 @@ class TestDerivationRefusals:
 
 
 def _compared(record: dict) -> tuple:
-    return tuple(record[f] for f in COMPARED_FIELDS)
+    return tuple(record.get(f) for f in COMPARED_FIELDS)
 
 
 def _derived_records_agree_with_compact(datasets: list[str]) -> int:

@@ -14,6 +14,7 @@ from meta_disco.edges import (
     EDGE_CONFLICT,
     LineageStep,
     generic_only,
+    in_folder,
     merge_steps,
     misfits,
 )
@@ -71,6 +72,17 @@ def test_a_name_two_files_carry_gives_no_edge(tmp_path):
     )
     [md5] = [r for r in rows if r["file_name"] == "sample.bam.md5"]
     assert md5["generated_by"] is None
+
+
+def test_a_name_two_files_carry_is_settled_by_the_checksum_s_own_folder(tmp_path):
+    """#717: of two files carrying the name, the one beside the checksum is the one it checks."""
+    records = [
+        {**_file("sample.bam", "f-a"), "file_path": "a/sample.bam"},
+        {**_file("sample.bam", "f-b"), "file_path": "b/sample.bam"},
+        {**_file("sample.bam.md5", "f-md5"), "file_path": "b/sample.bam.md5"},
+    ]
+    [md5] = [r for r in run_producer(CATCH_ALL, tmp_path, records) if r["file_name"] == "sample.bam.md5"]
+    assert [i["parent_key"] for i in md5["generated_by"]["inputs"]] == ["f-b"]
 
 
 def test_a_parent_in_another_dataset_is_not_the_parent(tmp_path):
@@ -309,3 +321,10 @@ def test_a_call_takes_alignments_and_a_joint_genotyping_a_store_of_gvcfs(activit
         "inputs": [{"role": role, "parent_file": "p", "parent_key": "k", "parent_kind": None, "named_by": [ROW]}],
     }
     assert (("input kind (" + role + ")", parent_kind) in misfits(step, "variants", {"k": parent_kind})) is flagged
+
+
+def test_a_record_s_own_folder_key_is_not_read_as_its_folder():
+    """The folder is read from ``file_path``; a key named ``folder`` on an input record is not the stored one (#717)."""
+    a = {"file_name": "x.bam", "file_path": "a/x.bam", "folder": "b"}
+    b = {"file_name": "x.bam", "file_path": "b/x.bam"}
+    assert in_folder([a, b], "b") == [b]

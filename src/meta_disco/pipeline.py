@@ -558,7 +558,7 @@ class ClassifyPipeline:
 
         generated_by, step_outcome = None, None
         if self._step is not None and not content_unreadable:
-            generated_by, step_outcome = self._step(payload, item.file_name, item.dataset_id)
+            generated_by, step_outcome = self._step(payload, item.file_name, item.dataset_id, item.folder)
         samples = None
         if self.config.samples is not None and not content_unreadable:
             dataset = item.dataset_title if isinstance(item.dataset_title, str) else None
