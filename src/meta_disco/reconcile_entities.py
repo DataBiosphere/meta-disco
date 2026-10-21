@@ -47,7 +47,8 @@ naming both (``IdentifierRuleSet.collected_from``), and a ``collected_from`` lin
 donor (#559), each read as the main identifier. Sources naming different donors give none, and
 the sample is counted with each donor and who named it. A donor record is written for every donor
 the evidence names, every donor a sample's sources name (linked or in conflict), every identifier a
-``same_donor_as`` line names (joined or not), and every donor a donor's ``mother`` or ``father``
+``same_donor_as`` line about a recognised donor names (joined or not; a line whose own identifier no
+rule recognises is counted and read no further), and every donor a donor's ``mother`` or ``father``
 points to, so a join from a file to its donors, or from a donor to its parents, finds a record for each.
 
 Nothing here reads or writes a file record: a file reaches its donors through its
@@ -237,7 +238,7 @@ def _main_identifiers(paths: Iterable[Path], rules: IdentifierRuleSet) -> Identi
     A line about the donor it names (the synonym) names an identifier for the same donor, both recognised
     as donors in the line's dataset. The links are followed to the end of their chain, transitively
     (``S_Spanish-2`` → ``HG01504`` → ``NA99999`` puts both on ``NA99999``), and each synonym keeps the
-    attributions of its own step. A synonym whose chain reaches an identifier naming two others, or comes
+    attributions of its own step. A synonym whose chain reaches an identifier naming more than one other, or comes
     back on itself, joins none and is listed in ``unjoined`` with why. A line naming its own identifier says
     nothing and is passed over. A line whose synonym no rule recognises is left for :func:`gather` to count;
     one whose named identifier none recognises is counted here.
@@ -564,7 +565,7 @@ def reconcile_entities(
     sample_settled: dict[Identifier, dict[str, str]] = {}
     unreviewed: dict[EntityKind, Counter] = {DONOR: Counter(), SAMPLE: Counter()}
     links = evidence.links
-    samples = named_by_files | tied_samples | set(sample_slots) | set(links.collected_from)
+    samples = named_by_files | tied_samples | set(sample_slots)  # gather gives every link's sample a slot entry
     for sample in sorted(samples, key=identifier_order):
         record: dict = {"identifier": sample.to_dict()}
         by_donor = _collected_from(sample, rules, evidence)

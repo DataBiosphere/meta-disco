@@ -2246,7 +2246,7 @@ class DonorRecord(ConfiguredBaseModel):
 
 class Synonym(ConfiguredBaseModel):
     """
-    Another identifier for a donor, and every source that said so (#559): a source's `same_donor_as` line, about the donor it names by `identifier`, naming another identifier for it, followed to the end of the chain (the record's own identifier). Each synonym is cited by its own line. The record is listed under the repository's number and carries the synonyms, so a reader can find it by either; the explorer's search on synonyms is a follow-up.
+    Another identifier for a donor, and every source that said so (#559): a source's `same_donor_as` line, about the donor it names by `identifier`, naming another identifier for it, followed to the end of the chain (the record's own identifier). Each synonym is cited by its own line. The record is listed under the identifier at the end of the chain (for SGDP, the cell line's repository number) and carries the synonyms, so a reader can find it by either; the explorer's search on synonyms is a follow-up.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 

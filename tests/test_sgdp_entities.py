@@ -66,7 +66,7 @@ TABLE = """rows:
 HEADER = "Sample_ID\tSGDP_ID\tPopulation_ID\tGender\tCountry"
 SGDP = [
     ("HG01504", "S_Spanish-2", "Spanish", "M", "Spain"),
-    ("HGDP01163", "S_Tuscan-2", "Tuscan", "F", "Italy"),
+    ("HGDP01163", "S_Tuscan-2", "Toscàna", "F", "Italy"),
     ("HGDP00725", "S_Palestinian-2", "Palestinian", "M", "Israel"),
     ("NOR111", "S_Norwegian-1", "Norwegian", "U", "Norway"),
     ("DNK05", "S_Dinka-1", "Dinka", "M", "Sudan"),
@@ -142,9 +142,18 @@ def test_a_sample_is_written_only_where_sgdp_and_the_karyotype_agree_and_every_o
         se.NOT_IN_SGDP_FILE: ["simons_data_sample_5"],
         se.TABLES_DISAGREE: ["simons_data_sample_6"],
     }
-    lines = se.describe(imported)
-    assert "  confirmed: 3" in lines and "  sex_contradicts: 1: simons_data_sample_3" in lines
     assert imported.written == {CHM13: 3, GRCH38: 1, se.TABLE: 8}
+    assert se.describe(imported) == [
+        f"{T2T} -> {imported.directory} (7 SGDP samples)",
+        f"  {CHM13}: 3 lines",
+        f"  {GRCH38}: 1 lines",
+        f"  {se.TABLE}: 8 lines",
+        "  confirmed: 3",
+        "  not_in_sgdp_file: 1: simons_data_sample_5",
+        "  sex_not_stated: 1: simons_data_sample_4",
+        "  sex_contradicts: 1: simons_data_sample_3",
+        "  tables_disagree: 1: simons_data_sample_6",
+    ]
 
 
 def test_each_table_cites_the_pairing_it_states_and_sgdp_its_genomes(imported, tmp_path):
@@ -374,10 +383,15 @@ def test_synonyms_are_followed_to_the_end_of_their_chain_each_keeping_its_own_st
     assert set(donors) == {"NA99999"}
     person = donors["NA99999"]
     assert person["phenotypic_sex"]["value"] == "Male"
-    steps = {s["identifier"]["id"]: [a["rule_id"] for a in s["named_by"]] for s in person[SYNONYMS]}
-    # Each synonym is cited by the rule recognising the identifier its own line named.
-    assert steps == {"HG01504": ["coriell_cell_line_or_dna"], "S_Spanish-1": ["coriell_hg"], "S_Spanish-2": ["sgdp_id"]}
-    assert result.report[SYNONYMS]["unjoined"] == []
+    steps = [(s["identifier"]["id"], [a["rule_id"] for a in s["named_by"]]) for s in person[SYNONYMS]]
+    # In identifier order, each cited by the rule recognising the identifier its own line named.
+    assert steps == [
+        ("HG01504", ["coriell_cell_line_or_dna"]),
+        ("S_Spanish-1", ["coriell_hg"]),
+        ("S_Spanish-2", ["sgdp_id"]),
+    ]
+    # One record, three synonyms, counted by the record's namespace.
+    assert result.report[SYNONYMS] == {"records": 1, "synonyms": 3, "by_namespace": {"coriell": 3}, "unjoined": []}
 
 
 @pytest.mark.parametrize(
@@ -569,3 +583,61 @@ def test_a_link_whose_field_is_spelled_with_a_json_escape_is_still_read(tmp_path
     assert '"same_donor_as"' not in path.read_text()
     donors = by_id(settled(root, tmp_path).donors)
     assert [s["identifier"]["id"] for s in donors["HG01504"][SYNONYMS]] == ["S_Spanish-2"]
+
+
+def test_tables_naming_different_genomes_for_a_sample_disagree_whatever_the_karyotypes(tmp_path):
+    rows = [
+        t2t(CHM13, "simons_data_sample_2", "S_Tuscan-2", "XX"),
+        t2t(CHM13, "simons_data_sample_9", "S_Spanish-2", "XY"),
+        t2t(GRCH38, "simons_data_sample_9", "S_Dinka-2", "XY"),
+    ]
+    result = run(tmp_path, "e", rows=rows)
+    assert result.outcomes[se.TABLES_DISAGREE] == ["simons_data_sample_9"]
+    # An outcome no sample had is not listed.
+    assert [line for line in se.describe(result) if line.startswith("  ") and "lines" not in line] == [
+        "  confirmed: 1",
+        "  tables_disagree: 1: simons_data_sample_9",
+    ]
+    # Its only GRCh38 row writes no link, and no table writes one for it.
+    assert not path_of(tmp_path / "e", GRCH38).exists()
+    assert [g["target_key_value"] for g in written(tmp_path / "e", CHM13)] == ["simons_data_sample_2"]
+
+
+def test_a_download_whose_sha256_is_not_the_pinned_one_is_refused(monkeypatch):
+    class Response:
+        content = b"another file"
+
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr(se.requests, "get", lambda *a, **k: Response())
+    with pytest.raises(ValueError, match="this importer was measured against"):
+        se.fetch()
+
+
+def test_one_repository_identifier_tied_through_a_synonym_and_its_main_names_one_record(tmp_path):
+    root = tmp_path / "entity_evidence"
+    lines_file(root, "D", [(SAME_DONOR_AS, "S_Spanish-2", "HG01504")], SOURCE_EXTERNAL_GROUND_TRUTH, "sgdp")
+    lines_file(root, "D", [("donor_repository_id", "S_Spanish-2", "u1")], SOURCE_PUBLISHED_VALUE, name="anvil_donor")
+    lines_file(root, "D", [("donor_repository_id", "HG01504", "u1")], SOURCE_PUBLISHED_VALUE, name="anvil_donor_2")
+    donors = by_id(settled(root, tmp_path).donors)
+    assert {r["id"] for r in donors["HG01504"]["repository_ids"]} == {"u1"}
+    assert "S_Spanish-2" not in donors
+
+
+def test_a_population_in_latin_1_is_written_as_sgdp_wrote_it(imported, tmp_path):
+    (line,) = [
+        g
+        for g in written(tmp_path / "entity_evidence")
+        if g["target_key_value"] == "S_Tuscan-2" and g["field"] == "genetic_ancestry"
+    ]
+    assert line["raw_value"] == "Toscàna"
+
+
+def test_a_link_line_about_an_unrecognised_donor_is_counted_once_and_read_no_further(tmp_path):
+    root = tmp_path / "entity_evidence"
+    lines_file(root, "D", [(SAME_DONOR_AS, "NOT-AN-ID", "HG01504")], SOURCE_EXTERNAL_GROUND_TRUTH, "ext")
+    result = settled(root, tmp_path)
+    assert result.report["unrecognised_links"] == []
+    assert [u["examples"] for u in result.report["unrecognised"]] == [{"NOT-AN-ID": 1}]
+    assert "HG01504" not in by_id(result.donors)

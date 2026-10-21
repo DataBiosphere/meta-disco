@@ -24,7 +24,7 @@ counted by :data:`OUTCOMES` and written nothing; #718 holds them.
   main identifier where an identifier rule recognises it, so the record is keyed by ``coriell:HG01504`` and
   keeps ``sgdp:S_Spanish-2`` as a synonym.
 
-The file is pinned (:data:`SHA256`) and kept beside each generation (:data:`KEPT_FILE`); ``discover``
+The file is pinned (:data:`SHA256`) and kept in each generation, beside its evidence files (:data:`KEPT_FILE`); ``discover``
 reads only ``*.ndjson``, so no evidence reader takes the copy as evidence.
 """
 
