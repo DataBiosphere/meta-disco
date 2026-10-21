@@ -459,3 +459,31 @@ def test_a_karyotype_or_a_cell_the_file_leaves_out_states_no_sex_and_writes_noth
     with pytest.raises(ValueError, match="no SGDP sample confirmed"):
         run(tmp_path, "e", read(short), rows)
     assert se.outcome([se.T2tRow(CHM13, "s", "S_Tuscan-2", None)], se.sgdp_rows(sgdp_bytes())) == se.SEX_NOT_STATED
+
+
+def test_a_sample_or_donor_a_failed_link_names_still_has_a_record(tmp_path):
+    """A link line is its subject's only evidence here: the link fails, the record stays, and the failure is counted."""
+    root = tmp_path / "entity_evidence"
+    rows = [
+        (COLLECTED_FROM, "HG00096", "NOT_A_DONOR"),  # a donor no rule recognises
+        (SAME_DONOR_AS, "S_Spanish-2", "NOT_A_DONOR"),  # a main identifier no rule recognises
+        (SAME_DONOR_AS, "S_Tuscan-2", "HG01504"),  # a chain that branches
+        (SAME_DONOR_AS, "S_Tuscan-2", "HG01503"),
+    ]
+    lines_file(root, "D", rows, SOURCE_EXTERNAL_GROUND_TRUTH, "ext")
+    result = settled(root, tmp_path)
+    assert {"S_Spanish-2", "S_Tuscan-2"} <= set(by_id(result.donors))
+    sample = by_id(result.samples)["HG00096"]
+    # Its identifier rule still links it to its own donor; the failed line adds nothing.
+    assert [a["source_type"] for a in sample[COLLECTED_FROM]["named_by"]] == [SOURCE_IDENTIFIER_RULE]
+    assert result.report["unrecognised_links"] == [
+        {"dataset": "D", "table": "t", "lines": 2, "examples": {"NOT_A_DONOR": 2}}
+    ]
+    assert [u["identifier"]["id"] for u in result.report[SYNONYMS]["unjoined"]] == ["S_Tuscan-2"]
+
+
+def test_a_dataset_local_sample_a_failed_link_names_still_has_a_record(tmp_path):
+    root = tmp_path / "entity_evidence"
+    lines_file(root, T2T, [(COLLECTED_FROM, "simons_data_sample_9", "NOT_A_DONOR")], SOURCE_REPOSITORY_METADATA)
+    sample = by_id(settled(root, tmp_path).samples)["simons_data_sample_9"]
+    assert COLLECTED_FROM not in sample

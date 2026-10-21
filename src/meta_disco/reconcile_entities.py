@@ -358,6 +358,9 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
                 continue
             ident = links.main(got.identifier) if kind == DONOR else got.identifier
             where = (dataset, envelope.source.table)
+            if entry.field in IDENTITY_LINK_FIELDS:
+                # The donor or sample a link names has a record, whether or not the link joins it to another.
+                (sample_slots if kind == SAMPLE else slots)[ident]
             if entry.field == SAME_DONOR_AS:
                 continue  # read by _main_identifiers
             if entry.field == COLLECTED_FROM:
