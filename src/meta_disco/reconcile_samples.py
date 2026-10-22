@@ -2,8 +2,8 @@
 
 Three kinds of source name a file's samples: its own content, a submitter table, and its
 parent across a step that passes samples (below). Inference reads the file's own content, called its
-header here (a BAM's ``@RG SM``, a VCF's sample columns, a GATK sample map's rows,
-``sample_identity.SampleReader``), and writes the record's ``samples``, a pointer into its
+header here (a BAM's ``@RG SM``, a VCF's sample columns, a GATK sample map's rows, a nanopore
+FAST5's ``sample_id``, a GenomicsDB workspace's ``callset.json``, ``sample_identity.SampleReader``), and writes the record's ``samples``, a pointer into its
 producer file's sample lists. A submitter table
 names them in a column the slot map routes to ``samples``, and the importer writes each
 cell as an evidence line; reconcile reads it here, through the same identifier rules

@@ -994,6 +994,27 @@ def workspace_header_member(member_names: list[str]) -> str | None:
     return WORKSPACE_HEADER_MEMBER if _is_genomicsdb_variant_store(member_names) else None
 
 
+# The member a GenomicsDB workspace lists the samples it imported in.
+CALLSET_MEMBER = "callset.json"
+# The workspaces whose `callset.json` the tar producer reads for their samples (#724), by
+# dataset and folder: ANVIL_T2T_CHRY's SGDP cohort, whose sample maps are not public (#624),
+# so nothing else names their samples. Its 1000 Genomes workspaces take theirs from the
+# published maps (#710), and reading theirs too is #725.
+CALLSET_FOLDERS = {"ANVIL_T2T_CHRY": frozenset({"SGDP_CHM13v2/genomics_db", "SGDP_GRCh38/genomics_db"})}
+
+
+def callset_member(member_names: list[str], dataset: str | None, folder: str | None) -> str | None:
+    """The base name of the member the tar fetcher reads a tar's samples from (``FileTypeConfig.samples_member``), or None.
+
+    ``callset.json`` where the members read so far are a GenomicsDB variant store
+    (:func:`_is_genomicsdb_variant_store`) and the tar is in a folder :data:`CALLSET_FOLDERS`
+    declares for its dataset; no other tar's.
+    """
+    if folder is None or folder not in CALLSET_FOLDERS.get(dataset or "", ()):
+        return None
+    return CALLSET_MEMBER if _is_genomicsdb_variant_store(member_names) else None
+
+
 def classify_sample_map(
     rows,
     *,

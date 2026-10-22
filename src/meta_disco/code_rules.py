@@ -25,7 +25,8 @@ dimension. It is declared here, in ``EDGE_RULES``, for the same reason the rules
 is what an edge's ``rule_id`` carries, and nothing else lists it.
 
 A **sample rule** (#357) reads which samples a file's data comes from, so it sets no
-dimension either: out of the file's own content (a header, a GATK sample map's rows), or, at
+dimension either: out of the file's own content (a header, a GATK sample map's rows, a GenomicsDB
+workspace's ``callset.json``), or, at
 reconcile, out of its parent's settled samples (#668). It is declared in ``SAMPLE_RULES``; its
 id is what a file's ``samples.named_by`` carries for that source.
 
@@ -139,7 +140,8 @@ class EdgeRule:
 @dataclass(frozen=True)
 class SampleRule:
     """A rule that reads which samples a file's data comes from (#357): out of the file's own
-    content (a header, a sample map's rows), or at reconcile its parent's settled samples (#668).
+    content (a header, a sample map's rows, a workspace's ``callset.json``), or at reconcile its parent's
+    settled samples (#668).
 
     ``reads`` says where; ``rationale`` says why that names the samples. Each string a content
     reader reads becomes a sample only through ``rules/sample_namespaces.yaml``.
@@ -834,6 +836,21 @@ FAST5_TRACKING_SAMPLE = SampleRule(
         "its message parsed whole, not reached by walking the file, which would read about 7.5 MB."
     ),
 )
+TAR_CALLSET_SAMPLES = SampleRule(
+    id="tar_callset_samples",
+    module=SAMPLE_IDENTITY,
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "a GenomicsDB workspace tar's callset.json: each callset's sample_name, read only for the workspaces "
+        "header_classifier.CALLSET_FOLDERS declares (ANVIL_T2T_CHRY's SGDP cohort)"
+    ),
+    rationale=(
+        "GenomicsDBImport writes one callset per sample it imports into the workspace, named for the "
+        "sample, so the list names whose genotypes the tar holds (#724). A list whose every name is "
+        "recognised names the tar's samples; one with a name no identifier rule recognises names none. "
+        "Read where nothing else names the tar's samples: SGDP's sample maps are not public (#624)."
+    ),
+)
 SAMPLES_INHERITED_FROM_PARENT = SampleRule(
     id="samples_inherited_from_parent",
     module=RECONCILE_SAMPLES,
@@ -870,6 +887,7 @@ SAMPLE_RULES = (
     VCF_SAMPLE_COLUMNS,
     SAMPLE_MAP_ROWS,
     FAST5_TRACKING_SAMPLE,
+    TAR_CALLSET_SAMPLES,
     SAMPLES_INHERITED_FROM_PARENT,
     EXTERNAL_SAMPLE_MAP_ROWS,
 )

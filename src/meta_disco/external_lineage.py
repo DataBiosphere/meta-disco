@@ -40,12 +40,21 @@ import requests
 
 from .anvil_evidence import verbatim_manifest
 from .azul_manifest import REPOSITORY, sidecar_datasets
-from .cohort_steps import NO_VCF_HEADER, VCF_HEADER_UNREADABLE, parse_tar_head, sample_name_map
+from .cohort_steps import (
+    CALLSET_UNREADABLE,
+    NO_CALLSET,
+    NO_VCF_HEADER,
+    VCF_HEADER_UNREADABLE,
+    callset_samples,
+    parse_tar_head,
+    sample_name_map,
+)
 from .deployments import Deployment
 from .ena_lineage import CatalogFile, Progress, catalog_files, in_parallel
 from .evidence import TarEvidence, TarHead
 from .external_files import Entry, ExternalFile, ExternalFiles, read_sample_map
 from .fetchers import FetchError, fetch_tar_member
+from .header_classifier import CALLSET_MEMBER
 from .lineage_evidence import write_lineage_file
 from .models import JOIN_KEY_FILE_ID, SOURCE_EXTERNAL_GROUND_TRUTH
 from .schema.classification_model import (
@@ -64,8 +73,6 @@ SOURCE = "external"
 TABLE = "sample_maps"
 # What the source keys its files by: their path in the repository.
 SOURCE_KEY = "path"
-# The member a GenomicsDB workspace lists the samples it imported in.
-CALLSET_MEMBER = "callset.json"
 # What a line names as its columns: the child by AnVIL's file id, the parent by the header's
 # argument, the step by the member it was read from.
 CHILD_COLUMN = JOIN_KEY_FILE_ID
@@ -87,8 +94,6 @@ NOT_A_WORKSPACE = "not_a_workspace"
 NO_HEADER = "no_header"
 NO_IMPORT = "no_import"
 MAP_NOT_DECLARED = "map_not_declared"
-CALLSET_UNREADABLE = "callset_unreadable"
-NO_CALLSET = "no_callset"
 SAMPLES_DIFFER = "samples_differ"
 OUTCOMES = (
     LINKED,
@@ -170,26 +175,6 @@ def sample_set_id(samples: Iterable[str]) -> str:
 
 def _set_id(distinct: list[str]) -> str:
     return hashlib.sha256("\n".join(distinct).encode("utf-8")).hexdigest()[:16]
-
-
-def callset_samples(text: str) -> list[str]:
-    """The sample names a GenomicsDB ``callset.json`` lists, in its order; ``ValueError`` where it is not one.
-
-    Its ``callsets`` is a list of objects each naming its ``sample_name``, or, in older
-    workspaces, an object keyed by the sample name.
-    """
-    document = json.loads(text)
-    callsets = document.get("callsets") if isinstance(document, dict) else None
-    if isinstance(callsets, dict):
-        found: list[object] = list(callsets)
-    elif isinstance(callsets, list):
-        found = [c.get("sample_name") if isinstance(c, dict) else None for c in callsets]
-    else:
-        raise ValueError("no callsets list")
-    names = [n for n in found if isinstance(n, str) and n]
-    if not names or len(names) != len(found):
-        raise ValueError("a callset names no sample")
-    return names
 
 
 # --- reading what the importer reads ---------------------------------------------------

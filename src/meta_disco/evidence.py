@@ -391,11 +391,20 @@ class TarEvidence(CachedEvidence):
     # another tar records null, and an older entry of one is left as it was.
     vcf_header: str | None = None
     vcf_header_read: bool = False
+    # Whether `callset.json` was looked for, and its text where found (#724), kept as
+    # `vcf_header` is: no key, not looked for; a key holding null, looked for and not found.
+    # Only a GenomicsDB store the tar producer reads samples from is searched
+    # (``header_classifier.callset_member``).
+    CALLSET_KEY: ClassVar[str] = "callset"
+    callset: str | None = None
+    callset_read: bool = False
 
     def to_json(self) -> dict:
         data = super().to_json()
         if self.vcf_header_read:
             data[self.VCF_HEADER_KEY] = self.vcf_header
+        if self.callset_read:
+            data[self.CALLSET_KEY] = self.callset
         return data
 
     @classmethod
@@ -404,7 +413,13 @@ class TarEvidence(CachedEvidence):
         if base is None:
             return None
         assert isinstance(data, dict)  # base returned non-None ⇒ data parsed as a dict
-        return replace(base, vcf_header=data.get(cls.VCF_HEADER_KEY), vcf_header_read=cls.VCF_HEADER_KEY in data)
+        return replace(
+            base,
+            vcf_header=data.get(cls.VCF_HEADER_KEY),
+            vcf_header_read=cls.VCF_HEADER_KEY in data,
+            callset=data.get(cls.CALLSET_KEY),
+            callset_read=cls.CALLSET_KEY in data,
+        )
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -513,11 +528,18 @@ class TarHead:
 
     ``vcf_header_unread`` is why the member could not be read, where the read failed: the
     names still classify the tar, and the member is looked for again next run.
+
+    ``callset`` is the workspace's ``callset.json`` text where it was looked for and found
+    (#724), ``callset_read`` whether it was looked for, and ``callset_unread`` why it could
+    not be, where it was wanted and was not read: looked for again next run.
     """
 
     member_names: list[str]
     vcf_header: str | None = None
     vcf_header_unread: str | None = None
+    callset: str | None = None
+    callset_read: bool = False
+    callset_unread: str | None = None
 
 
 @dataclass(frozen=True)

@@ -1054,6 +1054,118 @@ def test_a_compressed_workspace_whose_header_the_head_walk_missed_is_unreadable(
     assert TarEvidence.load(evidence_dir, MD5) is None
 
 
+# --- a workspace's callset.json, read for its samples (#724) ---------------------------
+
+CALLSET_TEXT = json.dumps({"callsets": [{"row_idx": 0, "sample_name": "simons_data_sample_1"}]})
+
+
+def _sgdp_workspace(*, with_callset: bool = True) -> bytes:
+    """A GenomicsDB workspace tar whose callset.json lists a sample, and its vcfheader.vcf last."""
+    filler = [(f"ws/c{i}/__book_keeping.tdb.gz", b"z" * 1000) for i in range(8)]
+    callset = [("ws/callset.json", CALLSET_TEXT.encode())] if with_callset else []
+    return _make_tar([*callset, *filler, ("ws/vcfheader.vcf", HEADER_TEXT.encode())])
+
+
+def _callset_member(names, dataset, folder):
+    return "callset.json" if (dataset, folder) == ("D", "SGDP/genomics_db") else None
+
+
+def _fetch_sgdp(evidence_dir, *, folder="SGDP/genomics_db", is_gzipped=False):
+    return fetch_tar_headers(
+        evidence_dir,
+        MD5,
+        is_gzipped=is_gzipped,
+        kept_member=_workspace_member,
+        samples_member=_callset_member,
+        dataset="D",
+        folder=folder,
+    )
+
+
+def _no_network(monkeypatch):
+    monkeypatch.setattr(fetchers, "_fetch_suffix", _raise_transport)
+    monkeypatch.setattr(fetchers, "_fetch_range", _raise_transport)
+
+
+def test_a_wanted_callset_is_read_and_cached(monkeypatch, evidence_dir):
+    _serve(monkeypatch, _sgdp_workspace())
+    head = _fetch_sgdp(evidence_dir)
+    assert (head.vcf_header, head.callset, head.callset_read, head.callset_unread) == (
+        HEADER_TEXT,
+        CALLSET_TEXT,
+        True,
+        None,
+    )
+    assert TarEvidence.load(evidence_dir, MD5).to_json()["callset"] == CALLSET_TEXT
+    _no_network(monkeypatch)
+    assert _fetch_sgdp(evidence_dir) == head
+
+
+def test_a_callset_not_wanted_is_not_read_and_the_entry_says_so(monkeypatch, evidence_dir):
+    # The same tar in another folder: the samples_member names nothing.
+    _serve(monkeypatch, _sgdp_workspace())
+    head = _fetch_sgdp(evidence_dir, folder="1KGP/genomics_db")
+    assert (head.callset, head.callset_read, head.callset_unread) == (None, False, None)
+    assert head.vcf_header == HEADER_TEXT
+    assert "callset" not in TarEvidence.load(evidence_dir, MD5).to_json()
+
+
+def test_an_entry_from_before_724_reads_only_the_callset_and_is_saved_with_it(monkeypatch, evidence_dir):
+    names = ["ws/callset.json"]
+    TarEvidence(md5sum=MD5, file_name="x.tar", member_names=names, vcf_header=HEADER_TEXT, vcf_header_read=True).save(
+        evidence_dir
+    )
+    assert "callset" not in TarEvidence.load(evidence_dir, MD5).to_json()
+    calls: list = []
+    obj = _sgdp_workspace()
+    _serve(monkeypatch, obj, calls)
+    head = _fetch_sgdp(evidence_dir)
+    assert head == TarHead(names, HEADER_TEXT, None, CALLSET_TEXT, True, None)
+    # The walk saw callset.json's name, so its read starts at the head.
+    assert calls == [(0, fetchers.TAR_MEMBER_WINDOW - 1)]
+    cached = TarEvidence.load(evidence_dir, MD5)
+    assert cached.callset == CALLSET_TEXT and cached.vcf_header == HEADER_TEXT
+    assert cached.raw_bytes_fetched == len(obj)
+    _no_network(monkeypatch)
+    assert _fetch_sgdp(evidence_dir) == head
+
+
+def test_a_failed_callset_read_keeps_the_header_and_retries_next_run(monkeypatch, evidence_dir):
+    names = ["ws/callset.json"]
+    TarEvidence(md5sum=MD5, file_name="x.tar", member_names=names, vcf_header=HEADER_TEXT, vcf_header_read=True).save(
+        evidence_dir
+    )
+    monkeypatch.setattr(fetchers, "_fetch_range", _reset)
+    monkeypatch.setattr(fetchers, "_fetch_suffix", _reset)
+    head = _fetch_sgdp(evidence_dir)
+    assert head.vcf_header == HEADER_TEXT and head.callset is None and not head.callset_read
+    assert head.callset_unread is not None and "Connection reset" in head.callset_unread
+    # Not marked looked for: the next run reads it.
+    assert "callset" not in TarEvidence.load(evidence_dir, MD5).to_json()
+    _serve(monkeypatch, _sgdp_workspace())
+    assert _fetch_sgdp(evidence_dir).callset == CALLSET_TEXT
+
+
+def test_a_callset_looked_for_and_not_found_is_not_looked_for_again(monkeypatch, evidence_dir):
+    _serve(monkeypatch, _sgdp_workspace(with_callset=False))
+    head = _fetch_sgdp(evidence_dir)
+    assert (head.callset, head.callset_read, head.callset_unread) == (None, True, None)
+    assert TarEvidence.load(evidence_dir, MD5).to_json()["callset"] is None
+    _no_network(monkeypatch)
+    assert _fetch_sgdp(evidence_dir) == head
+
+
+def test_a_compressed_tars_callset_is_not_read_and_the_tar_is_not_failed(monkeypatch, evidence_dir):
+    buf = io.BytesIO()
+    with gzip.GzipFile(fileobj=buf, mode="wb") as gz:
+        gz.write(_workspace(header_first=True))
+    _serve(monkeypatch, buf.getvalue())
+    head = _fetch_sgdp(evidence_dir, is_gzipped=True)
+    assert head.vcf_header == HEADER_TEXT and head.callset is None and not head.callset_read
+    assert head.callset_unread == "compressed tar: callset.json is not read"
+    assert "callset" not in TarEvidence.load(evidence_dir, MD5).to_json()
+
+
 class _StreamResp(_Resp):
     """A streamed response: ``iter_content`` in chunks, usable as a context manager."""
 

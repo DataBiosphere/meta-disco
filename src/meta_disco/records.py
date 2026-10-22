@@ -124,9 +124,11 @@ UNKNOWN_DATASET = "unknown"
 STEP_OUTCOMES_KEY = "producer_steps"
 # Where a type that reads samples from a header (#357) writes, under its file's metadata
 # `details`, each header outcome's files per dataset, and the strings no identifier rule
-# recognised, the most frequent first.
+# recognised, the most frequent first; and where a reader says why a file's samples were not
+# read (``HeaderSamples.unread``, #724), each cause's files per dataset.
 SAMPLE_OUTCOMES_KEY = "sample_outcomes"
 UNRECOGNISED_SAMPLES_KEY = "unrecognised_samples"
+UNREAD_SAMPLES_KEY = "unread_samples"
 # The top-level key of a producer's file holding the sample lists its records point to (#357).
 SAMPLE_LISTS_KEY = "sample_lists"
 
