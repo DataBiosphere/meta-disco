@@ -616,6 +616,8 @@ def test_tars_reading_one_list_name_it_once_and_another_set_of_samples_is_anothe
         # A gVCF of that name, but in the other reference's folder.
         (CHR1[2:], MAP, (XX,), cs.MEMBER_NOT_FOUND),
         (CHR1, MAP, (XX, XX), cs.MEMBER_AMBIGUOUS),
+        # Two names one gVCF carries up to case are one sample listed twice.
+        (CHR1, MAP, (XX, XX.upper()), cs.MEMBER_AMBIGUOUS),
         # Two files of one name, up to case, in the folder.
         ([*CHR1, gvcf(CHM13, "chr1", f"{XX.upper()}.chr1.hc.vcf.gz")], MAP, (XX,), cs.MEMBER_AMBIGUOUS),
         # An XY sample with both chrX gVCFs placed for one map would be two members for one sample.
@@ -698,3 +700,10 @@ def test_the_tar_producer_writes_each_rebuilt_list_once_beside_its_records(tmp_p
     assert [i["parent_key"] for i in rebuilt["generated_by"]["inputs"]] == ["g0", "g1"]
     assert {rows[t]["generated_by"]["inputs"][0]["parent_ref"] for t in heads} == {rebuilt["ref"]}
     assert written["metadata"]["details"]["producer_steps"] == {T2T: {cs.STEPPED: 2}}
+
+
+def test_a_record_of_another_type_with_a_drifted_dataset_id_does_not_stop_the_tar_reader():
+    drifted = {"file_id": "b1", "file_name": "a.bam", "dataset_id": ["D"], "dataset_title": T2T}
+    reader = cs.TarSteps.for_run([*stored(*CHR1), drifted], KEY, EVIDENCE)
+    _, outcome = reader(sgdp_head(MAP, XX, XY), TAR, "D", f"{CHM13}/genomics_db")
+    assert outcome == cs.STEPPED

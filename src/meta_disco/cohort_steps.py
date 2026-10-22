@@ -327,9 +327,10 @@ class TarSteps(_StepReader):
         titles: dict[str, str] = {}
         kept = []
         for r in records:
-            title = r.get("dataset_title")
-            if isinstance(title, str):
-                titles[dataset_of(r)] = title
+            title, dataset = r.get("dataset_title"), dataset_of(r)
+            # Every record is read, not only this type's: a drifted id is the input gate's to refuse.
+            if isinstance(title, str) and isinstance(dataset, str):
+                titles[dataset] = title
             name = r.get("file_name")
             if isinstance(name, str) and (cls.keeps(name) or _rebuilt_member(r, name, title)):
                 kept.append(r)
@@ -392,7 +393,8 @@ class TarSteps(_StepReader):
             return None, MAP_NOT_IN_LAYOUT
         if not samples:
             return None, NO_SAMPLES
-        if len(set(samples)) < len(samples):
+        # Up to case, as the gVCFs are looked up.
+        if len({s.lower() for s in samples}) < len(samples):
             return None, MEMBER_AMBIGUOUS
         members = []
         for sample in samples:
