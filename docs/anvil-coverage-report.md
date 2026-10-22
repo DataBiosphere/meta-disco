@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-10-19 22:55:24**
+Classification run: **2026-10-22 07:39:44**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,088** files.
@@ -71,11 +71,11 @@ Processed **708,088** files.
 | .pod5 | 11 | `No rule determined a value for data_modality` |
 | .dict | 9 | `No rule determined a value for data_modality` |
 | .pbi | 7 | `No reason recorded` |
+| .dist | 6 | `No rule determined a value for data_modality` |
+| .min | 6 | `No rule determined a value for data_modality` |
+| .trans | 6 | `No rule determined a value for data_modality` |
 | .snarls | 6 | `No rule determined a value for data_modality` |
 | .gg | 6 | `No rule determined a value for data_modality` |
-| .min | 6 | `No rule determined a value for data_modality` |
-| .dist | 6 | `No rule determined a value for data_modality` |
-| .trans | 6 | `No rule determined a value for data_modality` |
 | .fa | 4 | `No rule determined a value for data_modality` |
 | .fna | 2 | `No rule determined a value for data_modality` |
 | .hal | 2 | `No rule determined a value for data_modality` |
@@ -85,7 +85,7 @@ Processed **708,088** files.
 | Data Modality | count | % | extensions |
 |---|---:|---:|---|
 | `genomic` | 352,441 | 49.8% | .vcf (201,645)<br>(none) (124,470)<br>.cram (10,555)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.g.vcf (2,504)<br>.bed (1,715)<br>.bam (1,688)<br>.fa (936)<br>.gfa (326)<br>.fasta (24)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
-| `not_classified` | 328,561 | 46.4% | .tbi (169,531)<br>.txt (42,477)<br>.csi (41,186)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.crai (10,317)<br>(none) (10,071)<br>.bed (9,768)<br>.bam (2,757)<br>.bai (2,742)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.paf (297)<br>.sam (192)<br>.cram (68)<br>.vcf (23)<br>.csv (18)<br>.fasta (14)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.fa (4)<br>.fna (2)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
+| `not_classified` | 328,561 | 46.4% | .tbi (169,531)<br>.txt (42,477)<br>.csi (41,186)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.crai (10,317)<br>(none) (10,071)<br>.bed (9,768)<br>.bam (2,757)<br>.bai (2,742)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.paf (297)<br>.sam (192)<br>.cram (68)<br>.vcf (23)<br>.csv (18)<br>.fasta (14)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.fa (4)<br>.fna (2)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
 | `not_applicable` | 20,968 | 3.0% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.tsv (24) |
 | `transcriptomic` | 5,930 | 0.8% | .bw (2,536)<br>.bam (2,329)<br>.sf (634)<br>.h5ad (350)<br>(none) (64)<br>.bed (12)<br>.csv (3)<br>.txt (2) |
 | `genomic.genotyping` | 160 | 0.0% | .idat (160) |
@@ -118,11 +118,11 @@ Processed **708,088** files.
 | .vcf | 23 | `no VCF header lines (no run of '#' lines starting the read head)` |
 | .csv | 18 | `No rule determined a value for data_type` |
 | .dict | 9 | `No rule determined a value for data_type` |
+| .dist | 6 | `No rule determined a value for data_type` |
+| .min | 6 | `No rule determined a value for data_type` |
+| .trans | 6 | `No rule determined a value for data_type` |
 | .snarls | 6 | `No rule determined a value for data_type` |
 | .gg | 6 | `No rule determined a value for data_type` |
-| .min | 6 | `No rule determined a value for data_type` |
-| .dist | 6 | `No rule determined a value for data_type` |
-| .trans | 6 | `No rule determined a value for data_type` |
 | .hal | 2 | `No rule determined a value for data_type` |
 | .hapl | 2 | `No rule determined a value for data_type` |
 | .delta | 1 | `No rule determined a value for data_type` |
@@ -134,7 +134,7 @@ Processed **708,088** files.
 | `variants` | 159,659 | 22.5% | (none) (124,335)<br>.vcf (35,324) |
 | `qc_report` | 37,548 | 5.3% | .txt (37,548) |
 | `reads` | 24,383 | 3.4% | .fastq (21,270)<br>.bam (3,113) |
-| `not_classified` | 22,653 | 3.2% | (none) (10,069)<br>.txt (4,929)<br>.bed (2,771)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.bigwig (462)<br>.sizes (458)<br>.paf (297)<br>.sam (192)<br>.vcf (23)<br>.csv (18)<br>.dict (9)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
+| `not_classified` | 22,653 | 3.2% | (none) (10,069)<br>.txt (4,929)<br>.bed (2,771)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.bigwig (462)<br>.sizes (458)<br>.paf (297)<br>.sam (192)<br>.vcf (23)<br>.csv (18)<br>.dict (9)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
 | `alignments` | 14,284 | 2.0% | .cram (10,623)<br>.bam (3,661) |
 | `checksum` | 14,233 | 2.0% | .md5 (14,233) |
 | `raw_signal` | 12,522 | 1.8% | .fast5 (12,509)<br>.pod5 (11)<br>(none) (2) |
@@ -194,18 +194,18 @@ Processed **708,088** files.
 | .csv | 21 | `No rule determined a value for platform` |
 | .dict | 9 | `No rule determined a value for platform` |
 | .pbi | 7 | `No reason recorded` |
+| .dist | 6 | `No rule determined a value for platform` |
+| .min | 6 | `No rule determined a value for platform` |
+| .trans | 6 | `No rule determined a value for platform` |
 | .snarls | 6 | `No rule determined a value for platform` |
 | .gg | 6 | `No rule determined a value for platform` |
-| .min | 6 | `No rule determined a value for platform` |
-| .dist | 6 | `No rule determined a value for platform` |
-| .trans | 6 | `No rule determined a value for platform` |
 | .hal | 2 | `No rule determined a value for platform` |
 | .hapl | 2 | `No rule determined a value for platform` |
 | .delta | 1 | `No rule determined a value for platform` |
 
 | Platform | count | % | extensions |
 |---|---:|---:|---|
-| `not_classified` | 638,115 | 90.1% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.bed (11,523)<br>.crai (10,317)<br>.bam (3,664)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.h5ad (350)<br>.paf (297)<br>.sam (192)<br>.csv (21)<br>.dict (9)<br>.pbi (7)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
+| `not_classified` | 638,115 | 90.1% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.bed (11,523)<br>.crai (10,317)<br>.bam (3,664)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.h5ad (350)<br>.paf (297)<br>.sam (192)<br>.csv (21)<br>.dict (9)<br>.pbi (7)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
 | `ILLUMINA` | 30,949 | 4.4% | .fastq (20,166)<br>.cram (10,623)<br>.idat (160) |
 | `not_applicable` | 22,290 | 3.1% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.fa (940)<br>.gfa (326)<br>.fasta (38)<br>.tsv (24)<br>.xg (8)<br>.gbwt (6)<br>.fna (2)<br>.gbz (2) |
 | `ONT` | 13,957 | 2.0% | .fast5 (12,509)<br>.bam (1,300)<br>.fastq (137)<br>.pod5 (11) |
@@ -265,8 +265,8 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | .bed | CHM13 vs GRCh38 | 2 |
 | .xg | CHM13 vs GRCh38 | 2 |
 | .fasta | CHM13 vs GRCh38 | 1 |
-| .chain | CHM13 vs GRCh38 | 1 |
 | .dict | CHM13 vs GRCh38 | 1 |
+| .chain | CHM13 vs GRCh38 | 1 |
 | .gff3 | CHM13 vs GRCh38 | 1 |
 
 | Reference Assembly | count | % | extensions |
@@ -275,8 +275,8 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | `t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r` | 111,756 | 15.8% | .vcf (108,478)<br>.cram (3,202)<br>.bam (76) |
 | `T2T-CHM13v2.0` | 87,747 | 12.4% | .vcf (83,804)<br>.cram (3,481)<br>.bam (462) |
 | `not_applicable` | 62,913 | 8.9% | .fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,509)<br>.bed (3,922)<br>.log (3,637)<br>.bam (3,113)<br>.png (3,074)<br>.fa (936)<br>.idat (160)<br>.fasta (24)<br>.tsv (24)<br>.pod5 (11) |
-| `GRCh38` | 20,705 | 2.9% | .vcf (9,186)<br>.cram (3,837)<br>.g.vcf (2,504)<br>.bam (2,341)<br>.pvar (1,427)<br>.bed (817)<br>.chain (462)<br>.gff3 (88)<br>.gfa (6)<br>.fasta (3)<br>.dict (3)<br>.snarls (3)<br>.min (3)<br>.gg (3)<br>.dist (3)<br>.trans (3)<br>.xg (3)<br>.gbwt (3)<br>.fna (2)<br>.fa (1)<br>.pgen (1)<br>.sizes (1)<br>.hal (1)<br>.paf (1)<br>.delta (1)<br>.hapl (1)<br>.gbz (1) |
-| `CHM13` | 7,395 | 1.0% | .bed (6,744)<br>.chain (462)<br>.gff3 (90)<br>.vcf (54)<br>.fasta (7)<br>.gfa (6)<br>.dict (4)<br>.fa (3)<br>.gg (3)<br>.snarls (3)<br>.trans (3)<br>.min (3)<br>.dist (3)<br>.gbwt (3)<br>.xg (3)<br>.sizes (1)<br>.hal (1)<br>.gbz (1)<br>.hapl (1) |
+| `GRCh38` | 20,705 | 2.9% | .vcf (9,186)<br>.cram (3,837)<br>.g.vcf (2,504)<br>.bam (2,341)<br>.pvar (1,427)<br>.bed (817)<br>.chain (462)<br>.gff3 (88)<br>.gfa (6)<br>.fasta (3)<br>.dict (3)<br>.min (3)<br>.xg (3)<br>.dist (3)<br>.snarls (3)<br>.gbwt (3)<br>.gg (3)<br>.trans (3)<br>.fna (2)<br>.fa (1)<br>.pgen (1)<br>.sizes (1)<br>.paf (1)<br>.hal (1)<br>.delta (1)<br>.hapl (1)<br>.gbz (1) |
+| `CHM13` | 7,395 | 1.0% | .bed (6,744)<br>.chain (462)<br>.gff3 (90)<br>.vcf (54)<br>.fasta (7)<br>.gfa (6)<br>.dict (4)<br>.fa (3)<br>.gbwt (3)<br>.dist (3)<br>.min (3)<br>.trans (3)<br>.xg (3)<br>.gg (3)<br>.snarls (3)<br>.sizes (1)<br>.hal (1)<br>.hapl (1)<br>.gbz (1) |
 | `GRCh37` | 1,463 | 0.2% | .pvar (1,427)<br>.vcf (34)<br>.bed (2) |
 | `Mmul_10` | 422 | 0.1% | .bam (372)<br>.cram (49)<br>.vcf (1) |
 | `mCalJa1.2.pat.X` | 334 | 0.0% | .bam (314)<br>.cram (19)<br>.vcf (1) |
@@ -284,7 +284,7 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | `T2T-CHM13v1.0` | 59 | 0.0% | .vcf (59) |
 | `t2t-chm13.20200921.HG002chrY.chrEBV` | 35 | 0.0% | .cram (35) |
 | `T2T-CHM13v1.1` | 24 | 0.0% | .vcf (24) |
-| `conflict` | 8 | 0.0% | .bed (2)<br>.xg (2)<br>.fasta (1)<br>.chain (1)<br>.dict (1)<br>.gff3 (1) |
+| `conflict` | 8 | 0.0% | .bed (2)<br>.xg (2)<br>.fasta (1)<br>.dict (1)<br>.chain (1)<br>.gff3 (1) |
 
 ---
 
@@ -329,18 +329,18 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | .pod5 | 11 | `No rule determined a value for assay_type` |
 | .dict | 9 | `No rule determined a value for assay_type` |
 | .pbi | 7 | `No reason recorded` |
+| .dist | 6 | `No rule determined a value for assay_type` |
+| .min | 6 | `No rule determined a value for assay_type` |
+| .trans | 6 | `No rule determined a value for assay_type` |
 | .snarls | 6 | `No rule determined a value for assay_type` |
 | .gg | 6 | `No rule determined a value for assay_type` |
-| .min | 6 | `No rule determined a value for assay_type` |
-| .dist | 6 | `No rule determined a value for assay_type` |
-| .trans | 6 | `No rule determined a value for assay_type` |
 | .hal | 2 | `No rule determined a value for assay_type` |
 | .hapl | 2 | `No rule determined a value for assay_type` |
 | .delta | 1 | `No rule determined a value for assay_type` |
 
 | Assay Type | count | % | extensions |
 |---|---:|---:|---|
-| `not_classified` | 679,943 | 96.0% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,541)<br>.txt (42,479)<br>.csi (41,186)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.bed (11,511)<br>.cram (10,623)<br>.crai (10,317)<br>.bam (4,675)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.paf (297)<br>.sam (192)<br>.csv (21)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
+| `not_classified` | 679,943 | 96.0% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,541)<br>.txt (42,479)<br>.csi (41,186)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.bed (11,511)<br>.cram (10,623)<br>.crai (10,317)<br>.bam (4,675)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.paf (297)<br>.sam (192)<br>.csv (21)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
 | `not_applicable` | 22,290 | 3.1% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.fa (940)<br>.gfa (326)<br>.fasta (38)<br>.tsv (24)<br>.xg (8)<br>.gbwt (6)<br>.fna (2)<br>.gbz (2) |
 | `RNA-seq` | 5,281 | 0.7% | .bw (2,536)<br>.bam (2,099)<br>.sf (634)<br>.bed (12) |
 | `sc/snRNA-seq` | 414 | 0.1% | .h5ad (350)<br>(none) (64) |
@@ -394,18 +394,18 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | .pod5 | 11 | `No rule determined a value for instrument_model` |
 | .dict | 9 | `No rule determined a value for instrument_model` |
 | .pbi | 7 | `No reason recorded` |
+| .dist | 6 | `No rule determined a value for instrument_model` |
+| .min | 6 | `No rule determined a value for instrument_model` |
+| .trans | 6 | `No rule determined a value for instrument_model` |
 | .snarls | 6 | `No rule determined a value for instrument_model` |
 | .gg | 6 | `No rule determined a value for instrument_model` |
-| .min | 6 | `No rule determined a value for instrument_model` |
-| .dist | 6 | `No rule determined a value for instrument_model` |
-| .trans | 6 | `No rule determined a value for instrument_model` |
 | .hal | 2 | `No rule determined a value for instrument_model` |
 | .hapl | 2 | `No rule determined a value for instrument_model` |
 | .delta | 1 | `No rule determined a value for instrument_model` |
 
 | Instrument Model | count | % | extensions |
 |---|---:|---:|---|
-| `not_classified` | 684,886 | 96.7% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.bed (11,523)<br>.cram (10,555)<br>.crai (10,317)<br>.bam (6,090)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.h5ad (350)<br>.paf (297)<br>.sam (192)<br>.csv (21)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
+| `not_classified` | 684,886 | 96.7% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.bed (11,523)<br>.cram (10,555)<br>.crai (10,317)<br>.bam (6,090)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.h5ad (350)<br>.paf (297)<br>.sam (192)<br>.csv (21)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
 | `not_applicable` | 22,290 | 3.1% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.fa (940)<br>.gfa (326)<br>.fasta (38)<br>.tsv (24)<br>.xg (8)<br>.gbwt (6)<br>.fna (2)<br>.gbz (2) |
 | `Revio` | 684 | 0.1% | .bam (684) |
 | `Illumina iScan` | 160 | 0.0% | .idat (160) |
@@ -452,21 +452,21 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | .dict | 9 | `No rule determined a value for variant_kind` |
 | .xg | 8 | `No rule determined a value for variant_kind` |
 | .pbi | 7 | `No reason recorded` |
+| .gbwt | 6 | `No rule determined a value for variant_kind` |
+| .dist | 6 | `No rule determined a value for variant_kind` |
+| .min | 6 | `No rule determined a value for variant_kind` |
+| .trans | 6 | `No rule determined a value for variant_kind` |
 | .snarls | 6 | `No rule determined a value for variant_kind` |
 | .gg | 6 | `No rule determined a value for variant_kind` |
-| .min | 6 | `No rule determined a value for variant_kind` |
-| .dist | 6 | `No rule determined a value for variant_kind` |
-| .trans | 6 | `No rule determined a value for variant_kind` |
-| .gbwt | 6 | `No rule determined a value for variant_kind` |
 | .hal | 2 | `No rule determined a value for variant_kind` |
-| .gbz | 2 | `No rule determined a value for variant_kind` |
 | .hapl | 2 | `No rule determined a value for variant_kind` |
+| .gbz | 2 | `No rule determined a value for variant_kind` |
 | .delta | 1 | `No rule determined a value for variant_kind` |
 
 | Variant Kind | count | % | extensions |
 |---|---:|---:|---|
 | `small` | 293,230 | 41.4% | .vcf (166,391)<br>(none) (124,335)<br>.g.vcf (2,504) |
-| `not_classified` | 291,585 | 41.2% | .tbi (169,531)<br>.csi (41,186)<br>.vcf (35,124)<br>.crai (10,317)<br>(none) (10,270)<br>.txt (4,929)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bed (2,771)<br>.bai (2,742)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.gfa (326)<br>.paf (297)<br>.sam (192)<br>.csv (18)<br>.dict (9)<br>.xg (8)<br>.pbi (7)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.gbwt (6)<br>.hal (2)<br>.gbz (2)<br>.hapl (2)<br>.delta (1) |
+| `not_classified` | 291,585 | 41.2% | .tbi (169,531)<br>.csi (41,186)<br>.vcf (35,124)<br>.crai (10,317)<br>(none) (10,270)<br>.txt (4,929)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bed (2,771)<br>.bai (2,742)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.gfa (326)<br>.paf (297)<br>.sam (192)<br>.csv (18)<br>.dict (9)<br>.xg (8)<br>.pbi (7)<br>.gbwt (6)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.gbz (2)<br>.delta (1) |
 | `not_applicable` | 123,120 | 17.4% | .txt (37,550)<br>.fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,509)<br>.cram (10,623)<br>.bed (8,752)<br>.bam (6,774)<br>.log (3,637)<br>.png (3,074)<br>.bw (2,536)<br>.fa (940)<br>.sf (634)<br>.h5ad (350)<br>.idat (160)<br>.fasta (38)<br>.tsv (24)<br>.pod5 (11)<br>.csv (3)<br>.fna (2) |
 | `structural` | 153 | 0.0% | .vcf (153) |
 
@@ -511,21 +511,21 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | .dict | 9 | `No rule determined a value for variant_origin` |
 | .xg | 8 | `No rule determined a value for variant_origin` |
 | .pbi | 7 | `No reason recorded` |
+| .gbwt | 6 | `No rule determined a value for variant_origin` |
+| .dist | 6 | `No rule determined a value for variant_origin` |
+| .min | 6 | `No rule determined a value for variant_origin` |
+| .trans | 6 | `No rule determined a value for variant_origin` |
 | .snarls | 6 | `No rule determined a value for variant_origin` |
 | .gg | 6 | `No rule determined a value for variant_origin` |
-| .min | 6 | `No rule determined a value for variant_origin` |
-| .dist | 6 | `No rule determined a value for variant_origin` |
-| .trans | 6 | `No rule determined a value for variant_origin` |
-| .gbwt | 6 | `No rule determined a value for variant_origin` |
 | .hal | 2 | `No rule determined a value for variant_origin` |
-| .gbz | 2 | `No rule determined a value for variant_origin` |
 | .hapl | 2 | `No rule determined a value for variant_origin` |
+| .gbz | 2 | `No rule determined a value for variant_origin` |
 | .delta | 1 | `No rule determined a value for variant_origin` |
 
 | Variant Origin | count | % | extensions |
 |---|---:|---:|---|
 | `germline` | 293,395 | 41.4% | .vcf (166,556)<br>(none) (124,335)<br>.g.vcf (2,504) |
-| `not_classified` | 291,573 | 41.2% | .tbi (169,531)<br>.csi (41,186)<br>.vcf (35,112)<br>.crai (10,317)<br>(none) (10,270)<br>.txt (4,929)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bed (2,771)<br>.bai (2,742)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.gfa (326)<br>.paf (297)<br>.sam (192)<br>.csv (18)<br>.dict (9)<br>.xg (8)<br>.pbi (7)<br>.snarls (6)<br>.gg (6)<br>.min (6)<br>.dist (6)<br>.trans (6)<br>.gbwt (6)<br>.hal (2)<br>.gbz (2)<br>.hapl (2)<br>.delta (1) |
+| `not_classified` | 291,573 | 41.2% | .tbi (169,531)<br>.csi (41,186)<br>.vcf (35,112)<br>.crai (10,317)<br>(none) (10,270)<br>.txt (4,929)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bed (2,771)<br>.bai (2,742)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.gfa (326)<br>.paf (297)<br>.sam (192)<br>.csv (18)<br>.dict (9)<br>.xg (8)<br>.pbi (7)<br>.gbwt (6)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.gbz (2)<br>.delta (1) |
 | `not_applicable` | 123,120 | 17.4% | .txt (37,550)<br>.fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,509)<br>.cram (10,623)<br>.bed (8,752)<br>.bam (6,774)<br>.log (3,637)<br>.png (3,074)<br>.bw (2,536)<br>.fa (940)<br>.sf (634)<br>.h5ad (350)<br>.idat (160)<br>.fasta (38)<br>.tsv (24)<br>.pod5 (11)<br>.csv (3)<br>.fna (2) |
 
 **Note**: Germline or somatic, read from the caller a VCF's header names, or the caller of the calls a GenomicsDB workspace imported, found as for the kind and looked up in `rules/callers.yaml` (#658, #678). A caller with a somatic mode (Sniffles2) gives its origin only where its command line shows the mode was off. Not applicable to a file whose rule says it holds no variants. An index, a VCF genotyped from a workspace, a merge of such VCFs and a filtered callset take their parents' origin only at reconcile, which this report does not read.
