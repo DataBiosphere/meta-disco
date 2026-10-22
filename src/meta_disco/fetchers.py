@@ -1267,8 +1267,10 @@ def fetch_tar_headers(
     or None. It is read after the walk, in the same two windows, never by the walk, and cached the
     same way (``TarEvidence.callset_read``), so a cached entry from before #724 of an uncompressed
     tar has only that member read. It is asked on every call, cached or not: an entry holding the
-    member's text returns none for a file it is not wanted for, and keeps it. A compressed tar's
-    is not read: ``TarHead.callset_unread`` says so, and the tar is not failed.
+    member's text returns none for a file it is not wanted for, and keeps it. A cached entry of a
+    tar named compressed is walked again for it, as for the kept member, so its bytes decide: a
+    tar whose bytes are compressed does not have it read (``TarHead.callset_unread`` says so, and
+    the tar is not failed), and a plain tar misnamed ``.gz`` does.
 
     A failed read of either member alone (an HTTP error or a dropped connection) does not fail
     the tar: its names are returned with the cause in ``TarHead.vcf_header_unread`` or
@@ -1301,8 +1303,10 @@ def fetch_tar_headers(
     if cached is not None:
         names = cached.member_names
         member = None if cached.vcf_header_read or kept_member is None else kept_member(names)
-        # A compressed tar's kept member is read only by walking it again from its head, below.
-        if member is None or not is_gzipped:
+        callset_wanted = not cached.callset_read and samples_member is not None and samples_member(names) is not None
+        # A tar named compressed whose kept or samples member is still to read is walked again from
+        # its head, below, which tells by its bytes whether it is: a plain tar misnamed `.gz` is read.
+        if not is_gzipped or (member is None and not callset_wanted):
             text, unread, fetched = cached.vcf_header, None, 0
             if member is not None:
                 text, unread, fetched = _read_kept(md5sum, member, names, url=url)

@@ -1162,6 +1162,17 @@ def test_a_callset_looked_for_and_not_found_is_not_looked_for_again(monkeypatch,
     assert _fetch_sgdp(evidence_dir) == head
 
 
+def test_a_plain_tar_named_compressed_has_its_callset_read_on_a_header_only_entry(monkeypatch, evidence_dir):
+    # The name says `.tar.gz`, the bytes are a plain tar: walked again, its callset is read, not refused.
+    TarEvidence(
+        md5sum=MD5, file_name="x.tar.gz", member_names=["ws/callset.json"], vcf_header=HEADER_TEXT, vcf_header_read=True
+    ).save(evidence_dir)
+    _serve(monkeypatch, _sgdp_workspace())
+    head = _fetch_sgdp(evidence_dir, is_gzipped=True)
+    assert (head.callset, head.callset_read, head.callset_unread) == (CALLSET_TEXT, True, None)
+    assert TarEvidence.load(evidence_dir, MD5).to_json()["callset"] == CALLSET_TEXT
+
+
 def test_a_compressed_tars_callset_is_not_read_and_the_tar_is_not_failed(monkeypatch, evidence_dir):
     buf = io.BytesIO()
     with gzip.GzipFile(fileobj=buf, mode="wb") as gz:
