@@ -684,7 +684,10 @@ def test_the_sample_maps_held_outside_anvil_are_listed_per_dataset(conflicted):
 def test_the_sample_maps_inference_rebuilt_are_listed_per_dataset(conflicted):
     report = rr.load_report(conflicted)
     md = rr.render_markdown(rr.dashboard_data(report, None, Path("report.json")))
-    assert "### Sample maps inference rebuilt" in md and "None: the run's tar producer rebuilt none." in md
+    assert (
+        "### Sample maps inference rebuilt" in md
+        and "None: the run's tar producer rebuilt none, or the run predates #726." in md
+    )
     report["rebuilt_lists"] = {"ANVIL_T2T_CHRY": {"lists": 52, "members": 14300}}
     data = rr.dashboard_data(report, None, Path("report.json"))
     assert data["rebuilt_list_columns"] == ["lists", "members"]

@@ -280,7 +280,7 @@
           + (Object.keys(DATA.rebuilt_lists).length
               ? table(['dataset', ...DATA.rebuilt_list_columns],
                   Object.keys(DATA.rebuilt_lists).sort().map(d => [shown(d), ...DATA.rebuilt_list_columns.map(k => ({text: n(DATA.rebuilt_lists[d][k] ?? 0), cls: 'num'}))]))
-              : '<p>None: the run\'s tar producer rebuilt none.</p>')
+              : '<p>None: the run\'s tar producer rebuilt none, or the run predates #726.</p>')
           + '<h3>Who named each file\'s step</h3>'
           + table(['dataset', 'named by', 'files'], L.steps.map(r => [shown(r.dataset), r.named_by, {text: n(r.files), cls: 'num'}]))
           + '<h3>Conflicts</h3>'

@@ -1010,14 +1010,14 @@ REBUILT_LIST_COLUMNS = ("lists", "members")
 
 
 def _rebuilt_lists_section(per_dataset: dict[str, dict]) -> list[str]:
-    """The sample maps inference rebuilt that the run's steps read through, per dataset (#726)."""
+    """The sample maps the run's tar producer rebuilt, per dataset (#726)."""
     return _lists_section(
         "Sample maps inference rebuilt",
         "ANVIL_T2T_CHRY's SGDP workspace tars name sample maps no one holds (#624), so inference rebuilds each "
         "from the tars that read it (#726): the map a tar's header names, the samples its `callset.json` lists, "
         "and each sample's one gVCF under the tar's reference folder. *lists*: the lists the run's tar producer rebuilt; "
         "*members*: their gVCFs, a gVCF counted once per list.",
-        "None: the run's tar producer rebuilt none.",
+        "None: the run's tar producer rebuilt none, or the run predates #726.",
         REBUILT_LIST_COLUMNS,
         per_dataset,
     )
