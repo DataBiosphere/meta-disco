@@ -27,7 +27,9 @@ then its donor records (``DONORS_FILE``, #693), each counted as one "file" under
 the identifier rule that recognises its identifier; then its sample records (``SAMPLES_FILE``, #699),
 counted the same way under :data:`SAMPLE_RECORDS`, for a sample's slots and the identifier rule that
 recognises its identifier; then the sample maps held outside AnVIL that its steps read through
-(``EXTERNAL_LISTS_FILE``, #710), counted under :data:`EXTERNAL_LISTS` for their own step and samples.
+(``EXTERNAL_LISTS_FILE``, #710), counted under :data:`EXTERNAL_LISTS` for their own step and samples; then the
+sample maps inference rebuilt that its steps read through (``REBUILT_LISTS_FILE``, #726), counted under
+:data:`REBUILT_LISTS` for their own step.
 For each claim carrying a
 ``rule_id``, per rule:
 
@@ -80,6 +82,7 @@ from meta_disco.models import DONOR_SLOTS, MIXED, SAMPLE_SLOTS, SAMPLES_FIELD, S
 from meta_disco.output_utils import (
     DONORS_FILE,
     EXTERNAL_LISTS_FILE,
+    REBUILT_LISTS_FILE,
     RECONCILED_DIR,
     RUN_DIR_FORMAT,
     SAMPLES_FILE,
@@ -424,6 +427,7 @@ class Tally:
 DONOR_RECORDS = "(donor records)"
 SAMPLE_RECORDS = "(sample records)"
 EXTERNAL_LISTS = "(external sample maps)"
+REBUILT_LISTS = "(rebuilt sample maps)"
 _ENTITY = "_entity"
 
 
@@ -439,8 +443,20 @@ def external_list_records(run_dir: Path):
     each list's step and samples, which cite the external sample map rules. Nothing for a run reconciled before #710."""
     if not (run_dir / RECONCILED_DIR / EXTERNAL_LISTS_FILE).exists():
         return
-    for row in iter_reconciled_artifact(run_dir, EXTERNAL_LISTS_FILE):
-        record = {"dataset_title": EXTERNAL_LISTS, "classifications": {}, _ENTITY: True}
+    yield from _list_records(run_dir, EXTERNAL_LISTS_FILE, EXTERNAL_LISTS)
+
+
+def rebuilt_list_records(run_dir: Path):
+    """A run's rebuilt lists (#726) in the shape :func:`tally` reads, counted under :data:`REBUILT_LISTS`, not as files:
+    each list's step, which cites the rebuilt sample map rule. Nothing for a run reconciled before #726."""
+    if not (run_dir / RECONCILED_DIR / REBUILT_LISTS_FILE).exists():
+        return
+    yield from _list_records(run_dir, REBUILT_LISTS_FILE, REBUILT_LISTS)
+
+
+def _list_records(run_dir: Path, artifact: str, counted_as: str):
+    for row in iter_reconciled_artifact(run_dir, artifact):
+        record = {"dataset_title": counted_as, "classifications": {}, _ENTITY: True}
         for name in ("generated_by", SAMPLES_FIELD):
             if name in row:
                 record[name] = row[name]
@@ -664,9 +680,11 @@ def build(
     donors=(),
     samples=(),
     external_lists=(),
+    rebuilt_lists=(),
 ) -> dict:
     """The report's data. A path left None reads the bundled file; ``donors`` are :func:`donor_records`,
-    ``samples`` :func:`sample_records` and ``external_lists`` :func:`external_list_records`, counted after ``records``."""
+    ``samples`` :func:`sample_records`, ``external_lists`` :func:`external_list_records` and ``rebuilt_lists``
+    :func:`rebuilt_list_records`, counted after ``records``."""
     if set(PLACEHOLDER_MARKERS) != marker_values():
         raise ReportError(f"the schema's markers {sorted(marker_values())} are not the ones worded here")
     rules = yaml_rules(rules_path) + code_rule_rows() + mapping_rows(value_map_path)
@@ -684,9 +702,10 @@ def build(
     duplicates = sorted(i for i, c in Counter([*ids, *others]).items() if c > 1)
     if duplicates:
         raise ReportError(f"ids declared twice: {duplicates}")
-    donors, samples, external_lists = list(donors), list(samples), list(external_lists)
+    donors, samples = list(donors), list(samples)
+    external_lists, rebuilt_lists = list(external_lists), list(rebuilt_lists)
     n, stats, by_caller = tally(
-        chain(records, donors, samples, external_lists),
+        chain(records, donors, samples, external_lists, rebuilt_lists),
         rule_ids={r["id"] for r in rules if r["kind"] != KIND_MAPPING},
         mapping_ids={r["id"] for r in rules if r["kind"] == KIND_MAPPING},
     )
@@ -707,6 +726,12 @@ def build(
             f", and the {len(external_lists):,} sample maps held outside AnVIL its steps read through (#710), "
             f"under {EXTERNAL_LISTS}"
             if external_lists
+            else ""
+        )
+        + (
+            f", and the {len(rebuilt_lists):,} sample maps inference rebuilt that its steps read through (#726), "
+            f"under {REBUILT_LISTS}"
+            if rebuilt_lists
             else ""
         )
         + ".",
@@ -907,6 +932,7 @@ def main(argv: list[str] | None = None) -> int:
             donor_records(run_dir),
             sample_records(run_dir),
             external_list_records(run_dir),
+            rebuilt_list_records(run_dir),
         )
     except (ReportError, FileNotFoundError, ValueError) as exc:
         print(f"rules-report: {exc}", file=sys.stderr)

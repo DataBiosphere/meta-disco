@@ -29,11 +29,14 @@ parses the ones it reads with the same function (#710).
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from functools import cached_property, lru_cache
 from pathlib import Path, PurePosixPath
+from threading import Lock
 
 from . import code_rules, edges
 from .evidence import TarHead
@@ -49,6 +52,7 @@ from .producer_steps import (
     resolve_names,
 )
 from .record_keys import RecordKey
+from .records import dataset_of
 from .validators.command_lines import GATK
 from .validators.header_extractors import VCFHeader, parse_vcf_header
 
@@ -64,6 +68,13 @@ GENOMICSDB_IMPORT = "GenomicsDBImport"
 NO_VCF_HEADER = "no_vcf_header"
 VCF_HEADER_UNREADABLE = "vcf_header_unreadable"
 NOT_A_LIST = "not_a_list"
+# Why a tar in a folder whose lists are rebuilt (#726) got no step, beside those above: the map its header
+# names is none the layout declares, its `callset.json` gave no samples, or a sample's gVCF is carried by no
+# file, or by several, or a sample is listed twice.
+MAP_NOT_IN_LAYOUT = "map_not_in_layout"
+NO_SAMPLES = "no_samples"
+MEMBER_NOT_FOUND = "member_not_found"
+MEMBER_AMBIGUOUS = "member_ambiguous"
 OUTCOMES = (
     STEPPED,
     NO_VCF_HEADER,
@@ -74,8 +85,53 @@ OUTCOMES = (
     NOT_A_LIST,
     PARENT_NOT_FOUND,
     PARENT_AMBIGUOUS,
+    MAP_NOT_IN_LAYOUT,
+    NO_SAMPLES,
+    MEMBER_NOT_FOUND,
+    MEMBER_AMBIGUOUS,
 )
 
+
+# The workspace tar folders, by dataset, whose sample maps are rebuilt (#726), each with the reference
+# folder its gVCFs are under: ANVIL_T2T_CHRY's SGDP cohort, whose maps' bucket is deleted and whose two
+# reference runs name the same map paths (#624). Each must be a folder whose `callset.json` is read
+# (`header_classifier.CALLSET_FOLDERS`), the samples being the list's rows.
+REBUILT_MAP_FOLDERS = {
+    "ANVIL_T2T_CHRY": {
+        "SGDP_CHM13v2/genomics_db": "SGDP_CHM13v2",
+        "SGDP_GRCh38/genomics_db": "SGDP_GRCh38",
+    }
+}
+# Where the run wrote its gVCFs under a reference folder, and the name every one ends in.
+GVCF_FOLDER = "haplotype_calling_vcfs"
+GVCF_SUFFIX = ".hc.vcf.gz"
+# How a rebuilt list is addressed (``edges.PARENT_REF``): `rebuilt:<dataset>/<reference folder>/<map>#<digest>`.
+REBUILT_SCHEME = "rebuilt:"
+
+
+def gvcf_layout(map_name: str) -> tuple[tuple[str, str], ...] | None:
+    """Where a sample's gVCF for the sample map ``map_name`` is, as ``(folder, name less the sample)`` pairs, or None.
+
+    The layout of T2T's joint-calling run (#726), as its published 1000 Genomes maps list it: per autosome
+    one gVCF per sample; on chrX an XX sample's one whole-chrX gVCF, and an XY sample's PAR gVCF for a PAR
+    map, its non-PAR gVCF for the non-PAR map; on chrY an XY sample's non-PAR gVCF. A sample has a file in at
+    most one of the pairs; ``map_name`` is matched exactly, as the header writes it.
+    """
+    if (match := _AUTOSOME_MAP.fullmatch(map_name)) is not None:
+        chrom = match.group(1)
+        return ((chrom, f".{chrom}{GVCF_SUFFIX}"),)
+    return _SEX_CHROMOSOME_MAPS.get(map_name)
+
+
+_AUTOSOME_MAP = re.compile(r"(chr[1-9]|chr1[0-9]|chr2[0-2])_sample_map\.tsv")
+_XX_CHRX = ("XX_samples_chrX", f".chrX{GVCF_SUFFIX}")
+_XY_CHRX_PAR = ("XY_samples_chrX-PAR", f".chrX_PAR{GVCF_SUFFIX}")
+_SEX_CHROMOSOME_MAPS = {
+    "chrX_PAR1_sample_map.tsv": (_XX_CHRX, _XY_CHRX_PAR),
+    "chrX_PAR2_sample_map.tsv": (_XX_CHRX, _XY_CHRX_PAR),
+    "chrX_non_PAR_sample_map.tsv": (_XX_CHRX, ("XY_samples_chrX-nonPAR", f".chrX_non_PAR{GVCF_SUFFIX}")),
+    "chrY_sample_map.tsv": (("XY_samples_chrY-nonPAR", f".chrY{GVCF_SUFFIX}"),),
+}
 
 # Why a workspace whose `callset.json` was wanted names no samples (#724): it was looked for and
 # not found, its read failed, or its text is no callset list.
@@ -243,11 +299,28 @@ class _StepReader:
 
 
 class TarSteps(_StepReader):
-    """A run's reader of the step each GenomicsDB workspace tar's ``vcfheader.vcf`` states, its parents the sample maps."""
+    """A run's reader of the step each GenomicsDB workspace tar's ``vcfheader.vcf`` states, its parents the sample
+    maps, or in a folder :data:`REBUILT_MAP_FOLDERS` declares the lists it rebuilds (#726), which it keeps for the
+    producer file (:meth:`rebuilt_lists`)."""
+
+    def __init__(self, index: edges.NameIndex, key: RecordKey, titles: dict[str, str] | None = None):
+        super().__init__(index, key)
+        # Each dataset's title by its id: the declaration names a dataset by title, a record by id.
+        self.titles = titles or {}
+        self._lock = Lock()
+        # Per (dataset, reference folder, map, samples), the list rebuilt for it or why none was:
+        # 62,022 tars read 52 lists (measured 2026-10-22), so each is resolved once.
+        self._rebuilt: dict[tuple, tuple[dict | None, str]] = {}
 
     @staticmethod
     def keeps(name: str) -> bool:
-        return name.lower().endswith(SAMPLE_MAP_SUFFIX)
+        return name.lower().endswith((SAMPLE_MAP_SUFFIX, GVCF_SUFFIX))
+
+    @classmethod
+    def for_run(cls, records: Iterable[dict], key: RecordKey, evidence_base: Path):
+        records = list(records)
+        titles = {dataset_of(r): r["dataset_title"] for r in records if isinstance(r.get("dataset_title"), str)}
+        return cls(edges.parent_index(records, key, cls.keeps, cls.PURPOSE), key, titles)
 
     def __call__(
         self, head: ParsedTarHead, file_name: str, dataset_id: str, folder: str | None
@@ -258,17 +331,80 @@ class TarSteps(_StepReader):
         (None): it is not counted.
 
         The map its header names (:func:`sample_name_map`, whose outcomes it gives where the
-        header names none) is the one sample map of ``dataset_id`` carrying its base name,
-        case-folded, as ``edges.matches`` settles it by the tar's ``folder``
-        (:data:`PARENT_NOT_FOUND`, :data:`PARENT_AMBIGUOUS`).
+        header names none) is, in a ``folder`` :data:`REBUILT_MAP_FOLDERS` declares for the dataset,
+        the list rebuilt from the tar's own samples (:meth:`_rebuild`); elsewhere the one sample map of
+        ``dataset_id`` carrying its base name, case-folded, as ``edges.matches`` settles it by the tar's
+        ``folder`` (:data:`PARENT_NOT_FOUND`, :data:`PARENT_AMBIGUOUS`).
         """
         named, outcome = sample_name_map(head, file_name)
         if named is None:
             return None, outcome
+        title = self.titles.get(dataset_id)
+        reference = REBUILT_MAP_FOLDERS.get(title or "", {}).get(folder or "")
+        if title is not None and reference is not None:
+            return self._rebuild(head, PurePosixPath(named).name, dataset_id, title, reference)
         parents, outcome = resolve_names(self.index, dataset_id, [PurePosixPath(named).name], folder)
         if parents is None:
             return None, outcome
         return edges.generated_by(code_rules.MERGE_BY_WORKSPACE_HEADER, parents, self.key), STEPPED
+
+    def _rebuild(
+        self, head: ParsedTarHead, map_name: str, dataset_id: str, title: str, reference: str
+    ) -> tuple[dict | None, str]:
+        """The tar's step with the list rebuilt for it its one ``input_list``, by its address; or None and why.
+
+        The list's members are, for each sample ``head``'s ``callset.json`` names, the one file of
+        ``dataset_id`` that :func:`gvcf_layout` places for ``map_name`` and the sample under
+        ``reference``'s :data:`GVCF_FOLDER`: base name up to case, folder exactly. A map the layout
+        does not declare gives :data:`MAP_NOT_IN_LAYOUT`; no samples, :data:`NO_SAMPLES`; a sample no
+        file is placed for, :data:`MEMBER_NOT_FOUND`; one several are, or a sample listed twice,
+        :data:`MEMBER_AMBIGUOUS`.
+        """
+        samples = tuple(head.samples or ())
+        known = (dataset_id, reference, map_name, samples)
+        with self._lock:
+            rebuilt = self._rebuilt.get(known)
+        if rebuilt is None:
+            rebuilt = self._resolve(map_name, samples, dataset_id, title, reference)
+            with self._lock:
+                rebuilt = self._rebuilt.setdefault(known, rebuilt)
+        entry, outcome = rebuilt
+        if entry is None:
+            return None, outcome
+        return edges.generated_by_ref(code_rules.MERGE_BY_WORKSPACE_HEADER, map_name, entry["ref"]), STEPPED
+
+    def _resolve(
+        self, map_name: str, samples: tuple[str, ...], dataset_id: str, title: str, reference: str
+    ) -> tuple[dict | None, str]:
+        layout = gvcf_layout(map_name)
+        if layout is None:
+            return None, MAP_NOT_IN_LAYOUT
+        if not samples:
+            return None, NO_SAMPLES
+        if len(set(samples)) < len(samples):
+            return None, MEMBER_AMBIGUOUS
+        members = []
+        for sample in samples:
+            found = [
+                r
+                for folder, rest in layout
+                for r in self.index.get((dataset_id, f"{sample}{rest}".lower()), [])
+                if r.get(edges.FOLDER) == f"{reference}/{GVCF_FOLDER}/{folder}"
+            ]
+            if len(found) != 1:
+                return None, MEMBER_NOT_FOUND if not found else MEMBER_AMBIGUOUS
+            members.append(found[0])
+        step = edges.generated_by(code_rules.COHORT_BY_REBUILT_SAMPLE_MAP, members, self.key)
+        keys = "\n".join(sorted(used["parent_key"] for used in step["inputs"]))
+        digest = hashlib.sha256(keys.encode("utf-8")).hexdigest()[:16]
+        ref = f"{REBUILT_SCHEME}{title}/{reference}/{map_name}#{digest}"
+        return {"ref": ref, "dataset": title, "file_name": map_name, "generated_by": step}, STEPPED
+
+    def rebuilt_lists(self) -> list[dict]:
+        """Each list rebuilt so far, once, by address: a ``RebuiltList`` each."""
+        with self._lock:
+            entries = {e["ref"]: e for e, _ in self._rebuilt.values() if e is not None}
+        return [entries[ref] for ref in sorted(entries)]
 
 
 class SampleMapSteps(_StepReader):

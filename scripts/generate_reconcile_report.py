@@ -599,6 +599,9 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
         # Written before #710: no list held outside AnVIL.
         "external_lists": report.get("external_lists") or {},
         "external_list_columns": list(EXTERNAL_LIST_COLUMNS),
+        # Written before #726: no list inference rebuilt.
+        "rebuilt_lists": report.get("rebuilt_lists") or {},
+        "rebuilt_list_columns": list(REBUILT_LIST_COLUMNS),
         "content_step_columns": list(CONTENT_STEP_COLUMNS),
         "inheritance": inheritance_rows(report),
         "inheritance_columns": list(INHERITANCE_COLUMNS),
@@ -955,6 +958,7 @@ def render_markdown(data: dict) -> str:
         ]
     lines += ["", *_lineage_section(data["lineage"])]
     lines += ["", *_external_lists_section(data["external_lists"])]
+    lines += ["", *_rebuilt_lists_section(data["rebuilt_lists"])]
     lines += ["", *_inheritance_section(data["inheritance"])]
     lines += ["", *_samples_section(data["samples"])]
     lines += ["", "## Per dataset", ""]
@@ -1010,6 +1014,28 @@ def _external_lists_section(per_dataset: dict[str, dict]) -> list[str]:
     )
 
 
+REBUILT_LIST_COLUMNS = ("lists", "members")
+
+
+def _rebuilt_lists_section(per_dataset: dict[str, dict]) -> list[str]:
+    """The sample maps inference rebuilt that the run's steps read through, per dataset (#726)."""
+    lines = [
+        "### Sample maps inference rebuilt",
+        "",
+        "ANVIL_T2T_CHRY's SGDP workspace tars name sample maps no one holds (#624), so inference rebuilds each "
+        "from the tars that read it (#726): the map a tar's header names, the samples its `callset.json` lists, "
+        "and each sample's one gVCF under the tar's reference folder. *lists*: the lists the run's steps name; "
+        "*members*: their gVCFs, a gVCF counted once per list.",
+        "",
+    ]
+    if not per_dataset:
+        return [*lines, "None: no step in this run names one."]
+    return lines + md_table(
+        ["dataset", *REBUILT_LIST_COLUMNS],
+        [[md_code(shown(d))] + [_n(c.get(k, 0)) for k in REBUILT_LIST_COLUMNS] for d, c in sorted(per_dataset.items())],
+    )
+
+
 def _content_steps_section(rows: list[dict]) -> list[str]:
     """What each producer's step reader made of each file's content, per dataset (#609, #621)."""
     lines = [
@@ -1034,7 +1060,11 @@ def _content_steps_section(rows: list[dict]) -> list[str]:
         "counted; *no_vcf_header*: the workspace has no `vcfheader.vcf` where it was looked for; *vcf_header_unreadable*: reading it failed, and the next run "
         "reads it again; *output_not_this_file*, for a tar: the import's workspace names another directory; *not_a_list*: the file "
         "is not two tab-separated columns naming VCFs, or three with an index path. A tar counted *parent_not_found* "
-        "here may still get its step at reconcile, through a sample map held outside AnVIL (#710, below).",
+        "here may still get its step at reconcile, through a sample map held outside AnVIL (#710, below). A tar in a "
+        "folder whose maps are rebuilt (ANVIL_T2T_CHRY's SGDP tars, #726, below) is *stepped* through the list rebuilt "
+        "from its own samples; *map_not_in_layout*: its map is none the run's layout places gVCFs for; *no_samples*: "
+        "its `callset.json` gave no samples; *member_not_found* / *member_ambiguous*: a sample's gVCF no file, or more "
+        "than one, carries in the tar's reference folder, or a sample listed twice.",
         "",
     ]
     if not rows:

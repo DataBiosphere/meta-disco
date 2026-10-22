@@ -14,6 +14,8 @@ from meta_disco.header_classifier import CALLSET_FOLDERS, callset_member, worksp
 from meta_disco.models import SOURCE_CONTENT_READ
 from meta_disco.pipeline import ClassifyPipeline
 from meta_disco.record_keys import RecordKey
+from meta_disco.records import REBUILT_LISTS_KEY
+from meta_disco.schema.classification_model import GeneratedBy, RebuiltList
 from meta_disco.validators.command_lines import GATK, Step
 from tests.metadata_fixtures import write_metadata
 from tests.test_producer_steps import EVIDENCE, IMPORT, SELECT, header, header_text
@@ -445,6 +447,7 @@ def test_the_callset_rule_is_declared_with_the_sample_rules():
 def test_the_edge_rules_are_declared_with_the_others():
     assert code_rules.MERGE_BY_WORKSPACE_HEADER in code_rules.EDGE_RULES
     assert code_rules.COHORT_BY_SAMPLE_MAP in code_rules.EDGE_RULES
+    assert code_rules.COHORT_BY_REBUILT_SAMPLE_MAP in code_rules.EDGE_RULES
 
 
 # --- the folder settling a shared name (#717) --------------------------------------------------
@@ -472,3 +475,226 @@ def test_a_sample_map_takes_each_member_of_that_name_in_its_own_folder():
     step, outcome = reader(cs.parse_sample_map(MAP_TEXT), MAP, "D", "b")
     assert outcome == cs.STEPPED and step is not None
     assert [i["parent_key"] for i in step["inputs"]] == ["f2", "f3"]
+
+
+# --- a sample map rebuilt from the tars that read it (#726) ------------------------------------
+
+T2T = "ANVIL_T2T_CHRY"
+CHM13 = "SGDP_CHM13v2"
+GRCH38 = "SGDP_GRCh38"
+XX, XY = "simons_data_sample_1", "simons_data_sample_2"
+
+
+def import_of(map_name: str) -> str:
+    return IMPORT.replace("chr1_sample_map.tsv", map_name)
+
+
+def sgdp_head(map_name: str, *samples: str) -> cs.ParsedTarHead:
+    """An SGDP workspace's head: its header naming ``map_name``, its callset.json listing ``samples``."""
+    head = TarHead(
+        ["./chr1.100000001_100100000/vcfheader.vcf", "./chr1.100000001_100100000/callset.json"],
+        header_text(import_of(map_name)),
+        callset=callset(*samples) if samples else None,
+        callset_read=True,
+    )
+    return cs.parse_tar_head(head)
+
+
+def stored(*paths: str, dataset: str = T2T) -> list[dict]:
+    """A record per path, of one dataset, keyed f0, f1, …"""
+    return [
+        {
+            "file_id": f"f{n}",
+            "file_name": path.rsplit("/", 1)[1],
+            "dataset_id": "D",
+            "dataset_title": dataset,
+            "file_path": path,
+        }
+        for n, path in enumerate(paths)
+    ]
+
+
+def gvcf(reference: str, folder: str, name: str) -> str:
+    return f"{reference}/{cs.GVCF_FOLDER}/{folder}/{name}"
+
+
+# Both references' gVCFs, one name each: only the tar's own reference folder's are its members.
+CHR1 = [gvcf(r, "chr1", f"{s}.chr1.hc.vcf.gz") for r in (CHM13, GRCH38) for s in (XX, XY)]
+CHRX = [
+    gvcf(CHM13, "XX_samples_chrX", f"{XX}.chrX.hc.vcf.gz"),
+    gvcf(CHM13, "XY_samples_chrX-PAR", f"{XY}.chrX_PAR.hc.vcf.gz"),
+    gvcf(CHM13, "XY_samples_chrX-nonPAR", f"{XY}.chrX_non_PAR.hc.vcf.gz"),
+]
+
+
+@pytest.mark.parametrize(
+    ("map_name", "layout"),
+    [
+        ("chr1_sample_map.tsv", (("chr1", ".chr1.hc.vcf.gz"),)),
+        ("chr22_sample_map.tsv", (("chr22", ".chr22.hc.vcf.gz"),)),
+        (
+            "chrX_PAR1_sample_map.tsv",
+            (("XX_samples_chrX", ".chrX.hc.vcf.gz"), ("XY_samples_chrX-PAR", ".chrX_PAR.hc.vcf.gz")),
+        ),
+        (
+            "chrX_PAR2_sample_map.tsv",
+            (("XX_samples_chrX", ".chrX.hc.vcf.gz"), ("XY_samples_chrX-PAR", ".chrX_PAR.hc.vcf.gz")),
+        ),
+        (
+            "chrX_non_PAR_sample_map.tsv",
+            (("XX_samples_chrX", ".chrX.hc.vcf.gz"), ("XY_samples_chrX-nonPAR", ".chrX_non_PAR.hc.vcf.gz")),
+        ),
+        ("chrY_sample_map.tsv", (("XY_samples_chrY-nonPAR", ".chrY.hc.vcf.gz"),)),
+        ("chr23_sample_map.tsv", None),
+        ("chrX_sample_map.tsv", None),
+        ("chrM_sample_map.tsv", None),
+        ("CHR1_sample_map.tsv", None),
+    ],
+)
+def test_the_layout_places_each_maps_gvcfs(map_name, layout):
+    assert cs.gvcf_layout(map_name) == layout
+
+
+def test_a_declared_folders_tar_reads_through_the_list_rebuilt_from_its_own_samples():
+    reader = cs.TarSteps.for_run(stored(*CHR1), KEY, EVIDENCE)
+    step, outcome = reader(sgdp_head(MAP, XX, XY), TAR, "D", f"{GRCH38}/genomics_db")
+    assert outcome == cs.STEPPED and step is not None
+    (used,) = step["inputs"]
+    assert step["activity"] == "CohortMergeActivity" and used["role"] == "input_list"
+    assert used["parent_file"] == MAP and "parent_key" not in used
+    assert used["named_by"] == [
+        {"source_type": SOURCE_CONTENT_READ, "rule_id": code_rules.MERGE_BY_WORKSPACE_HEADER.id}
+    ]
+    (rebuilt,) = reader.rebuilt_lists()
+    assert used["parent_ref"] == rebuilt["ref"]
+    assert rebuilt["ref"].startswith(f"rebuilt:{T2T}/{GRCH38}/{MAP}#")
+    assert (rebuilt["dataset"], rebuilt["file_name"]) == (T2T, MAP)
+    members = rebuilt["generated_by"]
+    assert members["activity"] == "CohortDefinitionActivity"
+    # The GRCh38 folder's two gVCFs, not CHM13v2's of the same names.
+    assert [(i["role"], i["parent_key"]) for i in members["inputs"]] == [("member", "f2"), ("member", "f3")]
+    assert members["named_by"] == [
+        {"source_type": SOURCE_CONTENT_READ, "rule_id": code_rules.COHORT_BY_REBUILT_SAMPLE_MAP.id}
+    ]
+    GeneratedBy.model_validate(step)
+    RebuiltList.model_validate(rebuilt)
+
+
+@pytest.mark.parametrize(
+    ("map_name", "members"),
+    [
+        # An XX sample's whole-chrX gVCF either way; an XY sample's PAR or non-PAR one by the map.
+        ("chrX_PAR1_sample_map.tsv", ["f0", "f1"]),
+        ("chrX_non_PAR_sample_map.tsv", ["f0", "f2"]),
+    ],
+)
+def test_on_chrx_the_map_decides_an_xy_samples_gvcf(map_name, members):
+    reader = cs.TarSteps.for_run(stored(*CHRX), KEY, EVIDENCE)
+    _, outcome = reader(sgdp_head(map_name, XX, XY), TAR, "D", f"{CHM13}/genomics_db")
+    assert outcome == cs.STEPPED
+    (rebuilt,) = reader.rebuilt_lists()
+    assert [i["parent_key"] for i in rebuilt["generated_by"]["inputs"]] == members
+
+
+def test_tars_reading_one_list_name_it_once_and_another_set_of_samples_is_another_list():
+    reader = cs.TarSteps.for_run(stored(*CHR1), KEY, EVIDENCE)
+    first, _ = reader(sgdp_head(MAP, XX, XY), TAR, "D", f"{CHM13}/genomics_db")
+    again, _ = reader(sgdp_head(MAP, XY, XX), TAR, "D", f"{CHM13}/genomics_db")
+    fewer, _ = reader(sgdp_head(MAP, XX), TAR, "D", f"{CHM13}/genomics_db")
+    assert first is not None and again is not None and fewer is not None
+    assert first["inputs"][0]["parent_ref"] == again["inputs"][0]["parent_ref"]
+    assert fewer["inputs"][0]["parent_ref"] != first["inputs"][0]["parent_ref"]
+    assert [len(r["generated_by"]["inputs"]) for r in reader.rebuilt_lists()] in ([2, 1], [1, 2])
+
+
+@pytest.mark.parametrize(
+    ("paths", "map_name", "samples", "outcome"),
+    [
+        (CHR1, "chrM_sample_map.tsv", (XX,), cs.MAP_NOT_IN_LAYOUT),
+        (CHR1, MAP, (), cs.NO_SAMPLES),
+        (CHR1, MAP, (XX, "simons_data_sample_3"), cs.MEMBER_NOT_FOUND),
+        # A gVCF of that name, but in the other reference's folder.
+        (CHR1[2:], MAP, (XX,), cs.MEMBER_NOT_FOUND),
+        (CHR1, MAP, (XX, XX), cs.MEMBER_AMBIGUOUS),
+        # Two files of one name, up to case, in the folder.
+        ([*CHR1, gvcf(CHM13, "chr1", f"{XX.upper()}.chr1.hc.vcf.gz")], MAP, (XX,), cs.MEMBER_AMBIGUOUS),
+        # An XY sample with both chrX gVCFs placed for one map would be two members for one sample.
+        (
+            [*CHRX, gvcf(CHM13, "XX_samples_chrX", f"{XY}.chrX.hc.vcf.gz")],
+            "chrX_PAR1_sample_map.tsv",
+            (XY,),
+            cs.MEMBER_AMBIGUOUS,
+        ),
+    ],
+)
+def test_a_list_missing_a_member_or_with_two_for_a_sample_is_not_rebuilt(paths, map_name, samples, outcome):
+    reader = cs.TarSteps.for_run(stored(*paths), KEY, EVIDENCE)
+    assert reader(sgdp_head(map_name, *samples), TAR, "D", f"{CHM13}/genomics_db") == (None, outcome)
+    assert reader.rebuilt_lists() == []
+
+
+def test_a_tar_outside_the_declared_folders_looks_for_the_catalog_map():
+    reader = cs.TarSteps.for_run(stored(*CHR1, f"1KGP/sample_maps/{MAP}"), KEY, EVIDENCE)
+    step, outcome = reader(sgdp_head(MAP, XX, XY), TAR, "D", "1KGP/genomics_db")
+    assert outcome == cs.STEPPED and step is not None
+    assert step["inputs"][0]["parent_key"] == "f4"
+    # Another dataset's folder of that name is not declared either.
+    other = cs.TarSteps.for_run(stored(*CHR1, dataset="OTHER"), KEY, EVIDENCE)
+    assert other(sgdp_head(MAP, XX, XY), TAR, "D", f"{CHM13}/genomics_db") == (None, cs.PARENT_NOT_FOUND)
+    assert reader.rebuilt_lists() == other.rebuilt_lists() == []
+
+
+def test_a_declared_folder_never_takes_a_catalog_map():
+    reader = cs.TarSteps.for_run(stored(*CHR1, f"{CHM13}/genomics_db/{MAP}"), KEY, EVIDENCE)
+    step, _ = reader(sgdp_head(MAP, XX, XY), TAR, "D", f"{CHM13}/genomics_db")
+    assert step is not None and "parent_key" not in step["inputs"][0]
+
+
+def test_every_folder_whose_lists_are_rebuilt_has_its_callset_read():
+    for dataset, folders in cs.REBUILT_MAP_FOLDERS.items():
+        assert set(folders) <= CALLSET_FOLDERS[dataset]
+
+
+def test_the_tar_producer_writes_each_rebuilt_list_once_beside_its_records(tmp_path):
+    heads = {
+        f"t{n}": TarHead(
+            ["./chr1.100000001_100100000/vcfheader.vcf"],
+            header_text(IMPORT),
+            callset=callset(XX, XY),
+            callset_read=True,
+        )
+        for n in range(2)
+    }
+    inputs = [
+        {
+            "file_id": file_id,
+            "file_name": TAR,
+            "dataset_id": "D",
+            "dataset_title": T2T,
+            "file_md5sum": f"{n:032x}",
+            "file_size": 1,
+            "file_format": ".tar",
+            "file_path": f"{CHM13}/genomics_db/{TAR}",
+        }
+        for n, file_id in enumerate(heads)
+    ] + [
+        {**record, "file_md5sum": f"{9:031x}{n}", "file_size": 1, "file_format": ".vcf.gz", "file_id": f"g{n}"}
+        for n, record in enumerate(stored(*CHR1))
+    ]
+    by_md5 = {f"{n:032x}": head for n, head in enumerate(heads.values())}
+    out = tmp_path / "tar.json"
+    rows = {
+        r["file_id"]: r
+        for r in ClassifyPipeline(
+            dataclasses.replace(TAR_CONFIG, fetcher=lambda evidence_dir, md5, **kwargs: by_md5[md5]),
+            write_metadata(tmp_path / "tar_in.json", inputs),
+            out,
+            evidence_base=tmp_path / "ev",
+            workers=2,
+        ).run()
+    }
+    written = json.loads(out.read_text())
+    (rebuilt,) = written[REBUILT_LISTS_KEY]
+    assert [i["parent_key"] for i in rebuilt["generated_by"]["inputs"]] == ["g0", "g1"]
+    assert {rows[t]["generated_by"]["inputs"][0]["parent_ref"] for t in heads} == {rebuilt["ref"]}
+    assert written["metadata"]["details"]["producer_steps"] == {T2T: {cs.STEPPED: 2}}

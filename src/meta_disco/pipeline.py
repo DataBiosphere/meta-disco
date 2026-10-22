@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 from pathlib import Path
 from threading import Lock
-from typing import Any, NamedTuple, TypeGuard
+from typing import Any, NamedTuple, Protocol, TypeGuard, runtime_checkable
 
 from .exclusions import MD5_RE, partition_records, write_excluded
 from .fetchers import FetchError
@@ -28,6 +28,7 @@ from .producers import producer_for
 from .provenance import run_provenance
 from .record_keys import record_key
 from .records import (
+    REBUILT_LISTS_KEY,
     SAMPLE_LISTS_KEY,
     SAMPLE_OUTCOMES_KEY,
     STEP_OUTCOMES_KEY,
@@ -91,6 +92,13 @@ UNRECOGNISED_EXAMPLES = 20
 # The name suffixes of a gzip-compressed file the header readers decompress: a `.bgz` is
 # bgzip's BGZF, as 1000 Genomes phase 3 names its VCFs (#561).
 GZIP_SUFFIXES = (".gz", ".bgz")
+
+
+@runtime_checkable
+class RebuildsLists(Protocol):
+    """A step reader that rebuilds lists its steps name by address (``cohort_steps.TarSteps``, #726)."""
+
+    def rebuilt_lists(self) -> list[dict]: ...
 
 
 class RecordOutcome(NamedTuple):
@@ -694,6 +702,9 @@ class ClassifyPipeline:
                 print(f"  Header samples, {dataset}: {', '.join(f'{k} {v:,}' for k, v in counts.items())}")
             for dataset, counts in details[UNREAD_SAMPLES_KEY].items():
                 print(f"  Samples not read, {dataset}: {', '.join(f'{k} {v:,}' for k, v in counts.items())}")
+        rebuilt_lists = self._step.rebuilt_lists() if isinstance(self._step, RebuildsLists) else None
+        if rebuilt_lists:
+            print(f"  Lists rebuilt: {len(rebuilt_lists):,}")
         classifications = self._save_final(
             total,
             successful,
@@ -704,6 +715,7 @@ class ClassifyPipeline:
             provenance=provenance,
             details=details,
             sample_lists=sample_lists,
+            rebuilt_lists=rebuilt_lists,
         )
 
         print(f"\nSaved to {self.output_path}")
@@ -722,12 +734,15 @@ class ClassifyPipeline:
         validation_failed: int = 0,
         details: dict | None = None,
         sample_lists: list[dict] | None = None,
+        rebuilt_lists: list[dict] | None = None,
     ) -> list[dict]:
         """Write final JSON output from NDJSON progress file.
 
         ``sample_lists``, for a type that reads samples (#357), is written after the
         records under ``SAMPLE_LISTS_KEY``: every list a record's ``samples`` points to,
-        once. None writes no such key.
+        once. None writes no such key. ``rebuilt_lists``, for a type whose step reader rebuilds
+        lists (:class:`RebuildsLists`, #726), is written after them under ``REBUILT_LISTS_KEY``,
+        each list once; None writes no such key.
 
         ``unreadable`` is persisted alongside ``from_cache``: an all-not_classified
         record from a failed fetch is otherwise indistinguishable from one whose
@@ -762,6 +777,7 @@ class ClassifyPipeline:
                     ).to_dict(),
                     "classifications": classifications,
                     **({SAMPLE_LISTS_KEY: sample_lists} if sample_lists is not None else {}),
+                    **({REBUILT_LISTS_KEY: rebuilt_lists} if rebuilt_lists is not None else {}),
                 },
                 f,
                 indent=2,

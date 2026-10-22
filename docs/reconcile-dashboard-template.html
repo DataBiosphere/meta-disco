@@ -275,6 +275,12 @@
               ? table(['dataset', ...DATA.external_list_columns],
                   Object.keys(DATA.external_lists).sort().map(d => [shown(d), ...DATA.external_list_columns.map(k => ({text: n(DATA.external_lists[d][k] ?? 0), cls: 'num'}))]))
               : '<p>None: no lineage line named one in this run.</p>')
+          + '<h3>Sample maps inference rebuilt</h3>'
+          + '<p class="note">ANVIL_T2T_CHRY\'s SGDP workspace tars name sample maps no one holds (#624), so inference rebuilds each from the tars that read it (#726): the map a tar\'s header names, the samples its <code>callset.json</code> lists, and each sample\'s one gVCF under the tar\'s reference folder. <em>lists</em>: the lists the run\'s steps name; <em>members</em>: their gVCFs, a gVCF counted once per list.</p>'
+          + (Object.keys(DATA.rebuilt_lists).length
+              ? table(['dataset', ...DATA.rebuilt_list_columns],
+                  Object.keys(DATA.rebuilt_lists).sort().map(d => [shown(d), ...DATA.rebuilt_list_columns.map(k => ({text: n(DATA.rebuilt_lists[d][k] ?? 0), cls: 'num'}))]))
+              : '<p>None: no step in this run names one.</p>')
           + '<h3>Who named each file\'s step</h3>'
           + table(['dataset', 'named by', 'files'], L.steps.map(r => [shown(r.dataset), r.named_by, {text: n(r.files), cls: 'num'}]))
           + '<h3>Conflicts</h3>'

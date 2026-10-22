@@ -13,6 +13,7 @@ from meta_disco.output_utils import (
     CLASSIFICATION_FILES,
     DONORS_FILE,
     EXTERNAL_LISTS_FILE,
+    REBUILT_LISTS_FILE,
     RECONCILED_DIR,
     SAMPLES_FILE,
     iter_reconciled_records,
@@ -611,3 +612,33 @@ def test_a_sample_map_held_outside_anvil_counts_its_step_and_sample_rules(tmp_pa
 )
 def test_the_provenance_names_the_runs_start_only_where_its_folder_is_dated(folder, opening):
     assert opening in grr.build(None, None, iter([]), Path("/x") / folder)["provenance"]
+
+
+def test_a_sample_map_inference_rebuilt_counts_its_step_rule(tmp_path):
+    """A rebuilt list (#726) is no record either, so its own step is counted from its file."""
+    run_dir = reconciled_run(tmp_path)
+    member = {"source_type": "content_read", "rule_id": code_rules.COHORT_BY_REBUILT_SAMPLE_MAP.id}
+    listed = {
+        "ref": "rebuilt:C/R/m_sample_map.tsv#" + "0" * 16,
+        "dataset": "C",
+        "file_name": "m_sample_map.tsv",
+        "generated_by": {
+            "activity": "CohortDefinitionActivity",
+            "named_by": [member],
+            "inputs": [
+                {"role": "member", "parent_file": f"g{n}.hc.vcf.gz", "parent_key": f"g{n}", "named_by": [member]}
+                for n in (1, 2, 3)
+            ],
+        },
+    }
+    write_reconciled_file(run_dir / RECONCILED_DIR / REBUILT_LISTS_FILE, {"catalog": "t"}, [listed])
+    data = grr.build(
+        *rule_files(tmp_path),
+        iter_reconciled_records(run_dir),
+        run_dir,
+        rebuilt_lists=grr.rebuilt_list_records(run_dir),
+    )
+    edge = {r["id"]: r for r in data["edge_rules"]}[code_rules.COHORT_BY_REBUILT_SAMPLE_MAP.id]
+    assert (edge["claims"], edge["files"], edge["datasets"]) == (3, 1, {grr.REBUILT_LISTS: 1})
+    assert "1 sample maps inference rebuilt" in data["provenance"]
+    assert list(grr.rebuilt_list_records(tmp_path / "unreconciled")) == []

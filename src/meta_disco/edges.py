@@ -160,6 +160,23 @@ def generated_by(rule: EdgeRule, parents: Sequence[dict], key: RecordKey) -> dic
     return {"activity": rule.activity, "named_by": [dict(n) for n in named_by], "inputs": inputs}
 
 
+def generated_by_ref(rule: EdgeRule, parent_file: str, ref: str) -> dict:
+    """The child's ``generated_by``: ``rule``'s step with one input in ``rule``'s role, a list no catalog file is, by its address.
+
+    The input carries the address as its ``parent_ref`` and no ``parent_key`` (:func:`parent_node`):
+    a list inference rebuilt (``cohort_steps``, #726), held in the producer file beside the records.
+    """
+    named_by = [{"source_type": rule.source_type, "rule_id": rule.id}]
+    used = {
+        "role": rule.role,
+        "parent_file": parent_file,
+        PARENT_REF: ref,
+        "parent_kind": parent_kind_of(parent_file),
+        "named_by": [dict(n) for n in named_by],
+    }
+    return {"activity": rule.activity, "named_by": [dict(n) for n in named_by], "inputs": [used]}
+
+
 def matches(index: NameIndex, dataset_id: str, name: str, folder: str | None) -> list[dict]:
     """Every input record of ``dataset_id`` carrying ``name`` up to case, or the one of them in ``folder``.
 
@@ -237,7 +254,8 @@ class LineageStep:
     external: bool = False
 
 
-# The input field naming a file held outside AnVIL for the dataset, by its address (#710).
+# The input field naming a list no catalog file is, by its address: a file held outside AnVIL for the
+# dataset (#710), or a list inference rebuilt (#726).
 PARENT_REF = "parent_ref"
 
 
@@ -245,7 +263,8 @@ def parent_node(used: dict) -> str:
     """The key an input's parent is held by in reconcile's graph: its ``parent_key``, or its ``parent_ref`` where it has none.
 
     An input with a ``parent_ref`` and no ``parent_key`` is a file held outside AnVIL for the
-    dataset (#710), held in the graph under its address (``reconcile_external``).
+    dataset (#710, ``reconcile_external``) or a list inference rebuilt (#726, ``reconcile_rebuilt``),
+    held in the graph under its address.
     """
     return used["parent_key"] if "parent_key" in used else used[PARENT_REF]
 
@@ -285,7 +304,8 @@ EDGE_CONFLICT = "edge"
 def inferred_steps(step: dict | None) -> list[LineageStep]:
     """Inference's ``generated_by`` as one :class:`LineageStep` per input and attribution, in order.
 
-    An input naming no source of its own is attributed to the step's sources, so it is not lost.
+    An input naming no source of its own is attributed to the step's sources, so it is not lost. An
+    input naming its parent by address (a list inference rebuilt, #726) keeps it as one (``external``).
     """
     if step is None:
         return []
@@ -293,10 +313,11 @@ def inferred_steps(step: dict | None) -> list[LineageStep]:
         LineageStep(
             step["activity"],
             used["role"],
-            used["parent_key"],
+            parent_node(used),
             used["parent_file"],
             used.get("parent_kind"),
             attribution,
+            external="parent_key" not in used,
         )
         for used in step["inputs"]
         for attribution in used.get("named_by") or step.get("named_by") or []

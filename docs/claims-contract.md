@@ -253,6 +253,23 @@ Importers say what was written. Rules say what it means. Only rules make claims.
      (#359, #609): bwa's `-R` copied NYGC's read groups in whole, so each `@RG` still names the reads'
      platform (`PL:illumina`) and says `DS:GRCh38` inside a file aligned to CHM13.
 
+3.14 **A list no one holds may be rebuilt by inference from the files that read it, only for declared
+     folders, and only whole** (#726). ANVIL_T2T_CHRY's SGDP GenomicsDB workspace tars name GATK sample-name
+     maps whose bucket is deleted, and the two reference runs name the same map paths, so no map says which
+     gVCFs a tar read (#624), and none was published to hold outside AnVIL (2.11). Each tar's own content says
+     the rest: its `vcfheader.vcf` names the map, so the region, and its `callset.json` the samples; its folder
+     is its reference's. The run wrote one gVCF per sample, region and reference, at a path its layout fixes
+     (`cohort_steps.gvcf_layout`; rebuilt from the same layout, the 1000 Genomes run's published maps come out
+     row for row, 78,447 of 78,447). So the tar producer, for a tar in a folder `cohort_steps.REBUILT_MAP_FOLDERS`
+     declares, rebuilds the list (a code rule, `cohort_by_rebuilt_sample_map`): each sample's one gVCF under the
+     tar's reference folder, by name and folder exactly. A sample whose gVCF no file or two files carry gives no
+     list and no step: a cohort missing a member is not the cohort. A list is addressed by its dataset,
+     reference folder, map name and a digest of its members, held once beside the tar producer's records, and
+     names no samples: they are the tar's own `callset.json`, which the tar already names (#724), and a second
+     copy would count one reading as two sources. The tar's step names the list by address, and reconcile reads
+     the tar's values through it as it does a catalog map's (4.9). A declared folder never looks for a catalog
+     map; when AnVIL holds the maps (#624), the declaration is deleted and the catalog maps take over.
+
 ## 4. Sources and resolution
 
 4.1 There are five input kinds:
@@ -330,8 +347,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     files of one dataset, or, under ADR-0002 decision 2's one declared exception (#594), a child to its
     parent in the dataset the run lineage map declares (the input's `parent_dataset`). A parent is
     looked for only there; one missing is `external`, and nothing is inherited across it, except a list
-    held outside AnVIL for the child's dataset (2.11, #710): a role that reads through its parents reads
-    through it to the dataset's own files it lists. A child has one activity (its
+    held outside AnVIL for the child's dataset (2.11, #710) or one inference rebuilt (3.14, #726): a role
+    that reads through its parents reads through it to the dataset's own files it lists. A child has one activity (its
     `generated_by`); for each input role that passes a dimension, the child's parents in that role settle
     their resolved answers among themselves and give the child one declaration, credited to them, to which
     4.2–4.6 apply as to inputs 1–4 — so a dimension two roles pass (none today) has two declarations, which
@@ -593,8 +610,12 @@ importer's half is built — 7.12 is enforced (below), and the published importe
 - **2.11 is a workaround with one entry.** The external files declaration holds ANVIL_T2T_CHRY's 25
   published 1000 Genomes sample maps and nothing else; its 62,022 SGDP tars name maps no one has
   published, and are counted `map_not_declared` and given no lineage; their samples come from each tar's
-  own `callset.json` (#724). #624 asks AnVIL for the maps; when they are in the snapshot, 2.11 and
-  everything it names are deleted.
+  own `callset.json` (#724), and their step from the lists inference rebuilds (3.14, #726). #624 asks AnVIL
+  for the maps; when they are in the snapshot, 2.11, 3.14's declaration and everything they name are deleted.
+- **3.14 holds for one dataset's one layout.** `cohort_steps.REBUILT_MAP_FOLDERS` declares ANVIL_T2T_CHRY's two
+  SGDP folders and nothing else, and `gvcf_layout` the T2T joint-calling run's map names; a tar naming another
+  map is counted `map_not_in_layout`. The 1000 Genomes tars, whose maps are held outside AnVIL (2.11), are
+  not rebuilt.
 - **No curator rule exists** (4.7, #397). Every conflict stands unanswered, which 7.13 makes deliverable.
 - **5.1 is met for values, not rules.** `make reconcile-report` (#395) lists each conflict's competing values
   per input, counted per distinct set; the rule behind each value is on the reconciled record, not in the list.
