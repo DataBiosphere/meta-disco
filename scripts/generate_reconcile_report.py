@@ -1017,7 +1017,7 @@ def _rebuilt_lists_section(per_dataset: dict[str, dict]) -> list[str]:
         "from the tars that read it (#726): the map a tar's header names, the samples its `callset.json` lists, "
         "and each sample's one gVCF under the tar's reference folder. *lists*: the lists the run's tar producer rebuilt; "
         "*members*: their gVCFs, a gVCF counted once per list.",
-        "None: no step in this run names one.",
+        "None: the run's tar producer rebuilt none.",
         REBUILT_LIST_COLUMNS,
         per_dataset,
     )
