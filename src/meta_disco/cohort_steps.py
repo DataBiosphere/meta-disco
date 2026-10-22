@@ -20,13 +20,19 @@ Two steps are read here, each from the file's own content:
 A step is written only where every parent resolves: exactly one file of the dataset carries
 the name (#438's rule). Each file's outcome is one of :data:`OUTCOMES`, which the tar and
 sample-map producers count per dataset.
+
+A workspace's ``callset.json`` lists the samples GenomicsDB imported: where the tar fetcher read
+it (``header_classifier.callset_member``, #724), :func:`parse_tar_head` parses it
+(:func:`callset_samples`) for the tar producer's sample reader, and the external lineage importer
+parses the ones it reads with the same function (#710).
 """
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from dataclasses import dataclass
-from functools import cached_property
+from functools import cached_property, lru_cache
 from pathlib import Path, PurePosixPath
 
 from . import code_rules, edges
@@ -71,15 +77,46 @@ OUTCOMES = (
 )
 
 
+# Why a workspace whose `callset.json` was wanted names no samples (#724): it was looked for and
+# not found, its read failed, or its text is no callset list.
+NO_CALLSET = "no_callset"
+CALLSET_UNREADABLE = "callset_unreadable"
+NOT_A_CALLSET = "not_a_callset"
+
+
+def callset_samples(text: str) -> list[str]:
+    """The sample names a GenomicsDB ``callset.json`` lists, in its order; ``ValueError`` where it is not one.
+
+    Its ``callsets`` is a list of objects each naming its ``sample_name``, or, in older
+    workspaces, an object keyed by the sample name.
+    """
+    document = json.loads(text)
+    callsets = document.get("callsets") if isinstance(document, dict) else None
+    if isinstance(callsets, dict):
+        found: list[object] = list(callsets)
+    elif isinstance(callsets, list):
+        found = [c.get("sample_name") if isinstance(c, dict) else None for c in callsets]
+    else:
+        raise ValueError("no callsets list")
+    names = [n for n in found if isinstance(n, str) and n]
+    if not names or len(names) != len(found):
+        raise ValueError("a callset names no sample")
+    return names
+
+
 @dataclass(frozen=True)
 class ParsedTarHead:
-    """A tar's fetched head as the classifier and the step reader take it: the member names,
-    its ``vcfheader.vcf`` parsed where it was read (None where not), and why it could not be
-    where its read failed."""
+    """A tar's fetched head as the classifier, the step reader and the sample reader take it: the
+    member names, its ``vcfheader.vcf`` parsed where it was read (None where not), and why it
+    could not be where its read failed; and the samples its ``callset.json`` names where it was
+    read and parses (#724), else why not (:data:`NO_CALLSET`, :data:`CALLSET_UNREADABLE`,
+    :data:`NOT_A_CALLSET`), both None where it was not wanted."""
 
     member_names: list[str]
     header: VCFHeader | None
     vcf_header_unread: str | None = None
+    samples: list[str] | None = None
+    samples_unread: str | None = None
 
     @cached_property
     def is_workspace(self) -> bool:
@@ -98,9 +135,32 @@ class ParsedTarHead:
 
 def parse_tar_head(head: TarHead) -> ParsedTarHead:
     """``head`` with its ``vcfheader.vcf`` parsed, once per file (``FileTypeConfig.parser``), for the
-    classifier's caller reader and the step reader both (#678)."""
+    classifier's caller reader and the step reader both (#678), and its ``callset.json`` for the
+    sample reader (#724)."""
     header = parse_vcf_header(head.vcf_header) if head.vcf_header is not None else None
-    return ParsedTarHead(head.member_names, header, head.vcf_header_unread)
+    samples, why = _parse_callset(head)
+    return ParsedTarHead(head.member_names, header, head.vcf_header_unread, samples, why)
+
+
+def _parse_callset(head: TarHead) -> tuple[list[str] | None, str | None]:
+    """The samples ``head``'s ``callset.json`` names, or None and why; both None where it was not wanted."""
+    if head.callset_unread is not None:
+        return None, CALLSET_UNREADABLE
+    if not head.callset_read:
+        return None, None
+    if head.callset is None:
+        return None, NO_CALLSET
+    names = _callset_names(head.callset)
+    return (list(names), None) if names is not None else (None, NOT_A_CALLSET)
+
+
+# The 62,022 SGDP workspaces hold two distinct callset texts (279 and 175 samples; measured 2026-10-21): each is parsed once.
+@lru_cache(maxsize=8)
+def _callset_names(text: str) -> tuple[str, ...] | None:
+    try:
+        return tuple(callset_samples(text))
+    except ValueError:
+        return None
 
 
 def sample_name_map(head: ParsedTarHead, file_name: str) -> tuple[str | None, str | None]:

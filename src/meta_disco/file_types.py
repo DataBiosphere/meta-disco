@@ -29,6 +29,7 @@ from .fetchers import (
 )
 from .header_classifier import (
     GRAPH_TEXT_EXTENSIONS,
+    callset_member,
     classify_from_bed_signals,
     classify_from_fast5_header,
     classify_from_fasta_header,
@@ -43,7 +44,7 @@ from .header_classifier import (
     workspace_header_member,
 )
 from .producer_steps import HeaderSteps
-from .sample_identity import BAM_SAMPLES, FAST5_SAMPLES, SAMPLE_MAP_SAMPLES, VCF_SAMPLES, SampleReader
+from .sample_identity import BAM_SAMPLES, FAST5_SAMPLES, SAMPLE_MAP_SAMPLES, TAR_SAMPLES, VCF_SAMPLES, SampleReader
 from .summaries import print_bam_summary, print_fastq_summary, print_vcf_summary
 from .validators.header_extractors import parse_vcf_head
 
@@ -84,8 +85,10 @@ class FileTypeConfig:
     # so the reader stays ignorant of which archives have a member worth reading. None
     # keeps none.
     kept_member: Callable | None = None
-    # The samples a file's own content names (#357; a header, a sample map's rows, #668), read from the parse (or the payload, for a
-    # type without a ``parser``). None means the type reads no samples.
+    # Given the member names, the file's dataset and folder, the member its samples are read from, or None (#724).
+    samples_member: Callable | None = None
+    # The samples a file's own content names (#357; a header, a sample map's rows, #668, a tar's ``callset.json``, #724),
+    # read from the parse (or the payload, for a type without a ``parser``). None means the type reads no samples.
     samples: SampleReader | None = None
     # The content is read only for ``samples``, the dimensions coming from the name (#605): a
     # failed read keeps the classifier's answers from the name, rather than none.
@@ -173,6 +176,9 @@ TAR_CONFIG = FileTypeConfig(
     kept_member=workspace_header_member,
     parser=parse_tar_head,
     step=TarSteps.for_run,
+    # The samples an SGDP workspace imported, from its `callset.json` (#724).
+    samples_member=callset_member,
+    samples=TAR_SAMPLES,
 )
 
 # GATK sample-name maps (#621): the list of gVCFs one GenomicsDB import joint-calls. Read

@@ -132,6 +132,7 @@
             "named": 1
           }
         },
+        "unread_samples": {},
         "unrecognised_samples": {}
       },
       "dropped": 0,
@@ -443,6 +444,7 @@
             "named": 1
           }
         },
+        "unread_samples": {},
         "unrecognised_samples": {}
       },
       "dropped": 0,
@@ -1299,6 +1301,7 @@
             "named": 1
           }
         },
+        "unread_samples": {},
         "unrecognised_samples": {}
       },
       "dropped": 0,
@@ -1481,7 +1484,10 @@
           "GOLDEN_FIXTURE": {
             "stepped": 1
           }
-        }
+        },
+        "sample_outcomes": {},
+        "unread_samples": {},
+        "unrecognised_samples": {}
       },
       "dropped": 0,
       "errored": 0,
@@ -1505,7 +1511,8 @@
       "successful": 1,
       "total_to_process": 1,
       "validation_failed": 0
-    }
+    },
+    "sample_lists": []
   },
   "vcf": {
     "classifications": [
@@ -1780,6 +1787,7 @@
             "named": 2
           }
         },
+        "unread_samples": {},
         "unrecognised_samples": {}
       },
       "dropped": 0,

@@ -329,23 +329,6 @@ def test_check_refuses_a_map_not_in_the_cache(tmp_path, declared, importing):
     assert "fetch-external-files" in problem
 
 
-@pytest.mark.parametrize(
-    ("text", "samples"),
-    [
-        (callset("A", "B"), ["A", "B"]),
-        (json.dumps({"callsets": {"A": {"row_idx": 0}, "B": {"row_idx": 1}}}), ["A", "B"]),
-    ],
-)
-def test_a_callset_names_its_samples_in_either_shape(text, samples):
-    assert xl.callset_samples(text) == samples
-
-
-@pytest.mark.parametrize("text", ["[]", json.dumps({"callsets": [{"row_idx": 0}]}), json.dumps({"callsets": []})])
-def test_a_callset_naming_no_sample_is_refused(text):
-    with pytest.raises(ValueError):
-        xl.callset_samples(text)
-
-
 # --- reconcile -------------------------------------------------------------------------------------
 
 GVCF = {"assay_type": "WGS", "platform": "ILLUMINA", "instrument_model": "Illumina NovaSeq 6000"}
@@ -526,11 +509,6 @@ def test_a_reimport_refuses_a_kept_reading_whose_tar_it_no_longer_checks(tmp_pat
 
 
 # --- what the first tests left untested (the no-context review's surviving mutations) ------------
-
-
-def test_a_callset_with_one_nameless_entry_among_named_ones_is_refused():
-    with pytest.raises(ValueError):
-        xl.callset_samples(json.dumps({"callsets": [{"sample_name": "A"}, {"row_idx": 1}]}))
 
 
 def test_a_changed_cached_copy_is_downloaded_again(declared, cached):

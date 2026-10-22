@@ -10,7 +10,7 @@ from meta_disco import code_rules
 from meta_disco import cohort_steps as cs
 from meta_disco.evidence import TarHead
 from meta_disco.file_types import SAMPLE_MAP_CONFIG, TAR_CONFIG
-from meta_disco.header_classifier import workspace_header_member
+from meta_disco.header_classifier import CALLSET_FOLDERS, callset_member, workspace_header_member
 from meta_disco.models import SOURCE_CONTENT_READ
 from meta_disco.pipeline import ClassifyPipeline
 from meta_disco.record_keys import RecordKey
@@ -298,7 +298,148 @@ def test_the_tar_producer_writes_the_workspace_step(tmp_path):
     assert rows["t1"]["generated_by"]["inputs"][0]["parent_key"] == "m1"
     assert rows["t2"]["generated_by"] is None
     assert rows["t1"]["classifications"]["data_type"]["value"] == "variants"
-    assert details == {"producer_steps": {"T": {cs.STEPPED: 1, cs.NO_VCF_HEADER: 1}}}
+    # No tar here is one whose callset.json is read (#724): the sample reader counts none.
+    assert details == {
+        "producer_steps": {"T": {cs.STEPPED: 1, cs.NO_VCF_HEADER: 1}},
+        "sample_outcomes": {},
+        "unrecognised_samples": {},
+        "unread_samples": {},
+    }
+
+
+# --- a workspace's callset.json, read for its samples (#724) ---------------------------------
+
+
+def callset(*samples: str) -> str:
+    return json.dumps({"callsets": [{"sample_name": s, "row_idx": i} for i, s in enumerate(samples)]})
+
+
+@pytest.mark.parametrize(
+    ("text", "samples"),
+    [
+        (callset("A", "B"), ["A", "B"]),
+        (json.dumps({"callsets": {"A": {"row_idx": 0}, "B": {"row_idx": 1}}}), ["A", "B"]),
+    ],
+)
+def test_a_callset_names_its_samples_in_either_shape(text, samples):
+    assert cs.callset_samples(text) == samples
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "[]",
+        json.dumps({"callsets": [{"row_idx": 0}]}),
+        json.dumps({"callsets": []}),
+        json.dumps({"callsets": [{"sample_name": "A"}, {"row_idx": 1}]}),
+    ],
+)
+def test_a_callset_naming_no_sample_is_refused(text):
+    with pytest.raises(ValueError):
+        cs.callset_samples(text)
+
+
+WORKSPACE = ["ws/vcfheader.vcf", "ws/callset.json"]
+SGDP = "SGDP_CHM13v2/genomics_db"
+
+
+@pytest.mark.parametrize(
+    ("head", "samples", "why"),
+    [
+        (TarHead(WORKSPACE, callset=callset("A"), callset_read=True), ["A"], None),
+        (TarHead(WORKSPACE, callset_read=True), None, cs.NO_CALLSET),
+        (TarHead(WORKSPACE, callset_unread="ConnectionError: reset"), None, cs.CALLSET_UNREADABLE),
+        (TarHead(WORKSPACE, callset="not json", callset_read=True), None, cs.NOT_A_CALLSET),
+        (TarHead(WORKSPACE, callset=json.dumps({"callsets": []}), callset_read=True), None, cs.NOT_A_CALLSET),
+        # Not wanted: neither names nor a cause.
+        (TarHead(WORKSPACE), None, None),
+    ],
+)
+def test_the_parse_gives_a_callsets_samples_or_why_not(head, samples, why):
+    parsed = cs.parse_tar_head(head)
+    assert (parsed.samples, parsed.samples_unread) == (samples, why)
+
+
+@pytest.mark.parametrize(
+    ("names", "dataset", "folder", "member"),
+    [
+        (WORKSPACE, "ANVIL_T2T_CHRY", SGDP, "callset.json"),
+        (WORKSPACE, "ANVIL_T2T_CHRY", "SGDP_GRCh38/genomics_db", "callset.json"),
+        # The same name in 1000 Genomes' folder, another dataset, no folder, a deeper folder.
+        (WORKSPACE, "ANVIL_T2T_CHRY", "1KGP/genomics_db", None),
+        (WORKSPACE, "ANVIL_T2T", SGDP, None),
+        (WORKSPACE, "ANVIL_T2T_CHRY", None, None),
+        (WORKSPACE, "ANVIL_T2T_CHRY", SGDP + "/x", None),
+        # No GenomicsDB store.
+        (["reads/a.fastq"], "ANVIL_T2T_CHRY", SGDP, None),
+    ],
+)
+def test_only_a_declared_folders_workspaces_have_their_callset_read(names, dataset, folder, member):
+    assert SGDP in CALLSET_FOLDERS["ANVIL_T2T_CHRY"]
+    assert callset_member(names, dataset, folder) == member
+
+
+def test_the_tar_producer_reads_each_wanted_callsets_samples_and_counts_each_tar_not_read_by_cause(tmp_path):
+    named = callset("simons_data_sample_1", "simons_data_sample_2")
+    heads = {
+        "s1": TarHead(WORKSPACE, callset=named, callset_read=True),
+        "s2": TarHead(WORKSPACE, callset_unread="ConnectionError: reset"),
+        "s3": TarHead(WORKSPACE, callset_read=True),
+        "s4": TarHead(WORKSPACE, callset="{}", callset_read=True),
+        "s5": TarHead(WORKSPACE, callset=callset("simons_data_sample_1", "nobody"), callset_read=True),
+        "k1": TarHead(WORKSPACE),
+    }
+    inputs = [
+        {
+            "file_id": file_id,
+            "file_name": f"chr1.{n}.tar",
+            "dataset_id": "D",
+            "dataset_title": "ANVIL_T2T_CHRY",
+            "file_md5sum": f"{n:032x}",
+            "file_size": 1,
+            "file_format": ".tar",
+            "file_path": f"{'1KGP/genomics_db' if file_id == 'k1' else SGDP}/chr1.{n}.tar",
+        }
+        for n, file_id in enumerate(heads)
+    ]
+    by_md5 = {f"{n:032x}": head for n, head in enumerate(heads.values())}
+    asked: dict[str, str | None] = {}
+
+    def fetch(evidence_dir, md5, **kwargs):
+        asked[md5] = kwargs["samples_member"](WORKSPACE)
+        return by_md5[md5]
+
+    out = tmp_path / "tar.json"
+    rows = {
+        r["file_id"]: r
+        for r in ClassifyPipeline(
+            dataclasses.replace(TAR_CONFIG, fetcher=fetch),
+            write_metadata(tmp_path / "tar_in.json", inputs),
+            out,
+            evidence_base=tmp_path / "ev",
+            workers=1,
+        ).run()
+    }
+    # The fetcher is asked for each tar's samples member with its dataset and folder bound in.
+    assert asked[f"{0:032x}"] == "callset.json"
+    assert asked[f"{5:032x}"] is None
+    assert rows["s1"]["samples"]["count"] == 2
+    assert rows["s1"]["samples"]["named_by"] == [
+        {"source_type": SOURCE_CONTENT_READ, "rule_id": code_rules.TAR_CALLSET_SAMPLES.id}
+    ]
+    assert all(rows[f]["samples"] is None for f in ("s2", "s3", "s4", "s5", "k1"))
+    details = json.loads(out.read_text())["metadata"]["details"]
+    # The 1000 Genomes tar's callset was not wanted: it is not counted.
+    assert details["sample_outcomes"] == {"ANVIL_T2T_CHRY": {"named": 1, "unread": 3, "unrecognised": 1}}
+    assert details["unread_samples"] == {
+        "ANVIL_T2T_CHRY": {cs.CALLSET_UNREADABLE: 1, cs.NO_CALLSET: 1, cs.NOT_A_CALLSET: 1}
+    }
+    assert details["unrecognised_samples"] == {"ANVIL_T2T_CHRY": {"nobody": 1}}
+
+
+def test_the_callset_rule_is_declared_with_the_sample_rules():
+    assert code_rules.TAR_CALLSET_SAMPLES in code_rules.SAMPLE_RULES
+    assert TAR_CONFIG.samples is not None and TAR_CONFIG.samples.rule is code_rules.TAR_CALLSET_SAMPLES
 
 
 def test_the_edge_rules_are_declared_with_the_others():

@@ -25,7 +25,8 @@ from collections.abc import Callable, Collection, Iterable, Sequence
 from dataclasses import dataclass
 from functools import cache, cached_property, lru_cache
 from importlib.resources import files
-from typing import Any, Literal
+from operator import attrgetter
+from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
 
@@ -35,6 +36,9 @@ from .models import DONOR_REPOSITORY_ID, SAMPLE_REPOSITORY_ID
 from .schema.classification_model import IdentifierRule, IdentifierRules
 from .slot_map import unique_key_loader
 from .validators.header_extractors import VCFHeader, parse_sam_header
+
+if TYPE_CHECKING:
+    from .cohort_steps import ParsedTarHead
 
 DATASET_LOCAL = "dataset_local"
 
@@ -318,7 +322,7 @@ def members_of(sample_list_entry: dict) -> frozenset[Identifier]:
     )
 
 
-# --- a file's own content: a header, a sample map's rows (#668) ------------------
+# --- a file's own content: a header, a sample map's rows (#668), a callset (#724) --
 
 # What a file's header (or other content a reader reads) said about its samples, per file; a
 # producer counts each per dataset.
@@ -336,6 +340,8 @@ class HeaderSamples:
     rule: code_rules.SampleRule
     members: frozenset[Identifier] = frozenset()
     unrecognised: tuple[str, ...] = ()
+    # Why an :data:`UNREAD` file's samples were not read, where its reader says (``SampleReader.why_unread``).
+    unread: str | None = None
 
     @cached_property
     def sample_list(self) -> dict | None:
@@ -352,11 +358,21 @@ class HeaderSamples:
 
 @dataclass(frozen=True)
 class SampleReader:
-    """A file type's sample reader: the strings its parsed content (a header, a sample map's rows) names samples with, and the rule that reads them."""
+    """A file type's sample reader: the strings its parsed content (a header, a sample map's rows, a tar's ``callset.json``) names samples with, and the rule that reads them."""
 
     rule: code_rules.SampleRule
     # The strings the parse names samples with, or None where the head read did not reach them.
     strings: Callable[[Any], Sequence[str] | None]
+    # Whether the reader reads this file's parse at all (:meth:`reads`); None reads every file's.
+    # A file it does not read gets no reading and is not counted: a tar whose samples were not
+    # wanted (#724).
+    applies: Callable[[Any], bool] | None = None
+    # Why ``strings`` gave None, kept on the reading (``HeaderSamples.unread``); None gives no cause.
+    why_unread: Callable[[Any], str | None] | None = None
+
+    def reads(self, content: Any) -> bool:
+        """Whether this reader reads ``content``'s samples (``applies``)."""
+        return self.applies is None or self.applies(content)
 
     def read(self, content: Any, dataset: str | None) -> HeaderSamples:
         """The samples ``content`` names in ``dataset``: all of them recognised, or none.
@@ -366,7 +382,8 @@ class SampleReader:
         """
         strings = self.strings(content)
         if strings is None:
-            return HeaderSamples(UNREAD, self.rule)
+            why = self.why_unread(content) if self.why_unread is not None else None
+            return HeaderSamples(UNREAD, self.rule, unread=why)
         return _read(self.rule, tuple(dict.fromkeys(strings)), dataset, identifier_rules())
 
 
@@ -421,8 +438,19 @@ def _sample_map_strings(rows: Sequence[tuple[str, str]] | None) -> list[str]:
     return [sample for sample, _ in rows or ()]
 
 
+def _callset_wanted(head: ParsedTarHead) -> bool:
+    """Whether a tar's ``callset.json`` was wanted (``header_classifier.callset_member``): its names read, or a cause why not."""
+    return head.samples is not None or head.samples_unread is not None
+
+
 BAM_SAMPLES = SampleReader(code_rules.BAM_READ_GROUP_SAMPLES, _read_group_strings)
 VCF_SAMPLES = SampleReader(code_rules.VCF_SAMPLE_COLUMNS, _sample_column_strings)
 SAMPLE_MAP_SAMPLES = SampleReader(code_rules.SAMPLE_MAP_ROWS, _sample_map_strings)
 FAST5_SAMPLES = SampleReader(code_rules.FAST5_TRACKING_SAMPLE, _fast5_strings)
+TAR_SAMPLES = SampleReader(
+    code_rules.TAR_CALLSET_SAMPLES,
+    attrgetter("samples"),
+    applies=_callset_wanted,
+    why_unread=attrgetter("samples_unread"),
+)
 EXTERNAL_SAMPLE_MAP_SAMPLES = SampleReader(code_rules.EXTERNAL_SAMPLE_MAP_ROWS, _sample_map_strings)

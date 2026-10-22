@@ -9,6 +9,7 @@ import json
 from collections import Counter, defaultdict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import partial
 from pathlib import Path
 from threading import Lock
 from typing import Any, NamedTuple, TypeGuard
@@ -30,6 +31,7 @@ from .records import (
     SAMPLE_LISTS_KEY,
     SAMPLE_OUTCOMES_KEY,
     STEP_OUTCOMES_KEY,
+    UNREAD_SAMPLES_KEY,
     UNRECOGNISED_SAMPLES_KEY,
     ClassifierRecord,
     InvalidRecord,
@@ -112,7 +114,8 @@ class RecordOutcome(NamedTuple):
     # for a file its type's step reader does not apply to.
     step_outcome: str | None = None
     # What the file's header says about its samples, where its type reads them
-    # (``FileTypeConfig.samples``, #357); None for every other type and for a file not read.
+    # (``FileTypeConfig.samples``, #357); None for every other type, for a file not read, and
+    # for a file its type's sample reader does not read (``SampleReader.reads``, #724).
     samples: HeaderSamples | None = None
 
 
@@ -128,6 +131,8 @@ def _fetch_and_classify(
     is_gzipped: bool,
     use_cache: bool,
     url: str | None = None,
+    dataset: str | None = None,
+    folder: str | None = None,
 ) -> tuple[dict, bool, Any]:
     """Fetch a file's content and classify it.
 
@@ -158,6 +163,9 @@ def _fetch_and_classify(
     the fetcher derives its URL from ``md5sum`` (the S3 mirror); when supplied (HPRC)
     the fetcher streams from it instead. Every fetcher accepts ``url`` and defaults it
     to ``None``, so passing it unconditionally leaves the AnVIL path byte-for-byte.
+
+    ``dataset`` and ``folder`` (``records.folder_of``) are bound into the type's
+    ``samples_member`` (#724), which the fetcher then asks with the member names alone.
     """
     try:
         raw_data = config.fetcher(
@@ -168,6 +176,11 @@ def _fetch_and_classify(
             use_cache=use_cache,
             head_detector=config.head_detector,
             kept_member=config.kept_member,
+            samples_member=(
+                partial(config.samples_member, dataset=dataset, folder=folder)
+                if config.samples_member is not None
+                else None
+            ),
             url=url,
         )
     except FetchError as e:
@@ -535,6 +548,7 @@ class ClassifyPipeline:
         )
 
         was_cached = self.resume and self._is_cached(item.file_md5sum)
+        dataset = item.dataset_title if isinstance(item.dataset_title, str) else None
 
         classifications, content_unreadable, payload = _fetch_and_classify(
             self.config,
@@ -547,6 +561,8 @@ class ClassifyPipeline:
             is_gzipped=is_gzipped,
             use_cache=self.resume,
             url=item.url,
+            dataset=dataset,
+            folder=item.folder,
         )
         if content_unreadable:
             # was_cached is a file-existence stat taken before the fetch. A fetcher
@@ -560,8 +576,7 @@ class ClassifyPipeline:
         if self._step is not None and not content_unreadable:
             generated_by, step_outcome = self._step(payload, item.file_name, item.dataset_id, item.folder)
         samples = None
-        if self.config.samples is not None and not content_unreadable:
-            dataset = item.dataset_title if isinstance(item.dataset_title, str) else None
+        if self.config.samples is not None and not content_unreadable and self.config.samples.reads(payload):
             samples = self.config.samples.read(payload, dataset)
         return RecordOutcome(
             OutputRecord.from_work_item(
@@ -593,6 +608,7 @@ class ClassifyPipeline:
         # the strings no rule recognised; and each distinct list the records point to.
         sample_counts: dict[str, Counter] = defaultdict(Counter)
         unrecognised_samples: dict[str, Counter] = defaultdict(Counter)
+        unread_samples: dict[str, Counter] = defaultdict(Counter)
         lists: dict[str, dict] = {}
 
         print(f"Using {self.workers} parallel workers")
@@ -611,6 +627,8 @@ class ClassifyPipeline:
                     if outcome.samples is not None:
                         sample_counts[dataset][outcome.samples.outcome] += 1
                         unrecognised_samples[dataset].update(outcome.samples.unrecognised)
+                        if outcome.samples.unread is not None:
+                            unread_samples[dataset][outcome.samples.unread] += 1
                         entry = outcome.samples.sample_list
                         if entry is not None:
                             lists.setdefault(entry["list_id"], entry)
@@ -669,10 +687,13 @@ class ClassifyPipeline:
                     for dataset, counts in sorted(unrecognised_samples.items())
                     if counts
                 },
+                UNREAD_SAMPLES_KEY: {dataset: dict(counts) for dataset, counts in sorted(unread_samples.items())},
             }
             sample_lists = sorted_lists(lists)
             for dataset, counts in details[SAMPLE_OUTCOMES_KEY].items():
                 print(f"  Header samples, {dataset}: {', '.join(f'{k} {v:,}' for k, v in counts.items())}")
+            for dataset, counts in details[UNREAD_SAMPLES_KEY].items():
+                print(f"  Samples not read, {dataset}: {', '.join(f'{k} {v:,}' for k, v in counts.items())}")
         classifications = self._save_final(
             total,
             successful,

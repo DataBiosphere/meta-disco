@@ -413,7 +413,9 @@ evidence}` entry — plus the controlled vocabulary:
     and a GenomicsDB workspace tar's own `vcfheader.vcf` giving `CohortMergeActivity` with the
     map its one `input_list`, whose values reconcile reads **through** the map's members
     (`read_through` in `activities.yaml`, contract 4.9); the tar fetcher keeps that member's
-    text in the tar's cache entry (`TarEvidence.vcf_header`).
+    text in the tar's cache entry (`TarEvidence.vcf_header`), and for the workspaces
+    `header_classifier.CALLSET_FOLDERS` declares (ANVIL_T2T_CHRY's SGDP cohort, #724) its `callset.json`
+    too (`TarEvidence.callset`).
     Their outcomes per dataset are in each producer's `metadata.details.producer_steps`.
     **A VCF's command lines are read once, on first use, by `VCFHeader.commands`** (#615),
     which gives each line's words and its step, through `validators.command_lines` and its
@@ -430,9 +432,10 @@ evidence}` entry — plus the controlled vocabulary:
     its sorted members, each an `EntityIdentifier`. A string is a sample only through
     `rules/sample_namespaces.yaml` (`sample_identity`), which also declares the one rewrite
     (`GM` → `NA`, same number); a string no rule recognises is counted, never guessed.
-    Inference reads it from the file's own content, a header, a sample map's rows or a nanopore
+    Inference reads it from the file's own content, a header, a sample map's rows, a nanopore
     FAST5's `sample_id` (`fast5`, #605: found by name in the first 64 KiB, its attribute
-    message parsed whole) (`FileTypeConfig.samples`, its readers among `code_rules.SAMPLE_RULES`), all of its strings or none, and each producer file holds its lists under
+    message parsed whole) or an SGDP workspace tar's `callset.json` (#724; a wanted tar whose head was read
+    but whose `callset.json` gave no names is counted by cause, `unread_samples`) (`FileTypeConfig.samples`, its readers among `code_rules.SAMPLE_RULES`), all of its strings or none, and each producer file holds its lists under
     `sample_lists`. A submitter table states it through the slot map, one cell per column
     (`samples` is the one non-dimension in `models.EVIDENCE_FIELDS`, never translated by the
     value map), and `make check-slot-map` refuses a column whose files' names mostly name

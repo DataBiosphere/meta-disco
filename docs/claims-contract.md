@@ -592,8 +592,9 @@ importer's half is built — 7.12 is enforced (below), and the published importe
 - **6.11 holds for the reconciled artifact only.** It is gzip-compressed NDJSON (`.ndjson.gz`) under `<run>/reconciled/`; inference output is still pretty-printed JSON at the run root (#448, #271).
 - **2.11 is a workaround with one entry.** The external files declaration holds ANVIL_T2T_CHRY's 25
   published 1000 Genomes sample maps and nothing else; its 62,022 SGDP tars name maps no one has
-  published, and are counted `map_not_declared`, not read. #624 asks AnVIL for the maps; when they are in
-  the snapshot, 2.11 and everything it names are deleted.
+  published, and are counted `map_not_declared` and given no lineage; their samples come from each tar's
+  own `callset.json` (#724). #624 asks AnVIL for the maps; when they are in the snapshot, 2.11 and
+  everything it names are deleted.
 - **No curator rule exists** (4.7, #397). Every conflict stands unanswered, which 7.13 makes deliverable.
 - **5.1 is met for values, not rules.** `make reconcile-report` (#395) lists each conflict's competing values
   per input, counted per distinct set; the rule behind each value is on the reconciled record, not in the list.
