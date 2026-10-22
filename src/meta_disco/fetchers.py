@@ -1229,8 +1229,6 @@ def fetch_tar_headers(
     head_detector=None,
     kept_member=None,
     samples_member=None,
-    dataset: str | None = None,
-    folder: str | None = None,
     **kwargs,
 ) -> TarHead:
     """Read member names from the head of a tar / tar.gz archive on S3 (#255, #260), one member's text (#621), and another's for the tar's samples (#724).
@@ -1264,12 +1262,13 @@ def fetch_tar_headers(
     is not looked for again. With no ``kept_member`` nothing is
     looked for, and the entry records that it was not.
 
-    ``samples_member`` (``FileTypeConfig.samples_member``), given the member names and the
-    file's ``dataset`` and ``folder``, names the member the tar's samples are read from, or
-    None. It is read after the walk, in the same two windows, never by the walk, and cached the
-    same way (``TarEvidence.callset_read``), so a cached entry from before #724 has only that
-    member read. A compressed tar's is not read: ``TarHead.callset_unread`` says so, and the tar
-    is not failed.
+    ``samples_member`` (``FileTypeConfig.samples_member``, bound by the pipeline to the file's
+    dataset and folder) names from the member names the member the tar's samples are read from,
+    or None. It is read after the walk, in the same two windows, never by the walk, and cached the
+    same way (``TarEvidence.callset_read``), so a cached entry from before #724 of an uncompressed
+    tar has only that member read. It is asked on every call, cached or not: an entry holding the
+    member's text returns none for a file it is not wanted for, and keeps it. A compressed tar's
+    is not read: ``TarHead.callset_unread`` says so, and the tar is not failed.
 
     A failed read of either member alone (an HTTP error or a dropped connection) does not fail
     the tar: its names are returned with the cause in ``TarHead.vcf_header_unread`` or
@@ -1283,8 +1282,20 @@ def fetch_tar_headers(
     as searched. Nothing is cached, so a later run reads it again.
     """
 
-    def wanted(names: list[str]) -> str | None:
-        return samples_member(names, dataset, folder) if samples_member is not None else None
+    def callset_of(names: list[str], compressed: bool) -> _MemberRead:
+        # Asked first: the entry is keyed by md5 alone, and a file it is not wanted for gets none.
+        member = samples_member(names) if samples_member is not None else None
+        if member is None:
+            return _MemberRead()
+        if cached is not None and cached.callset_read:
+            return _MemberRead(cached.callset, read=True)
+        return _read_callset(md5sum, names, member, compressed=compressed, url=url)
+
+    def kept_callset(callset: _MemberRead) -> _MemberRead:
+        # What the entry keeps: this read where it read the member, else what the entry held.
+        if callset.read or cached is None or not cached.callset_read:
+            return callset
+        return _MemberRead(cached.callset, read=True)
 
     cached = TarEvidence.load(evidence_dir, md5sum) if use_cache else None
     if cached is not None:
@@ -1296,18 +1307,15 @@ def fetch_tar_headers(
             if member is not None:
                 text, unread, fetched = _read_kept(md5sum, member, names, url=url)
             header_read = cached.vcf_header_read or (member is not None and unread is None)
-            callset = (
-                _MemberRead(cached.callset, read=True)
-                if cached.callset_read
-                else _read_callset(md5sum, names, wanted(names), compressed=is_gzipped, url=url)
-            )
-            if header_read != cached.vcf_header_read or callset.read != cached.callset_read:
+            callset = callset_of(names, is_gzipped)
+            kept = kept_callset(callset)
+            if header_read != cached.vcf_header_read or kept.read != cached.callset_read:
                 replace(
                     cached,
                     vcf_header=text,
                     vcf_header_read=header_read,
-                    callset=callset.text,
-                    callset_read=callset.read,
+                    callset=kept.text,
+                    callset_read=kept.read,
                     raw_bytes_fetched=(cached.raw_bytes_fetched or 0) + fetched + callset.fetched,
                 ).save(evidence_dir)
             return TarHead(names, text, unread, callset.text, callset.read, callset.unread)
@@ -1332,11 +1340,8 @@ def fetch_tar_headers(
             # reads it, so its step cannot be read: the tar is unreadable, not "looked for".
             raise FetchError(f"compressed tar: {member} not in the head read, and a compressed tail is not read")
         text, unread, fetched = _read_kept(md5sum, member, member_names, url=url)
-    callset = (
-        _MemberRead(cached.callset, read=True)
-        if cached is not None and cached.callset_read
-        else _read_callset(md5sum, member_names, wanted(member_names), compressed=compressed, url=url)
-    )
+    callset = callset_of(member_names, compressed)
+    kept = kept_callset(callset)
 
     _save_head_evidence(
         TarEvidence,
@@ -1350,8 +1355,8 @@ def fetch_tar_headers(
         vcf_header=text,
         # A member whose read failed is not recorded as looked for, so the next run reads it.
         vcf_header_read=kept_member is not None and unread is None,
-        callset=callset.text,
-        callset_read=callset.read,
+        callset=kept.text,
+        callset_read=kept.read,
     )
     return TarHead(member_names, text, unread, callset.text, callset.read, callset.unread)
 

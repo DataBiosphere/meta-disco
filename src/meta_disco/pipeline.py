@@ -9,6 +9,7 @@ import json
 from collections import Counter, defaultdict
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from functools import partial
 from pathlib import Path
 from threading import Lock
 from typing import Any, NamedTuple, TypeGuard
@@ -163,9 +164,8 @@ def _fetch_and_classify(
     the fetcher streams from it instead. Every fetcher accepts ``url`` and defaults it
     to ``None``, so passing it unconditionally leaves the AnVIL path byte-for-byte.
 
-    ``dataset`` and ``folder`` (``records.folder_of``) go to the fetcher, for a type whose
-    ``samples_member`` decides by them which archive's member to read (#724); the other
-    fetchers take them in ``**kwargs`` and ignore them.
+    ``dataset`` and ``folder`` (``records.folder_of``) are bound into the type's
+    ``samples_member`` (#724), which the fetcher then asks with the member names alone.
     """
     try:
         raw_data = config.fetcher(
@@ -176,9 +176,11 @@ def _fetch_and_classify(
             use_cache=use_cache,
             head_detector=config.head_detector,
             kept_member=config.kept_member,
-            samples_member=config.samples_member,
-            dataset=dataset,
-            folder=folder,
+            samples_member=(
+                partial(config.samples_member, dataset=dataset, folder=folder)
+                if config.samples_member is not None
+                else None
+            ),
             url=url,
         )
     except FetchError as e:
@@ -685,15 +687,12 @@ class ClassifyPipeline:
                     for dataset, counts in sorted(unrecognised_samples.items())
                     if counts
                 },
+                UNREAD_SAMPLES_KEY: {dataset: dict(counts) for dataset, counts in sorted(unread_samples.items())},
             }
-            if unread_samples:
-                details[UNREAD_SAMPLES_KEY] = {
-                    dataset: dict(counts) for dataset, counts in sorted(unread_samples.items())
-                }
             sample_lists = sorted_lists(lists)
             for dataset, counts in details[SAMPLE_OUTCOMES_KEY].items():
                 print(f"  Header samples, {dataset}: {', '.join(f'{k} {v:,}' for k, v in counts.items())}")
-            for dataset, counts in (details.get(UNREAD_SAMPLES_KEY) or {}).items():
+            for dataset, counts in details[UNREAD_SAMPLES_KEY].items():
                 print(f"  Samples not read, {dataset}: {', '.join(f'{k} {v:,}' for k, v in counts.items())}")
         classifications = self._save_final(
             total,

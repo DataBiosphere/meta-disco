@@ -1066,19 +1066,14 @@ def _sgdp_workspace(*, with_callset: bool = True) -> bytes:
     return _make_tar([*callset, *filler, ("ws/vcfheader.vcf", HEADER_TEXT.encode())])
 
 
-def _callset_member(names, dataset, folder):
-    return "callset.json" if (dataset, folder) == ("D", "SGDP/genomics_db") else None
-
-
-def _fetch_sgdp(evidence_dir, *, folder="SGDP/genomics_db", is_gzipped=False):
+def _fetch_sgdp(evidence_dir, *, wanted=True, is_gzipped=False):
+    """The tar's head, its samples member wanted or not (the pipeline binds the file's dataset and folder in)."""
     return fetch_tar_headers(
         evidence_dir,
         MD5,
         is_gzipped=is_gzipped,
         kept_member=_workspace_member,
-        samples_member=_callset_member,
-        dataset="D",
-        folder=folder,
+        samples_member=lambda names: "callset.json" if wanted else None,
     )
 
 
@@ -1104,10 +1099,22 @@ def test_a_wanted_callset_is_read_and_cached(monkeypatch, evidence_dir):
 def test_a_callset_not_wanted_is_not_read_and_the_entry_says_so(monkeypatch, evidence_dir):
     # The same tar in another folder: the samples_member names nothing.
     _serve(monkeypatch, _sgdp_workspace())
-    head = _fetch_sgdp(evidence_dir, folder="1KGP/genomics_db")
+    head = _fetch_sgdp(evidence_dir, wanted=False)
     assert (head.callset, head.callset_read, head.callset_unread) == (None, False, None)
     assert head.vcf_header == HEADER_TEXT
     assert "callset" not in TarEvidence.load(evidence_dir, MD5).to_json()
+
+
+def test_a_cached_callset_is_not_given_to_a_file_it_is_not_wanted_for_and_is_kept(monkeypatch, evidence_dir):
+    # The entry is keyed by md5: a file of the same bytes in a folder not declared gets no callset.
+    _serve(monkeypatch, _sgdp_workspace())
+    assert _fetch_sgdp(evidence_dir).callset == CALLSET_TEXT
+    _no_network(monkeypatch)
+    head = _fetch_sgdp(evidence_dir, wanted=False)
+    assert (head.callset, head.callset_read, head.callset_unread) == (None, False, None)
+    assert head.vcf_header == HEADER_TEXT
+    assert TarEvidence.load(evidence_dir, MD5).to_json()["callset"] == CALLSET_TEXT
+    assert _fetch_sgdp(evidence_dir).callset == CALLSET_TEXT
 
 
 def test_an_entry_from_before_724_reads_only_the_callset_and_is_saved_with_it(monkeypatch, evidence_dir):

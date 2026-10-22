@@ -303,6 +303,7 @@ def test_the_tar_producer_writes_the_workspace_step(tmp_path):
         "producer_steps": {"T": {cs.STEPPED: 1, cs.NO_VCF_HEADER: 1}},
         "sample_outcomes": {},
         "unrecognised_samples": {},
+        "unread_samples": {},
     }
 
 
@@ -402,10 +403,10 @@ def test_the_tar_producer_reads_each_wanted_callsets_samples_and_counts_each_tar
         for n, file_id in enumerate(heads)
     ]
     by_md5 = {f"{n:032x}": head for n, head in enumerate(heads.values())}
-    asked: dict[str, tuple] = {}
+    asked: dict[str, str | None] = {}
 
     def fetch(evidence_dir, md5, **kwargs):
-        asked[md5] = (kwargs["dataset"], kwargs["folder"], kwargs["samples_member"])
+        asked[md5] = kwargs["samples_member"](WORKSPACE)
         return by_md5[md5]
 
     out = tmp_path / "tar.json"
@@ -419,9 +420,9 @@ def test_the_tar_producer_reads_each_wanted_callsets_samples_and_counts_each_tar
             workers=1,
         ).run()
     }
-    # The fetcher is told each tar's dataset and folder, and which member to read for its samples.
-    assert asked[f"{0:032x}"] == ("ANVIL_T2T_CHRY", SGDP, callset_member)
-    assert asked[f"{5:032x}"][1] == "1KGP/genomics_db"
+    # The fetcher is asked for each tar's samples member with its dataset and folder bound in.
+    assert asked[f"{0:032x}"] == "callset.json"
+    assert asked[f"{5:032x}"] is None
     assert rows["s1"]["samples"]["count"] == 2
     assert rows["s1"]["samples"]["named_by"] == [
         {"source_type": SOURCE_CONTENT_READ, "rule_id": code_rules.TAR_CALLSET_SAMPLES.id}

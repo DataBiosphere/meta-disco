@@ -996,10 +996,8 @@ def workspace_header_member(member_names: list[str]) -> str | None:
 
 # The member a GenomicsDB workspace lists the samples it imported in.
 CALLSET_MEMBER = "callset.json"
-# The workspaces whose `callset.json` the tar producer reads for their samples (#724), by
-# dataset and folder: ANVIL_T2T_CHRY's SGDP cohort, whose sample maps are not public (#624),
-# so nothing else names their samples. Its 1000 Genomes workspaces take theirs from the
-# published maps (#710), and reading theirs too is #725.
+# The folders, by dataset, whose workspaces' `callset.json` is read for their samples (#724): ANVIL_T2T_CHRY's
+# SGDP cohort, whose sample maps are not public (#624). Its 1000 Genomes workspaces' are #725.
 CALLSET_FOLDERS = {"ANVIL_T2T_CHRY": frozenset({"SGDP_CHM13v2/genomics_db", "SGDP_GRCh38/genomics_db"})}
 
 

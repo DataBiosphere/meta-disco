@@ -132,6 +132,7 @@
             "named": 1
           }
         },
+        "unread_samples": {},
         "unrecognised_samples": {}
       },
       "dropped": 0,
@@ -443,6 +444,7 @@
             "named": 1
           }
         },
+        "unread_samples": {},
         "unrecognised_samples": {}
       },
       "dropped": 0,
@@ -1299,6 +1301,7 @@
             "named": 1
           }
         },
+        "unread_samples": {},
         "unrecognised_samples": {}
       },
       "dropped": 0,
@@ -1483,6 +1486,7 @@
           }
         },
         "sample_outcomes": {},
+        "unread_samples": {},
         "unrecognised_samples": {}
       },
       "dropped": 0,
@@ -1783,6 +1787,7 @@
             "named": 2
           }
         },
+        "unread_samples": {},
         "unrecognised_samples": {}
       },
       "dropped": 0,

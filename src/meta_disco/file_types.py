@@ -85,13 +85,10 @@ class FileTypeConfig:
     # so the reader stays ignorant of which archives have a member worth reading. None
     # keeps none.
     kept_member: Callable | None = None
-    # Given the member names an archive's head walk has read, the file's dataset and folder, the
-    # base name of the member its samples are read from, or None (#724). Injected like
-    # ``kept_member``. None reads none.
+    # Given the member names, the file's dataset and folder, the member its samples are read from, or None (#724).
     samples_member: Callable | None = None
-    # The samples a file's own content names (#357; a header, a sample map's rows, #668, a tar's
-    # ``callset.json``, #724), read from the parse (or the payload, for a type without a
-    # ``parser``). None means the type reads no samples.
+    # The samples a file's own content names (#357; a header, a sample map's rows, #668, a tar's ``callset.json``, #724),
+    # read from the parse (or the payload, for a type without a ``parser``). None means the type reads no samples.
     samples: SampleReader | None = None
     # The content is read only for ``samples``, the dimensions coming from the name (#605): a
     # failed read keeps the classifier's answers from the name, rather than none.
@@ -179,8 +176,7 @@ TAR_CONFIG = FileTypeConfig(
     kept_member=workspace_header_member,
     parser=parse_tar_head,
     step=TarSteps.for_run,
-    # ANVIL_T2T_CHRY's SGDP workspaces' `callset.json` names the samples GenomicsDB imported
-    # (#724); no other tar's is read.
+    # The samples an SGDP workspace imported, from its `callset.json` (#724).
     samples_member=callset_member,
     samples=TAR_SAMPLES,
 )

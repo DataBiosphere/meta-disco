@@ -25,6 +25,7 @@ from collections.abc import Callable, Collection, Iterable, Sequence
 from dataclasses import dataclass
 from functools import cache, cached_property, lru_cache
 from importlib.resources import files
+from operator import attrgetter
 from typing import TYPE_CHECKING, Any, Literal
 
 import yaml
@@ -437,18 +438,9 @@ def _sample_map_strings(rows: Sequence[tuple[str, str]] | None) -> list[str]:
     return [sample for sample, _ in rows or ()]
 
 
-def _callset_strings(head: ParsedTarHead) -> list[str] | None:
-    """The names a tar's ``callset.json`` lists (``cohort_steps.ParsedTarHead.samples``); None where none were read."""
-    return head.samples
-
-
 def _callset_wanted(head: ParsedTarHead) -> bool:
     """Whether a tar's ``callset.json`` was wanted (``header_classifier.callset_member``): its names read, or a cause why not."""
     return head.samples is not None or head.samples_unread is not None
-
-
-def _callset_unread(head: ParsedTarHead) -> str | None:
-    return head.samples_unread
 
 
 BAM_SAMPLES = SampleReader(code_rules.BAM_READ_GROUP_SAMPLES, _read_group_strings)
@@ -457,8 +449,8 @@ SAMPLE_MAP_SAMPLES = SampleReader(code_rules.SAMPLE_MAP_ROWS, _sample_map_string
 FAST5_SAMPLES = SampleReader(code_rules.FAST5_TRACKING_SAMPLE, _fast5_strings)
 TAR_SAMPLES = SampleReader(
     code_rules.TAR_CALLSET_SAMPLES,
-    _callset_strings,
+    attrgetter("samples"),
     applies=_callset_wanted,
-    why_unread=_callset_unread,
+    why_unread=attrgetter("samples_unread"),
 )
 EXTERNAL_SAMPLE_MAP_SAMPLES = SampleReader(code_rules.EXTERNAL_SAMPLE_MAP_ROWS, _sample_map_strings)
