@@ -606,6 +606,44 @@ class TestBamCramClassification:
         result = classify_from_header(f"@HD\tVN:1.6\n@RG\tID:rg1\tPM:{pm}\tSM:s")
         assert field_value(result, "platform") == platform
 
+    @pytest.mark.parametrize(
+        ("command", "platform"),
+        [
+            pytest.param(
+                "winnowmap -W ref_k15 -w 50 -k 15 -t 48 -x map-ont -a --MD ref.fasta r.fastq",
+                "ONT",
+                id="winnowmap map-ont",
+            ),
+            pytest.param(
+                "winnowmap -W rep.txt -ax map-pb -t 16 --MD ref.fa r.fastq", "PACBIO", id="winnowmap -ax map-pb"
+            ),
+            pytest.param(
+                "/opt/bin/minimap2 -ax map-hifi ref.fa hifi.fq", "PACBIO", id="minimap2 map-hifi, with a path"
+            ),
+            pytest.param("minimap2 -xmap-ont ref.fa r.fq", "ONT", id="preset joined to -x"),
+            pytest.param("minimap2 -ax asm5 ref.fa asm.fa", None, id="an assembly preset names no platform"),
+            pytest.param("minimap2 -ax sr ref.fa r1.fq r2.fq", None, id="sr names no platform"),
+            pytest.param("minimap2 -ax splice ref.fa r.fq", None, id="splice names no platform"),
+            pytest.param("minimap2 -ax map-ontology ref.fa r.fq", None, id="a longer word is no preset"),
+            pytest.param("mytool -x map-ont ref.fa r.fq", None, id="another tool's -x is not read"),
+            pytest.param("samtools view -H x.bam", None, id="no preset"),
+        ],
+    )
+    def test_platform_from_the_aligner_read_preset(self, command, platform):
+        """A minimap2/Winnowmap read preset on an @PG line names the reads' platform (#727)."""
+        header = f"@HD\tVN:1.6\n@PG\tID:aln\tPN:aligner\tCL:{command}\n@PG\tID:samtools\tPN:samtools\tCL:samtools sort"
+        result = classify_from_header(header)
+        assert field_value(result, "platform") == platform
+        assert field_status(result, "platform") == (CLASSIFIED if platform else NOT_CLASSIFIED)
+
+    def test_two_read_presets_in_one_header_conflict(self):
+        """ONT and PacBio presets in one header are not settled by either (#727)."""
+        header = (
+            "@HD\tVN:1.6\n@PG\tID:a\tPN:minimap2\tCL:minimap2 -ax map-ont ref.fa r.fq\n"
+            "@PG\tID:b\tPN:minimap2\tCL:minimap2 -ax map-pb ref.fa r.fq"
+        )
+        assert field_status(classify_from_header(header), "platform") != CLASSIFIED
+
     def test_grch38_from_sq(self):
         """Detect GRCh38 from @SQ AS field."""
         header = """@HD\tVN:1.6

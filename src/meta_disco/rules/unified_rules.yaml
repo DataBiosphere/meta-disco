@@ -933,6 +933,41 @@ rules:
       platform: PACBIO
     rationale: "The 'ccs' program generates HiFi reads from PacBio subreads. Confirms PacBio platform (used for both WGS and IsoSeq)"
 
+  # ---------------------------------------------------------------------------
+  # Platform from the aligner's read preset (#727). minimap2 and Winnowmap take a
+  # preset (`-x`, often grouped as `-ax`) naming the kind of reads they align:
+  # `map-ont` for Oxford Nanopore reads, `map-pb` for PacBio (CLR or HiFi) and
+  # `map-hifi` for PacBio HiFi. The preset is the producing step's own argument,
+  # chosen for its input reads, and a platform describes the reads, so it holds
+  # for the alignment (contract 3.13). Only those read presets are read: the
+  # assembly presets (`asm5`, `asm10`, `asm20`), `sr` and `splice` name no platform.
+  # Any one @PG line naming a preset is enough; a header naming both kinds gives both
+  # claims, and so an inference conflict.
+  # ---------------------------------------------------------------------------
+  - id: platform_aligner_preset_ont
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@PG"
+      header_field: "CL"
+      header_pattern: "^(\\S*/)?(minimap2|winnowmap)\\s(.*\\s)?-[a-z]*x\\s*map-ont(\\s|$)"
+    then:
+      platform: ONT
+    rationale: "minimap2/Winnowmap's -x map-ont preset aligns Oxford Nanopore reads, so the alignment's reads are ONT"
+
+  - id: platform_aligner_preset_pacbio
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@PG"
+      header_field: "CL"
+      header_pattern: "^(\\S*/)?(minimap2|winnowmap)\\s(.*\\s)?-[a-z]*x\\s*map-(pb|hifi)(\\s|$)"
+    then:
+      platform: PACBIO
+    rationale: "minimap2/Winnowmap's -x map-pb and map-hifi presets align PacBio reads (CLR or HiFi), so the alignment's reads are PacBio"
+
 
 
 
