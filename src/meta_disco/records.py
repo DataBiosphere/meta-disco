@@ -131,8 +131,7 @@ UNRECOGNISED_SAMPLES_KEY = "unrecognised_samples"
 UNREAD_SAMPLES_KEY = "unread_samples"
 # The top-level key of a producer's file holding the sample lists its records point to (#357).
 SAMPLE_LISTS_KEY = "sample_lists"
-# The top-level key of a producer's file holding the lists its step reader rebuilt, which its records'
-# steps name by address (`RebuiltList`, #726).
+# The top-level key of a producer's file holding the lists its records' steps name by address (#726).
 REBUILT_LISTS_KEY = "rebuilt_lists"
 
 

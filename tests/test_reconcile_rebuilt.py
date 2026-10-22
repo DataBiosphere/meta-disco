@@ -86,6 +86,14 @@ def test_a_tar_reads_its_values_through_the_list_inference_rebuilt(tmp_path):
     RebuiltList.model_validate(listed)
 
 
+def test_each_list_is_written_once_in_address_order(tmp_path):
+    first = rebuilt_list(*NAMES)
+    later = {**rebuilt_list(NAMES[0]), "ref": REF.replace("#0", "#f")}
+    run_dir, _, report = reconcile(tmp_path, [GVCF, GVCF], [later, first, first])
+    assert [r["ref"] for r in iter_reconciled_artifact(run_dir, REBUILT_LISTS_FILE)] == [REF, later["ref"]]
+    assert report["rebuilt_lists"] == {"ANVIL_T2T_CHRY": {"lists": 2, "members": 3}}
+
+
 def test_members_that_differ_give_the_tar_mixed_not_either_value(tmp_path):
     other = {**GVCF, "reference_assembly": "GRCh38"}
     _, rows, _ = reconcile(tmp_path, [GVCF, other], [rebuilt_list(*NAMES)])

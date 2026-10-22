@@ -260,7 +260,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
      the rest: its `vcfheader.vcf` names the map, so the region, and its `callset.json` the samples; its folder
      is its reference's. The run wrote one gVCF per sample, region and reference, at a path its layout fixes
      (`cohort_steps.gvcf_layout`; rebuilt from the same layout, the 1000 Genomes run's published maps come out
-     row for row, 78,447 of 78,447). So the tar producer, for a tar in a folder `cohort_steps.REBUILT_MAP_FOLDERS`
+     row for row, 78,447 of 78,447, its one published `chrX_PAR` map read as the PAR1 and PAR2 maps the tars
+     name, as 2.11's declaration reads it). So the tar producer, for a tar in a folder `cohort_steps.REBUILT_MAP_FOLDERS`
      declares, rebuilds the list (a code rule, `cohort_by_rebuilt_sample_map`): each sample's one gVCF under the
      tar's reference folder, by name up to case and folder exactly. A sample whose gVCF no file or two files carry gives no
      list and no step: a cohort missing a member is not the cohort. A list is addressed by its dataset,

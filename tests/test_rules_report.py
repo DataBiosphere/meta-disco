@@ -642,3 +642,19 @@ def test_a_sample_map_inference_rebuilt_counts_its_step_rule(tmp_path):
     assert (edge["claims"], edge["files"], edge["datasets"]) == (3, 1, {grr.REBUILT_LISTS: 1})
     assert "1 sample maps inference rebuilt" in data["provenance"]
     assert list(grr.rebuilt_list_records(tmp_path / "unreconciled")) == []
+
+
+def test_the_report_main_counts_the_runs_rebuilt_lists(tmp_path):
+    run_dir = reconciled_run(tmp_path)
+    member = {"source_type": "content_read", "rule_id": code_rules.COHORT_BY_REBUILT_SAMPLE_MAP.id}
+    step = {"activity": "CohortDefinitionActivity", "named_by": [member], "inputs": []}
+    listed = {"ref": "rebuilt:C/R/m#" + "0" * 16, "dataset": "C", "file_name": "m", "generated_by": step}
+    write_reconciled_file(run_dir / RECONCILED_DIR / REBUILT_LISTS_FILE, {"catalog": "t"}, [listed])
+    rules, value_map = rule_files(tmp_path)
+    md = tmp_path / "r.md"
+    argv = ["--run-dir", str(run_dir), "--rules", str(rules), "--value-map", str(value_map)]
+    assert grr.main([*argv, "--markdown", str(md), "--html", str(tmp_path / "r.html")]) == 0
+    assert (
+        f"the 1 sample maps inference rebuilt that its steps read through (#726), under {grr.REBUILT_LISTS}"
+        in md.read_text()
+    )

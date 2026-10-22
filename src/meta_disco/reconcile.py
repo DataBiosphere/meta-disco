@@ -1336,13 +1336,11 @@ def reconcile_run(
     for _, records, lists, rebuilt_lists in iter_run_file_contents(run_dir):
         inference_lists.update((entry["list_id"], entry) for entry in lists)
         for entry in rebuilt_lists:
-            if entry["ref"] in rebuilt:
-                continue
             rebuilt[entry["ref"]] = entry
             stand_in = reconcile_external.stand_in(entry["file_name"], entry["dataset"])
             samples.names_none.add(entry["ref"])
+            # No samples.hold: a rebuilt list names none, and its step passes none.
             graph.add(entry["ref"], stand_in, {}, entry.get("generated_by"))
-            samples.hold(entry["ref"], stand_in, inference_lists, [], graph.steps.get(entry["ref"]))
         for record in records:
             identity = identity_of(record, seen)
             step, _ = step_of(record, identity)

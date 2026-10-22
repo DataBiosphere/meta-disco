@@ -75,10 +75,9 @@ HEADER, TABLE, PARENT = "header", "table", "parent"
 KINDS = (HEADER, TABLE, PARENT)
 
 # What a role that passes samples gave a child (#668); the report counts each per dataset and
-# activity. First match wins: parents naming different lists, then a parent in conflict, then
-# parents that are all lists naming none by design, then a parent with none; the order ``reconcile_inherit.settle_parents`` gives mixed, conflict and
-# not_classified. Its earlier parent-not-in-run check has no case here: a parent outside the run
-# holds no list, so it is counted as a parent with none.
+# activity. First match wins: different lists, a parent in conflict, lists naming none by design
+# (#726), a parent with none; but for the third, ``reconcile_inherit.settle_parents``' order (mixed,
+# conflict, not_classified). A parent outside the run holds no list, so it counts as one with none.
 PASSED = "passed"
 PARENTS_DIFFER = "parents_differ"  # parents in the role name different lists
 # PARENT_CONFLICT: a parent's own sources named different samples, so it has none to pass

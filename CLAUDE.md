@@ -421,7 +421,7 @@ evidence}` entry — plus the controlled vocabulary:
     `cohort_steps.gvcf_layout` under the tar's reference folder (`cohort_by_rebuilt_sample_map`). The step
     names the list by address (`parent_ref`, `rebuilt:…`, `edges.generated_by_ref`); the tar producer file
     holds each list once under `rebuilt_lists` (`records.REBUILT_LISTS_KEY`), and reconcile holds it under
-    its address (`reconcile_rebuilt`) and writes it to `reconciled/rebuilt_lists.ndjson.gz`. A rebuilt list
+    its address and writes it to `reconciled/rebuilt_lists.ndjson.gz` (its report block, `reconcile_rebuilt`). A rebuilt list
     names no samples.
     Their outcomes per dataset are in each producer's `metadata.details.producer_steps`.
     **A VCF's command lines are read once, on first use, by `VCFHeader.commands`** (#615),

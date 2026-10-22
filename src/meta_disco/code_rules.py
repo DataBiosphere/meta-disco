@@ -757,7 +757,8 @@ COHORT_BY_REBUILT_SAMPLE_MAP = EdgeRule(
         "the same paths, so no map says which gVCFs a tar read (#624). The tar's own callset.json says which "
         "samples, its header's map which region, and its folder which reference; the run wrote one gVCF per "
         "sample, region and reference, so these name each input. The layout is the pipeline's: rebuilt the same "
-        "way, all 78,447 rows of the 1000 Genomes run's published maps come out as published (measured "
+        "way, all 78,447 rows of the 1000 Genomes run's published maps come out as published, its one chrX_PAR "
+        "map read as the PAR1 and PAR2 maps the tars name, as sources/external_files.yaml reads it (measured "
         "2026-10-22). A sample whose gVCF no file or two files carry, or a sample listed twice, gives no list: "
         "a cohort missing a member is not the cohort."
     ),

@@ -573,6 +573,9 @@ def test_a_declared_folders_tar_reads_through_the_list_rebuilt_from_its_own_samp
     assert members["activity"] == "CohortDefinitionActivity"
     # The GRCh38 folder's two gVCFs, not CHM13v2's of the same names.
     assert [(i["role"], i["parent_key"]) for i in members["inputs"]] == [("member", "f2"), ("member", "f3")]
+    # The address's digest is over the members' record keys, not their names.
+    assert rebuilt["ref"].endswith("#" + cs.set_id(["f2", "f3"]))
+    assert cs.set_id(["f2", "f3"]) != cs.set_id(i["parent_file"] for i in members["inputs"])
     assert members["named_by"] == [
         {"source_type": SOURCE_CONTENT_READ, "rule_id": code_rules.COHORT_BY_REBUILT_SAMPLE_MAP.id}
     ]
@@ -604,7 +607,10 @@ def test_tars_reading_one_list_name_it_once_and_another_set_of_samples_is_anothe
     assert first is not None and again is not None and fewer is not None
     assert first["inputs"][0]["parent_ref"] == again["inputs"][0]["parent_ref"]
     assert fewer["inputs"][0]["parent_ref"] != first["inputs"][0]["parent_ref"]
-    assert [len(r["generated_by"]["inputs"]) for r in reader.rebuilt_lists()] in ([2, 1], [1, 2])
+    lists = reader.rebuilt_lists()
+    assert sorted(len(r["generated_by"]["inputs"]) for r in lists) == [1, 2]
+    # By address, so a run writes them in one order whatever order its threads read the tars in.
+    assert [r["ref"] for r in lists] == sorted(r["ref"] for r in lists)
 
 
 @pytest.mark.parametrize(

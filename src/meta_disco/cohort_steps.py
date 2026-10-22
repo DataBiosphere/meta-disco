@@ -2,7 +2,7 @@
 
 T2T joint-called its gVCFs region by region: GATK's ``GenomicsDBImport`` merged the gVCFs a
 **sample-name map** lists into one GenomicsDB workspace per region, each stored as a tar.
-Two steps are read here, each from the file's own content:
+Three steps are read here, each from the file's own content:
 
 - **A sample map's step** is a ``CohortDefinitionActivity`` with each gVCF it lists a
   ``member``. The map is tab-separated columns, a sample name and a VCF path, and
@@ -15,12 +15,14 @@ Two steps are read here, each from the file's own content:
   names the list, matched by base name among the dataset's sample maps. At reconcile the tar
   takes its values from the map's members, read through the map (``activities.read_through``),
   not from each gVCF as an input of its own; its kind and origin it also reads itself, from the
-  same header's callers (``header_classifier.classify_from_tar_head``, #678). In a folder
-  :data:`REBUILT_MAP_FOLDERS` declares, whose maps no one holds, the map is rebuilt from the tar's
-  own samples and folder (#726) and named by address, the tar producer holding each list once.
+  same header's callers (``header_classifier.classify_from_tar_head``, #678).
+- **A rebuilt map's step** (#726): in a folder :data:`REBUILT_MAP_FOLDERS` declares, whose maps no
+  one holds, the tar's ``input_list`` is the map rebuilt from the tar's own ``callset.json`` samples,
+  each sample's gVCF placed by :func:`gvcf_layout` under the tar's reference folder, and named by
+  address; the tar producer holds each list, with its ``CohortDefinitionActivity``, once.
 
 A step is written only where every parent resolves: exactly one file of the dataset carries
-the name (#438's rule). Each file's outcome is one of :data:`OUTCOMES`, which the tar and
+the name (#438's rule), or, for a rebuilt map's member, exactly one in the folder the layout gives. Each file's outcome is one of :data:`OUTCOMES`, which the tar and
 sample-map producers count per dataset.
 
 A workspace's ``callset.json`` lists the samples GenomicsDB imported: where the tar fetcher read
@@ -115,7 +117,8 @@ def set_id(values: Iterable[str]) -> str:
 def gvcf_layout(map_name: str) -> tuple[tuple[str, str], ...] | None:
     """Where a sample's gVCF for the sample map ``map_name`` is, as ``(folder, name less the sample)`` pairs, or None.
 
-    The layout of T2T's joint-calling run (#726), as its published 1000 Genomes maps list it: per autosome
+    The layout of T2T's joint-calling run (#726), as its published 1000 Genomes maps list it (their one
+    ``chrX_PAR`` map standing for the PAR1 and PAR2 maps the tars name): per autosome
     one gVCF per sample; on chrX an XX sample's one whole-chrX gVCF, and an XY sample's PAR gVCF for a PAR
     map, its non-PAR gVCF for the non-PAR map; on chrY an XY sample's non-PAR gVCF. ``TarSteps`` takes a sample
     with a file at more than one of the pairs as ambiguous; ``map_name`` is matched exactly, as the header writes it.
