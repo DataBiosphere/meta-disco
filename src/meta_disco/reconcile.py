@@ -63,7 +63,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import activities, reconcile_external, reconcile_samples
+from . import activities, reconcile_external, reconcile_rebuilt, reconcile_samples
 from .activity_map import ActivityMap, load_activity_map
 from .azul_manifest import REPOSITORY as ANVIL_REPOSITORY
 from .deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS
@@ -94,6 +94,7 @@ from .output_utils import (
     CLASSIFICATION_FILES,
     DONORS_FILE,
     EXTERNAL_LISTS_FILE,
+    REBUILT_LISTS_FILE,
     RECONCILED_DIR,
     REPORT_FILE,
     SAMPLE_LISTS_FILE,
@@ -249,6 +250,7 @@ MAX_EXAMPLES = 5
 ENTITIES_KEY = "entities"
 # The report's block of the lists held outside AnVIL that the run's steps read through (#710).
 EXTERNAL_LISTS_KEY = "external_lists"
+REBUILT_LISTS_REPORT_KEY = "rebuilt_lists"
 
 
 class ReconcileError(Exception):
@@ -1190,7 +1192,8 @@ def reconcile_run(
     default) declares for the line's dataset, read from its cache under ``external_root``
     (by default the ``external`` directory beside ``evidence_root``); a declared map missing
     from the cache, or changed, refuses the run. Each such map is held in the graph under its address and written to
-    ``external_lists.ndjson.gz``.
+    ``external_lists.ndjson.gz``. A list inference rebuilt (#726, :mod:`reconcile_rebuilt`), which a run
+    file holds beside its records, is held the same way and written to ``rebuilt_lists.ndjson.gz``.
 
     Donors and samples (#693, :mod:`reconcile_entities`): the entity evidence under
     ``entity_root``, by default the ``entity_evidence`` directory beside ``evidence_root``,
@@ -1328,8 +1331,16 @@ def reconcile_run(
             inference_lists[held.list.samples.sample_list["list_id"]] = held.list.samples.sample_list
         graph.add(held.list.file.ref, held.record, {}, held.step)
         samples.hold(held.list.file.ref, held.record, inference_lists, [], graph.steps.get(held.list.file.ref))
-    for _, records, lists in iter_run_file_contents(run_dir):
+    # The lists inference rebuilt (#726), each held under its address as an external list is.
+    rebuilt: dict[str, dict] = {}
+    for _, records, lists, rebuilt_lists in iter_run_file_contents(run_dir):
         inference_lists.update((entry["list_id"], entry) for entry in lists)
+        for entry in rebuilt_lists:
+            rebuilt[entry["ref"]] = entry
+            stand_in = reconcile_external.stand_in(entry["file_name"], entry["dataset"])
+            samples.names_none.add(entry["ref"])
+            # No samples.hold: a rebuilt list names none, and its step passes none.
+            graph.add(entry["ref"], stand_in, {}, entry.get("generated_by"))
         for record in records:
             identity = identity_of(record, seen)
             step, _ = step_of(record, identity)
@@ -1369,6 +1380,7 @@ def reconcile_run(
     # A list's samples are written only where a reconciled file settled to them (#710).
     written = {entry["list_id"] for entry in run_lists}
     write_reconciled_file(staging / EXTERNAL_LISTS_FILE, header, (h.row(written) for h in external_held))
+    write_reconciled_file(staging / REBUILT_LISTS_FILE, header, (rebuilt[ref] for ref in sorted(rebuilt)))
 
     full_report = {
         **header,
@@ -1378,6 +1390,7 @@ def reconcile_run(
         SAMPLES_FIELD: samples.to_dict(header_samples(files_metadata), joined.unrecognised_samples),
         ENTITIES_KEY: entities.report,
         EXTERNAL_LISTS_KEY: reconcile_external.report(external_held),
+        REBUILT_LISTS_REPORT_KEY: reconcile_rebuilt.report(rebuilt.values()),
     }
     (staging / REPORT_FILE).write_text(json.dumps(full_report, indent=2, sort_keys=True) + "\n")
     # Swap by renames: the earlier artifact is moved aside, the new one moved in, and only

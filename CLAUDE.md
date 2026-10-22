@@ -399,7 +399,7 @@ evidence}` entry — plus the controlled vocabulary:
     activity declares. What each role passes is `rules/activities.yaml`'s to say, read
     through `meta_disco.activities` and trusted by its readers; a term may take its
     declaration from an abstract parent, and no step names an abstract term (#610). Inference
-    states six of `code_rules.EDGE_RULES`'s seven (the seventh is reconcile's, an external sample map's
+    states seven of `code_rules.EDGE_RULES`'s eight (the eighth is reconcile's, an external sample map's
     members, #710): two from the child's own name through
     `meta_disco.edges`, the index producer's `IndexActivity` and the catch-all's
     `ChecksumActivity` for a `.md5`, two from a VCF's header through
@@ -407,7 +407,7 @@ evidence}` entry — plus the controlled vocabulary:
     decision 6), a `HaplotypeCaller` giving `VariantCallActivity` (an input name several
     alignments carry settled, on a GATK 4 line, by which one's `@SQ` contigs all fit the VCF's `##contig`s, read
     from the BAM producer's cache or with samtools into it on a miss, #620) and a bcftools `concat`
-    giving `MergeActivity` with every input VCF a `shard`, and two of T2T's joint-calling
+    giving `MergeActivity` with every input VCF a `shard`, and three of T2T's joint-calling
     cohort through `meta_disco.cohort_steps` (#621): a GATK sample-name map's rows giving
     `CohortDefinitionActivity` with every listed gVCF a `member` (the `sample_map` producer),
     and a GenomicsDB workspace tar's own `vcfheader.vcf` giving `CohortMergeActivity` with the
@@ -415,7 +415,14 @@ evidence}` entry — plus the controlled vocabulary:
     (`read_through` in `activities.yaml`, contract 4.9); the tar fetcher keeps that member's
     text in the tar's cache entry (`TarEvidence.vcf_header`), and for the workspaces
     `header_classifier.CALLSET_FOLDERS` declares (ANVIL_T2T_CHRY's SGDP cohort, #724) its `callset.json`
-    too (`TarEvidence.callset`).
+    too (`TarEvidence.callset`). **In a folder `cohort_steps.REBUILT_MAP_FOLDERS` declares** (the same SGDP
+    folders, whose maps no one holds, #726, contract 3.14) the tar's `input_list` is the map **rebuilt** from
+    its own content: its header's map name and its `callset.json`'s samples, each sample's one gVCF placed by
+    `cohort_steps.gvcf_layout` under the tar's reference folder (`cohort_by_rebuilt_sample_map`). The step
+    names the list by address (`parent_ref`, `rebuilt:…`, `edges.generated_by_ref`); the tar producer file
+    holds each list once under `rebuilt_lists` (`records.REBUILT_LISTS_KEY`), and reconcile holds it under
+    its address and writes it to `reconciled/rebuilt_lists.ndjson.gz` (its report block, `reconcile_rebuilt`). A rebuilt list
+    names no samples.
     Their outcomes per dataset are in each producer's `metadata.details.producer_steps`.
     **A VCF's command lines are read once, on first use, by `VCFHeader.commands`** (#615),
     which gives each line's words and its step, through `validators.command_lines` and its

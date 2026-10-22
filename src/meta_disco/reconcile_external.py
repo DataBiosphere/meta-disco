@@ -122,16 +122,20 @@ def hold(lists: Iterable[ExternalList], found: dict[Locator, list[Carrier]], key
         step = None
         if not unresolved and not several:
             step = edges.generated_by(code_rules.COHORT_BY_EXTERNAL_SAMPLE_MAP, members, key)
-        record: dict = {
-            "file_name": x.file.name,
-            "dataset_title": x.file.dataset,
-            "classifications": {s: {"status": NOT_CLASSIFIED, "value": None} for s in activities.carried()},
-        }
-        reference = x.samples.reference()
-        if reference is not None:
-            record["samples"] = reference
-        held.append(Held(x, record, step, unresolved, several))
+        held.append(Held(x, stand_in(x.file.name, x.file.dataset, x.samples.reference()), step, unresolved, several))
     return held
+
+
+def stand_in(file_name: str, dataset: str, samples: dict | None = None) -> dict:
+    """A list's stand-in record for reconcile's graph (external, or rebuilt, #726): passing nothing, with its ``samples``."""
+    record: dict = {
+        "file_name": file_name,
+        "dataset_title": dataset,
+        "classifications": {s: {"status": NOT_CLASSIFIED, "value": None} for s in activities.carried()},
+    }
+    if samples is not None:
+        record["samples"] = samples
+    return record
 
 
 def report(held: Iterable[Held]) -> dict:

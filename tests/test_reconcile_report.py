@@ -641,7 +641,7 @@ def test_the_samples_section_lists_what_passed_and_each_parent_disagreement():
         ],
     }
     md = "\n".join(rr._samples_section(rr.samples_rows({"samples": {"by_dataset": {DATASET: block}}})))
-    assert f"| `{DATASET}` | `IndexActivity` | 2 | 0 | 0 | 1 |" in md
+    assert f"| `{DATASET}` | `IndexActivity` | 2 | 0 | 0 | 0 | 1 |" in md
     assert "| dataset | activity | pairs | examples |" in md
     assert f"| `{DATASET}` | `AlignmentActivity` | 1 | `a.cram` ← `a.fastq.gz` |" in md
     assert f"| `{DATASET}` | `VariantCallActivity` | 1 | `a.vcf.gz` ← `a.cram` |" in md
@@ -679,6 +679,20 @@ def test_the_sample_maps_held_outside_anvil_are_listed_per_dataset(conflicted):
     md = rr.render_markdown(rr.dashboard_data(report, None, Path("report.json")))
     row = next(line for line in md.splitlines() if line.startswith("| `ANVIL_T2T_CHRY` |"))
     assert row.strip("| ").split(" | ")[1:] == ["25", "25", "78,447", "0", "0", "25"]
+
+
+def test_the_sample_maps_inference_rebuilt_are_listed_per_dataset(conflicted):
+    report = rr.load_report(conflicted)
+    md = rr.render_markdown(rr.dashboard_data(report, None, Path("report.json")))
+    assert "### Sample maps inference rebuilt" in md and "None: no step in this run names one." in md
+    report["rebuilt_lists"] = {"ANVIL_T2T_CHRY": {"lists": 52, "members": 14300}}
+    data = rr.dashboard_data(report, None, Path("report.json"))
+    assert data["rebuilt_list_columns"] == ["lists", "members"]
+    row = next(line for line in rr.render_markdown(data).splitlines() if line.startswith("| `ANVIL_T2T_CHRY` | 52"))
+    assert row.strip("| ").split(" | ")[1:] == ["52", "14,300"]
+    html = rr.render_html(data, rr.TEMPLATE.read_text())
+    assert "<h3>Sample maps inference rebuilt</h3>" in html and "DATA.rebuilt_lists" in html
+    assert '"ANVIL_T2T_CHRY": {"lists": 52, "members": 14300}' in html
 
 
 def test_the_dashboard_draws_the_sample_maps_held_outside_anvil(tmp_path, conflicted):

@@ -733,7 +733,34 @@ MERGE_BY_WORKSPACE_HEADER = EdgeRule(
         "which list of gVCFs it merged. The tar names the list, not each gVCF: one step per tar with "
         "3,202 inputs would be about 100M links, so the list is the input and its members' answers are "
         "read through it (#621). A workspace naming another directory than the tar, or given gVCFs one "
-        "by one, gives no step."
+        "by one, gives no step. In a folder whose lists are rebuilt (cohort_by_rebuilt_sample_map) the "
+        "list is the one rebuilt for the tar, never a catalog map."
+    ),
+)
+
+# The step of a sample map no one holds, rebuilt from the workspace tars that read it (#726).
+COHORT_BY_REBUILT_SAMPLE_MAP = EdgeRule(
+    id="cohort_by_rebuilt_sample_map",
+    module=COHORT_STEPS,
+    activity=activities.COHORT_DEFINITION,
+    role="member",
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "a GenomicsDB workspace tar in a folder cohort_steps.REBUILT_MAP_FOLDERS declares: the sample-name map "
+        "its own vcfheader.vcf names, and the samples its own callset.json lists; each sample's gVCF is the one "
+        "file of the dataset at the path the declared layout gives for that map and sample, under the tar's "
+        "reference folder (SGDP_CHM13v2/haplotype_calling_vcfs/chr1/simons_data_sample_1.chr1.hc.vcf.gz for "
+        "chr1_sample_map.tsv), matched by base name up to case and by folder exactly"
+    ),
+    rationale=(
+        "ANVIL_T2T_CHRY's SGDP workspace tars name sample maps whose bucket is deleted, both reference runs naming "
+        "the same paths, so no map says which gVCFs a tar read (#624). The tar's own callset.json says which "
+        "samples, its header's map which region, and its folder which reference; the run wrote one gVCF per "
+        "sample, region and reference, so these name each input. The layout is the pipeline's: rebuilt the same "
+        "way, all 78,447 rows of the 1000 Genomes run's published maps come out as published, its one chrX_PAR "
+        "map read as the PAR1 and PAR2 maps the tars name, as sources/external_files.yaml reads it (measured "
+        "2026-10-22). A sample whose gVCF no file or two files carry, or a sample listed twice, gives no list: "
+        "a cohort missing a member is not the cohort."
     ),
 )
 
@@ -783,6 +810,7 @@ EDGE_RULES = (
     MERGE_BY_HEADER,
     MERGE_BY_WORKSPACE_HEADER,
     COHORT_BY_SAMPLE_MAP,
+    COHORT_BY_REBUILT_SAMPLE_MAP,
     COHORT_BY_EXTERNAL_SAMPLE_MAP,
 )
 

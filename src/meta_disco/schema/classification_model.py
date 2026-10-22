@@ -995,7 +995,7 @@ class ClassificationRecord(ConfiguredBaseModel):
          'tree_root': True})
 
     md5sum: str = Field(default=..., description="""MD5 checksum of the file; primary key for records.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
-    file_name: Optional[str] = Field(default=None, description="""The file name.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList']} })
+    file_name: Optional[str] = Field(default=None, description="""The file name.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList', 'RebuiltList']} })
     file_format: Optional[str] = Field(default=None, description="""File extension / compound extension (e.g. .bam, .vcf.gz).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     file_size: Optional[int] = Field(default=None, description="""File size in bytes.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     entry_id: Optional[str] = Field(default=None, description="""Source catalog entry identifier the record was classified from: Azul's per-index document id. Where present it is unique within a run and regenerated when the catalog is re-indexed, so it scopes a weaker key rather than outliving a refresh (#433). Null on a record whose input came from a TDR snapshot's tables rather than the compact manifest (#499), and on every HPRC record. An AnVIL record's durable identity is `file_id`; an HPRC record's is the URL hash it carries in `md5sum` (`record_keys.SOURCE_RECORD_KEYS`).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
@@ -1003,7 +1003,7 @@ class ClassificationRecord(ConfiguredBaseModel):
     drs_uri: Optional[str] = Field(default=None, description="""The file's DRS URI: what a resolver dereferences to reach the bytes. Carried, never derived from `file_id` — thousands of records wrap a different object id, so a reconstructed URI resolves to the wrong file or to nothing (#433).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     dataset_title: Optional[str] = Field(default=None, description="""Title of the dataset the file belongs to.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     classifications: Classifications = Field(default=..., description="""The eight classified dimensions for this file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
-    generated_by: Optional[GeneratedBy] = Field(default=None, description="""The step that made the file and the inputs it used, by role (ADR-0002 decisions 3, 6, #580); null where no step is recorded.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList']} })
+    generated_by: Optional[GeneratedBy] = Field(default=None, description="""The step that made the file and the inputs it used, by role (ADR-0002 decisions 3, 6, #580); null where no step is recorded.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList', 'RebuiltList']} })
     samples: Optional[SampleReference] = Field(default=None, description="""The samples the file's data comes from (#357), as a pointer to the run's sample list; null where no source names a sample, or where its sources name different ones.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList']} })
 
 
@@ -1295,6 +1295,7 @@ Carried on the claim and not only on the evidence file's envelope because it is 
                        'EvidenceFileSource',
                        'EvidenceTarget',
                        'ExternalList',
+                       'RebuiltList',
                        'EntityIdentifier',
                        'IdentifierRule',
                        'RepositoryIdentifier']} })
@@ -1380,6 +1381,7 @@ class EvidenceFileSource(ConfiguredBaseModel):
                        'EvidenceFileSource',
                        'EvidenceTarget',
                        'ExternalList',
+                       'RebuiltList',
                        'EntityIdentifier',
                        'IdentifierRule',
                        'RepositoryIdentifier']} })
@@ -1453,6 +1455,7 @@ Null for a source whose key is unique across the whole target (`file_id`, `entry
                        'EvidenceFileSource',
                        'EvidenceTarget',
                        'ExternalList',
+                       'RebuiltList',
                        'EntityIdentifier',
                        'IdentifierRule',
                        'RepositoryIdentifier']} })
@@ -1917,7 +1920,7 @@ class ActivityInput(ConfiguredBaseModel):
 
     parent_file: str = Field(default=..., description="""The input file's name: the matched record's own spelling where the input resolves (a file-name rule matches case-insensitively, so it may differ in case from the name worked out from the child), otherwise as the source that names the input wrote it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
     parent_key: Optional[str] = Field(default=None, description="""The parent's record key (`record_keys.SOURCE_RECORD_KEYS`: AnVIL's `file_id`, HPRC's URL hash in `md5sum`), set only when the parent resolves to exactly one record of the child's dataset (ADR-0002 decision 2), or of the dataset an input's `parent_dataset` names under that decision's declared exception (#594). Named for the key rather than `parent_file_id` because HPRC's key is not a `file_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
-    parent_ref: Optional[str] = Field(default=None, description="""The parent as a source wrote it when that is not a bare name (ADR-0002 decision 2). Written today only for a file held outside AnVIL for the child's dataset (#710, a workaround until #624): its address, `github:<owner>/<repo>@<commit>/<path>`, as `sources/external_files.yaml` declares it, and its record in the reconciled `external_lists.ndjson.gz`. Such an input has no `parent_key`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
+    parent_ref: Optional[str] = Field(default=None, description="""The parent as a source wrote it when that is not a bare name (ADR-0002 decision 2). Written today for a file held outside AnVIL for the child's dataset (#710, a workaround until #624): its address, `github:<owner>/<repo>@<commit>/<path>`, as `sources/external_files.yaml` declares it, and its record in the reconciled `external_lists.ndjson.gz`; and for a sample map inference rebuilt (#726): its address, `rebuilt:<dataset>/<reference folder>/<map>#<digest>`, and its record in the reconciled `rebuilt_lists.ndjson.gz`. Such an input has no `parent_key`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
     parent_kind: Optional[ParentKindEnum] = Field(default=None, description="""The kind of file the parent is.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput']} })
     role: str = Field(default=..., description="""One of the roles its activity declares in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityInput', 'InputRole']} })
     named_by: list[Attribution] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy',
@@ -2021,17 +2024,18 @@ class ExternalList(ConfiguredBaseModel):
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
-    ref: str = Field(default=..., description="""The list's address, `github:<owner>/<repo>@<commit>/<path>`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ExternalList']} })
+    ref: str = Field(default=..., description="""The list's address, `github:<owner>/<repo>@<commit>/<path>`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ExternalList', 'RebuiltList']} })
     dataset: str = Field(default=..., description="""The dataset the list is held for, the only one whose files it names.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource',
                        'EvidenceFileSource',
                        'EvidenceTarget',
                        'ExternalList',
+                       'RebuiltList',
                        'EntityIdentifier',
                        'IdentifierRule',
                        'RepositoryIdentifier']} })
-    file_name: str = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList']} })
+    file_name: str = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList', 'RebuiltList']} })
     sha256: str = Field(default=..., description="""The sha256 of the list's text, as declared and as read.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ExternalList']} })
-    generated_by: Optional[GeneratedBy] = Field(default=None, description="""The list's members, each a file of the dataset carrying the name a row gives. Absent where a row's name is carried by no file of the dataset or by several, or two rows give one name: a cohort missing a member is not the cohort.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList']} })
+    generated_by: Optional[GeneratedBy] = Field(default=None, description="""The list's members, each a file of the dataset carrying the name a row gives. Absent where a row's name is carried by no file of the dataset or by several, or two rows give one name: a cohort missing a member is not the cohort.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList', 'RebuiltList']} })
     samples: Optional[SampleReference] = Field(default=None, description="""The samples the list's rows name, where every one is recognised and a reconciled file settles to them (so the list they point to is in `sample_lists.ndjson.gz`).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList']} })
 
     @field_validator('ref')
@@ -2083,6 +2087,64 @@ class ExternalList(ConfiguredBaseModel):
                     raise ValueError(err_msg)
         elif isinstance(v, str) and not pattern.match(v):
             err_msg = f"Invalid sha256 format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+
+class RebuiltList(ConfiguredBaseModel):
+    """
+    A GATK sample-name map no one holds, rebuilt by inference from the GenomicsDB workspace tars that read it (#726): a tar in a folder `cohort_steps.REBUILT_MAP_FOLDERS` declares names the map in its own vcfheader.vcf and its samples in its own callset.json, and each sample's gVCF is the one file of the dataset the run's layout places for that map under the tar's reference folder. Written once under the tar producer file's `rebuilt_lists` and once per run in the reconciled `rebuilt_lists.ndjson.gz`; an `ActivityInput.parent_ref` points here. It names no samples: they are the tars' own callset.json, which each tar names as its own.
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    ref: str = Field(default=..., description="""The list's address, `rebuilt:<dataset>/<reference folder>/<map>#<digest>`, the digest the first 16 hex of the sha256 of its members' record keys, sorted, one per line.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ExternalList', 'RebuiltList']} })
+    dataset: str = Field(default=..., description="""The dataset whose files the list names.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClaimSource',
+                       'EvidenceFileSource',
+                       'EvidenceTarget',
+                       'ExternalList',
+                       'RebuiltList',
+                       'EntityIdentifier',
+                       'IdentifierRule',
+                       'RepositoryIdentifier']} })
+    file_name: str = Field(default=..., description="""The map's base name, as the tars' headers write it.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList', 'RebuiltList']} })
+    generated_by: GeneratedBy = Field(default=..., description="""The list's members, each the one file of the dataset carrying a sample's gVCF. A list is rebuilt only where every sample's resolves.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList', 'RebuiltList']} })
+
+    @field_validator('ref')
+    def pattern_ref(cls, v):
+        pattern=re.compile(r"^rebuilt:[^\r\n#]+#[0-9a-f]{16}\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid ref format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid ref format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('dataset')
+    def pattern_dataset(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid dataset format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid dataset format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('file_name')
+    def pattern_file_name(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid file_name format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid file_name format: {v}"
             raise ValueError(err_msg)
         return v
 
@@ -2139,6 +2201,7 @@ class EntityIdentifier(ConfiguredBaseModel):
                        'EvidenceFileSource',
                        'EvidenceTarget',
                        'ExternalList',
+                       'RebuiltList',
                        'EntityIdentifier',
                        'IdentifierRule',
                        'RepositoryIdentifier']} })
@@ -2193,6 +2256,7 @@ class IdentifierRule(ConfiguredBaseModel):
                        'EvidenceFileSource',
                        'EvidenceTarget',
                        'ExternalList',
+                       'RebuiltList',
                        'EntityIdentifier',
                        'IdentifierRule',
                        'RepositoryIdentifier']} })
@@ -2270,6 +2334,7 @@ class RepositoryIdentifier(ConfiguredBaseModel):
                        'EvidenceFileSource',
                        'EvidenceTarget',
                        'ExternalList',
+                       'RebuiltList',
                        'EntityIdentifier',
                        'IdentifierRule',
                        'RepositoryIdentifier']} })
@@ -2595,6 +2660,7 @@ ActivityInput.model_rebuild()
 Attribution.model_rebuild()
 SampleReference.model_rebuild()
 ExternalList.model_rebuild()
+RebuiltList.model_rebuild()
 SampleList.model_rebuild()
 EntityIdentifier.model_rebuild()
 IdentifierRules.model_rebuild()
