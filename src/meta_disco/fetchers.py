@@ -1266,12 +1266,13 @@ def fetch_tar_headers(
     ``samples_member`` (``FileTypeConfig.samples_member``, bound by the pipeline to the file's
     dataset and folder) names from the member names the member the tar's samples are read from,
     or None. It is read after the walk, in the same two windows, never by the walk, and cached the
-    same way (``TarEvidence.callset_read``), so a cached entry from before #724 of an uncompressed
-    tar has only that member read. It is asked on every call, cached or not: an entry holding the
-    member's text returns none for a file it is not wanted for, and keeps it. A tar's bytes decide
-    whether it is compressed (a cached entry of a tar named compressed reads its first two): a
-    compressed tar's is not read (``TarHead.callset_unread`` says so, and the tar is not failed),
-    and a plain tar misnamed ``.gz`` has it read.
+    same way (``TarEvidence.callset_read``), so a cached entry from before #724 whose header was
+    already looked for, of an uncompressed tar, has only that member read. It is asked on every
+    call that reaches it, cached or not: an entry holding the member's text returns none for a
+    file it is not wanted for, and keeps it. A tar named ``.gz`` is compressed or not by its
+    bytes (the walk's stream, or a cached entry's first two bytes); any other name is read as
+    uncompressed. A compressed tar's is not read (``TarHead.callset_unread`` says so, and the tar
+    is not failed); a plain tar misnamed ``.gz`` has it read.
 
     A failed read of either member alone (an HTTP error or a dropped connection) does not fail
     the tar: its names are returned with the cause in ``TarHead.vcf_header_unread`` or

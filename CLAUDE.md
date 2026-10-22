@@ -434,8 +434,8 @@ evidence}` entry — plus the controlled vocabulary:
     (`GM` → `NA`, same number); a string no rule recognises is counted, never guessed.
     Inference reads it from the file's own content, a header, a sample map's rows, a nanopore
     FAST5's `sample_id` (`fast5`, #605: found by name in the first 64 KiB, its attribute
-    message parsed whole) or an SGDP workspace tar's `callset.json` (#724; a tar whose names were read but
-    whose wanted `callset.json` was not is counted by cause, `unread_samples`) (`FileTypeConfig.samples`, its readers among `code_rules.SAMPLE_RULES`), all of its strings or none, and each producer file holds its lists under
+    message parsed whole) or an SGDP workspace tar's `callset.json` (#724; a wanted tar whose head was read
+    but whose `callset.json` gave no names is counted by cause, `unread_samples`) (`FileTypeConfig.samples`, its readers among `code_rules.SAMPLE_RULES`), all of its strings or none, and each producer file holds its lists under
     `sample_lists`. A submitter table states it through the slot map, one cell per column
     (`samples` is the one non-dimension in `models.EVIDENCE_FIELDS`, never translated by the
     value map), and `make check-slot-map` refuses a column whose files' names mostly name

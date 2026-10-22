@@ -529,9 +529,10 @@ class TarHead:
     ``vcf_header_unread`` is why the member could not be read, where the read failed: the
     names still classify the tar, and the member is looked for again next run.
 
-    ``callset`` is the workspace's ``callset.json`` text where it was looked for and found
-    (#724), ``callset_read`` whether it was looked for, and ``callset_unread`` why it could
-    not be, where it was wanted and was not read: looked for again next run.
+    ``callset`` is the workspace's ``callset.json`` text where it was wanted for this file and
+    found (#724), ``callset_read`` whether it was wanted and looked for, and ``callset_unread``
+    why it could not be, where it was wanted and was not read: looked for again next run. A file
+    it is not wanted for has neither, whatever the cache entry holds.
     """
 
     member_names: list[str]

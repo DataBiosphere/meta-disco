@@ -1163,7 +1163,7 @@ def test_a_callset_looked_for_and_not_found_is_not_looked_for_again(monkeypatch,
 
 
 def test_a_plain_tar_named_compressed_has_its_callset_read_on_a_header_only_entry(monkeypatch, evidence_dir):
-    # The name says `.tar.gz`, the bytes are a plain tar: walked again, its callset is read, not refused.
+    # The name says `.tar.gz`, the bytes are a plain tar: its first two bytes say so, and its callset is read.
     _header_only_entry(evidence_dir)
     _serve(monkeypatch, _sgdp_workspace())
     head = _fetch_sgdp(evidence_dir, is_gzipped=True)
@@ -1201,6 +1201,41 @@ def test_a_failed_compression_check_keeps_the_cached_header_and_retries_next_run
     assert head.callset is None and not head.callset_read
     assert head.callset_unread is not None and "Connection reset" in head.callset_unread
     assert "callset" not in TarEvidence.load(evidence_dir, MD5).to_json()
+
+
+def test_an_uncached_plain_tar_named_compressed_has_its_callset_read_and_counted(monkeypatch, evidence_dir):
+    # The walk's stream decides, not the name; the member's bytes are added to the entry's.
+    obj = _sgdp_workspace()
+    _serve(monkeypatch, obj)
+    head = _fetch_sgdp(evidence_dir, is_gzipped=True)
+    assert (head.callset, head.callset_read) == (CALLSET_TEXT, True)
+    assert TarEvidence.load(evidence_dir, MD5).raw_bytes_fetched > len(obj)
+
+
+def test_an_http_failure_of_the_compression_check_keeps_the_tar(monkeypatch, evidence_dir):
+    _header_only_entry(evidence_dir)
+
+    def status(*_args, **_kwargs):
+        raise FetchError("HTTP 503 for the range")
+
+    monkeypatch.setattr(fetchers, "_fetch_range", status)
+    head = _fetch_sgdp(evidence_dir, is_gzipped=True)
+    assert head.vcf_header == HEADER_TEXT and head.callset_unread == "HTTP 503 for the range"
+    assert "callset" not in TarEvidence.load(evidence_dir, MD5).to_json()
+
+
+def test_a_rewalked_entry_keeps_its_callset_for_a_file_it_is_not_wanted_for(monkeypatch, evidence_dir):
+    # A compressed tar's header not yet read is walked again; the callset the entry holds stays.
+    TarEvidence(
+        md5sum=MD5, file_name="x.tar.gz", member_names=["ws/callset.json"], callset=CALLSET_TEXT, callset_read=True
+    ).save(evidence_dir)
+    buf = io.BytesIO()
+    with gzip.GzipFile(fileobj=buf, mode="wb") as gz:
+        gz.write(_workspace(header_first=True))
+    _serve(monkeypatch, buf.getvalue())
+    head = _fetch_sgdp(evidence_dir, wanted=False, is_gzipped=True)
+    assert head.vcf_header == HEADER_TEXT and head.callset is None
+    assert TarEvidence.load(evidence_dir, MD5).to_json()["callset"] == CALLSET_TEXT
 
 
 def test_a_compressed_tars_callset_is_not_read_and_the_tar_is_not_failed(monkeypatch, evidence_dir):
