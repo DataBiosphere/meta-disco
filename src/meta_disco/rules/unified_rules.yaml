@@ -935,14 +935,14 @@ rules:
 
   # ---------------------------------------------------------------------------
   # Platform from the aligner's read preset (#727). minimap2 and Winnowmap take a
-  # preset (`-x`, often grouped as `-ax`) naming the kind of reads they align:
-  # `map-ont` for Oxford Nanopore reads, `map-pb` for PacBio (CLR or HiFi) and
-  # `map-hifi` for PacBio HiFi. The preset is the producing step's own argument,
-  # chosen for its input reads, and a platform describes the reads, so it holds
-  # for the alignment (contract 3.13). Only those read presets are read: the
-  # assembly presets (`asm5`, `asm10`, `asm20`), `sr` and `splice` name no platform.
-  # Any one @PG line naming a preset is enough; a header naming both kinds gives both
-  # claims, and so an inference conflict.
+  # preset (`-x`, often grouped as `-ax`; lower-case, as `-X` is another flag) naming
+  # the kind of reads they align: `map-ont` for Oxford Nanopore; for PacBio, `map-pb`
+  # (minimap2's CLR, Winnowmap's HiFi), `map-pb-clr` (Winnowmap's CLR) and `map-hifi`.
+  # The rules read it on any @PG line the header carries: the alignment's own, or one
+  # a later step (a sort, a CRAM conversion) carried in. Either way it was chosen for
+  # these reads, and a platform describes the reads, so it holds for the file
+  # (contract 3.13). Only those read presets are read: the assembly presets (`asm5`,
+  # `asm10`, `asm20`), `sr` and `splice` name no platform.
   # ---------------------------------------------------------------------------
   - id: platform_aligner_preset_ont
     tier: 3
@@ -951,7 +951,7 @@ rules:
       extensions: [".bam", ".cram"]
       header_section: "@PG"
       header_field: "CL"
-      header_pattern: "^(\\S*/)?(minimap2|winnowmap)\\s(.*\\s)?-[a-z]*x\\s*map-ont(\\s|$)"
+      header_pattern: "^(\\S*/)?(minimap2|winnowmap)\\s(.*\\s)?-(?-i:[a-z]*x)\\s*map-ont(\\s|$)"
     then:
       platform: ONT
     rationale: "minimap2/Winnowmap's -x map-ont preset aligns Oxford Nanopore reads, so the alignment's reads are ONT"
@@ -963,10 +963,10 @@ rules:
       extensions: [".bam", ".cram"]
       header_section: "@PG"
       header_field: "CL"
-      header_pattern: "^(\\S*/)?(minimap2|winnowmap)\\s(.*\\s)?-[a-z]*x\\s*map-(pb|hifi)(\\s|$)"
+      header_pattern: "^(\\S*/)?(minimap2|winnowmap)\\s(.*\\s)?-(?-i:[a-z]*x)\\s*map-(pb|pb-clr|hifi)(\\s|$)"
     then:
       platform: PACBIO
-    rationale: "minimap2/Winnowmap's -x map-pb and map-hifi presets align PacBio reads (CLR or HiFi), so the alignment's reads are PacBio"
+    rationale: "minimap2/Winnowmap's -x map-pb, map-pb-clr and map-hifi presets align PacBio reads (CLR or HiFi), so the alignment's reads are PacBio"
 
 
 

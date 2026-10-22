@@ -621,12 +621,14 @@ class TestBamCramClassification:
                 "/opt/bin/minimap2 -ax map-hifi ref.fa hifi.fq", "PACBIO", id="minimap2 map-hifi, with a path"
             ),
             pytest.param("minimap2 -xmap-ont ref.fa r.fq", "ONT", id="preset joined to -x"),
+            pytest.param("winnowmap -W r.txt -ax map-pb-clr ref.fa r.fq", "PACBIO", id="winnowmap map-pb-clr"),
+            pytest.param("minimap2 -aX map-ont ref.fa r.fq", None, id="-X is another flag, not the preset"),
             pytest.param("minimap2 -ax asm5 ref.fa asm.fa", None, id="an assembly preset names no platform"),
             pytest.param("minimap2 -ax sr ref.fa r1.fq r2.fq", None, id="sr names no platform"),
             pytest.param("minimap2 -ax splice ref.fa r.fq", None, id="splice names no platform"),
             pytest.param("minimap2 -ax map-ontology ref.fa r.fq", None, id="a longer word is no preset"),
             pytest.param("mytool -x map-ont ref.fa r.fq", None, id="another tool's -x is not read"),
-            pytest.param("samtools view -H x.bam", None, id="no preset"),
+            pytest.param("samtools view -H x.bam", None, id="no aligner and no preset"),
         ],
     )
     def test_platform_from_the_aligner_read_preset(self, command, platform):
@@ -642,7 +644,7 @@ class TestBamCramClassification:
             "@HD\tVN:1.6\n@PG\tID:a\tPN:minimap2\tCL:minimap2 -ax map-ont ref.fa r.fq\n"
             "@PG\tID:b\tPN:minimap2\tCL:minimap2 -ax map-pb ref.fa r.fq"
         )
-        assert field_status(classify_from_header(header), "platform") != CLASSIFIED
+        assert field_status(classify_from_header(header), "platform") == CONFLICT
 
     def test_grch38_from_sq(self):
         """Detect GRCh38 from @SQ AS field."""
