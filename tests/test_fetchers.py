@@ -1164,13 +1164,43 @@ def test_a_callset_looked_for_and_not_found_is_not_looked_for_again(monkeypatch,
 
 def test_a_plain_tar_named_compressed_has_its_callset_read_on_a_header_only_entry(monkeypatch, evidence_dir):
     # The name says `.tar.gz`, the bytes are a plain tar: walked again, its callset is read, not refused.
-    TarEvidence(
-        md5sum=MD5, file_name="x.tar.gz", member_names=["ws/callset.json"], vcf_header=HEADER_TEXT, vcf_header_read=True
-    ).save(evidence_dir)
+    _header_only_entry(evidence_dir)
     _serve(monkeypatch, _sgdp_workspace())
     head = _fetch_sgdp(evidence_dir, is_gzipped=True)
     assert (head.callset, head.callset_read, head.callset_unread) == (CALLSET_TEXT, True, None)
     assert TarEvidence.load(evidence_dir, MD5).to_json()["callset"] == CALLSET_TEXT
+
+
+def _header_only_entry(evidence_dir, file_name="x.tar.gz"):
+    TarEvidence(
+        md5sum=MD5, file_name=file_name, member_names=["ws/callset.json"], vcf_header=HEADER_TEXT, vcf_header_read=True
+    ).save(evidence_dir)
+
+
+def test_a_compressed_tar_with_a_header_only_entry_keeps_its_header_and_has_no_callset_read(monkeypatch, evidence_dir):
+    _header_only_entry(evidence_dir)
+    buf = io.BytesIO()
+    with gzip.GzipFile(fileobj=buf, mode="wb") as gz:
+        gz.write(_sgdp_workspace())
+    calls: list = []
+    _serve(monkeypatch, buf.getvalue(), calls)
+    head = _fetch_sgdp(evidence_dir, is_gzipped=True)
+    assert head.vcf_header == HEADER_TEXT and head.callset is None and not head.callset_read
+    assert head.callset_unread == "compressed tar: callset.json is not read"
+    # Only the first two bytes were read: the tar is not walked again.
+    assert calls == [(0, 1)]
+    assert "callset" not in TarEvidence.load(evidence_dir, MD5).to_json()
+
+
+def test_a_failed_compression_check_keeps_the_cached_header_and_retries_next_run(monkeypatch, evidence_dir):
+    _header_only_entry(evidence_dir)
+    monkeypatch.setattr(fetchers, "_fetch_range", _reset)
+    monkeypatch.setattr(fetchers, "_fetch_suffix", _reset)
+    head = _fetch_sgdp(evidence_dir, is_gzipped=True)
+    assert head.member_names == ["ws/callset.json"] and head.vcf_header == HEADER_TEXT
+    assert head.callset is None and not head.callset_read
+    assert head.callset_unread is not None and "Connection reset" in head.callset_unread
+    assert "callset" not in TarEvidence.load(evidence_dir, MD5).to_json()
 
 
 def test_a_compressed_tars_callset_is_not_read_and_the_tar_is_not_failed(monkeypatch, evidence_dir):

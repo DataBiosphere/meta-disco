@@ -39,6 +39,7 @@ import subprocess
 import tarfile
 import zlib
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 from typing import NamedTuple
@@ -1267,10 +1268,10 @@ def fetch_tar_headers(
     or None. It is read after the walk, in the same two windows, never by the walk, and cached the
     same way (``TarEvidence.callset_read``), so a cached entry from before #724 of an uncompressed
     tar has only that member read. It is asked on every call, cached or not: an entry holding the
-    member's text returns none for a file it is not wanted for, and keeps it. A cached entry of a
-    tar named compressed is walked again for it, as for the kept member, so its bytes decide: a
-    tar whose bytes are compressed does not have it read (``TarHead.callset_unread`` says so, and
-    the tar is not failed), and a plain tar misnamed ``.gz`` does.
+    member's text returns none for a file it is not wanted for, and keeps it. A tar's bytes decide
+    whether it is compressed (a cached entry of a tar named compressed reads its first two): a
+    compressed tar's is not read (``TarHead.callset_unread`` says so, and the tar is not failed),
+    and a plain tar misnamed ``.gz`` has it read.
 
     A failed read of either member alone (an HTTP error or a dropped connection) does not fail
     the tar: its names are returned with the cause in ``TarHead.vcf_header_unread`` or
@@ -1284,7 +1285,7 @@ def fetch_tar_headers(
     as searched. Nothing is cached, so a later run reads it again.
     """
 
-    def callset_of(names: list[str], compressed: bool) -> _MemberRead:
+    def callset_of(names: list[str], compressed: Callable[[], bool]) -> _MemberRead:
         # Asked first: the entry is keyed by md5 alone, and a file it is not wanted for gets none.
         member = samples_member(names) if samples_member is not None else None
         if member is None:
@@ -1303,15 +1304,14 @@ def fetch_tar_headers(
     if cached is not None:
         names = cached.member_names
         member = None if cached.vcf_header_read or kept_member is None else kept_member(names)
-        callset_wanted = not cached.callset_read and samples_member is not None and samples_member(names) is not None
-        # A tar named compressed whose kept or samples member is still to read is walked again from
-        # its head, below, which tells by its bytes whether it is: a plain tar misnamed `.gz` is read.
-        if not is_gzipped or (member is None and not callset_wanted):
+        # A compressed tar's kept member is read only by walking it again from its head, below.
+        if member is None or not is_gzipped:
             text, unread, fetched = cached.vcf_header, None, 0
             if member is not None:
                 text, unread, fetched = _read_kept(md5sum, member, names, url=url)
             header_read = cached.vcf_header_read or (member is not None and unread is None)
-            callset = callset_of(names, is_gzipped)
+            # A tar named compressed is asked by its first bytes: a plain tar misnamed `.gz` has its callset read.
+            callset = callset_of(names, lambda: is_gzipped and _starts_gzipped(md5sum, url))
             kept = kept_callset(callset)
             if header_read != cached.vcf_header_read or kept.read != cached.callset_read:
                 replace(
@@ -1344,7 +1344,7 @@ def fetch_tar_headers(
             # reads it, so its step cannot be read: the tar is unreadable, not "looked for".
             raise FetchError(f"compressed tar: {member} not in the head read, and a compressed tail is not read")
         text, unread, fetched = _read_kept(md5sum, member, member_names, url=url)
-    callset = callset_of(member_names, compressed)
+    callset = callset_of(member_names, lambda: compressed)
     kept = kept_callset(callset)
 
     _save_head_evidence(
@@ -1365,6 +1365,11 @@ def fetch_tar_headers(
     return TarHead(member_names, text, unread, callset.text, callset.read, callset.unread)
 
 
+def _starts_gzipped(md5sum: str, url: str | None) -> bool:
+    """Whether the file's first two bytes are the gzip magic, read by one range request."""
+    return _fetch_range(md5sum, 1, url=url)[:2] == b"\x1f\x8b"
+
+
 @dataclass(frozen=True)
 class _MemberRead:
     """One tar member read for its text: the text where found, whether it was looked for (a read that did not fail), why not where it was wanted and was not read, and the bytes pulled."""
@@ -1376,16 +1381,22 @@ class _MemberRead:
 
 
 def _read_callset(
-    md5sum: str, member_names: list[str], member: str | None, *, compressed: bool, url: str | None
+    md5sum: str, member_names: list[str], member: str | None, *, compressed: Callable[[], bool], url: str | None
 ) -> _MemberRead:
     """The member a tar's samples are read from (``samples_member``), by :func:`_read_kept`; nothing where none is wanted.
 
-    A compressed tar's is not read: its tail cannot be entered.
+    ``compressed`` is asked only where the member is wanted. A compressed tar's is not read: its
+    tail cannot be entered. A failed read, the question's included, is returned as the cause.
     """
     if member is None:
         return _MemberRead()
-    if compressed:
-        return _MemberRead(unread=f"compressed tar: {member} is not read")
+    try:
+        if compressed():
+            return _MemberRead(unread=f"compressed tar: {member} is not read")
+    except FetchError as e:
+        return _MemberRead(unread=e.reason)
+    except requests.RequestException as e:
+        return _MemberRead(unread=f"{type(e).__name__}: {e}")
     text, unread, fetched = _read_kept(md5sum, member, member_names, url=url)
     return _MemberRead(text, read=unread is None, unread=unread, fetched=fetched)
 
