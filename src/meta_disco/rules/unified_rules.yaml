@@ -935,7 +935,7 @@ rules:
 
   # ---------------------------------------------------------------------------
   # Platform from the aligner's read preset (#727). minimap2 and Winnowmap take a
-  # preset (`-x`, often grouped as `-ax`; lower-case, as `-X` is another flag) naming
+  # preset (`-x`, often grouped as `-ax` or `-aYx`; the `x` lower-case, as `-X` is another flag) naming
   # the kind of reads they align: `map-ont` for Oxford Nanopore; for PacBio, `map-pb`
   # (minimap2's CLR, Winnowmap's HiFi), `map-pb-clr` (Winnowmap's CLR) and `map-hifi`.
   # The rules read it on any @PG line the header carries: the alignment's own, or one
@@ -951,7 +951,7 @@ rules:
       extensions: [".bam", ".cram"]
       header_section: "@PG"
       header_field: "CL"
-      header_pattern: "^(\\S*/)?(minimap2|winnowmap)\\s(.*\\s)?-(?-i:[a-z]*x)\\s*map-ont(\\s|$)"
+      header_pattern: "^(\\S*/)?(minimap2|winnowmap)\\s(.*\\s)?-(?-i:[a-zA-Z]*x)\\s*map-ont(\\s|$)"
     then:
       platform: ONT
     rationale: "minimap2/Winnowmap's -x map-ont preset aligns Oxford Nanopore reads, so the alignment's reads are ONT"
@@ -963,7 +963,7 @@ rules:
       extensions: [".bam", ".cram"]
       header_section: "@PG"
       header_field: "CL"
-      header_pattern: "^(\\S*/)?(minimap2|winnowmap)\\s(.*\\s)?-(?-i:[a-z]*x)\\s*map-(pb|pb-clr|hifi)(\\s|$)"
+      header_pattern: "^(\\S*/)?(minimap2|winnowmap)\\s(.*\\s)?-(?-i:[a-zA-Z]*x)\\s*map-(pb|pb-clr|hifi)(\\s|$)"
     then:
       platform: PACBIO
     rationale: "minimap2/Winnowmap's -x map-pb, map-pb-clr and map-hifi presets align PacBio reads (CLR or HiFi), so the alignment's reads are PacBio"

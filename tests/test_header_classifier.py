@@ -623,6 +623,8 @@ class TestBamCramClassification:
             pytest.param("minimap2 -xmap-ont ref.fa r.fq", "ONT", id="preset joined to -x"),
             pytest.param("winnowmap -W r.txt -ax map-pb-clr ref.fa r.fq", "PACBIO", id="winnowmap map-pb-clr"),
             pytest.param("minimap2 -aX map-ont ref.fa r.fq", None, id="-X is another flag, not the preset"),
+            pytest.param("minimap2 -aYx map-ont ref.fa r.fq", "ONT", id="an upper-case flag grouped before -x"),
+            pytest.param("minimap2 -Hax map-pb ref.fa r.fq", "PACBIO", id="-H grouped before -ax"),
             pytest.param("minimap2 -ax asm5 ref.fa asm.fa", None, id="an assembly preset names no platform"),
             pytest.param("minimap2 -ax sr ref.fa r1.fq r2.fq", None, id="sr names no platform"),
             pytest.param("minimap2 -ax splice ref.fa r.fq", None, id="splice names no platform"),
