@@ -262,7 +262,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
      (`cohort_steps.gvcf_layout`; rebuilt from the same layout, the 1000 Genomes run's published maps come out
      row for row, 78,447 of 78,447). So the tar producer, for a tar in a folder `cohort_steps.REBUILT_MAP_FOLDERS`
      declares, rebuilds the list (a code rule, `cohort_by_rebuilt_sample_map`): each sample's one gVCF under the
-     tar's reference folder, by name and folder exactly. A sample whose gVCF no file or two files carry gives no
+     tar's reference folder, by name up to case and folder exactly. A sample whose gVCF no file or two files carry gives no
      list and no step: a cohort missing a member is not the cohort. A list is addressed by its dataset,
      reference folder, map name and a digest of its members, held once beside the tar producer's records, and
      names no samples: they are the tar's own `callset.json`, which the tar already names (#724), and a second

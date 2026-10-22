@@ -182,13 +182,20 @@ def iter_run_file_contents(run_dir: Path):
                 f"{path}: its record list is not a list of records, so some of its rows could not be read; "
                 "it is damaged or not a run's output"
             )
-        lists = data.get(SAMPLE_LISTS_KEY, []) if isinstance(data, dict) else []
-        if not isinstance(lists, list) or not all(isinstance(e, dict) and "list_id" in e for e in lists):
-            raise ValueError(f"{path}: its {SAMPLE_LISTS_KEY} is not a list of sample lists; it is damaged")
-        rebuilt = data.get(REBUILT_LISTS_KEY, []) if isinstance(data, dict) else []
-        if not isinstance(rebuilt, list) or not all(isinstance(e, dict) and "ref" in e for e in rebuilt):
-            raise ValueError(f"{path}: its {REBUILT_LISTS_KEY} is not a list of rebuilt lists; it is damaged")
-        yield fname, rows, lists, rebuilt
+        yield (
+            fname,
+            rows,
+            _lists_in(path, data, SAMPLE_LISTS_KEY, "list_id"),
+            _lists_in(path, data, REBUILT_LISTS_KEY, "ref"),
+        )
+
+
+def _lists_in(path: Path, data: object, key: str, field: str) -> list[dict]:
+    """The entries a producer file holds under ``key``, each a dict with ``field``; ``ValueError`` where damaged."""
+    entries = data.get(key, []) if isinstance(data, dict) else []
+    if not isinstance(entries, list) or not all(isinstance(e, dict) and field in e for e in entries):
+        raise ValueError(f"{path}: its {key} is not a list of entries each with a {field}; it is damaged")
+    return entries
 
 
 # Where the reconcile stage writes its artifact inside a run directory (#432), and the

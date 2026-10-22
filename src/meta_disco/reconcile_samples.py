@@ -75,15 +75,16 @@ HEADER, TABLE, PARENT = "header", "table", "parent"
 KINDS = (HEADER, TABLE, PARENT)
 
 # What a role that passes samples gave a child (#668); the report counts each per dataset and
-# activity. First match wins: parents naming different lists, then a parent in conflict, then a
-# parent with none; the order ``reconcile_inherit.settle_parents`` gives mixed, conflict and
+# activity. First match wins: parents naming different lists, then a parent in conflict, then
+# parents that are all lists naming none by design, then a parent with none; the order ``reconcile_inherit.settle_parents`` gives mixed, conflict and
 # not_classified. Its earlier parent-not-in-run check has no case here: a parent outside the run
 # holds no list, so it is counted as a parent with none.
 PASSED = "passed"
 PARENTS_DIFFER = "parents_differ"  # parents in the role name different lists
 # PARENT_CONFLICT: a parent's own sources named different samples, so it has none to pass
+LIST_NAMES_NONE = "list_names_none"  # every parent in the role is a list naming none by design (#726)
 PARENT_NONE = "parent_none"  # a parent in the role has no settled samples: no source named any
-PASSING_OUTCOMES = (PASSED, PARENTS_DIFFER, PARENT_CONFLICT, PARENT_NONE)
+PASSING_OUTCOMES = (PASSED, PARENTS_DIFFER, PARENT_CONFLICT, LIST_NAMES_NONE, PARENT_NONE)
 
 
 @dataclass(frozen=True)
@@ -243,6 +244,8 @@ class SampleReport:
     # passing no samples (:func:`lists_disagree`), and the first few per activity.
     parent_disagreements: dict[str, Counter] = field(default_factory=lambda: defaultdict(Counter))
     parent_examples: dict[str, list[dict]] = field(default_factory=lambda: defaultdict(list))
+    # The keys of the lists that name no samples by design (rebuilt lists, #726), counted apart when passing.
+    names_none: set[str] = field(default_factory=set)
     # Per child whose step passes samples, its own sources and dataset, until :meth:`inherit` reads them.
     _own: dict[str, tuple[list[Named], str]] = field(default_factory=dict, init=False, repr=False)
     # Per child, what its parents passed it, for the second pass.
@@ -298,6 +301,8 @@ class SampleReport:
                     outcome = PARENTS_DIFFER
                 elif any(p in self._conflicted for p in parent_keys):
                     outcome = PARENT_CONFLICT
+                elif all(p in self.names_none for p in parent_keys):
+                    outcome = LIST_NAMES_NONE
                 elif any(p not in self.held for p in parent_keys):
                     outcome = PARENT_NONE
                 else:

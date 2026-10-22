@@ -441,20 +441,18 @@ def donor_records(run_dir: Path):
 def external_list_records(run_dir: Path):
     """A run's external lists (#710) in the shape :func:`tally` reads, counted under :data:`EXTERNAL_LISTS`, not as files:
     each list's step and samples, which cite the external sample map rules. Nothing for a run reconciled before #710."""
-    if not (run_dir / RECONCILED_DIR / EXTERNAL_LISTS_FILE).exists():
-        return
-    yield from _list_records(run_dir, EXTERNAL_LISTS_FILE, EXTERNAL_LISTS)
+    return _list_records(run_dir, EXTERNAL_LISTS_FILE, EXTERNAL_LISTS)
 
 
 def rebuilt_list_records(run_dir: Path):
     """A run's rebuilt lists (#726) in the shape :func:`tally` reads, counted under :data:`REBUILT_LISTS`, not as files:
     each list's step, which cites the rebuilt sample map rule. Nothing for a run reconciled before #726."""
-    if not (run_dir / RECONCILED_DIR / REBUILT_LISTS_FILE).exists():
-        return
-    yield from _list_records(run_dir, REBUILT_LISTS_FILE, REBUILT_LISTS)
+    return _list_records(run_dir, REBUILT_LISTS_FILE, REBUILT_LISTS)
 
 
 def _list_records(run_dir: Path, artifact: str, counted_as: str):
+    if not (run_dir / RECONCILED_DIR / artifact).exists():
+        return
     for row in iter_reconciled_artifact(run_dir, artifact):
         record = {"dataset_title": counted_as, "classifications": {}, _ENTITY: True}
         for name in ("generated_by", SAMPLES_FIELD):

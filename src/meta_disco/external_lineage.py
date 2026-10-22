@@ -27,7 +27,6 @@ cache (``TarEvidence``), never fetched here: ``make classify-tar`` reads them.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import time
 from collections import Counter
@@ -48,6 +47,7 @@ from .cohort_steps import (
     callset_samples,
     parse_tar_head,
     sample_name_map,
+    set_id,
 )
 from .deployments import Deployment
 from .ena_lineage import CatalogFile, Progress, catalog_files, in_parallel
@@ -170,11 +170,7 @@ def sample_set_id(samples: Iterable[str]) -> str:
 
     Not a ``sample_identity.list_id``, which digests recognised identifiers: these are the names as written.
     """
-    return _set_id(sorted(set(samples)))
-
-
-def _set_id(distinct: list[str]) -> str:
-    return hashlib.sha256("\n".join(distinct).encode("utf-8")).hexdigest()[:16]
+    return set_id(samples)
 
 
 # --- reading what the importer reads ---------------------------------------------------
@@ -442,7 +438,7 @@ def _read_callsets(
                 if text is not None:
                     names = callset_samples(text)
                     distinct = sorted(set(names))
-                    reading.callset, reading.duplicated = _set_id(distinct), len(distinct) != len(names)
+                    reading.callset, reading.duplicated = set_id(names), len(distinct) != len(names)
                     if reading.callset not in inputs.sample_sets:
                         inputs.sample_sets[reading.callset] = distinct
             except (FetchError, ValueError) as exc:

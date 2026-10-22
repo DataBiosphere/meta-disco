@@ -127,9 +127,7 @@ def hold(lists: Iterable[ExternalList], found: dict[Locator, list[Carrier]], key
 
 
 def stand_in(file_name: str, dataset: str, samples: dict | None = None) -> dict:
-    """A list's record-shaped stand-in for reconcile's graph: its name and dataset, every carried slot
-    ``not_classified`` (a list passes nothing itself, ``CohortDefinitionActivity``), and ``samples``, its
-    ``SampleReference``, where it names them. Shared with the lists inference rebuilt (``reconcile_rebuilt``)."""
+    """A list's stand-in record for reconcile's graph (external, or rebuilt, #726): passing nothing, with its ``samples``."""
     record: dict = {
         "file_name": file_name,
         "dataset_title": dataset,

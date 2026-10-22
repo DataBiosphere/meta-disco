@@ -77,6 +77,10 @@ def test_a_tar_reads_its_values_through_the_list_inference_rebuilt(tmp_path):
         (inherited,) = [e for e in entry["evidence"] if e.get("rule_id") == "inherited_from_parent"]
         assert inherited["parent_keys"] == [REF]
     assert report["rebuilt_lists"] == {"ANVIL_T2T_CHRY": {"lists": 1, "members": 2}}
+    # The list names no samples by design: counted apart from a parent no source named samples for.
+    assert report["samples"]["by_dataset"]["ANVIL_T2T_CHRY"]["inheritance"] == {
+        "CohortMergeActivity": {"list_names_none": 1}
+    }
     (listed,) = iter_reconciled_artifact(run_dir, REBUILT_LISTS_FILE)
     assert listed == rebuilt_list(*NAMES)
     RebuiltList.model_validate(listed)

@@ -15,7 +15,9 @@ Two steps are read here, each from the file's own content:
   names the list, matched by base name among the dataset's sample maps. At reconcile the tar
   takes its values from the map's members, read through the map (``activities.read_through``),
   not from each gVCF as an input of its own; its kind and origin it also reads itself, from the
-  same header's callers (``header_classifier.classify_from_tar_head``, #678).
+  same header's callers (``header_classifier.classify_from_tar_head``, #678). In a folder
+  :data:`REBUILT_MAP_FOLDERS` declares, whose maps no one holds, the map is rebuilt from the tar's
+  own samples and folder (#726) and named by address, the tar producer holding each list once.
 
 A step is written only where every parent resolves: exactly one file of the dataset carries
 the name (#438's rule). Each file's outcome is one of :data:`OUTCOMES`, which the tar and
@@ -52,7 +54,7 @@ from .producer_steps import (
     resolve_names,
 )
 from .record_keys import RecordKey
-from .records import dataset_of
+from .records import dataset_of, folder_of
 from .validators.command_lines import GATK
 from .validators.header_extractors import VCFHeader, parse_vcf_header
 
@@ -92,16 +94,12 @@ OUTCOMES = (
 )
 
 
-# The workspace tar folders, by dataset, whose sample maps are rebuilt (#726), each with the reference
-# folder its gVCFs are under: ANVIL_T2T_CHRY's SGDP cohort, whose maps' bucket is deleted and whose two
+# The workspace tar folders, by dataset, whose sample maps are rebuilt (#726), its gVCFs under the folder's
+# parent, the reference folder: ANVIL_T2T_CHRY's SGDP cohort, whose maps' bucket is deleted and whose two
 # reference runs name the same map paths (#624). Each must be a folder whose `callset.json` is read
-# (`header_classifier.CALLSET_FOLDERS`), the samples being the list's rows.
-REBUILT_MAP_FOLDERS = {
-    "ANVIL_T2T_CHRY": {
-        "SGDP_CHM13v2/genomics_db": "SGDP_CHM13v2",
-        "SGDP_GRCh38/genomics_db": "SGDP_GRCh38",
-    }
-}
+# (`header_classifier.CALLSET_FOLDERS`), the samples being the list's rows; a folder whose callset is read
+# need not be rebuilt.
+REBUILT_MAP_FOLDERS = {"ANVIL_T2T_CHRY": frozenset({"SGDP_CHM13v2/genomics_db", "SGDP_GRCh38/genomics_db"})}
 # Where the run wrote its gVCFs under a reference folder, and the name every one ends in.
 GVCF_FOLDER = "haplotype_calling_vcfs"
 GVCF_SUFFIX = ".hc.vcf.gz"
@@ -109,13 +107,18 @@ GVCF_SUFFIX = ".hc.vcf.gz"
 REBUILT_SCHEME = "rebuilt:"
 
 
+def set_id(values: Iterable[str]) -> str:
+    """The id of a set of strings: the first 16 hex of the sha256 of the distinct ones, sorted, one per line."""
+    return hashlib.sha256("\n".join(sorted(set(values))).encode("utf-8")).hexdigest()[:16]
+
+
 def gvcf_layout(map_name: str) -> tuple[tuple[str, str], ...] | None:
     """Where a sample's gVCF for the sample map ``map_name`` is, as ``(folder, name less the sample)`` pairs, or None.
 
     The layout of T2T's joint-calling run (#726), as its published 1000 Genomes maps list it: per autosome
     one gVCF per sample; on chrX an XX sample's one whole-chrX gVCF, and an XY sample's PAR gVCF for a PAR
-    map, its non-PAR gVCF for the non-PAR map; on chrY an XY sample's non-PAR gVCF. A sample has a file in at
-    most one of the pairs; ``map_name`` is matched exactly, as the header writes it.
+    map, its non-PAR gVCF for the non-PAR map; on chrY an XY sample's non-PAR gVCF. ``TarSteps`` takes a sample
+    with a file at more than one of the pairs as ambiguous; ``map_name`` is matched exactly, as the header writes it.
     """
     if (match := _AUTOSOME_MAP.fullmatch(map_name)) is not None:
         chrom = match.group(1)
@@ -280,7 +283,8 @@ def _is_member_path(path: str) -> bool:
 
 class _StepReader:
     """A run's step reader: the name index its parents resolve in, built once per run from every
-    loaded record (:meth:`for_run`), keeping only the records :meth:`keeps` takes, and called per file."""
+    loaded record (:meth:`for_run`), keeping the records :meth:`keeps` takes (and, for :class:`TarSteps`,
+    the gVCFs a rebuilt list could name), and called per file."""
 
     PURPOSE = "ground a cohort step's input on its parent"
 
@@ -314,13 +318,22 @@ class TarSteps(_StepReader):
 
     @staticmethod
     def keeps(name: str) -> bool:
-        return name.lower().endswith((SAMPLE_MAP_SUFFIX, GVCF_SUFFIX))
+        return name.lower().endswith(SAMPLE_MAP_SUFFIX)
 
     @classmethod
     def for_run(cls, records: Iterable[dict], key: RecordKey, evidence_base: Path):
-        records = list(records)
-        titles = {dataset_of(r): r["dataset_title"] for r in records if isinstance(r.get("dataset_title"), str)}
-        return cls(edges.parent_index(records, key, cls.keeps, cls.PURPOSE), key, titles)
+        """The reader, its index holding the sample maps, and the gVCFs only where a rebuilt list can name them:
+        under a declared dataset's reference folders' :data:`GVCF_FOLDER`."""
+        titles: dict[str, str] = {}
+        kept = []
+        for r in records:
+            title = r.get("dataset_title")
+            if isinstance(title, str):
+                titles[dataset_of(r)] = title
+            name = r.get("file_name")
+            if isinstance(name, str) and (cls.keeps(name) or _rebuilt_member(r, name, title)):
+                kept.append(r)
+        return cls(edges.parent_index(kept, key, lambda _: True, cls.PURPOSE), key, titles)
 
     def __call__(
         self, head: ParsedTarHead, file_name: str, dataset_id: str, folder: str | None
@@ -340,8 +353,8 @@ class TarSteps(_StepReader):
         if named is None:
             return None, outcome
         title = self.titles.get(dataset_id)
-        reference = REBUILT_MAP_FOLDERS.get(title or "", {}).get(folder or "")
-        if title is not None and reference is not None:
+        if title is not None and folder is not None and folder in REBUILT_MAP_FOLDERS.get(title, ()):
+            reference = PurePosixPath(folder).parent.as_posix()
             return self._rebuild(head, PurePosixPath(named).name, dataset_id, title, reference)
         parents, outcome = resolve_names(self.index, dataset_id, [PurePosixPath(named).name], folder)
         if parents is None:
@@ -364,10 +377,8 @@ class TarSteps(_StepReader):
         known = (dataset_id, reference, map_name, samples)
         with self._lock:
             rebuilt = self._rebuilt.get(known)
-        if rebuilt is None:
-            rebuilt = self._resolve(map_name, samples, dataset_id, title, reference)
-            with self._lock:
-                rebuilt = self._rebuilt.setdefault(known, rebuilt)
+            if rebuilt is None:
+                rebuilt = self._rebuilt[known] = self._resolve(map_name, samples, dataset_id, title, reference)
         entry, outcome = rebuilt
         if entry is None:
             return None, outcome
@@ -395,8 +406,7 @@ class TarSteps(_StepReader):
                 return None, MEMBER_NOT_FOUND if not found else MEMBER_AMBIGUOUS
             members.append(found[0])
         step = edges.generated_by(code_rules.COHORT_BY_REBUILT_SAMPLE_MAP, members, self.key)
-        keys = "\n".join(sorted(used["parent_key"] for used in step["inputs"]))
-        digest = hashlib.sha256(keys.encode("utf-8")).hexdigest()[:16]
+        digest = set_id(used["parent_key"] for used in step["inputs"])
         ref = f"{REBUILT_SCHEME}{title}/{reference}/{map_name}#{digest}"
         return {"ref": ref, "dataset": title, "file_name": map_name, "generated_by": step}, STEPPED
 
@@ -405,6 +415,20 @@ class TarSteps(_StepReader):
         with self._lock:
             entries = {e["ref"]: e for e, _ in self._rebuilt.values() if e is not None}
         return [entries[ref] for ref in sorted(entries)]
+
+
+def _rebuilt_member(record: dict, name: str, title: object) -> bool:
+    """Whether ``record`` is a gVCF a rebuilt list could name: under a declared folder's reference folder's :data:`GVCF_FOLDER`."""
+    if not name.lower().endswith(GVCF_SUFFIX) or not isinstance(title, str) or title not in _GVCF_ROOTS:
+        return False
+    return (folder_of(record) or "").startswith(_GVCF_ROOTS[title])
+
+
+# Per dataset, the folder prefixes its rebuilt lists' gVCFs are under (:func:`_rebuilt_member`).
+_GVCF_ROOTS = {
+    title: tuple(f"{PurePosixPath(folder).parent.as_posix()}/{GVCF_FOLDER}/" for folder in sorted(folders))
+    for title, folders in REBUILT_MAP_FOLDERS.items()
+}
 
 
 class SampleMapSteps(_StepReader):

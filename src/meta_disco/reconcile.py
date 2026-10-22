@@ -250,7 +250,7 @@ MAX_EXAMPLES = 5
 ENTITIES_KEY = "entities"
 # The report's block of the lists held outside AnVIL that the run's steps read through (#710).
 EXTERNAL_LISTS_KEY = "external_lists"
-REBUILT_LISTS_KEY = "rebuilt_lists"
+REBUILT_LISTS_REPORT_KEY = "rebuilt_lists"
 
 
 class ReconcileError(Exception):
@@ -1339,7 +1339,8 @@ def reconcile_run(
             if entry["ref"] in rebuilt:
                 continue
             rebuilt[entry["ref"]] = entry
-            stand_in = reconcile_rebuilt.record_of(entry)
+            stand_in = reconcile_external.stand_in(entry["file_name"], entry["dataset"])
+            samples.names_none.add(entry["ref"])
             graph.add(entry["ref"], stand_in, {}, entry.get("generated_by"))
             samples.hold(entry["ref"], stand_in, inference_lists, [], graph.steps.get(entry["ref"]))
         for record in records:
@@ -1391,7 +1392,7 @@ def reconcile_run(
         SAMPLES_FIELD: samples.to_dict(header_samples(files_metadata), joined.unrecognised_samples),
         ENTITIES_KEY: entities.report,
         EXTERNAL_LISTS_KEY: reconcile_external.report(external_held),
-        REBUILT_LISTS_KEY: reconcile_rebuilt.report(rebuilt.values()),
+        REBUILT_LISTS_REPORT_KEY: reconcile_rebuilt.report(rebuilt.values()),
     }
     (staging / REPORT_FILE).write_text(json.dumps(full_report, indent=2, sort_keys=True) + "\n")
     # Swap by renames: the earlier artifact is moved aside, the new one moved in, and only
