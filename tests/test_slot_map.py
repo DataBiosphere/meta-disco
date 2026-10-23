@@ -378,16 +378,20 @@ datasets:
 
 
 def test_a_folder_entry_names_the_path_below_the_folder_its_column_names(tmp_path):
-    (entry,) = load(tmp_path, FOLDER).entries
+    slot_map = load(tmp_path, FOLDER)
+    (entry,) = slot_map.entries
     assert entry.is_folder
+    assert slot_map.has_folders("D")
     assert entry.files_under == "reads/fast5"
     assert entry.folder_prefix("HG002") == "HG002/reads/fast5/"
     assert set(entry.slots) == {"assay_type"}
 
 
 def test_a_link_entry_is_not_a_folder_entry(tmp_path):
-    (entry,) = load(tmp_path, MINIMAL).entries
+    slot_map = load(tmp_path, MINIMAL)
+    (entry,) = slot_map.entries
     assert not entry.is_folder
+    assert not slot_map.has_folders("D")
     with pytest.raises(ValueError, match="link column"):
         entry.folder_prefix("HG002")
 
@@ -404,13 +408,15 @@ def test_a_folder_entry_maps_at_least_one_slot(tmp_path):
     refuses(tmp_path, text, "names files_under and no slot")
 
 
-def test_a_folder_columns_name_is_no_span_for_a_slot(tmp_path):
-    text = FOLDER.replace("{table_name: sequencing}", "{column_name: seq}")
+@pytest.mark.parametrize("span", ["seq", "sample", "interval"])
+def test_a_folder_columns_name_is_no_span_for_a_slot_whatever_the_span(tmp_path, span):
+    text = FOLDER.replace("{table_name: sequencing}", f"{{column_name: {span}}}")
     refuses(tmp_path, text, "names a folder", "describes no file")
 
 
-def test_a_folder_entry_reads_no_samples(tmp_path):
-    text = FOLDER + "        samples:\n          - {cell: sample_id}\n"
+@pytest.mark.parametrize("sources", ["[{cell: sample_id}]", "[{cell: a}, {cell: b}]", "[{table_name: sequencing}]"])
+def test_a_folder_entry_reads_no_samples_however_they_are_spelled(tmp_path, sources):
+    text = FOLDER + f"        samples: {sources}\n"
     refuses(tmp_path, text, "a folder entry reads no samples", "#740")
 
 

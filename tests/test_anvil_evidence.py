@@ -505,12 +505,20 @@ class TestFolders:
             "D/sequencing/seq_filename: no row carries this column"
         ]
 
-    def test_dataset_files_are_found_by_path_prefix_in_path_order(self, tmp_path):
-        write_dataset(tmp_path, "D", FOLDER_ROWS)
-        files = ae.dataset_files(manifest_path(tmp_path, CATALOG, "D", FORMAT_VERBATIM))
-        assert files.under("HG002/") == [drs(3), drs(2), drs(1)]
-        assert files.under("HG002/reads/") == [drs(2), drs(1)]
+    def test_the_file_index_finds_files_by_path_prefix_in_path_order(self, tmp_path):
+        write_dataset(tmp_path, "D", [*FOLDER_ROWS, stored_file(7, "HG002//reads/f.fast5")])
+        files = ae.file_index(manifest_path(tmp_path, CATALOG, "D", FORMAT_VERBATIM), with_paths=True)
+        assert files.under("HG002/") == [drs(3), drs(2), drs(7), drs(1)]
+        assert files.under("HG002/reads/") == [drs(2), drs(7), drs(1)]
         assert files.under("HG003/") == []
+        assert files.handles == {drs(n) for n in range(1, 8)}
+        assert files.has("file_id", "f7") and files.has("drs_uri", drs(7))
+        assert not files.has("file_id", "f8")
+
+    def test_the_file_index_holds_paths_only_when_asked(self, tmp_path):
+        write_dataset(tmp_path, "D", FOLDER_ROWS)
+        files = ae.file_index(manifest_path(tmp_path, CATALOG, "D", FORMAT_VERBATIM), with_paths=False)
+        assert files.by_path == ()
         assert files.handles == {drs(n) for n in range(1, 7)}
 
 

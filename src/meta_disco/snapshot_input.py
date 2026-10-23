@@ -59,6 +59,8 @@ from typing import Any, Protocol
 
 from . import tdr
 from .azul_manifest import (
+    ANVIL_FILE_PATH,
+    ANVIL_FILE_REF,
     VERBATIM_FILE,
     iter_verbatim_entities,
     iter_verbatim_lines,
@@ -266,13 +268,13 @@ def record_from_file_row(row: dict[str, Any], dataset: dict[str, Any]) -> dict[s
             "file_size": row["file_size"],
             "file_md5sum": row["file_md5sum"],
             "is_supplementary": row["is_supplementary"],
-            "drs_uri": row["file_ref"],
+            "drs_uri": row[ANVIL_FILE_REF],
             "dataset_id": dataset_id,
             "dataset_title": dataset_title,
         }
     except KeyError as exc:
         raise ValueError(f"cannot map an {VERBATIM_FILE} row to a record: no {exc.args[0]!r} column") from None
-    if "file_path" in row:
+    if ANVIL_FILE_PATH in row:
         # An empty path is none, as the compact path reads an empty cell (#717).
-        record["file_path"] = row["file_path"] or None
+        record["file_path"] = row[ANVIL_FILE_PATH] or None
     return record

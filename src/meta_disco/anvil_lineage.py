@@ -37,9 +37,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .anvil_evidence import chosen_datasets, verbatim_manifest
+from .anvil_evidence import FileIndex, chosen_datasets, file_index, verbatim_manifest
 from .azul_manifest import (
-    ANVIL_FILE_HANDLE_COLUMNS,
     FORMAT_VERBATIM,
     REPOSITORY,
     VERBATIM_FILE,
@@ -63,22 +62,6 @@ from .schema.classification_model import (
     LineageRow,
 )
 from .source_evidence import evidence_file_path, generation_dir, new_generation, staged_generation
-
-
-@dataclass(frozen=True)
-class DatasetFiles:
-    """The dataset's own files, as its ``anvil_file`` entities name them."""
-
-    drs_uris: frozenset[str]
-    file_ids: frozenset[str]
-
-    def has(self, key: str, value: str) -> bool:
-        """Whether ``value``, a ``key`` (``drs_uri`` or ``file_id``), is one of these files; any other key raises."""
-        if key == JOIN_KEY_DRS_URI:
-            return value in self.drs_uris
-        if key == JOIN_KEY_FILE_ID:
-            return value in self.file_ids
-        raise ValueError(f"{key!r} names no file of the dataset")
 
 
 @dataclass
@@ -228,18 +211,6 @@ def _check_dataset(links: list[Link], dataset: str, path: Path) -> list[str]:
     return problems
 
 
-def dataset_files(path: Path) -> DatasetFiles:
-    """The dataset's own files, as its ``anvil_file`` entities name them: DRS URIs and ``file_id``s."""
-    drs_uris: set[str] = set()
-    file_ids: set[str] = set()
-    for _table, value in iter_verbatim_entities(path, {VERBATIM_FILE}):
-        for column in ANVIL_FILE_HANDLE_COLUMNS:
-            drs_uris.update(link_handles(value.get(column)) or [])
-        if isinstance(value.get("file_id"), str):
-            file_ids.add(value["file_id"])
-    return DatasetFiles(frozenset(drs_uris), frozenset(file_ids))
-
-
 def lookup_locators(path: Path, lookup: Lookup) -> dict[str, set[str]]:
     """Each source identifier in ``lookup.table``'s ``identifier_column``, to the locators its rows give it."""
     found: dict[str, set[str]] = {}
@@ -305,7 +276,7 @@ def import_dataset(
     fetched_at = sidecar_requested_at(manifest_root, catalog, dataset, FORMAT_VERBATIM)
     if fetched_at is None:
         raise ValueError(f"{dataset}: the {catalog} sidecar records no {FORMAT_VERBATIM} requested_at")
-    files = dataset_files(path)
+    files = file_index(path, with_paths=False)
     lookups = {
         lookup: lookup_locators(path, lookup)
         for lookup in {link.lookup for link in lineage_map.dataset_links(dataset) if link.lookup is not None}
@@ -341,7 +312,7 @@ def _table_rows(
     path: Path,
     table: str,
     links: list[Link],
-    files: DatasetFiles,
+    files: FileIndex,
     lookups: dict[Lookup, dict[str, set[str]]],
     result: TableLineage,
 ) -> Iterator[LineageRow]:
@@ -395,7 +366,7 @@ def _row(
     parent: str,
     raw_activity: str | None,
     activity_id: str | None,
-    files: DatasetFiles,
+    files: FileIndex,
     lookups: dict[Lookup, dict[str, set[str]]],
     result: TableLineage,
     counted: set[tuple[str, str, str]],

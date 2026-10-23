@@ -99,8 +99,12 @@ VERBATIM_BIOSAMPLE = "anvil_biosample"
 # submitter's own table.
 HARMONIZED_PREFIX = "anvil_"
 # The two columns of an `anvil_file` entity that carry the file's DRS URI; both are
-# read because a submitter table may point at a file by either.
-ANVIL_FILE_HANDLE_COLUMNS = ("drs_uri", "file_ref")
+# read because a submitter table may point at a file by either. `file_ref` is TDR's own,
+# which a snapshot-derived record's `drs_uri` is and the published map keys by.
+ANVIL_FILE_REF = "file_ref"
+ANVIL_FILE_HANDLE_COLUMNS = ("drs_uri", ANVIL_FILE_REF)
+# An `anvil_file` entity's storage path within its dataset (#717).
+ANVIL_FILE_PATH = "file_path"
 # What a file pointer in a submitter cell starts with.
 DRS_PREFIX = "drs://"
 

@@ -23,10 +23,10 @@ a link an importer cannot resolve is counted per column and not written.
 
 **A folder entry** (``slot_map``, #604) reaches its files by storage path instead: a row's
 cell names a top folder, and the files are the dataset's ``anvil_file`` entities whose
-``file_path`` begins with the entry's prefix for it (:meth:`DatasetFiles.under`), each
-named by its ``file_ref`` as the published map names it. The evidence row is the same
-row a link would have written; it does not record how the file was reached, as a link
-entry's row does not record its link column.
+normalised ``file_path`` begins with the entry's prefix for it (:func:`folder_files`), each named by
+its ``file_ref`` as the published map names it. The evidence row is the same row a link
+would have written; it does not record how the file was reached, as a link entry's row
+does not record its link column.
 
 **An import is a generation** (`source_evidence.generation_dir`): written once, never
 over an earlier one, and read by ``discover`` as the newest per dataset. Within-source
@@ -41,6 +41,7 @@ holds each map to AnVIL's published table (``PUBLISHED_TABLE``, contract 7.12), 
 
 from __future__ import annotations
 
+import posixpath
 from bisect import bisect_left
 from collections import Counter
 from collections.abc import Iterator
@@ -49,7 +50,8 @@ from pathlib import Path
 
 from .azul_manifest import (
     ANVIL_FILE_HANDLE_COLUMNS,
-    DRS_PREFIX,
+    ANVIL_FILE_PATH,
+    ANVIL_FILE_REF,
     FORMAT_COMPACT,
     FORMAT_VERBATIM,
     PUBLISHED_TABLE,
@@ -62,7 +64,14 @@ from .azul_manifest import (
     sidecar_datasets,
     sidecar_requested_at,
 )
-from .models import JOIN_KEY_DRS_URI, SAMPLES_FIELD, SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA, ClaimSource
+from .models import (
+    JOIN_KEY_DRS_URI,
+    JOIN_KEY_FILE_ID,
+    SAMPLES_FIELD,
+    SOURCE_PUBLISHED_VALUE,
+    SOURCE_REPOSITORY_METADATA,
+    ClaimSource,
+)
 from .sample_identity import SAMPLE, Identifier, IdentifierRuleSet, identifier_rules, name_contradicts
 from .schema.classification_model import ImporterSourceTypeEnum, JoinKeyEnum
 from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource
@@ -86,12 +95,6 @@ from .source_evidence import (
 # each other's generations of a dataset, and that is the intent; two kinds never do.
 PUBLISHED_DIR = f"{REPOSITORY}_published"
 EVIDENCE_DIRS = {SOURCE_REPOSITORY_METADATA: REPOSITORY, SOURCE_PUBLISHED_VALUE: PUBLISHED_DIR}
-
-# The `anvil_file` columns a folder entry reads (#604): the file's storage path within its
-# dataset (#717), and the DRS URI it names the file by — TDR's own column, which a
-# snapshot-derived record's `drs_uri` is (`snapshot_input`) and the published map keys by.
-FILE_PATH = "file_path"
-FILE_REF = "file_ref"
 
 
 def evidence_dir(slot_map: SlotMap) -> str:
@@ -179,17 +182,27 @@ class DatasetImport:
 
 
 @dataclass(frozen=True)
-class DatasetFiles:
+class FileIndex:
     """A dataset's own files: every DRS URI its ``anvil_file`` entities carry
-    (``ANVIL_FILE_HANDLE_COLUMNS``), and each file's storage path with its ``file_ref``,
-    sorted by path for :meth:`under`. A file with no path or no ``file_ref`` is in
-    ``handles`` only."""
+    (``ANVIL_FILE_HANDLE_COLUMNS``), every ``file_id``, and, where :func:`file_index` was asked
+    for them, each file's normalised storage path with its ``file_ref``, sorted by path for
+    :meth:`under`. A file with no path or no ``file_ref`` is in ``handles`` only. Shared with
+    the lineage importer (``anvil_lineage``, #583), which asks :meth:`has`."""
 
     handles: frozenset[str]
-    by_path: tuple[tuple[str, str], ...]
+    file_ids: frozenset[str] = frozenset()
+    by_path: tuple[tuple[str, str], ...] = ()
+
+    def has(self, key: str, value: str) -> bool:
+        """Whether ``value``, a ``key`` (``drs_uri`` or ``file_id``), is one of these files; any other key raises."""
+        if key == JOIN_KEY_DRS_URI:
+            return value in self.handles
+        if key == JOIN_KEY_FILE_ID:
+            return value in self.file_ids
+        raise ValueError(f"{key!r} names no file of the dataset")
 
     def under(self, prefix: str) -> list[str]:
-        """The ``file_ref`` of each file whose storage path begins with ``prefix``, in path order."""
+        """The ``file_ref`` of each file whose normalised storage path begins with ``prefix``, in path order."""
         found = []
         for i in range(bisect_left(self.by_path, (prefix,)), len(self.by_path)):
             path, handle = self.by_path[i]
@@ -199,35 +212,34 @@ class DatasetFiles:
         return found
 
 
-def dataset_files(path: Path) -> DatasetFiles:
-    """The dataset's own files, from its verbatim manifest's ``anvil_file`` entities."""
+def file_index(path: Path, with_paths: bool) -> FileIndex:
+    """The dataset's own files, from its verbatim manifest's ``anvil_file`` entities; their storage
+    paths only ``with_paths``, since only a folder entry reads them. Each path is normalised by
+    ``posixpath.normpath``, so ``a//b`` is ``a/b`` and ``./a`` is ``a``."""
     handles: set[str] = set()
+    file_ids: set[str] = set()
     by_path = []
     for _table, value in iter_verbatim_entities(path, {VERBATIM_FILE}):
         for column in ANVIL_FILE_HANDLE_COLUMNS:
             handles.update(link_handles(value.get(column)) or [])
-        file_path, ref = value.get(FILE_PATH), link_handles(value.get(FILE_REF))
+        if isinstance(value.get(JOIN_KEY_FILE_ID), str):
+            file_ids.add(value[JOIN_KEY_FILE_ID])
+        if not with_paths:
+            continue
+        file_path, ref = value.get(ANVIL_FILE_PATH), link_handles(value.get(ANVIL_FILE_REF))
         if isinstance(file_path, str) and file_path and ref:
-            by_path.extend((file_path, handle) for handle in ref)
-    return DatasetFiles(handles=frozenset(handles), by_path=tuple(sorted(by_path)))
+            normal = posixpath.normpath(file_path)
+            by_path.extend((normal, handle) for handle in ref)
+    return FileIndex(handles=frozenset(handles), file_ids=frozenset(file_ids), by_path=tuple(sorted(by_path)))
 
 
-def top_folder(value: object) -> str | None:
-    """``value`` where it names a top folder of a dataset's storage — a non-empty string with no
-    ``/``, not ``.`` or ``..``, and not a DRS URI — else None."""
-    if (
-        isinstance(value, str)
-        and value not in ("", ".", "..")
-        and "/" not in value
-        and not value.startswith(DRS_PREFIX)
-    ):
-        return value
-    return None
-
-
-def _no_cell(value: object) -> bool:
-    """A cell that holds nothing, as :func:`link_handles` reads one: null, the empty string or the empty list."""
-    return value is None or value == "" or value == []
+def folder_files(entry: ColumnEntry, value: object, files: FileIndex) -> list[str] | None:
+    """The ``file_ref`` of each file a folder entry reaches from a cell, stored under the entry's
+    prefix for the folder the cell names; None where the cell names no top folder — a non-empty
+    string with no ``/`` (so no DRS URI either), not ``.`` or ``..``. Shared by ``check`` and the import."""
+    if not isinstance(value, str) or value in ("", ".", "..") or "/" in value:
+        return None
+    return files.under(entry.folder_prefix(value))
 
 
 # --- checking the map against the manifests -----------------------------------
@@ -241,8 +253,11 @@ def check(slot_map: SlotMap, manifest_root: Path, catalog: str, datasets: list[s
     manifest is on disk — a compact manifest alone is named as not a source this
     importer reads. Per mapped table: at least one row of that type exists. Per
     file-link column: it appears on some row, and every non-empty value it holds is a
-    DRS URI or a list of them. Per folder column (#604), what :func:`_check_folders`
-    checks. Per cell: the column appears on some row of its table
+    DRS URI or a list of them. Per folder column (#604): it appears on some row, every
+    non-empty value names a top folder (:func:`folder_files`), each folder reaches at least
+    one of the dataset's files, and no file is reached from two rows — the one-to-one a
+    folder entry is declared on, since two rows would give one file two rows' values. Per
+    cell: the column appears on some row of its table
     and is not itself a file-link column — a column is one kind, never two (contract
     2.7). Every chosen dataset is checked, and within one every table and column, so a
     map edited in one sitting is answered in one pass; a dataset whose manifest is
@@ -295,11 +310,19 @@ def _check_kind(slot_map: SlotMap, datasets: set[str]) -> list[str]:
 
 def _check_dataset(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
     tables = slot_map.tables(dataset)
-    wanted = {table: [e.column for e in slot_map.columns(dataset, table) if not e.is_folder] for table in tables}
+    entries = {table: slot_map.columns(dataset, table) for table in tables}
+    wanted = {table: [entry.column for entry in entries[table]] for table in tables}
+    folders = {table: [entry for entry in entries[table] if entry.is_folder] for table in tables}
+    folder_columns = {(entry.table, entry.column) for table in tables for entry in folders[table]}
+    # Built only for a dataset with a folder entry: no other check reads storage paths.
+    files = file_index(path, with_paths=True) if slot_map.has_folders(dataset) else None
     cells = {table: sorted(slot_map.cells(dataset, table)) for table in tables}
     rows: Counter = Counter()
     columns_seen: dict[str, set[str]] = {table: set() for table in tables}
     not_links: dict[tuple[str, str], object] = {}
+    not_folders: dict[tuple[str, str], object] = {}
+    empty_folders: dict[tuple[str, str], set[str]] = {}
+    reached: dict[tuple[str, str], Counter] = {key: Counter() for key in folder_columns}
     # A cell is a link column when every non-empty value it holds is a link: `None`
     # until a non-empty value is seen, then whether all of them so far were links.
     cell_is_link: dict[tuple[str, str], bool | None] = {(t, c): None for t in tables for c in cells[t]}
@@ -307,25 +330,45 @@ def _check_dataset(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
         rows[table] += 1
         columns_seen[table].update(row)
         for column in wanted[table]:
-            if (table, column) not in not_links and link_handles(row.get(column)) == []:
-                not_links[(table, column)] = row[column]
+            key = (table, column)
+            if key not in folder_columns and key not in not_links and link_handles(row.get(column)) == []:
+                not_links[key] = row[column]
+        for entry in folders[table]:
+            key, value = (table, entry.column), row.get(entry.column)
+            if files is None or link_handles(value) is None:
+                continue
+            handles = folder_files(entry, value, files)
+            if handles is None:
+                not_folders.setdefault(key, value)
+            elif not handles:
+                empty_folders.setdefault(key, set()).add(entry.folder_prefix(str(value)))
+            reached[key].update(handles or [])
         for cell in cells[table]:
             handles = link_handles(row.get(cell))
             if handles is not None and cell_is_link[(table, cell)] is not False:
                 cell_is_link[(table, cell)] = handles != []
-    problems = _check_sample_names(slot_map, dataset, path) + _check_folders(slot_map, dataset, path)
+    problems = _check_sample_names(slot_map, dataset, path)
     for table in tables:
         if not rows[table]:
             problems.append(f"{dataset}/{table}: no row of this type in the manifest")
             continue
         for column in wanted[table]:
+            key, at = (table, column), f"{dataset}/{table}/{column}"
             if column not in columns_seen[table]:
-                problems.append(f"{dataset}/{table}/{column}: no row carries this column")
-            elif (table, column) in not_links:
+                problems.append(f"{at}: no row carries this column")
+                continue
+            if key in not_links:
                 problems.append(
-                    f"{dataset}/{table}/{column}: holds {not_links[(table, column)]!r}, "
-                    "not a DRS URI or a list of them — not a file-link column"
+                    f"{at}: holds {not_links[key]!r}, not a DRS URI or a list of them — not a file-link column"
                 )
+            if key in not_folders:
+                problems.append(f"{at}: holds {not_folders[key]!r}, not a top folder's name — not a folder column")
+            if key in empty_folders:
+                prefixes = ", ".join(repr(prefix) for prefix in sorted(empty_folders[key]))
+                problems.append(f"{at}: reaches none of the dataset's files under {prefixes}")
+            twice = sum(1 for n in reached.get(key, Counter()).values() if n > 1)
+            if twice:
+                problems.append(f"{at}: {twice:,} files are reached from more than one row")
         for cell in cells[table]:
             if cell not in columns_seen[table]:
                 problems.append(f"{dataset}/{table}: cell {cell!r} is not a column of this table")
@@ -333,56 +376,6 @@ def _check_dataset(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
                 problems.append(
                     f"{dataset}/{table}: cell {cell!r} holds DRS URIs — a file-link column, not a metadata value"
                 )
-    return problems
-
-
-def _check_folders(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
-    """How the dataset's folder columns (#604) disagree with its manifest, one line per problem.
-
-    Per folder column: it appears on some row of its table; every non-empty cell names a top
-    folder (:func:`top_folder`); each folder reaches at least one of the dataset's files; and
-    no file is reached from two rows, which would give one file two rows' values from one
-    entry — the one-to-one a folder entry is declared on.
-    """
-    entries = [e for e in slot_map.entries if e.dataset == dataset and e.is_folder]
-    if not entries:
-        return []
-    files = dataset_files(path)
-    seen: set[tuple[str, str]] = set()
-    not_folder: dict[tuple[str, str], object] = {}
-    empty: dict[tuple[str, str], list[str]] = {}
-    reached: dict[tuple[str, str], Counter] = {(e.table, e.column): Counter() for e in entries}
-    for table, row in iter_verbatim_entities(path, {e.table for e in entries}):
-        for entry in entries:
-            if entry.table != table or entry.column not in row:
-                continue
-            key = (table, entry.column)
-            seen.add(key)
-            value = row[entry.column]
-            if _no_cell(value):
-                continue
-            folder = top_folder(value)
-            if folder is None:
-                not_folder.setdefault(key, value)
-                continue
-            handles = files.under(entry.folder_prefix(folder))
-            if not handles:
-                empty.setdefault(key, []).append(folder)
-            reached[key].update(handles)
-    problems = []
-    for entry in entries:
-        key, at = (entry.table, entry.column), f"{dataset}/{entry.table}/{entry.column}"
-        if key not in seen:
-            problems.append(f"{at}: no row carries this column")
-            continue
-        if key in not_folder:
-            problems.append(f"{at}: holds {not_folder[key]!r}, not a top folder's name — not a folder column")
-        if key in empty:
-            folders = ", ".join(repr(entry.folder_prefix(f)) for f in sorted(set(empty[key])))
-            problems.append(f"{at}: reaches none of the dataset's files under {folders}")
-        twice = sum(1 for n in reached[key].values() if n > 1)
-        if twice:
-            problems.append(f"{at}: {twice:,} files are reached from more than one row")
     return problems
 
 
@@ -494,7 +487,8 @@ def import_dataset(
     """Write one generation of evidence files for one dataset.
 
     Two kinds of pass over the manifest: one to collect the dataset's own files
-    (:func:`dataset_files`: its ``anvil_file`` DRS URIs and storage paths), then one per mapped table to write that table's file.
+    (:func:`file_index`: its ``anvil_file`` DRS URIs, and their storage paths where a folder
+    entry reads them), then one per mapped table to write that table's file.
     Per-table passes rather than one pass fanning out to every table's writer, so each
     file keeps ``write_evidence_file``'s write-then-rename guarantee on its own; each
     pass parses only the lines that name its table (``iter_verbatim_entities``'s gate).
@@ -531,7 +525,7 @@ def import_dataset(
         raise ValueError(
             f"{dataset}: the {catalog} sidecar records no {FORMAT_VERBATIM} requested_at to write as fetched_at"
         )
-    files = dataset_files(path)
+    files = file_index(path, slot_map.has_folders(dataset))
     # What every table's envelope shares. The generated model types the two vocabulary
     # members as its enums and stores their values (`use_enum_values`), so the runtime
     # constants are wrapped for the type checker and read back as the plain strings
@@ -570,7 +564,7 @@ def _table_entries(
     path: Path,
     table: str,
     columns: list[ColumnEntry],
-    files: DatasetFiles,
+    files: FileIndex,
     source: EvidenceFileSource,
     result: TableImport,
 ) -> Iterator[EvidenceEntry]:
@@ -598,26 +592,25 @@ def _table_entries(
                         yield EvidenceEntry(field=slot, target_key_value=handle, raw_value=raw, source=claim_source)
 
 
-def _reached(entry: ColumnEntry, row: dict, files: DatasetFiles, result: TableImport) -> list[str]:
+def _reached(entry: ColumnEntry, row: dict, files: FileIndex, result: TableImport) -> list[str]:
     """The files one row reaches through one entry, counting into ``result`` the rows that reach none.
 
     A link entry's are the DRS URIs its cell holds; a folder entry's are the files under the
-    folder its cell names (:meth:`DatasetFiles.under`).
+    folder its cell names (:func:`folder_files`).
     """
     value = row.get(entry.column)
-    if _no_cell(value):
+    links = link_handles(value)
+    if links is None:
         result.no_link[entry.column] += 1
         return []
     if not entry.is_folder:
-        links = link_handles(value)
         if not links:
             result.not_link[entry.column] += 1
-        return links or []
-    folder = top_folder(value)
-    if folder is None:
+        return links
+    handles = folder_files(entry, value, files)
+    if handles is None:
         result.not_folder[entry.column] += 1
         return []
-    handles = files.under(entry.folder_prefix(folder))
     if not handles:
         result.empty_folder[entry.column] += 1
     return handles

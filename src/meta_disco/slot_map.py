@@ -215,6 +215,10 @@ class SlotMap:
     def columns(self, dataset: str, table: str) -> list[ColumnEntry]:
         return [e for e in self.entries if e.dataset == dataset and e.table == table]
 
+    def has_folders(self, dataset: str) -> bool:
+        """Whether any of the dataset's entries is a folder entry, whose files are reached by storage path."""
+        return any(e.is_folder for e in self.entries if e.dataset == dataset)
+
     def cells(self, dataset: str, table: str) -> set[str]:
         """Every column a ``cell`` source of this table names."""
         return {
@@ -357,14 +361,10 @@ def _entry(dataset: str, table: str, column: str, members: dict) -> ColumnEntry:
     slots = {slot: sources for slot, sources in members.items() if slot != FILES_UNDER}
     if not slots:
         raise ValueError(f"{at}: names {FILES_UNDER} and no slot — a folder entry maps at least one slot")
-    folder = files_under is not None
-    return ColumnEntry(
-        dataset=dataset,
-        table=table,
-        column=column,
-        slots={slot: _sources(slot, sources, table, column, at, folder) for slot, sources in slots.items()},
-        files_under=files_under,
-    )
+    if files_under is not None:
+        _refuse_in_folder_entry(slots, column, at)
+    parsed = {slot: _sources(slot, sources, table, column, at) for slot, sources in slots.items()}
+    return ColumnEntry(dataset=dataset, table=table, column=column, slots=parsed, files_under=files_under)
 
 
 def _files_under(value: object, at: str) -> str:
@@ -375,6 +375,23 @@ def _files_under(value: object, at: str) -> str:
         f"{at}: {FILES_UNDER} is {value!r}, not a relative path of folder names below the folder the "
         "column names (no leading or trailing '/', no '.' or '..')"
     )
+
+
+def _refuse_in_folder_entry(slots: dict, column: str, at: str) -> None:
+    """Refuse what a link entry may carry and a folder entry may not: the ``samples`` slot, and a
+    span of the column's name. Read off the unparsed sources, so either is refused for what it is
+    before any other rule a source breaks is reported."""
+    if SAMPLES_FIELD in slots:
+        raise ValueError(
+            f"{at} {SAMPLES_FIELD}: a folder entry reads no samples — a folder row's sample is not yet "
+            "compared with each file's own (#740)"
+        )
+    for slot, sources in slots.items():
+        if isinstance(sources, list) and any(isinstance(s, dict) and SOURCE_COLUMN_NAME in s for s in sources):
+            raise ValueError(
+                f"{at} {slot}: column {column!r} names a folder, and its name is a field label that describes "
+                "no file, so no slot reads a span of it"
+            )
 
 
 def _refuse_cells_naming_folders(entries: list[ColumnEntry], at: str) -> None:
@@ -394,16 +411,11 @@ def _is_cell(item: object) -> bool:
     return isinstance(item, dict) and list(item) == [SOURCE_CELL]
 
 
-def _sources(slot: str, sources: object, table: str, column: str, at: str, folder: bool) -> tuple[SlotSource, ...]:
-    """Check one slot's source list, returning it typed; ``folder`` when the entry is a folder entry."""
+def _sources(slot: str, sources: object, table: str, column: str, at: str) -> tuple[SlotSource, ...]:
+    """Check one slot's source list, returning it typed."""
     if slot not in _FIELDS:
         raise ValueError(f"{at}: {slot!r} is not a slot (expected one of {sorted(_FIELDS)})")
     at = f"{at} {slot}"
-    if folder and slot == SAMPLES_FIELD:
-        raise ValueError(
-            f"{at}: a folder entry reads no samples — a folder row's sample is not yet compared with each "
-            "file's own (#740)"
-        )
     # A sample is read from one cell of the row (#357): a table's or a column's name says what
     # the files are, never which sample they are of, and a second cell would be a second
     # source for the same fact from the same row.
@@ -416,7 +428,7 @@ def _sources(slot: str, sources: object, table: str, column: str, at: str, folde
         )
     if not isinstance(sources, list) or not sources:
         raise ValueError(f"{at}: must be a non-empty list of sources, not {type(sources).__name__}")
-    parsed = [_source(slot, item, table, column, at, folder) for item in sources]
+    parsed = [_source(slot, item, table, column, at) for item in sources]
     seen: dict[tuple[str, str], SlotSource] = {}
     for source in parsed:
         key = ("name", source.value.casefold()) if source.is_name else (source.form, source.value)
@@ -429,7 +441,7 @@ def _sources(slot: str, sources: object, table: str, column: str, at: str, folde
     return tuple(parsed)
 
 
-def _source(slot: str, item: object, table: str, column: str, at: str, folder: bool) -> SlotSource:
+def _source(slot: str, item: object, table: str, column: str, at: str) -> SlotSource:
     if not isinstance(item, dict) or len(item) != 1:
         raise ValueError(f"{at}: a source is one mapping with one key ({', '.join(SOURCE_FORMS)}), not {item!r}")
     ((form, value),) = item.items()
@@ -441,11 +453,6 @@ def _source(slot: str, item: object, table: str, column: str, at: str, folder: b
         raise ValueError(f"{at}: {form} is {value!r}, not a non-empty string")
     if form == SOURCE_CELL and value == column:
         raise ValueError(f"{at}: cell {value!r} is the file-link column itself, which holds a pointer and no value")
-    if form == SOURCE_COLUMN_NAME and folder:
-        raise ValueError(
-            f"{at}: column {column!r} names a folder, and its name is a field label that describes no file, "
-            "so no slot reads a span of it"
-        )
     if form == SOURCE_TABLE_NAME and not _span_of(value, table):
         raise ValueError(
             f"{at}: span {value!r} is not a run of whole tokens of the table name {table!r}, in the name's own casing"
