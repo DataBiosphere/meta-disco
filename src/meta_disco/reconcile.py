@@ -1362,14 +1362,11 @@ def reconcile_run(
             reconciled["samples"] = samples.settle(
                 record, inference_lists, joined.samples.get(identity, []), identity, reconciled["generated_by"]
             )
-            if reconciled["samples"] is not None:
-                files_by_list[(str(record.get("dataset_title") or ""), reconciled["samples"]["list_id"])] += 1
             report.add(reconciled, record_slots)
             report.add_step(reconciled, conflict, lineage.steps.get(identity, []))
             report.add_inheritance(reconciled, inheritance.outcomes.get(identity, ()))
             yield reconciled
 
-    files_by_list: Counter = Counter()  # files per (dataset, list_id) of their settled samples, for donor reach (#718)
     if staging.exists():
         shutil.rmtree(staging)
     staging.mkdir()
@@ -1378,7 +1375,7 @@ def reconcile_run(
     run_lists = samples.sorted_lists()
     write_reconciled_file(staging / SAMPLE_LISTS_FILE, header, run_lists)
     entities = reconcile_entities(
-        entity_evidence, rules, run_lists, skipped=entity_skipped, files_by_list=files_by_list
+        entity_evidence, rules, run_lists, skipped=entity_skipped, files_by_list=samples.files_by_list
     )
     write_reconciled_file(staging / DONORS_FILE, header, entities.donors)
     write_reconciled_file(staging / SAMPLES_FILE, header, entities.samples)

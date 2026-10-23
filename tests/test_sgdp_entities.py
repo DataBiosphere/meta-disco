@@ -16,7 +16,13 @@ import pytest
 from meta_disco import code_rules
 from meta_disco import sgdp_entities as se
 from meta_disco.azul_manifest import FORMAT_VERBATIM, manifest_path
-from meta_disco.entity_evidence import OUTCOMES_FILE, iter_entity_evidence, read_outcomes, write_entity_file
+from meta_disco.entity_evidence import (
+    OUTCOMES_FILE,
+    iter_entity_evidence,
+    read_outcomes,
+    write_entity_file,
+    write_outcomes,
+)
 from meta_disco.models import (
     CLASSIFIED,
     COLLECTED_FROM,
@@ -97,7 +103,7 @@ T2T_ROWS = [
     t2t(CHM13, "simons_data_sample_4", "S_Norwegian-1", "XX"),
     # Not in SGDP's file, and the genotype record matches it to no genome.
     t2t(CHM13, "simons_data_sample_5", "S_Naxi-2", "XY"),
-    # The two tables give the sample different karyotypes.
+    # The two tables state different karyotypes: no sex check, and no genotype record to confirm it.
     t2t(CHM13, "simons_data_sample_6", "S_Dinka-1", "XY"),
     t2t(GRCH38, "simons_data_sample_6", "S_Dinka-1", "XX"),
     # Confirmed; SGDP names the person by a contributor's own name, and gives no population.
@@ -111,7 +117,9 @@ SEX, GENOTYPE = code_rules.SGDP_SEX_AGREES.id, code_rules.SGDP_GENOTYPE_MATCHES.
 
 def checks(*entries: tuple[str, str, str | None], catalog: str = CATALOG) -> se.GenotypeChecks:
     """A genotype record, an entry per ``(sample, the genome its tables paired it with, the genome it matched)``."""
-    return se.GenotypeChecks(catalog, {e[0]: se.GenotypeCheck(*e) for e in entries})
+    return se.GenotypeChecks(
+        catalog, {sample: se.GenotypeCheck(sgdp_id, matched) for sample, sgdp_id, matched in entries}
+    )
 
 
 CHECKS = checks(
@@ -152,16 +160,19 @@ def envelope_of(root: Path, table: str) -> dict:
 
 
 def test_a_sample_is_written_only_where_a_check_confirms_it_and_every_sample_says_why(imported):
-    found = {s: (o.sgdp_id, o.sex_check, o.genotype_check, o.confirmed_by) for s, o in imported.outcomes.items()}
+    found = {
+        s: (o.sgdp_id, o.pairing, o.sex_check, o.genotype_check, o.confirmed_by) for s, o in imported.outcomes.items()
+    }
     assert found == {
-        "simons_data_sample_1": ("S_Spanish-2", se.SEX_AGREES, se.GENOTYPE_NOT_CHECKED, (SEX,)),
-        "simons_data_sample_2": ("S_Tuscan-2", se.SEX_AGREES, se.GENOTYPE_NOT_CHECKED, (SEX,)),
+        "simons_data_sample_1": ("S_Spanish-2", se.PAIRED, se.SEX_AGREES, se.NOT_CHECKED, (SEX,)),
+        "simons_data_sample_2": ("S_Tuscan-2", se.PAIRED, se.SEX_AGREES, se.NOT_CHECKED, (SEX,)),
         # The genotypes confirm what the sexes cannot.
-        "simons_data_sample_3": ("S_Palestinian-2", se.SEX_CONTRADICTS, se.GENOTYPE_MATCHES, (GENOTYPE,)),
-        "simons_data_sample_4": ("S_Norwegian-1", se.SEX_NOT_STATED, se.GENOTYPE_NOT_CHECKED, ()),
-        "simons_data_sample_5": ("S_Naxi-2", se.NOT_IN_SGDP_FILE, se.GENOTYPE_NO_MATCH, ()),
-        "simons_data_sample_6": (None, se.TABLES_DISAGREE, se.GENOTYPE_NOT_CHECKED, ()),
-        "simons_data_sample_7": ("S_Dinka-2", se.SEX_AGREES, se.GENOTYPE_NOT_CHECKED, (SEX,)),
+        "simons_data_sample_3": ("S_Palestinian-2", se.PAIRED, se.SEX_CONTRADICTS, se.GENOTYPE_MATCHES, (GENOTYPE,)),
+        "simons_data_sample_4": ("S_Norwegian-1", se.PAIRED, se.SEX_NOT_STATED, se.NOT_CHECKED, ()),
+        # Not a pairing to check by sex; the record is still read.
+        "simons_data_sample_5": ("S_Naxi-2", se.NOT_IN_SGDP_FILE, se.NOT_CHECKED, se.GENOTYPE_NO_MATCH, ()),
+        "simons_data_sample_6": ("S_Dinka-1", se.PAIRED, se.KARYOTYPES_DISAGREE, se.NOT_CHECKED, ()),
+        "simons_data_sample_7": ("S_Dinka-2", se.PAIRED, se.SEX_AGREES, se.NOT_CHECKED, (SEX,)),
     }
     assert imported.linked == [
         "simons_data_sample_1",
@@ -179,27 +190,29 @@ def test_a_sample_is_written_only_where_a_check_confirms_it_and_every_sample_say
         f"    confirmed by {SEX}: 3",
         f"    confirmed by {GENOTYPE}: 1",
         "  left out: 3",
-        "    simons_data_sample_4 (S_Norwegian-1): sex not_stated, genotype not_checked",
-        "    simons_data_sample_5 (S_Naxi-2): sex not_in_sgdp_file, genotype no_match",
-        "    simons_data_sample_6 (None): sex tables_disagree, genotype not_checked",
+        "    simons_data_sample_4 (S_Norwegian-1): paired, sex not_stated, genotype not_checked",
+        "    simons_data_sample_5 (S_Naxi-2): not_in_sgdp_file, sex not_checked, genotype no_match",
+        "    simons_data_sample_6 (S_Dinka-1): paired, sex karyotypes_disagree, genotype not_checked",
     ]
 
 
 def test_every_samples_outcome_is_written_beside_the_evidence_and_read_as_no_evidence(imported, tmp_path):
     root = tmp_path / "entity_evidence"
     document = json.loads((imported.directory / OUTCOMES_FILE).read_text())
-    assert document["dataset"] == T2T
+    assert (document["source"], document["dataset"]) == (se.SOURCE, T2T)
     assert [o["sample"] for o in document["samples"]] == sorted(imported.outcomes)
     assert document["samples"][2] == {
         "sample": "simons_data_sample_3",
         "sgdp_id": "S_Palestinian-2",
+        "pairing": se.PAIRED,
         "sex_check": se.SEX_CONTRADICTS,
         "genotype_check": se.GENOTYPE_MATCHES,
         "confirmed_by": [GENOTYPE],
     }
     assert all(p.suffix == ".ndjson" for p in discover(root))
     outcomes = read_outcomes(discover(root))
-    assert outcomes[(T2T, "simons_data_sample_5")]["genotype_check"] == se.GENOTYPE_NO_MATCH
+    ((said,),) = [outcomes[(T2T, "simons_data_sample_5")]]
+    assert (said["source"], said["genotype_check"]) == (se.SOURCE, se.GENOTYPE_NO_MATCH)
 
 
 def test_a_recorded_non_match_leaves_out_a_sample_whose_sex_agrees(tmp_path):
@@ -215,7 +228,7 @@ def test_a_recorded_non_match_leaves_out_a_sample_whose_sex_agrees(tmp_path):
         # The tables now pair the sample with another genome than the one measured.
         (checks(("simons_data_sample_3", "S_Tuscan-2", "S_Tuscan-2")), "was measured as S_Tuscan-2"),
         (checks(("simons_data_sample_99", "S_X-1", "S_X-1")), "names simons_data_sample_99, which no T2T_CHRY"),
-        (checks(catalog="anvil14"), "measured against anvil14's files"),
+        (checks(catalog="anvil14"), "measured on anvil14's files"),
     ],
 )
 def test_a_genotype_record_the_tables_do_not_bear_out_is_refused_and_nothing_written(tmp_path, record, message):
@@ -227,46 +240,42 @@ def test_a_genotype_record_the_tables_do_not_bear_out_is_refused_and_nothing_wri
 def test_the_bundled_genotype_record_loads():
     record = se.load_genotype_checks()
     assert record.catalog == CATALOG
-    assert all(c.sample.startswith("simons_data_sample_") for c in record.by_sample.values())
-
-
-class Text:
-    def __init__(self, text: str):
-        self.text = text
-
-    def read_text(self, encoding="utf-8"):
-        return self.text
+    assert all(sample.startswith("simons_data_sample_") for sample in record.by_sample)
 
 
 GOOD = """catalog: anvil15
-dataset: ANVIL_T2T_CHRY
-measured: "2026-10-22"
-region: chr22:1-2
-references: {sgdp: "https://s/x.bcf"}
-samples:
-  simons_data_sample_3:
-    sgdp_id: S_Palestinian-2
-    matched: null
-    best: {sgdp: [{genome: S_X-1, concordance: 0.5, sites: 10}]}
+datasets:
+  ANVIL_T2T_CHRY:
+    measured: "2026-10-22"
+    region: chr22:1-2
+    references: {sgdp: "https://s/x.bcf"}
+    samples:
+      simons_data_sample_3:
+        sgdp_id: S_Palestinian-2
+        matched: null
+        best: {sgdp: [{genome: S_X-1, concordance: 0.5, sites: 10}]}
 """
 
 
 @pytest.mark.parametrize(
     ("change", "message"),
     [
-        (("dataset: ANVIL_T2T_CHRY", "dataset: ANVIL_T2T"), "dataset is 'ANVIL_T2T'"),
-        (('references: {sgdp: "https://s/x.bcf"}', 'references: {sgdp: "http://s/x.bcf"}'), "https URL"),
-        (("    matched: null", "    matched: null\n    extra: 1"), "keys are"),
-        (("concordance: 0.5", "concordance: 1.5"), "not from 0 to 1"),
-        (("sites: 10", "sites: 0"), "not a positive count"),
-        (("best: {sgdp:", "best: {hgdp:"), "needs the scores of each reference"),
-        (("    sgdp_id: S_Palestinian-2\n", "    sgdp_id: S_Palestinian-2\n    sgdp_id: S_X-1\n"), "duplicate key"),
+        (("  ANVIL_T2T_CHRY:", "  ANVIL_T2T:"), "not ANVIL_T2T_CHRY alone"),
+        (("        matched: null", "        matched: null\n        extra: 1"), "keys are"),
+        (("        matched: null", "        matched: ''"), "matched a genome or null"),
+        (
+            ("        sgdp_id: S_Palestinian-2\n", "        sgdp_id: S_Palestinian-2\n        sgdp_id: S_X-1\n"),
+            "duplicate key",
+        ),
     ],
 )
-def test_a_malformed_genotype_record_is_refused(change, message):
-    assert se.load_genotype_checks(Text(GOOD)).by_sample["simons_data_sample_3"].matched is None
+def test_a_malformed_genotype_record_is_refused(tmp_path, change, message):
+    good, bad = tmp_path / "good.yaml", tmp_path / "bad.yaml"
+    good.write_text(GOOD)
+    bad.write_text(GOOD.replace(*change))
+    assert se.load_genotype_checks(good).by_sample["simons_data_sample_3"] == se.GenotypeCheck("S_Palestinian-2", None)
     with pytest.raises(ValueError, match=message):
-        se.load_genotype_checks(Text(GOOD.replace(*change)))
+        se.load_genotype_checks(bad)
 
 
 def test_each_table_cites_the_pairing_it_states_and_sgdp_its_genomes(imported, tmp_path):
@@ -603,7 +612,9 @@ def test_a_run_reaches_an_sgdp_files_donor_through_its_sample_and_the_synonym(im
     (said,) = report[ENTITIES_KEY]["samples"][NO_DONOR][T2T]["with_outcome"]
     assert report[ENTITIES_KEY]["samples"][NO_DONOR][T2T]["samples"] == 1
     assert said["identifier"] == sample(5).to_dict()
-    assert (said["outcome"]["sex_check"], said["outcome"]["genotype_check"]) == (
+    ((outcome,),) = [said["outcomes"]]
+    assert (outcome["source"], outcome["pairing"], outcome["genotype_check"]) == (
+        se.SOURCE,
         se.NOT_IN_SGDP_FILE,
         se.GENOTYPE_NO_MATCH,
     )
@@ -734,9 +745,7 @@ def test_tables_naming_different_genomes_for_a_sample_disagree_whatever_the_kary
     ]
     # A genotype record for the sample cannot settle which genome the tables mean.
     result = run(tmp_path, "e", rows=rows, record=checks(("simons_data_sample_9", "S_Spanish-2", "S_Spanish-2")))
-    assert result.outcomes["simons_data_sample_9"] == se.Outcome(
-        "simons_data_sample_9", None, se.TABLES_DISAGREE, se.GENOTYPE_NOT_CHECKED
-    )
+    assert result.outcomes["simons_data_sample_9"] == se.Outcome("simons_data_sample_9", None, se.TABLES_DISAGREE)
     assert result.linked == ["simons_data_sample_2"]
     # Its only GRCh38 row writes no link, and no table writes one for it.
     assert not path_of(tmp_path / "e", GRCH38).exists()
@@ -781,3 +790,49 @@ def test_a_link_line_about_an_unrecognised_donor_is_counted_once_and_read_no_fur
     assert result.report["unrecognised_links"] == []
     assert [u["examples"] for u in result.report["unrecognised"]] == [{"NOT-AN-ID": 1}]
     assert "HG01504" not in by_id(result.donors)
+
+
+@pytest.mark.parametrize("row", [{"sample": ""}, {"genotype_check": "matches"}, {"sample": "s", "source": "other"}])
+def test_an_outcome_naming_no_sample_or_its_own_source_is_refused_before_it_is_written(tmp_path, row):
+    with pytest.raises(ValueError, match="every outcome names its sample"):
+        write_outcomes(tmp_path, se.SOURCE, T2T, [row])
+    assert not (tmp_path / OUTCOMES_FILE).exists()
+
+
+def test_an_outcomes_file_whose_row_names_its_own_source_is_refused_at_read(tmp_path):
+    (tmp_path / "x.ndjson").write_text("")
+    document = {"source": se.SOURCE, "dataset": T2T, "samples": [{"sample": "s", "source": "other"}]}
+    (tmp_path / OUTCOMES_FILE).write_text(json.dumps(document))
+    with pytest.raises(ValueError, match="names its own source"):
+        read_outcomes([tmp_path / "x.ndjson"])
+
+
+def test_a_blank_cell_disagrees_with_no_other_and_two_stated_karyotypes_leave_the_genotype_to_confirm(tmp_path):
+    rows = [
+        # One table states the karyotype, the other leaves it blank: the sex check reads the one stated.
+        t2t(CHM13, "simons_data_sample_1", "S_Spanish-2", "XY"),
+        t2t(GRCH38, "simons_data_sample_1", "S_Spanish-2", ""),
+        # One table names the genome, the other leaves it blank: paired.
+        t2t(CHM13, "simons_data_sample_2", "S_Tuscan-2", "XX"),
+        t2t(GRCH38, "simons_data_sample_2", "", "XX"),
+        # Two karyotypes stated: the genotype record confirms the pairing.
+        t2t(CHM13, "simons_data_sample_3", "S_Palestinian-2", "XY"),
+        t2t(GRCH38, "simons_data_sample_3", "S_Palestinian-2", "XX"),
+        # No genome named at all.
+        t2t(CHM13, "simons_data_sample_8", "", "XY"),
+    ]
+    result = run(
+        tmp_path, "e", rows=rows, record=checks(("simons_data_sample_3", "S_Palestinian-2", "S_Palestinian-2"))
+    )
+    found = {s: (o.pairing, o.sex_check, o.confirmed_by) for s, o in result.outcomes.items()}
+    assert found == {
+        "simons_data_sample_1": (se.PAIRED, se.SEX_AGREES, (SEX,)),
+        "simons_data_sample_2": (se.PAIRED, se.SEX_AGREES, (SEX,)),
+        "simons_data_sample_3": (se.PAIRED, se.KARYOTYPES_DISAGREE, (GENOTYPE,)),
+        "simons_data_sample_8": (se.NO_SGDP_ID, se.NOT_CHECKED, ()),
+    }
+    # A blank row writes no link; the row naming the genome does.
+    assert [g["target_key_value"] for g in written(tmp_path / "e", GRCH38)] == [
+        "simons_data_sample_1",
+        "simons_data_sample_3",
+    ]

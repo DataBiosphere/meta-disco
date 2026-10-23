@@ -194,8 +194,9 @@ SAMPLE_RULES_NOTE = (
     "`anatomical_site_as_written` a sample its site (#699). Counted by the sources a reconciled record's "
     "`samples` lists, the identifier rule keying each donor and sample record, and the claims on those "
     "records' slots. The two identity checks (`sgdp_sex_agrees`, `sgdp_genotype_matches`, #718) let the SGDP "
-    "importer link a sample to its donor; no record cites a check, so each counts none here, and which samples "
-    "each confirmed is in the import's `outcomes.json` and the reconcile report's `no_donor`."
+    "importer link a sample to its donor; no record cites a check, so each counts none here. Which samples each "
+    "confirmed is in the import's `outcomes.json`; the reconcile report's `no_donor` lists the samples a file names "
+    "that none confirmed, with their checks."
 )
 UNDECLARED_HEAD = "Rule names with no rule behind them"
 SAMPLE_NAMESPACES = "src/meta_disco/rules/sample_namespaces.yaml"

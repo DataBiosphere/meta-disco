@@ -989,9 +989,11 @@ SGDP_GENOTYPE_MATCHES = IdentityCheck(
     ),
     rationale=(
         "Two genomes whose genotypes match are one person, whatever either side says about sex: of the nine "
-        "samples measured, each matching pairing scored 0.96-1.00 and every other genome at most 0.62 "
+        "samples measured by bcftools gtcheck, each matching pairing differed at 0-60 of 25,000-31,000 sites and "
+        "every other genome at 1.98% of sites or more "
         "(docs/studies/sgdp-genome-identity.md, #718). The record is a measurement, not a source: it adds no "
-        "value to a record, it only confirms the pairing T2T_CHRY's table states."
+        "value to a record. It confirms the pairing T2T_CHRY's table states, or, recording that the genotypes match "
+        "another genome or none, leaves the sample out whatever its sex check says."
     ),
 )
 

@@ -10,19 +10,12 @@ SGDP's metadata file (:data:`URL`, Mallick et al. 2016) gives, per SGDP name, th
 **The join is on SGDP's name** (contract 2.10): the target publishes it (``sgdp_id``), so the file's
 ``SGDP_ID`` is joined on it as written. The pairing of a sample with an SGDP name rests on T2T_CHRY's
 tables alone (the files' headers name only ``simons_data_sample_N``), so **a sample is written only where
-a check confirms the pairing** (``code_rules.IDENTITY_CHECKS``), in every table naming the sample:
-
-- ``code_rules.SGDP_SEX_AGREES``: SGDP's ``Gender`` (``M``, ``F``) is T2T_CHRY's ``karyotype`` (``XY``,
-  ``XX``, :data:`KARYOTYPE`), the one fact both sides state about the genome. 275 of 279 samples agree
-  (#559).
-- ``code_rules.SGDP_GENOTYPE_MATCHES``: the sample's genotypes match the paired genome's in SGDP's or
-  HGDP's public release, as recorded in ``sources/sgdp_genotype_checks.yaml`` (:func:`load_genotype_checks`,
-  #718). It confirms three samples the sex check cannot: one whose karyotype contradicts SGDP's sex, and
-  two SGDP gives no sex for. A recorded non-match leaves a sample out whatever its sex check says.
-
-A sample SGDP's file does not hold, or whose tables disagree, is written nothing. Every sample's
-:class:`Outcome` (both checks, and which confirmed it) is written beside the evidence
-(``entity_evidence.OUTCOMES_FILE``), where reconcile reads why a sample has no donor.
+one of** ``code_rules.IDENTITY_CHECKS`` **confirms the pairing**: SGDP's sex agreeing with T2T_CHRY's
+karyotype (:data:`KARYOTYPE`), or a genotype match recorded in ``sources/sgdp_genotype_checks.yaml``
+(:func:`load_genotype_checks`, #718), and no recorded non-match. A sample whose tables name two genomes or
+none, or whose genome SGDP's file does not hold, is written nothing; a blank cell says nothing, so it disagrees
+with no other. Every sample's :class:`Outcome` is written beside the
+evidence (``entity_evidence.OUTCOMES_FILE``), where reconcile reads why a sample has no donor.
 
 **Each line is cited to the source that wrote it** (contract 1.1), one file per source in a generation:
 
@@ -44,19 +37,18 @@ import hashlib
 import io
 from collections import Counter
 from collections.abc import Callable, Iterator
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from importlib.resources import files
 from pathlib import Path
 
 import requests
-import yaml
 
 from . import code_rules
 from .anvil_evidence import verbatim_manifest
 from .azul_manifest import FORMAT_VERBATIM, REPOSITORY, iter_verbatim_entities, sidecar_datasets, sidecar_requested_at
 from .entity_evidence import read_entity_envelope, write_entity_file, write_outcomes
-from .lineage_map import expect_keys, expect_mapping, expect_name
+from .lineage_map import expect_keys, expect_mapping, map_document
 from .models import (
     COLLECTED_FROM,
     JOIN_KEY_ENTITY_IDENTIFIER,
@@ -104,18 +96,20 @@ KARYOTYPE_COLUMN = "karyotype"
 # The karyotype each of SGDP's sexes is: the check both sides must pass.
 KARYOTYPE = {"M": "XY", "F": "XX"}
 
-# What the sex check found for a sample; the first three mean the tables name one genome, which SGDP's file holds.
+# Whether the tables pair a sample with one genome SGDP's file holds: only a paired sample can be linked, the sex
+# check needs one, and the genotype record is read wherever the tables name one genome.
+PAIRED = "paired"
+TABLES_DISAGREE = "tables_disagree"
+NO_SGDP_ID = "no_sgdp_id"
+NOT_IN_SGDP_FILE = "not_in_sgdp_file"
+# What a check found of a sample's pairing: the sex check's, and the genotype record's.
 SEX_AGREES = "agrees"
 SEX_CONTRADICTS = "contradicts"
 SEX_NOT_STATED = "not_stated"
-NOT_IN_SGDP_FILE = "not_in_sgdp_file"
-TABLES_DISAGREE = "tables_disagree"
-SEX_CHECKS = (SEX_AGREES, SEX_CONTRADICTS, SEX_NOT_STATED, NOT_IN_SGDP_FILE, TABLES_DISAGREE)
-# What the genotype record says of the sample's pairing.
+KARYOTYPES_DISAGREE = "karyotypes_disagree"
 GENOTYPE_MATCHES = "matches"
 GENOTYPE_NO_MATCH = "no_match"
-GENOTYPE_NOT_CHECKED = "not_checked"
-GENOTYPE_CHECKS = (GENOTYPE_MATCHES, GENOTYPE_NO_MATCH, GENOTYPE_NOT_CHECKED)
+NOT_CHECKED = "not_checked"
 
 
 @dataclass(frozen=True)
@@ -128,19 +122,20 @@ class SgdpFile:
 
 @dataclass(frozen=True)
 class Outcome:
-    """One sample's checks: the SGDP genome its tables pair it with (None where they disagree), what the sex check
-    found (:data:`SEX_CHECKS`) and what the genotype record says (:data:`GENOTYPE_CHECKS`)."""
+    """One sample's outcome: the SGDP genome its tables pair it with (None where they disagree), whether that is a
+    pairing to check (``pairing``), and what each check found of it."""
 
     sample: str
     sgdp_id: str | None
-    sex_check: str
-    genotype_check: str
+    pairing: str
+    sex_check: str = NOT_CHECKED
+    genotype_check: str = NOT_CHECKED
 
     @property
     def confirmed_by(self) -> tuple[str, ...]:
-        """The ids of the checks that confirm the pairing, where it can be written: the tables name one genome SGDP's
-        file holds, and no genotype record says the sample is someone else."""
-        if self.sex_check in (NOT_IN_SGDP_FILE, TABLES_DISAGREE) or self.genotype_check == GENOTYPE_NO_MATCH:
+        """The ids of the checks that confirm the pairing, none where a genotype record says the sample is someone
+        else."""
+        if self.pairing != PAIRED or self.genotype_check == GENOTYPE_NO_MATCH:
             return ()
         checks = []
         if self.sex_check == SEX_AGREES:
@@ -151,13 +146,7 @@ class Outcome:
 
     def to_dict(self) -> dict:
         """The outcome as the generation's outcomes file holds it."""
-        return {
-            "sample": self.sample,
-            "sgdp_id": self.sgdp_id,
-            "sex_check": self.sex_check,
-            "genotype_check": self.genotype_check,
-            "confirmed_by": list(self.confirmed_by),
-        }
+        return asdict(self) | {"confirmed_by": list(self.confirmed_by)}
 
 
 @dataclass
@@ -179,7 +168,6 @@ class GenotypeCheck:
     """One sample's genotype record: the SGDP genome its tables paired it with when measured, and the genome its
     genotypes match, None where none does."""
 
-    sample: str
     sgdp_id: str
     matched: str | None
 
@@ -262,9 +250,9 @@ def t2t_rows(manifest: Path) -> dict[str, list[T2tRow]]:
 
 
 _GENOTYPE_WHERE = "sgdp genotype checks"
-_GENOTYPE_KEYS = {"catalog", "dataset", "measured", "region", "references", "samples"}
+_GenotypeLoader = unique_key_loader(_GENOTYPE_WHERE)
+_GENOTYPE_ENTRY_KEYS = {"measured", "region", "references", "samples"}
 _GENOTYPE_SAMPLE_KEYS = {"sgdp_id", "matched", "best"}
-_GENOTYPE_SCORE_KEYS = {"genome", "concordance", "sites"}
 
 
 def default_genotype_checks_resource():
@@ -273,70 +261,51 @@ def default_genotype_checks_resource():
 
 
 def load_genotype_checks(source: Readable | None = None) -> GenotypeChecks:
-    """Load and check the genotype record, the bundled one by default; ``ValueError`` naming where it is wrong.
-
-    Checked: its top-level keys, ``dataset`` :data:`DATASET`, ``references`` a mapping of names to URLs; per sample an
-    ``sgdp_id``, a ``matched`` genome or null, and under ``best`` each declared reference's scores, each a genome, a
-    concordance from 0 to 1 and a count of sites. The scores are the measurement's record; the importer reads only
-    ``sgdp_id`` and ``matched``.
+    """Load the genotype record, the bundled one by default: its ``catalog``, and each sample's ``sgdp_id`` and
+    ``matched`` genome (or null), the three the importer reads; ``best`` holds the scores, for a person, and is not read. ``ValueError`` naming
+    where it is wrong.
     """
     resource = source if source is not None else default_genotype_checks_resource()
-    document = yaml.load(resource.read_text(encoding="utf-8"), Loader=unique_key_loader(_GENOTYPE_WHERE))
-    expect_keys(document, _GENOTYPE_KEYS, _GENOTYPE_KEYS, _GENOTYPE_WHERE)
-    assert isinstance(document, dict)
-    catalog = expect_name(document["catalog"], f"{_GENOTYPE_WHERE} catalog")
-    if document["dataset"] != DATASET:
-        raise ValueError(f"{_GENOTYPE_WHERE}: dataset is {document['dataset']!r}, not {DATASET}")
-    for key in ("measured", "region"):
-        expect_name(document[key], f"{_GENOTYPE_WHERE} {key}")
-    references = document["references"]
-    expect_mapping(references, f"{_GENOTYPE_WHERE} references", "reference")
-    if not all(isinstance(u, str) and u.startswith("https://") for u in references.values()):
-        raise ValueError(f"{_GENOTYPE_WHERE} references: each is a reference's https URL")
-    expect_mapping(document["samples"], f"{_GENOTYPE_WHERE} samples", "sample")
+    document = map_document(resource, _GenotypeLoader, _GENOTYPE_WHERE, set())
+    datasets = document["datasets"]
+    if set(datasets) != {DATASET}:
+        raise ValueError(f"{_GENOTYPE_WHERE}: datasets are {sorted(datasets)}, not {DATASET} alone")
+    entry = datasets[DATASET]
+    expect_keys(entry, _GENOTYPE_ENTRY_KEYS, _GENOTYPE_ENTRY_KEYS, f"{_GENOTYPE_WHERE} {DATASET}")
+    expect_mapping(entry["samples"], f"{_GENOTYPE_WHERE} samples", "sample")
     checks = {}
-    for sample, entry in document["samples"].items():
+    for sample, found in entry["samples"].items():
         at = f"{_GENOTYPE_WHERE} {sample}"
-        expect_keys(entry, _GENOTYPE_SAMPLE_KEYS, _GENOTYPE_SAMPLE_KEYS, at)
-        assert isinstance(entry, dict)
-        sgdp_id = expect_name(entry["sgdp_id"], f"{at} sgdp_id")
-        matched = entry["matched"]
-        if matched is not None:
-            matched = expect_name(matched, f"{at} matched")
-        best = entry["best"]
-        if not isinstance(best, dict) or set(best) != set(references):
-            raise ValueError(f"{at} best: needs the scores of each reference, {sorted(references)}")
-        for reference, scores in best.items():
-            if not isinstance(scores, list) or not scores:
-                raise ValueError(f"{at} best {reference}: a non-empty list of scores")
-            for score in scores:
-                expect_keys(score, _GENOTYPE_SCORE_KEYS, _GENOTYPE_SCORE_KEYS, f"{at} best {reference}")
-                expect_name(score["genome"], f"{at} best {reference} genome")
-                concordance, sites = score["concordance"], score["sites"]
-                if not isinstance(concordance, (int, float)) or not 0 <= concordance <= 1:
-                    raise ValueError(f"{at} best {reference}: concordance {concordance!r} is not from 0 to 1")
-                if not isinstance(sites, int) or isinstance(sites, bool) or sites < 1:
-                    raise ValueError(f"{at} best {reference}: sites {sites!r} is not a positive count")
-        checks[sample] = GenotypeCheck(str(sample), sgdp_id, matched)
-    return GenotypeChecks(catalog, checks)
+        expect_keys(found, _GENOTYPE_SAMPLE_KEYS, _GENOTYPE_SAMPLE_KEYS, at)
+        sgdp_id, matched = found["sgdp_id"], found["matched"]
+        if (
+            not isinstance(sgdp_id, str)
+            or not sgdp_id
+            or not (matched is None or (isinstance(matched, str) and matched))
+        ):
+            raise ValueError(f"{at}: sgdp_id must name a genome, and matched a genome or null")
+        checks[sample] = GenotypeCheck(sgdp_id, matched)
+    return GenotypeChecks(document["catalog"], checks)
 
 
 def outcome(sample: str, rows: list[T2tRow], sgdp: dict[str, dict[str, str]], checks: GenotypeChecks) -> Outcome:
-    """One sample's :class:`Outcome`. The sex check: ``tables_disagree`` unless every T2T_CHRY row naming the sample
-    names one SGDP genome and one karyotype; ``not_in_sgdp_file`` unless SGDP's file holds the genome;
-    ``not_stated`` where SGDP's sex or the karyotype is neither of :data:`KARYOTYPE`'s; else whether they agree.
-    The genotype check: ``not_checked`` where the record has no entry for the sample or its tables disagree, else
-    whether the genome it matched is the one the tables pair it with.
+    """One sample's :class:`Outcome`, its tables' blank cells passed over. The pairing: ``tables_disagree`` where
+    the T2T_CHRY rows naming the sample name two SGDP genomes, ``no_sgdp_id`` where they name none,
+    ``not_in_sgdp_file`` unless SGDP's file holds the genome. The sex check, of a paired sample:
+    ``karyotypes_disagree`` where the rows state two karyotypes, ``not_stated`` where SGDP's sex or the karyotype is
+    neither of :data:`KARYOTYPE`'s, else whether they agree. The genotype check: ``not_checked`` where the tables name
+    two genomes or the record has no entry for the sample, else whether the genome it matched is the one the tables
+    pair it with.
 
     ``ValueError`` where the record's entry was measured against another pairing than the tables state: the
     tables have changed since, and the sample is to be measured again.
     """
-    pairs = {(r.sgdp_id, r.karyotype) for r in rows}
-    if len(pairs) != 1:
-        return Outcome(sample, None, TABLES_DISAGREE, GENOTYPE_NOT_CHECKED)
-    ((sgdp_id, karyotype),) = pairs
+    names = {r.sgdp_id for r in rows if r.sgdp_id}
+    if len(names) > 1:
+        return Outcome(sample, None, TABLES_DISAGREE)
+    sgdp_id = next(iter(names), None)
     check = checks.by_sample.get(sample)
-    genotype = GENOTYPE_NOT_CHECKED
+    genotype = NOT_CHECKED
     if check is not None:
         if check.sgdp_id != sgdp_id:
             raise ValueError(
@@ -344,13 +313,20 @@ def outcome(sample: str, rows: list[T2tRow], sgdp: dict[str, dict[str, str]], ch
                 f"{sgdp_id!r}; measure it again"
             )
         genotype = GENOTYPE_MATCHES if check.matched == sgdp_id else GENOTYPE_NO_MATCH
-    found = sgdp.get(sgdp_id) if sgdp_id else None
+    if sgdp_id is None:
+        return Outcome(sample, None, NO_SGDP_ID)
+    found = sgdp.get(sgdp_id)
     if found is None:
-        return Outcome(sample, sgdp_id, NOT_IN_SGDP_FILE, genotype)
+        return Outcome(sample, sgdp_id, NOT_IN_SGDP_FILE, genotype_check=genotype)
+    karyotypes = {r.karyotype for r in rows if r.karyotype}
     sex = KARYOTYPE.get(found[GENDER] or "")
-    if sex is None or karyotype not in KARYOTYPE.values():
-        return Outcome(sample, sgdp_id, SEX_NOT_STATED, genotype)
-    return Outcome(sample, sgdp_id, SEX_AGREES if sex == karyotype else SEX_CONTRADICTS, genotype)
+    if len(karyotypes) > 1:
+        verdict = KARYOTYPES_DISAGREE
+    elif sex is None or not karyotypes or (karyotype := next(iter(karyotypes))) not in KARYOTYPE.values():
+        verdict = SEX_NOT_STATED
+    else:
+        verdict = SEX_AGREES if sex == karyotype else SEX_CONTRADICTS
+    return Outcome(sample, sgdp_id, PAIRED, verdict, genotype)
 
 
 def link_lines(rows: list[T2tRow]) -> Iterator[EntityEvidenceRow]:
@@ -412,14 +388,15 @@ def import_sgdp(
     A T2T_CHRY file's source is the table, its url ``service`` (the Azul service the manifest came from), its
     ``fetched_at`` the verbatim manifest's request time; SGDP's file's version is its sha256, since SGDP
     publishes none, and its ``fetched_at`` when it was downloaded. Raises, writing nothing, where T2T_CHRY's
-    verbatim manifest cannot be read or has no request time, the genotype record was measured against another
-    catalog, names a sample the tables do not or pairs one differently (:func:`outcome`), or no sample is
+    verbatim manifest cannot be read or has no request time, the genotype record was measured on another
+    catalog's files (confirm it still holds, then name the catalog), names a sample the tables do not or pairs one
+    differently (:func:`outcome`), or no sample is
     confirmed: a generation confirming no sample would supersede an older one with no links at all, so the import
     is refused and any older generation stays current for a person to look at.
     """
     checks = checks if checks is not None else load_genotype_checks()
     if checks.catalog != catalog:
-        raise ValueError(f"{_GENOTYPE_WHERE}: measured against {checks.catalog}'s files, not {catalog}'s")
+        raise ValueError(f"{_GENOTYPE_WHERE}: measured on {checks.catalog}'s files, not {catalog}'s")
     manifest = verbatim_manifest(manifest_root, catalog, DATASET, sidecar_datasets(manifest_root, catalog))
     if isinstance(manifest, str):
         raise ValueError(manifest)
@@ -438,8 +415,8 @@ def import_sgdp(
         if found.confirmed_by:
             confirmed.extend(t2t[sample])
     if not confirmed:
-        counts = Counter(o.sex_check for o in result.outcomes.values())
-        said = ", ".join(f"{check} {n:,}" for check, n in sorted(counts.items()))
+        counts = Counter(f"{o.pairing}/{o.sex_check}/{o.genotype_check}" for o in result.outcomes.values())
+        said = ", ".join(f"{found} {n:,}" for found, n in sorted(counts.items()))
         raise ValueError(f"{DATASET}: no SGDP sample confirmed ({said or 'no SGDP rows'}); nothing written")
     genomes = sorted({r.sgdp_id for r in confirmed if r.sgdp_id})
     with staged_generation(result.directory) as staging:
@@ -460,7 +437,7 @@ def import_sgdp(
             donor_lines(genomes, sgdp),
         )
         (staging / KEPT_FILE).write_bytes(got.content)
-        write_outcomes(staging, DATASET, (o.to_dict() for o in result.outcomes.values()))
+        write_outcomes(staging, SOURCE, DATASET, (o.to_dict() for o in result.outcomes.values()))
     return result
 
 
@@ -476,5 +453,5 @@ def describe(result: Import) -> list[str]:
         out.append(f"    confirmed by {check.id}: {n:,}")
     left = [o for o in result.outcomes.values() if not o.confirmed_by]
     out.append(f"  left out: {len(left):,}")
-    out += [f"    {o.sample} ({o.sgdp_id}): sex {o.sex_check}, genotype {o.genotype_check}" for o in left]
+    out += [f"    {o.sample} ({o.sgdp_id}): {o.pairing}, sex {o.sex_check}, genotype {o.genotype_check}" for o in left]
     return out

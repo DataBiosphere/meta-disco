@@ -90,35 +90,41 @@ not a source, and adds no value to any record. Two runs of it:
   Positions lifted to GRCh38 with UCSC's `hg19ToHg38.over.chain.gz` (ungapped blocks, + strand).
 
 **Method.**
-- Window: chr22:25,000,000–26,000,000 (GRCh38); biallelic SNPs of each reference, read with
+- Window: chr22:25,000,000–26,000,000 (GRCh38); each reference's biallelic SNPs, read with
   `bcftools view -r … -v snps -m2 -M2` (HGDP 25,920 sites; SGDP 30,821 in the window after lifting).
-- The sample's genotype at a reference site is its gVCF call's where the call's ALT is the site's, 0/0 where
-  a reference block covers the site, unknown otherwise. The gVCFs are read in place from AnVIL's public S3
-  mirror (`https://anvilproject.s3.amazonaws.com/file/<md5>.md5`), the index likewise.
-- A site counts for a pair where both genotypes are known and either is non-reference; **concordance** is the
-  share of counted sites with the same allele dosage.
+- The sample's genotype at each reference site is its gVCF call's where the call's ALT is the site's, 0/0 where a
+  reference block covers the site, missing otherwise, written as a plain one-sample VCF of the reference's sites
+  with the reference's contig lines. `gtcheck` cannot take the gVCF itself: it compares a site only where position
+  and ALT match, and the gVCF's ALTs carry `<NON_REF>`. The gVCFs are read in place from AnVIL's public S3 mirror
+  (`https://anvilproject.s3.amazonaws.com/file/<md5>.md5`), the index likewise.
+- `bcftools gtcheck -u GT,GT -E 0 -g <reference> <sample>` counts, per reference genome, the **mismatches** among
+  the sites where both genotypes are known. Genomes are ranked by the share of sites that mismatch.
 
-**Controls.** Five samples the sex check confirmed, from the four genomes' populations (`B_Australian-4` is not in HGDP):
+**Controls.** Five samples the sex check confirmed, from the four genomes' populations (`B_Australian-4` is not in
+HGDP). Mismatches of sites compared:
 
 | Sample | Paired with | HGDP | SGDP | Best other genome |
 |---|---|---|---|---|
-| `simons_data_sample_209` | `S_Palestinian-1` (HGDP00722) | 1.000 | 0.964 | 0.415 |
-| `simons_data_sample_166` | `S_Palestinian-3` (HGDP00737) | 1.000 | 0.973 | 0.564 |
-| `simons_data_sample_171` | `S_Naxi-1` (HGDP01338) | 0.999 | 0.963 | 0.616 |
-| `simons_data_sample_185` | `S_Naxi-3` (HGDP01345) | 1.000 | 0.969 | 0.486 |
-| `simons_data_sample_116` | `B_Australian-4` | — | 0.973 | 0.593 |
+| `simons_data_sample_209` | `S_Palestinian-1` (HGDP00722) | 0 / 25,445 | 48 / 30,787 | 3.3% |
+| `simons_data_sample_166` | `S_Palestinian-3` (HGDP00737) | 0 / 25,475 | 44 / 30,783 | 3.3% |
+| `simons_data_sample_171` | `S_Naxi-1` (HGDP01338) | 1 / 25,517 | 53 / 30,792 | 2.7% |
+| `simons_data_sample_185` | `S_Naxi-3` (HGDP01345) | 0 / 25,440 | 48 / 30,780 | 3.7% |
+| `simons_data_sample_116` | `B_Australian-4` | — | 33 / 30,766 | 2.0% |
 
-The same person scores 0.999–1.000 against HGDP's calls and 0.963–0.973 against SGDP's imputed ones; any
-other genome at most 0.62.
+The same person differs at 0–1 sites of HGDP's calls and 33–53 of SGDP's (its genotypes are imputed, so a few
+differ); every other genome at 1.98% of sites or more, about 600 or more.
 
 **The four.**
 
 | Sample | Paired with | Best match | Best other genome | Verdict |
 |---|---|---|---|---|
-| `simons_data_sample_187` | `S_Palestinian-2` | HGDP00725 1.000; S_Palestinian-2 0.966 | 0.474 | the pairing holds |
-| `simons_data_sample_304` | `S_Norwegian-1` | S_Norwegian-1 0.967 (not in HGDP) | 0.454 | the pairing holds |
-| `simons_data_sample_33` | `B_Australian-3` | B_Australian-3 0.965 (not in HGDP) | 0.529 | the pairing holds |
-| `simons_data_sample_273` | `S_Naxi-2` | none: HGDP01345 (S_Naxi-3) 0.570 | — | no match |
+| `simons_data_sample_187` | `S_Palestinian-2` | HGDP00725 0 / 25,536; S_Palestinian-2 48 / 30,788 | 3.3% | the pairing holds |
+| `simons_data_sample_304` | `S_Norwegian-1` | S_Norwegian-1 40 / 30,799 (not in HGDP) | 2.7% | the pairing holds |
+| `simons_data_sample_33` | `B_Australian-3` | B_Australian-3 60 / 30,756 (not in HGDP) | 2.9% | the pairing holds |
+| `simons_data_sample_273` | `S_Naxi-2` | none: S_Naxi-3 806 / 30,783 (2.6%) | — | no match |
+
+A first pass the same day, scoring allele-dosage concordance over the same sites with a script of mine, gave the
+same verdict for all nine (the same person 0.963–1.000, any other genome at most 0.62).
 
 ## 5. Each of the four
 
@@ -142,22 +148,27 @@ nothing on the donor record conflicts; the outcome records the sex check as `con
 has nothing to compare. Each matches its SGDP genome. Their donors carry no sex.
 
 **`S_Naxi-2` — left out.** SGDP's metadata file has `S_Naxi-1` and `S_Naxi-3` but not `S_Naxi-2`, neither
-release holds it, and sample 273 matches no genome of either: its best, HGDP01345 (`S_Naxi-3`) at 0.570, is
-within the range of other genomes of a population. There is no person to link it to. Its 118 single-sample
+release holds it, and sample 273 matches no genome of either: its best, `S_Naxi-3`, differs at 2.6% of sites, the
+range of other genomes of a population. I think that is shared ancestry and not a relative, but a mismatch count
+does not measure relatedness; that is not checked. There is no person to link it to. Its 118 single-sample
 files, and every multi-sample file naming it (the joint-called files and the SGDP workspace tars), reach no
 donor for it; reconcile's `entities.donor_reach` counts them and `entities.samples.no_donor` lists it with its
 checks. Not tried: SGDP's paper's supplementary tables.
 
 ## 6. Measuring it again
 
-A sample is added to `sgdp_genotype_checks.yaml` by hand, from a run of the method above; the importer refuses
-an entry whose `sgdp_id` is not the pairing the tables state today, so a changed table means measuring again.
-The 2026-10-22 run's scripts are not in the repository. Its inputs:
+A sample is added to `sgdp_genotype_checks.yaml` by hand, from a run of the method above. The importer refuses an
+entry whose `sgdp_id` is not the pairing the tables state today, so a changed table means measuring again; and it
+refuses the record on another catalog than the one it names, until a person confirms it still holds there.
+The 2026-10-22 run's scripts are not in the repository (#738 would add a re-runnable target). Its steps:
 
 1. the HGDP window, all genomes (7 minutes over HTTP; 121 MB as BCF):
    `bcftools view -r chr22:25000000-26000000 -v snps -m2 -M2 -Ob -o hgdp.bcf <HGDP URL>`;
 2. the SGDP window in GRCh37 coordinates covering the GRCh38 window:
    `bcftools view -r 22:25390000-26400000 -v snps -m2 -M2 -Ob -o sgdp.bcf <SGDP URL>`;
-3. each sample's gVCF records over the window:
+3. SGDP's genotypes, lifted to GRCh38 positions with the chain and kept within the window, written as a GRCh38 VCF;
+4. each sample's gVCF records over the window:
    `bcftools query -r chr22:25000000-26000000 -f '%POS\t%END\t%REF\t%ALT\t[%GT]\n' '<gVCF URL>##idx##<index URL>'`,
-   the gVCF at `SGDP_GRCh38/haplotype_calling_vcfs/chr22/<sample>.chr22.hc.vcf.gz` (its `file_path`).
+   the gVCF at `SGDP_GRCh38/haplotype_calling_vcfs/chr22/<sample>.chr22.hc.vcf.gz` (its `file_path`), written as
+   its genotypes at each reference's sites (Method, above);
+5. per reference, `bcftools gtcheck -u GT,GT -E 0 -g <reference>.bcf <sample>.bcf`.
