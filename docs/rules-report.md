@@ -69,7 +69,7 @@ Every rule meta-disco uses to describe a file, such as "a .bam file holds alignm
 | `program_minimap2` | yaml | content | 3 | Minimap2 is a versatile aligner for long reads (PacBio, ONT) and assemblies. Can also be used for direct RNA with -ax splice preset | general | 1,400 | 1,400 | 1,400 | `ANVIL_HPRC` 738; `AnVIL_HPRC_R2` 659; `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` 3 |
 | `program_ccs` | yaml | content | 3 | The 'ccs' program generates HiFi reads from PacBio subreads. Confirms PacBio platform (used for both WGS and IsoSeq) | general | 1,810 | 1,810 | 1,810 | `AnVIL_HPRC_R2` 1,260; `ANVIL_HPRC` 550 |
 | `platform_aligner_preset_ont` | yaml | content | 3 | minimap2/Winnowmap's -x map-ont preset aligns Oxford Nanopore reads, so the alignment's reads are ONT | general | 28 | 28 | 28 | `ANVIL_T2T` 28 |
-| `platform_aligner_preset_pacbio` | yaml | content | 3 | minimap2/Winnowmap's -x map-pb, map-pb-clr and map-hifi presets align PacBio reads (CLR or HiFi), so the alignment's reads are PacBio | general | 124 | 124 | 124 | `ANVIL_HPRC` 90; `ANVIL_T2T` 34 |
+| `platform_aligner_preset_pacbio` | yaml | content | 3 | minimap2/Winnowmap's -x map-pb and Winnowmap's map-pb-clr presets align PacBio reads (CLR or HiFi), so the alignment's reads are PacBio | general | 124 | 124 | 124 | `ANVIL_HPRC` 90; `ANVIL_T2T` 34 |
 | `aligned_has_sq` | yaml | content | 3 | @SQ lines declare a reference, so the file is aligned to it. The reads themselves are not read (#538) | general | 14,284 | 42,852 | 14,284 | `ANVIL_T2T_CHRY` 3,760; `ANVIL_T2T` 3,299; `ANVIL_1000G_high_coverage_2019` 3,202; and 7 more |
 | `unaligned_no_sq` | yaml | content | 3 | No @SQ lines: the header declares no reference, so the file holds unaligned reads. Common for PacBio HiFi and ONT mod-base deliverables | general | 3,113 | 12,452 | 3,113 | `AnVIL_HPRC_R2` 2,207; `ANVIL_HPRC` 900; `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` 6 |
 | `vcf_ref_grch38` | yaml | content | 3 | ##reference line containing GRCh38, hg38, or the GRCh38 GenBank accession indicates variants called against GRCh38 | general | 37,811 | 37,811 | 4,658 | `ANVIL_T2T` 34,339; `ANVIL_1000G_high_coverage_2019` 3,252; `ANVIL_HPRC` 148; and 1 more |
@@ -1546,7 +1546,7 @@ When:
 extensions: [".bam", ".cram"]
 header_section: "@PG"
 header_field: "CL"
-header_pattern: "^(\\S*/)?(minimap2|winnowmap)\\s(.*\\s)?-(?-i:[a-zA-Z]*x)\\s*map-(pb|pb-clr|hifi)(\\s|$)"
+header_pattern: "^(\\S*/)?(minimap2|winnowmap)\\s(.*\\s)?-(?-i:[a-zA-Z]*x)\\s*map-(pb|pb-clr)(\\s|$)"
 ```
 
 Then:
@@ -1558,7 +1558,7 @@ platform: PACBIO
 Rationale:
 
 ```text
-minimap2/Winnowmap's -x map-pb, map-pb-clr and map-hifi presets align PacBio reads (CLR or HiFi), so the alignment's reads are PacBio
+minimap2/Winnowmap's -x map-pb and Winnowmap's map-pb-clr presets align PacBio reads (CLR or HiFi), so the alignment's reads are PacBio
 ```
 
 ### `aligned_has_sq`
