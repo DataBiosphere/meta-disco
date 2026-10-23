@@ -63,6 +63,8 @@ from .azul_manifest import (
     sidecar_datasets,
     sidecar_requested_at,
 )
+from .edges import CHECKSUM_CATEGORY
+from .file_name import EXTENSION_MAP, FileName
 from .models import (
     JOIN_KEY_DRS_URI,
     JOIN_KEY_FILE_ID,
@@ -73,7 +75,7 @@ from .models import (
 )
 from .sample_identity import SAMPLE, Identifier, IdentifierRuleSet, identifier_rules, name_contradicts
 from .schema.classification_model import ImporterSourceTypeEnum, JoinKeyEnum
-from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource, is_derivative_name
+from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource
 from .source_evidence import (
     EvidenceEntry,
     EvidenceFileEnvelope,
@@ -94,6 +96,10 @@ from .source_evidence import (
 # each other's generations of a dataset, and that is the intent; two kinds never do.
 PUBLISHED_DIR = f"{REPOSITORY}_published"
 EVIDENCE_DIRS = {SOURCE_REPOSITORY_METADATA: REPOSITORY, SOURCE_PUBLISHED_VALUE: PUBLISHED_DIR}
+
+# The `EXTENSION_MAP` categories of a file that is another file's index or checksum, which a
+# folder entry must not reach (#604): their slots are not their payload's (#437, #596).
+SIDECAR_CATEGORIES = frozenset({"index", CHECKSUM_CATEGORY})
 
 
 def evidence_dir(slot_map: SlotMap) -> str:
@@ -235,6 +241,13 @@ def file_index(path: Path, with_paths: bool) -> FileIndex:
     return FileIndex(handles=frozenset(handles), file_ids=frozenset(file_ids), by_path=tuple(sorted(by_path)))
 
 
+def is_sidecar_file(name: str) -> bool:
+    """Whether a file's own name says it is an index or checksum of another file: its core
+    extension, every compression wrapper peeled (``FileName.parse``), is one ``EXTENSION_MAP``
+    files under :data:`SIDECAR_CATEGORIES` — ``a.bam.pbi``, ``a.fa.fai.gz``, ``a.fast5.md5.gz``."""
+    return EXTENSION_MAP.get(FileName.parse(name).extension or "") in SIDECAR_CATEGORIES
+
+
 def folder_files(entry: ColumnEntry, value: object, files: FileIndex) -> list[str] | None:
     """The ``file_ref`` of each file a folder entry reaches from a cell, stored under the entry's
     prefix for the folder the cell names; None where the cell names no top folder — a non-empty
@@ -259,7 +272,7 @@ def check(slot_map: SlotMap, manifest_root: Path, catalog: str, datasets: list[s
     non-empty value names a top folder (:func:`folder_files`), each folder reaches at least
     one of the dataset's files, no file is reached from two rows — the one-to-one a
     folder entry is declared on, since two rows would give one file two rows' values — and
-    none is an index or checksum by its own name (``slot_map.is_derivative_name``), whose
+    none is an index or checksum by its own name (:func:`is_sidecar_file`), whose
     slots are not its payload's (#437, #596) and which a folder's column name cannot
     exclude as a link column's name does. Per
     cell: the column appears on some row of its table
@@ -377,7 +390,7 @@ def _check_dataset(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
             sidecars = [
                 path
                 for path, handle in (files.by_path if files is not None else ())
-                if handle in reached.get(key, ()) and is_derivative_name(path.rsplit("/", 1)[-1])
+                if handle in reached.get(key, ()) and is_sidecar_file(path.rsplit("/", 1)[-1])
             ]
             if sidecars:
                 problems.append(

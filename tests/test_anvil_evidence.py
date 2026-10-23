@@ -498,7 +498,9 @@ class TestFolders:
             f"{at}: 2 files are reached from more than one row",
         ]
 
-    @pytest.mark.parametrize("name", ["a.bam.bai", "a.fast5.md5", "a.vcf.gz.tbi"])
+    @pytest.mark.parametrize(
+        "name", ["a.bam.bai", "a.fast5.md5", "a.vcf.gz.tbi", "a.bam.pbi", "a.fa.fai.gz", "a.fast5.md5.gz"]
+    )
     def test_check_refuses_a_folder_that_reaches_an_index_or_checksum(self, tmp_path, name):
         """A folder column's name cannot exclude a sidecar as a link column's name does (#596)."""
         write_dataset(tmp_path, "D", [*FOLDER_ROWS, stored_file(7, f"HG002/reads/{name}")])
@@ -506,6 +508,10 @@ class TestFolders:
             f"D/sequencing/seq_filename: reaches 1 index or checksum files (e.g. 'HG002/reads/{name}'), whose "
             "slots are not their payload's (#437, #596) — narrow files_under"
         ]
+
+    @pytest.mark.parametrize("name", ["HG_index.html", "md5_report.txt", "a.bam", "run.fast5.tar"])
+    def test_a_name_that_only_mentions_an_index_or_checksum_is_no_sidecar(self, name):
+        assert not ae.is_sidecar_file(name)
 
     def test_an_index_outside_the_folders_reach_is_no_problem(self, tmp_path):
         write_dataset(tmp_path, "D", [*FOLDER_ROWS, stored_file(7, "HG002/methylation/a.bam.bai")])

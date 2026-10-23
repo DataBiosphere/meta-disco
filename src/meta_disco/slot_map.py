@@ -36,8 +36,8 @@ begins ``<cell>/<files_under>/`` (``anvil_evidence.folder_files``)::
 
 Its column's name says nothing about the files it reaches, so the derivative and checksum
 exclusions below cannot be read off it: ``anvil_evidence.check`` refuses a folder entry that
-reaches a file whose own name ends in one of those suffixes, and the entry's ``files_under``
-is narrowed instead. It is declared per table, so it reaches files only where a map names it. What it reaches
+reaches a file whose own name says it is an index or checksum
+(``anvil_evidence.is_sidecar_file``), and the entry's ``files_under`` is narrowed instead. It is declared per table, so it reaches files only where a map names it. What it reaches
 is written as any other entry's evidence, keyed by the file's DRS URI. It may not carry
 two things a link entry may: a ``column_name`` span, because the folder column's name is a
 field label that describes no file, and the ``samples`` slot, until a folder row's sample
@@ -236,13 +236,7 @@ class SlotMap:
 
 def is_derivative_column(column: str) -> bool:
     """Whether a column name says its file is an index or checksum of another file."""
-    return is_derivative_name(column)
-
-
-def is_derivative_name(name: str) -> bool:
-    """Whether a name — a column's, or a file's own (``x.bam.bai``) — ends in an index or checksum
-    suffix (:data:`DERIVATIVE_SUFFIXES`)."""
-    tokens = name_tokens(name)
+    tokens = name_tokens(column)
     return bool(tokens) and tokens[-1] in DERIVATIVE_SUFFIXES
 
 
