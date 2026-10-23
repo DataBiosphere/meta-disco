@@ -873,3 +873,17 @@ def test_a_file_of_a_sample_whose_sources_name_two_donors_reaches_none(tmp_path)
     files = Counter({("D", entry["list_id"]): 1})
     result = reconcile_entities(evidence, rules, [entry], skipped, files_by_list=files)
     assert result.report[DONOR_REACH] == {"D": {"files_with_samples": 1, "one_sample_without_donor": 1}}
+
+
+def test_an_outcome_is_read_as_a_sample_of_its_own_files_dataset(tmp_path):
+    """`simons_data_sample_1` is a sample only in ANVIL_T2T_CHRY, so an outcome about it in another dataset names no
+    sample and is passed over."""
+    root = tmp_path / "entity_evidence"
+    for dataset in ("D", T2T):
+        lines_file(root, dataset, [(COLLECTED_FROM, "simons_data_sample_1", "S_Spanish-2")], name=f"t_{dataset}")
+        (directory,) = {p.parent for p in root.rglob(f"t_{dataset}.ndjson")}
+        write_outcomes(directory, se.SOURCE, dataset, [{"sample": "simons_data_sample_1", "said": dataset}])
+    paths, _ = select_entity_evidence(root, "anvil", CATALOG)
+    rules = identifier_rules()
+    outcomes = gather(paths, root, load(tmp_path, TABLE), rules).outcomes
+    assert [[o["said"] for o in said] for said in outcomes.values()] == [[T2T]]
