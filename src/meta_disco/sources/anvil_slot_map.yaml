@@ -134,6 +134,10 @@ datasets:
         assay_type:
           - {cell: sequencing_assay}
           - {cell: sequencing_strategy}
+      seq_filename:
+        files_under: reads
+        assay_type:
+          - {cell: sequencing_assay}
   ANVIL_T2T:
     chromosome:
       chm13_pass_vcf_gz: &t2t_chromosome_chm13

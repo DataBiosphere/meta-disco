@@ -360,3 +360,63 @@ def test_a_sample_is_read_from_exactly_one_cell(tmp_path, sources):
     path.write_text(f"catalog: anvil15\ndatasets:\n  D:\n    hifi:\n      path:\n        samples: {sources}\n")
     with pytest.raises(ValueError, match="exactly one cell"):
         load_slot_map(path)
+
+
+# --- folder entries (#604) ----------------------------------------------------
+
+FOLDER = """
+catalog: anvil15
+datasets:
+  D:
+    sequencing:
+      seq_filename:
+        files_under: reads/fast5
+        assay_type:
+          - {cell: sequencing_assay}
+          - {table_name: sequencing}
+"""
+
+
+def test_a_folder_entry_names_the_path_below_the_folder_its_column_names(tmp_path):
+    (entry,) = load(tmp_path, FOLDER).entries
+    assert entry.is_folder
+    assert entry.files_under == "reads/fast5"
+    assert entry.folder_prefix("HG002") == "HG002/reads/fast5/"
+    assert set(entry.slots) == {"assay_type"}
+
+
+def test_a_link_entry_is_not_a_folder_entry(tmp_path):
+    (entry,) = load(tmp_path, MINIMAL).entries
+    assert not entry.is_folder
+    with pytest.raises(ValueError, match="link column"):
+        entry.folder_prefix("HG002")
+
+
+@pytest.mark.parametrize(
+    "value", ['""', '"/reads"', '"reads/"', '"reads//fast5"', '"."', '".."', '"reads/../x"', "3", "null", "[reads]"]
+)
+def test_files_under_is_a_relative_path_of_folder_names(tmp_path, value):
+    refuses(tmp_path, FOLDER.replace("files_under: reads/fast5", f"files_under: {value}"), "files_under is")
+
+
+def test_a_folder_entry_maps_at_least_one_slot(tmp_path):
+    text = "catalog: anvil15\ndatasets:\n  D:\n    sequencing:\n      seq_filename:\n        files_under: reads\n"
+    refuses(tmp_path, text, "names files_under and no slot")
+
+
+def test_a_folder_columns_name_is_no_span_for_a_slot(tmp_path):
+    text = FOLDER.replace("{table_name: sequencing}", "{column_name: seq}")
+    refuses(tmp_path, text, "names a folder", "describes no file")
+
+
+def test_a_folder_entry_reads_no_samples(tmp_path):
+    text = FOLDER + "        samples:\n          - {cell: sample_id}\n"
+    refuses(tmp_path, text, "a folder entry reads no samples", "#740")
+
+
+def test_a_cell_may_not_read_a_folder_column_of_its_table_as_a_value(tmp_path):
+    text = FOLDER.replace(
+        "    sequencing:\n",
+        "    sequencing:\n      seq_fileref:\n        platform:\n          - {cell: seq_filename}\n",
+    )
+    refuses(tmp_path, text, "cell 'seq_filename' is a folder column of this table")

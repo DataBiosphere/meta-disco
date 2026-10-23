@@ -76,6 +76,11 @@ is read differently:
 | **metadata value** | holds anything else that is not an identifier | its **value** | a dimension claim (#414) |
 | **foreign key** | names another entity (`sample_id`, `analyte_id`, `maternal_id`) | its value | the subject, or an entity→entity edge |
 
+A file link need not be a URI. NIA_CARD's `sequencing` table names its runs' files by the
+folder they are stored in: `seq_filename` is `HG002_R10`, and the run's 2,436 fast5s are
+under `HG002_R10/reads/fast5/`. The slot map declares such a column a folder (#604), and
+the importer reaches the files by storage path.
+
 Read that way, `assembly` needs no classification at all: `assembly_method` is a value,
 `assembly_fai` is an index edge, `sample_id` is the subject.
 

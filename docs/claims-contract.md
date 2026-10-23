@@ -95,7 +95,11 @@ Importers say what was written. Rules say what it means. Only rules make claims.
 2.7 Every column of a source table is one of three kinds, and the meaning sits in a different
     part of each. A column is read as one kind, never two.
     - A **file link** holds a `drs://` URI, or a list of them. Its **name** carries the meaning —
-      the role the file plays. Its value is a pointer and says nothing.
+      the role the file plays. Its value is a pointer and says nothing. Where the slot map
+      declares it (#604), a file link may instead hold a **folder**: the name of a top folder of
+      the dataset's storage, reaching the files stored under a path the map names below it
+      (NIA_CARD's `sequencing.seq_filename`, `HG002_R10`, reaching `HG002_R10/reads/…`). It is
+      a pointer like a URI, and its name is a field label that describes no file.
     - A **metadata value** holds anything else that is not an identifier. Its **value** carries
       the meaning. Its name is a field label and describes no file.
     - A **foreign key** names another entity. Its value is the subject, or an edge to another
