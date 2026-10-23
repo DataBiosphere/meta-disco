@@ -8,6 +8,7 @@ bundled rows."""
 import gzip
 import json
 import re
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -47,7 +48,7 @@ from meta_disco.models import (
 )
 from meta_disco.output_utils import DONORS_FILE, RECONCILED_DIR, SAMPLES_FILE, iter_reconciled_artifact
 from meta_disco.reconcile import ENTITIES_KEY, USE_META_DISCO, USE_PUBLISHED, reconcile_run, use_for
-from meta_disco.reconcile_entities import gather, reconcile_entities, select_entity_evidence
+from meta_disco.reconcile_entities import DONOR_REACH, NO_DONOR, gather, reconcile_entities, select_entity_evidence
 from meta_disco.sample_identity import Identifier, identifier_rules, reference, sample_list
 from meta_disco.schema.classification_model import (
     DonorRecord,
@@ -682,9 +683,40 @@ def test_a_sample_is_collected_from_its_same_identifier_donor_which_then_has_a_r
         "statuses": {slot: {NOT_CLASSIFIED: 4} for slot in SAMPLE_SLOTS},
         "unknown_site_lines": [],
         "unreviewed": {},
+        "no_donor": {},
     }
     for sample in result.samples:
         SampleRecord(**sample)
+
+
+def test_a_files_samples_reach_a_donor_only_where_every_one_has_one_and_each_without_is_listed(imported, tmp_path):
+    """SRS1 has no donor: a file of it alone, and one of it with HG00096, do not reach one; HG00096's alone does."""
+    alone, both, none = (
+        sample_list(m)
+        for m in (
+            [Identifier("coriell", "HG00096")],
+            [Identifier("coriell", "HG00096"), Identifier("sra_sample", "SRS1")],
+            [Identifier("sra_sample", "SRS1")],
+        )
+    )
+    files = Counter({("D", alone["list_id"]): 2, ("D", both["list_id"]): 3, ("D", none["list_id"]): 1})
+    files[("E", alone["list_id"])] = 4
+    root = tmp_path / "entity_evidence"
+    paths, skipped = select_entity_evidence(root, "anvil", CATALOG)
+    rules = identifier_rules()
+    evidence = gather(paths, root, load(tmp_path, TABLE), rules)
+    result = reconcile_entities(evidence, rules, [alone, both, none], skipped, files_by_list=files)
+    assert result.report[DONOR_REACH] == {
+        "D": {
+            "files_with_samples": 6,
+            "every_sample_has_a_donor": 2,
+            "one_sample_without_donor": 1,
+            "several_samples_some_without_donor": 3,
+        },
+        "E": {"files_with_samples": 4, "every_sample_has_a_donor": 4},
+    }
+    # No importer said why SRS1 has no donor, so it is counted and listed with no outcome.
+    assert result.report["samples"][NO_DONOR] == {"D": {"samples": 1, "with_outcome": []}}
 
 
 def test_every_repository_identifier_is_listed_on_the_one_record_it_ties_to(imported, tmp_path):

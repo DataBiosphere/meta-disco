@@ -16,6 +16,7 @@ DECLARED = (
     *code_rules.EDGE_RULES,
     *code_rules.SAMPLE_RULES,
     *code_rules.ENTITY_RULES,
+    *code_rules.IDENTITY_CHECKS,
 )
 SOURCES = [*Path("src/meta_disco").rglob("*.py"), *Path("scripts").rglob("*.py")]
 
@@ -118,6 +119,11 @@ def test_an_entity_rule_says_what_it_reads_sets_and_why(rule):
     assert rule.source_type in SOURCE_TYPES
 
 
+@pytest.mark.parametrize("check", code_rules.IDENTITY_CHECKS, ids=lambda c: c.id)
+def test_an_identity_check_says_what_it_reads_and_why(check):
+    assert check.rationale.strip() and check.reads.strip()
+
+
 def test_each_declaration_is_named_in_the_module_it_says_emits_it():
     names = {
         obj: name
@@ -130,12 +136,13 @@ def test_each_declaration_is_named_in_the_module_it_says_emits_it():
                 code_rules.EdgeRule,
                 code_rules.SampleRule,
                 code_rules.EntityRule,
+                code_rules.IdentityCheck,
             ),
         )
     }
     assert set(names) == set(DECLARED), (
-        "every CodeRule, CodeMarker, EdgeRule, SampleRule and EntityRule is in CODE_RULES, MARKERS, EDGE_RULES, "
-        "SAMPLE_RULES or ENTITY_RULES"
+        "every CodeRule, CodeMarker, EdgeRule, SampleRule, EntityRule and IdentityCheck is in CODE_RULES, MARKERS, "
+        "EDGE_RULES, SAMPLE_RULES, ENTITY_RULES or IDENTITY_CHECKS"
     )
     unused = [d.id for d in DECLARED if f"code_rules.{names[d]}" not in Path(d.module).read_text(encoding="utf-8")]
     assert unused == []

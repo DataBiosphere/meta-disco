@@ -35,6 +35,11 @@ declared in ``ENTITY_RULES``; its id is what the slot's claims carry as ``rule_i
 parent claims cite instead the identifier rule (``rules/sample_namespaces.yaml``) that
 recognised the parent.
 
+An **identity check** (#718) lets an importer write an identity link it could not otherwise
+confirm: it sets no slot and no claim cites it, since an importer writes no ``rule_id``
+(contract 1.1). It is declared in ``IDENTITY_CHECKS``; its id is what the importer's
+per-sample outcomes name as the check that linked the sample.
+
 ``basis`` says what a rule reads to reach its answer, in the report's terms
 (``BASES``). A YAML rule's basis is worked out from its ``when`` by the report. A code
 rule's is declared, because a code rule has no ``when`` to work it out from.
@@ -88,6 +93,7 @@ SAMPLE_IDENTITY = "src/meta_disco/sample_identity.py"
 RECONCILE_SAMPLES = "src/meta_disco/reconcile_samples.py"
 RECONCILE_ENTITIES = "src/meta_disco/reconcile_entities.py"
 RECONCILE_EXTERNAL = "src/meta_disco/reconcile_external.py"
+SGDP_ENTITIES = "src/meta_disco/sgdp_entities.py"
 
 
 @dataclass(frozen=True)
@@ -166,6 +172,17 @@ class EntityRule:
     source_type: str
     reads: str
     sets: tuple[str, ...]
+    rationale: str
+
+
+@dataclass(frozen=True)
+class IdentityCheck:
+    """A check that confirms an identity link an importer writes (#718): ``reads`` says what it compares,
+    ``rationale`` why agreement confirms the link."""
+
+    id: str
+    module: str
+    reads: str
     rationale: str
 
 
@@ -948,6 +965,37 @@ ANATOMICAL_SITE_AS_WRITTEN = EntityRule(
 )
 
 ENTITY_RULES = (FAMILY_ID_AS_WRITTEN, ANATOMICAL_SITE_AS_WRITTEN)
+
+SGDP_SEX_AGREES = IdentityCheck(
+    id="sgdp_sex_agrees",
+    module=SGDP_ENTITIES,
+    reads=(
+        "SGDP's metadata file's `Gender` for the genome T2T_CHRY's `SGDP_*_sample` tables pair a sample with, "
+        "and the tables' `karyotype` for the sample: M with XY, F with XX"
+    ),
+    rationale=(
+        "The pairing of a sample with an SGDP genome rests on T2T_CHRY's tables alone; no file's header names "
+        "the genome. Sex is the one fact both sides state about it, and a mislabelled row would disagree about "
+        "half the time: 275 of 279 samples agree (#559)."
+    ),
+)
+
+SGDP_GENOTYPE_MATCHES = IdentityCheck(
+    id="sgdp_genotype_matches",
+    module=SGDP_ENTITIES,
+    reads=(
+        "sources/sgdp_genotype_checks.yaml: a sample's chr22 gVCF genotypes compared with every genome of SGDP's "
+        "and HGDP's public releases, recorded with the genome they match"
+    ),
+    rationale=(
+        "Two genomes whose genotypes match are one person, whatever either side says about sex: of the nine "
+        "samples measured, each matching pairing scored 0.96-1.00 and every other genome at most 0.62 "
+        "(docs/studies/sgdp-genome-identity.md, #718). The record is a measurement, not a source: it adds no "
+        "value to a record, it only confirms the pairing T2T_CHRY's table states."
+    ),
+)
+
+IDENTITY_CHECKS = (SGDP_SEX_AGREES, SGDP_GENOTYPE_MATCHES)
 
 FETCH_FAILED = CodeMarker(
     id="fetch_failed",

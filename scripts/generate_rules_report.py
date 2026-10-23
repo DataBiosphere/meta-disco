@@ -193,7 +193,9 @@ SAMPLE_RULES_NOTE = (
     "cited by. The donor rule `family_id_as_written` gives a donor its family id, and the sample rule "
     "`anatomical_site_as_written` a sample its site (#699). Counted by the sources a reconciled record's "
     "`samples` lists, the identifier rule keying each donor and sample record, and the claims on those "
-    "records' slots."
+    "records' slots. The two identity checks (`sgdp_sex_agrees`, `sgdp_genotype_matches`, #718) let the SGDP "
+    "importer link a sample to its donor; no record cites a check, so each counts none here, and which samples "
+    "each confirmed is in the import's `outcomes.json` and the reconcile report's `no_donor`."
 )
 UNDECLARED_HEAD = "Rule names with no rule behind them"
 SAMPLE_NAMESPACES = "src/meta_disco/rules/sample_namespaces.yaml"
@@ -585,10 +587,10 @@ def _names(rule) -> str:
 
 def sample_rule_rows() -> list[dict]:
     """The sample and donor rules: ``code_rules.SAMPLE_RULES`` (#357; the file-content readers and the parent's, #668),
-    ``code_rules.ENTITY_RULES`` (#582), then each identifier rule."""
+    ``code_rules.ENTITY_RULES`` (#582), ``code_rules.IDENTITY_CHECKS`` (#718), then each identifier rule."""
     rows = [
         {"id": r.id, "reads": r.reads, "rationale": r.rationale, "defined_in": r.module}
-        for r in (*code_rules.SAMPLE_RULES, *code_rules.ENTITY_RULES)
+        for r in (*code_rules.SAMPLE_RULES, *code_rules.ENTITY_RULES, *code_rules.IDENTITY_CHECKS)
     ]
     rows += [
         {

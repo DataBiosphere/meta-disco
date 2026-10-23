@@ -1,0 +1,64 @@
+# A genotype check of ANVIL_T2T_CHRY's SGDP samples whose sex check could not confirm them (#718).
+# Shape and checks: src/meta_disco/sgdp_entities.py (load_genotype_checks); read by
+# `make import-sgdp-entities`, which links a sample its sex check does not confirm only where this
+# record matches it to the SGDP genome T2T_CHRY's table pairs it with. The method, the controls and
+# why each verdict holds: docs/studies/sgdp-genome-identity.md.
+#
+# A MEASUREMENT, NOT A SOURCE. It adds no value to any record; it only lets the importer write the
+# pairing T2T_CHRY's `SGDP_*_sample` tables state. Each sample's chr22 gVCF (SGDP_GRCh38/) was compared,
+# over `region`, with every genome of both `references` (SGDP's lifted from GRCh37), biallelic SNPs
+# only: `concordance` is the share of `sites` (where both genotypes are known and either is
+# non-reference) with the same allele dosage. Under `best`, each reference's two highest-scoring
+# genomes. Pairings the sex check confirmed scored 0.963-0.973 (sgdp) and 0.999-1.000 (hgdp).
+catalog: anvil15
+dataset: ANVIL_T2T_CHRY
+measured: "2026-10-22"
+region: chr22:25000000-26000000
+references:
+  sgdp: https://sharehost.hms.harvard.edu/genetics/reich_lab/sgdp/phased_data2021/chr.sgdp.pub.22.bcf
+  hgdp: https://ngs.sanger.ac.uk/production/hgdp/hgdp_wgs.20190516/hgdp_wgs.20190516.full.chr22.vcf.gz
+samples:
+  simons_data_sample_187:
+    # SGDP says M, T2T_CHRY's karyotype XX; the genome's chrX shows one X, so the karyotype is the odd one.
+    sgdp_id: S_Palestinian-2
+    matched: S_Palestinian-2
+    best:
+      sgdp:
+        - {genome: S_Palestinian-2, concordance: 0.966, sites: 1413}
+        - {genome: B_Crete-2, concordance: 0.444, sites: 1852}
+      hgdp:
+        - {genome: HGDP00725, concordance: 1.000, sites: 1457}
+        - {genome: HGDP01400, concordance: 0.474, sites: 1887}
+  simons_data_sample_304:
+    # SGDP gives no sex (U).
+    sgdp_id: S_Norwegian-1
+    matched: S_Norwegian-1
+    best:
+      sgdp:
+        - {genome: S_Norwegian-1, concordance: 0.967, sites: 1216}
+        - {genome: S_Bergamo-2, concordance: 0.446, sites: 1486}
+      hgdp:
+        - {genome: HGDP00650, concordance: 0.454, sites: 1724}
+        - {genome: HGDP01172, concordance: 0.453, sites: 1618}
+  simons_data_sample_33:
+    # SGDP gives no sex (U).
+    sgdp_id: B_Australian-3
+    matched: B_Australian-3
+    best:
+      sgdp:
+        - {genome: B_Australian-3, concordance: 0.965, sites: 1710}
+        - {genome: B_Papuan-15, concordance: 0.529, sites: 1897}
+      hgdp:
+        - {genome: HGDP00546, concordance: 0.526, sites: 2077}
+        - {genome: HGDP00547, concordance: 0.509, sites: 2064}
+  simons_data_sample_273:
+    # Neither release holds S_Naxi-2, and the sample matches no genome of either.
+    sgdp_id: S_Naxi-2
+    matched: null
+    best:
+      sgdp:
+        - {genome: S_Naxi-3, concordance: 0.563, sites: 1844}
+        - {genome: S_Icelandic-2, concordance: 0.420, sites: 1999}
+      hgdp:
+        - {genome: HGDP01345, concordance: 0.570, sites: 1971}
+        - {genome: HGDP00849, concordance: 0.471, sites: 2103}
