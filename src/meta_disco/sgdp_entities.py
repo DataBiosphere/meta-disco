@@ -133,8 +133,8 @@ class Outcome:
 
     @property
     def confirmed_by(self) -> tuple[str, ...]:
-        """The ids of the checks that confirm the pairing, none where a genotype record says the sample is someone
-        else."""
+        """The ids of the checks that confirm the pairing; none where the sample is not ``paired`` or a genotype
+        record says it is someone else."""
         if self.pairing != PAIRED or self.genotype_check == GENOTYPE_NO_MATCH:
             return ()
         checks = []
@@ -276,6 +276,8 @@ def load_genotype_checks(source: Readable | None = None) -> GenotypeChecks:
     checks = {}
     for sample, found in entry["samples"].items():
         at = f"{_GENOTYPE_WHERE} {sample}"
+        if not isinstance(sample, str) or not sample:
+            raise ValueError(f"{at}: a sample is named by a non-empty string")
         expect_keys(found, _GENOTYPE_SAMPLE_KEYS, _GENOTYPE_SAMPLE_KEYS, at)
         sgdp_id, matched = found["sgdp_id"], found["matched"]
         if (
@@ -297,14 +299,19 @@ def outcome(sample: str, rows: list[T2tRow], sgdp: dict[str, dict[str, str]], ch
     two genomes or the record has no entry for the sample, else whether the genome it matched is the one the tables
     pair it with.
 
-    ``ValueError`` where the record's entry was measured against another pairing than the tables state: the
-    tables have changed since, and the sample is to be measured again.
+    ``ValueError`` where the record's entry names another genome than the tables do (where they name two, one of
+    neither): the tables have changed since, and the sample is to be measured again.
     """
     names = {r.sgdp_id for r in rows if r.sgdp_id}
+    check = checks.by_sample.get(sample)
     if len(names) > 1:
+        if check is not None and check.sgdp_id not in names:
+            raise ValueError(
+                f"{_GENOTYPE_WHERE}: {sample} was measured as {check.sgdp_id}, but T2T_CHRY's tables name "
+                f"{sorted(names)}; measure it again"
+            )
         return Outcome(sample, None, TABLES_DISAGREE)
     sgdp_id = next(iter(names), None)
-    check = checks.by_sample.get(sample)
     genotype = NOT_CHECKED
     if check is not None:
         if check.sgdp_id != sgdp_id:

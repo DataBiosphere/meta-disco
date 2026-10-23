@@ -1,7 +1,8 @@
 # A genotype check of ANVIL_T2T_CHRY's SGDP samples whose sex check could not confirm them (#718).
 # Read by src/meta_disco/sgdp_entities.py (load_genotype_checks): `make import-sgdp-entities` links a
 # sample its sex check does not confirm where `matched` is the SGDP genome T2T_CHRY's tables pair it
-# with (code_rules.SGDP_GENOTYPE_MATCHES). The method, the controls and why each verdict holds:
+# with and SGDP's metadata file holds that genome, and leaves out a sample whose entry matched another
+# genome or none, whatever its sex check says (code_rules.SGDP_GENOTYPE_MATCHES). The method, the controls and why each verdict holds:
 # docs/studies/sgdp-genome-identity.md.
 #
 # Each sample's chr22 gVCF (SGDP_GRCh38/) was compared, over `region`, with every genome of both

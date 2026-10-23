@@ -9,6 +9,7 @@ the bundled rows."""
 import gzip
 import hashlib
 import json
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -37,8 +38,8 @@ from meta_disco.models import (
 )
 from meta_disco.output_utils import DONORS_FILE, RECONCILED_DIR, SAMPLES_FILE, iter_reconciled_artifact
 from meta_disco.reconcile import ENTITIES_KEY
-from meta_disco.reconcile_entities import DONOR_REACH, NO_DONOR
-from meta_disco.sample_identity import Identifier, reference, sample_list
+from meta_disco.reconcile_entities import DONOR_REACH, NO_DONOR, gather, reconcile_entities, select_entity_evidence
+from meta_disco.sample_identity import Identifier, identifier_rules, reference, sample_list
 from meta_disco.schema.classification_model import DonorRecord, EntityEvidenceRow, SampleRecord
 from meta_disco.source_evidence import discover, generation_dir
 from tests import test_entities
@@ -229,6 +230,8 @@ def test_a_recorded_non_match_leaves_out_a_sample_whose_sex_agrees(tmp_path):
         (checks(("simons_data_sample_3", "S_Tuscan-2", "S_Tuscan-2")), "was measured as S_Tuscan-2"),
         (checks(("simons_data_sample_99", "S_X-1", "S_X-1")), "names simons_data_sample_99, which no T2T_CHRY"),
         (checks(catalog="anvil14"), "measured on anvil14's files"),
+        # Sample 6's tables name S_Dinka-1 alone; sample 8's below name none.
+        (checks(("simons_data_sample_6", "", "S_X-1")), "was measured as , but"),
     ],
 )
 def test_a_genotype_record_the_tables_do_not_bear_out_is_refused_and_nothing_written(tmp_path, record, message):
@@ -263,6 +266,8 @@ datasets:
         (("  ANVIL_T2T_CHRY:", "  ANVIL_T2T:"), "not ANVIL_T2T_CHRY alone"),
         (("        matched: null", "        matched: null\n        extra: 1"), "keys are"),
         (("        matched: null", "        matched: ''"), "matched a genome or null"),
+        (("        sgdp_id: S_Palestinian-2", "        sgdp_id: ''"), "sgdp_id must name a genome"),
+        (("      simons_data_sample_3:", "      7:"), "a sample is named by a non-empty string"),
         (
             ("        sgdp_id: S_Palestinian-2\n", "        sgdp_id: S_Palestinian-2\n        sgdp_id: S_X-1\n"),
             "duplicate key",
@@ -583,14 +588,14 @@ def test_a_run_reaches_an_sgdp_files_donor_through_its_sample_and_the_synonym(im
     def sample(n: int) -> Identifier:
         return Identifier("dataset_local", f"simons_data_sample_{n}", T2T)
 
-    # A file of one linked sample; one of a sample left out; one of a linked and a left-out sample.
-    lists = [[sample(1)], [sample(5)], [sample(1), sample(5)]]
+    # A file of one linked sample, twice; one of a sample left out; one of a linked and a left-out sample.
+    lists = [[sample(1)], [sample(1)], [sample(5)], [sample(1), sample(5)]]
     rows = [record(n + 1, dataset=T2T) for n in range(len(lists))]
     for row, members in zip(rows, lists, strict=True):
         row["samples"] = reference(members, named_by)
     write_run(run, rows)
     body = json.loads((run / "bam_classifications.json").read_text())
-    body["sample_lists"] = [sample_list(members) for members in lists]
+    body["sample_lists"] = [sample_list(members) for members in lists[1:]]
     (run / "bam_classifications.json").write_text(json.dumps(body))
     (tmp_path / "source_evidence").mkdir()
     report = go(run, tmp_path, tmp_path / "source_evidence", load(tmp_path, TABLE))
@@ -603,8 +608,9 @@ def test_a_run_reaches_an_sgdp_files_donor_through_its_sample_and_the_synonym(im
     # Whether each file's samples reach a donor, and why the one that does not has none.
     assert report[ENTITIES_KEY][DONOR_REACH] == {
         T2T: {
-            "files_with_samples": 3,
-            "every_sample_has_a_donor": 1,
+            # Each file is counted, the two settling to one list both.
+            "files_with_samples": 4,
+            "every_sample_has_a_donor": 2,
             "one_sample_without_donor": 1,
             "several_samples_some_without_donor": 1,
         }
@@ -820,6 +826,10 @@ def test_a_blank_cell_disagrees_with_no_other_and_two_stated_karyotypes_leave_th
         # No genome named at all.
         t2t(CHM13, "simons_data_sample_8", "", "XY"),
     ]
+    two_genomes = [
+        t2t(CHM13, "simons_data_sample_9", "S_Spanish-2", "XY"),
+        t2t(GRCH38, "simons_data_sample_9", "S_Dinka-2", "XY"),
+    ]
     result = run(
         tmp_path, "e", rows=rows, record=checks(("simons_data_sample_3", "S_Palestinian-2", "S_Palestinian-2"))
     )
@@ -830,8 +840,36 @@ def test_a_blank_cell_disagrees_with_no_other_and_two_stated_karyotypes_leave_th
         "simons_data_sample_3": (se.PAIRED, se.KARYOTYPES_DISAGREE, (GENOTYPE,)),
         "simons_data_sample_8": (se.NO_SGDP_ID, se.NOT_CHECKED, ()),
     }
+    # A record entry for a sample whose tables name no genome, or two genomes neither of them its own, is stale.
+    for entry, stale in (
+        (("simons_data_sample_8", "S_X-1", "S_X-1"), rows),
+        (("simons_data_sample_9", "S_X-1", "S_X-1"), [*rows, *two_genomes]),
+    ):
+        with pytest.raises(ValueError, match="measure it again"):
+            run(tmp_path, f"stale_{entry[0]}", rows=stale, record=checks(entry))
+    # A recorded match for a genome SGDP's file lacks links nothing: there is no donor line to write.
+    lacking = run(
+        tmp_path,
+        "lacking",
+        rows=[*rows, t2t(CHM13, "simons_data_sample_5", "S_Naxi-2", "XY")],
+        record=checks(("simons_data_sample_5", "S_Naxi-2", "S_Naxi-2")),
+    )
+    assert lacking.outcomes["simons_data_sample_5"].genotype_check == se.GENOTYPE_MATCHES
+    assert "simons_data_sample_5" not in lacking.linked
     # A blank row writes no link; the row naming the genome does.
     assert [g["target_key_value"] for g in written(tmp_path / "e", GRCH38)] == [
         "simons_data_sample_1",
         "simons_data_sample_3",
     ]
+
+
+def test_a_file_of_a_sample_whose_sources_name_two_donors_reaches_none(tmp_path):
+    root = tmp_path / "entity_evidence"
+    lines_file(root, "D", [(COLLECTED_FROM, "HG00096", "HG00097")], SOURCE_EXTERNAL_GROUND_TRUTH, "ext")
+    entry = sample_list([Identifier("coriell", "HG00096")])
+    paths, skipped = select_entity_evidence(root, "anvil", CATALOG)
+    rules = identifier_rules()
+    evidence = gather(paths, root, load(tmp_path, TABLE), rules)
+    files = Counter({("D", entry["list_id"]): 1})
+    result = reconcile_entities(evidence, rules, [entry], skipped, files_by_list=files)
+    assert result.report[DONOR_REACH] == {"D": {"files_with_samples": 1, "one_sample_without_donor": 1}}

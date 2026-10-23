@@ -195,8 +195,8 @@ SAMPLE_RULES_NOTE = (
     "`samples` lists, the identifier rule keying each donor and sample record, and the claims on those "
     "records' slots. The two identity checks (`sgdp_sex_agrees`, `sgdp_genotype_matches`, #718) let the SGDP "
     "importer link a sample to its donor; no record cites a check, so each counts none here. Which samples each "
-    "confirmed is in the import's `outcomes.json`; the reconcile report's `no_donor` lists the samples a file names "
-    "that none confirmed, with their checks."
+    "confirmed is in the import's `outcomes.json`; the reconcile report's `entities.samples.no_donor` lists each "
+    "sample a file names with no donor, with what an importer recorded of it where one did."
 )
 UNDECLARED_HEAD = "Rule names with no rule behind them"
 SAMPLE_NAMESPACES = "src/meta_disco/rules/sample_namespaces.yaml"
