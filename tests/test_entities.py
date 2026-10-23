@@ -715,8 +715,8 @@ def test_a_files_samples_reach_a_donor_only_where_every_one_has_one_and_each_wit
         },
         "E": {"files_with_samples": 4, "every_sample_has_a_donor": 4},
     }
-    # No importer said why SRS1 has no donor, so it is counted and listed with no outcome.
-    assert result.report["samples"][NO_DONOR] == {"D": {"samples": 1, "with_outcome": []}}
+    # No importer said why SRS1 has no donor: it is listed, with no outcome.
+    assert result.report["samples"][NO_DONOR] == {"D": [{"identifier": {"id": "SRS1", "namespace": "sra_sample"}}]}
 
 
 def test_every_repository_identifier_is_listed_on_the_one_record_it_ties_to(imported, tmp_path):

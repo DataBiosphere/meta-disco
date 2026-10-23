@@ -684,8 +684,8 @@ def _donor_reach(
     outcomes: dict[Identifier, list[dict]],
 ) -> tuple[dict, dict]:
     """Per dataset, how many files whose samples settled have a donor for every sample, and how many do not, by
-    whether they name one sample or several (``donor_reach``); and the samples those files name with no donor, each
-    with what each importer said of it where one did (``no_donor``, #718)."""
+    whether they name one sample or several (``donor_reach``); and each sample those files name with no donor, with
+    what each importer said of it where one did (``no_donor``, #718)."""
     reach: dict[str, Counter] = defaultdict(Counter)
     missing: dict[str, set[Identifier]] = defaultdict(set)
     for (dataset, list_id), n in sorted(files_by_list.items()):
@@ -698,11 +698,13 @@ def _donor_reach(
             continue
         counts["one_sample_without_donor" if len(named) == 1 else "several_samples_some_without_donor"] += n
         missing[dataset] |= lacking
-    no_donor = {}
-    for dataset in sorted(missing):
-        lacking = sorted(missing[dataset], key=identifier_order)
-        said = [{"identifier": s.to_dict(), "outcomes": outcomes[s]} for s in lacking if s in outcomes]
-        no_donor[dataset] = {"samples": len(lacking), "with_outcome": said}
+    no_donor = {
+        dataset: [
+            {"identifier": s.to_dict(), **({"outcomes": outcomes[s]} if s in outcomes else {})}
+            for s in sorted(missing[dataset], key=identifier_order)
+        ]
+        for dataset in sorted(missing)
+    }
     return {dataset: dict(reach[dataset]) for dataset in sorted(reach)}, no_donor
 
 

@@ -609,8 +609,7 @@ def test_a_run_reaches_an_sgdp_files_donor_through_its_sample_and_the_synonym(im
             "several_samples_some_without_donor": 1,
         }
     }
-    (said,) = report[ENTITIES_KEY]["samples"][NO_DONOR][T2T]["with_outcome"]
-    assert report[ENTITIES_KEY]["samples"][NO_DONOR][T2T]["samples"] == 1
+    (said,) = report[ENTITIES_KEY]["samples"][NO_DONOR][T2T]
     assert said["identifier"] == sample(5).to_dict()
     ((outcome,),) = [said["outcomes"]]
     assert (outcome["source"], outcome["pairing"], outcome["genotype_check"]) == (
