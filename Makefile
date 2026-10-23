@@ -39,7 +39,7 @@ help:
 	@echo "  make import-anvil-lineage Import AnVIL's lineage (anvil_activity, sample rows, IGVF derived_from) as lineage evidence"
 	@echo "  make check-entity-map   Check the AnVIL entity map (donors' and samples' facts) against the manifests (offline)"
 	@echo "  make import-anvil-entities Import AnVIL's donor and sample facts (submitter tables, anvil_donor, anvil_biosample) as entity evidence"
-	@echo "  make import-sgdp-entities Import SGDP's metadata file for T2T_CHRY's SGDP genomes whose sex both agree on (network)"
+	@echo "  make import-sgdp-entities Import SGDP's metadata file for T2T_CHRY's SGDP genomes a sex or genotype check confirms (network)"
 	@echo "  make import-ena-evidence Import ENA's run records for the FASTQs ENA generated, where the md5 matches (network)"
 	@echo "  make check-ena-lineage-map Check the ENA run lineage map against the deployment and the manifests (offline)"
 	@echo "  make import-ena-lineage Link declared alignments to the ENA run whose reads they hold, by read and base counts (network)"
@@ -296,8 +296,10 @@ import-anvil-entities:
 
 # SGDP's metadata file (#559), for ANVIL_T2T_CHRY's SGDP genomes: each sample's donor, and the
 # donor's sex, population and main identifier, written only for a sample whose sex SGDP and
-# T2T_CHRY's karyotype agree on. A generation under data/entity_evidence/sgdp/, with the file
-# kept beside it. Network; `ARGS="--file <kept copy>"` re-imports offline.
+# T2T_CHRY's karyotype agree on, or whose genotypes sources/sgdp_genotype_checks.yaml records
+# matching its SGDP genome (#718). A generation under data/entity_evidence/sgdp/, with the file
+# and each sample's checks (outcomes.json) beside it. Network; `ARGS="--file <kept copy>"`
+# re-imports offline.
 import-sgdp-entities:
 	uv run python scripts/import_sgdp_entities.py $(ARGS)
 

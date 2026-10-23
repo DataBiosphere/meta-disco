@@ -148,10 +148,16 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     identity both sides state stands in for the checksum: SGDP's metadata file (#559) is keyed by SGDP's
     name for a genome, which ANVIL_T2T_CHRY's `SGDP_*_sample` tables pair with a sample
     (`simons_data_sample_64` = `S_Spanish-2`) and no file's header confirms, so `sgdp_entities`
-    writes a sample's lines only where SGDP's `Gender` and the table's `karyotype` agree (M with XY, F
-    with XX), and counts every other sample by why (275 of 279 agree; the four are #718). Each line is
-    cited to the source that wrote it: the pairing to T2T_CHRY's tables (`repository_metadata`), the
-    genome's sex, population and person to SGDP's file.
+    writes a sample's lines only where a check confirms the pairing (`code_rules.IDENTITY_CHECKS`):
+    SGDP's `Gender` and the table's `karyotype` agree (M with XY, F with XX; 275 of 279), or the
+    sample's genotypes match the paired genome's in SGDP's or HGDP's public release, as recorded in
+    `sources/sgdp_genotype_checks.yaml` (#718; three more). The record is a measurement, not a source: it
+    adds no value to any record, only confirms the pairing the table states, and a recorded non-match
+    leaves a sample out whatever its sex says. Every sample's checks are written beside the evidence
+    (`outcomes.json`), and reconcile's report lists each sample a file names with no donor, with the
+    checks its import recorded where one did. Each
+    line is cited to the source that wrote it: the pairing to T2T_CHRY's tables (`repository_metadata`),
+    the genome's sex, population and person to SGDP's file.
 
 2.11 **A file the catalog lacks may be held outside it for one dataset, only as a declared workaround, and
     links to it only where the child's own content confirms it** (#710). ANVIL_T2T_CHRY's 1000 Genomes

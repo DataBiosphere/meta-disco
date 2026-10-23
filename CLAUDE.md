@@ -490,7 +490,9 @@ evidence}` entry — plus the controlled vocabulary:
     **ANVIL_T2T_CHRY's SGDP genomes** (#559) get their donors from SGDP's own metadata file,
     `sgdp_entities` (`make import-sgdp-entities`, network, sha256-pinned, a generation under
     `data/entity_evidence/sgdp/`), written only for a sample whose SGDP sex and T2T_CHRY karyotype agree
-    (275 of 279; the rest are #718), each line cited to its source: T2T_CHRY's tables' pairing as
+    (275 of 279) or whose genotypes `sources/sgdp_genotype_checks.yaml` records matching its SGDP genome (#718,
+    three more; `code_rules.IDENTITY_CHECKS`, each sample's checks in the generation's `outcomes.json`, and
+    reconcile's `entities.donor_reach`), each line cited to its source: T2T_CHRY's tables' pairing as
     `repository_metadata`, SGDP's facts as `external_ground_truth`. Its links are the two **identity
     links** (`models.IDENTITY_LINK_FIELDS`): `collected_from` names a sample's donor, beside the
     identifier rule's link, and `same_donor_as` names another identifier for a donor, followed to the end

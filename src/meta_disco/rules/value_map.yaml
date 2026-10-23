@@ -31,14 +31,21 @@ rows:
     declares: {phenotypic_sex: Male}
     reason: >-
       SGDP's metadata file writes a genome's sex in `Gender` as M, F or U (not known); scoped to
-      SGDP, since a bare `M` means male only there (#559). Its U has no row and makes no claim.
+      SGDP, since a bare `M` means male only there (#559).
   - id: "phenotypic_sex.sgdp_f"
     match: {slot: phenotypic_sex, value: "F"}
     scope: {source: sgdp}
     declares: {phenotypic_sex: Female}
     reason: >-
       SGDP's metadata file writes a genome's sex in `Gender` as M, F or U (not known); scoped to
-      SGDP, since a bare `F` means female only there (#559). Its U has no row and makes no claim.
+      SGDP, since a bare `F` means female only there (#559).
+  - id: "phenotypic_sex.sgdp_u"
+    match: {slot: phenotypic_sex, value: "U"}
+    scope: {source: sgdp}
+    declares: {}
+    reason: >-
+      SGDP's `U` is "not known": reviewed, and no claim. Two genomes linked by their genotypes
+      (#718), S_Norwegian-1 and B_Australian-3, have it.
   # --- genetic_ancestry (#693): a donor's slot, from entity evidence ----------------
   - id: "genetic_ancestry.afr"
     match: {slot: genetic_ancestry, value: "AFR"}

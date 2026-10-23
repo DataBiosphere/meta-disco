@@ -1374,7 +1374,9 @@ def reconcile_run(
         write_reconciled_file(staging / reconciled_name(fname), header, reconciled_rows(records))
     run_lists = samples.sorted_lists()
     write_reconciled_file(staging / SAMPLE_LISTS_FILE, header, run_lists)
-    entities = reconcile_entities(entity_evidence, rules, run_lists, skipped=entity_skipped)
+    entities = reconcile_entities(
+        entity_evidence, rules, run_lists, skipped=entity_skipped, files_by_list=samples.files_by_list
+    )
     write_reconciled_file(staging / DONORS_FILE, header, entities.donors)
     write_reconciled_file(staging / SAMPLES_FILE, header, entities.samples)
     # A list's samples are written only where a reconciled file settled to them (#710).

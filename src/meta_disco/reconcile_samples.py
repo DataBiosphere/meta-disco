@@ -232,6 +232,7 @@ class SampleReport:
     name_examples: dict[str, list[dict]] = field(default_factory=lambda: defaultdict(list))
     # Each distinct list a reconciled record points to, by id.
     lists: dict[str, dict] = field(default_factory=dict)
+    files_by_list: Counter = field(default_factory=Counter)
     # Each list's members once read, by id: an inference list's (:func:`from_record`), and each
     # list a file holds (:attr:`held`).
     members: dict[str, frozenset[Identifier]] = field(default_factory=dict)
@@ -337,6 +338,7 @@ class SampleReport:
             self.examples[(dataset, outcome)].append(file_name)
         if samples is not None:
             key = samples["list_id"]
+            self.files_by_list[(dataset, key)] += 1
             if key not in self.lists:
                 # A header's list is the inference list itself; only a table's is built here.
                 self.lists[key] = inference_lists.get(key) or sample_list(members)

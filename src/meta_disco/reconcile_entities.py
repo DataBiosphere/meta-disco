@@ -66,7 +66,7 @@ from pathlib import Path
 
 from . import code_rules
 from .edges import distinct
-from .entity_evidence import entries, read_entity_envelope
+from .entity_evidence import entries, read_entity_envelope, read_outcomes
 from .models import (
     ANATOMICAL_SITE,
     COLLECTED_FROM,
@@ -118,6 +118,9 @@ MAX_EXAMPLES = 5
 _ENTITY_FIELDS = (*DONOR_SLOTS, *SAMPLE_SLOTS, *REPOSITORY_ID_FIELDS, *IDENTITY_LINK_FIELDS)
 # The entity rule a slot taken as written cites.
 _AS_WRITTEN_RULES = {slot: rule.id for rule in code_rules.ENTITY_RULES for slot in rule.sets}
+# The report's keys for whether a file's samples reach a donor (#718): per dataset, and the samples that do not.
+DONOR_REACH = "donor_reach"
+NO_DONOR = "no_donor"
 # The report's labels for the lines that name no value (:func:`_names_no_value`).
 UNKNOWN_PARENT_LINES = "unknown_parent_lines"
 BLANK_FAMILY_ID_LINES = "blank_family_id_lines"
@@ -158,7 +161,8 @@ class EntityEvidence:
     label (:data:`UNKNOWN_PARENT_LINES`, :data:`BLANK_FAMILY_ID_LINES`, :data:`UNKNOWN_SITE_LINES`), the
     lines that name no value, and ``unrecognised_parents`` the parent strings no rule recognises, each
     per dataset and table.
-    ``links`` holds the identity links (:class:`IdentityLinks`, #559).
+    ``links`` holds the identity links (:class:`IdentityLinks`, #559). ``outcomes`` is what each importer writing
+    one said of a sample it linked or left out (``entity_evidence.OUTCOMES_FILE``, #718), by the sample's identifier.
     """
 
     slots: dict[Identifier, dict[str, SlotEvidence]]
@@ -170,6 +174,7 @@ class EntityEvidence:
     no_value_lines: dict[str, Counter]
     unrecognised_parents: dict[tuple[str | None, str | None], Counter]
     links: IdentityLinks
+    outcomes: dict[Identifier, list[dict]] = field(default_factory=dict)
 
 
 @dataclass
@@ -311,6 +316,11 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
     """
     paths = list(paths)  # read twice: the main identifiers first
     links = _main_identifiers(paths, rules)
+    outcomes: dict[Identifier, list[dict]] = defaultdict(list)
+    for (dataset, sample), said in read_outcomes(paths).items():
+        # A sample no rule recognises is in no record, so nothing asks why it has no donor.
+        if (found := rules.recognise(sample, dataset, SAMPLE)) is not None:
+            outcomes[found.identifier].extend(said)
     slots: dict[Identifier, dict[str, SlotEvidence]] = defaultdict(lambda: defaultdict(SlotEvidence))
     sample_slots: dict[Identifier, dict[str, SlotEvidence]] = defaultdict(lambda: defaultdict(SlotEvidence))
     named_in: dict[tuple[str, str], set[Identifier]] = defaultdict(set)
@@ -422,6 +432,7 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
         no_value_lines=no_value_lines,
         unrecognised_parents=unrecognised_parents,
         links=links,
+        outcomes=dict(outcomes),
     )
 
 
@@ -544,6 +555,7 @@ def reconcile_entities(
     rules: IdentifierRuleSet,
     sample_lists: Iterable[dict],
     skipped: list[dict] | None = None,
+    files_by_list: Counter | None = None,
 ) -> EntityResult:
     """Settle every donor ``evidence`` names and every sample ``sample_lists`` hold, a repository identifier ties
     to or ``evidence`` names, link each sample to its donor, list each record's repository identifiers, and
@@ -552,14 +564,17 @@ def reconcile_entities(
     ``evidence`` is :func:`gather`'s; ``sample_lists`` are the run's reconciled ``SampleList``
     dicts. A donor a sample's ``collected_from`` points to, or a donor's ``mother`` or ``father``
     claim names, gets a record, evidence or none; so does a main identifier with a synonym (#559).
-    A sample's donor is :func:`_collected_from`'s.
+    A sample's donor is :func:`_collected_from`'s. ``files_by_list`` counts the reconciled files per (dataset,
+    ``list_id``) of the samples they settled to, for :func:`_donor_reach`.
     """
+    members = {entry["list_id"]: members_of(entry) for entry in sample_lists}
     slots, named_in, files, unrecognised = evidence.slots, evidence.named_in, evidence.files, evidence.unrecognised
     repository_ids = evidence.repository_ids
-    named_by_files = {m for entry in sample_lists for m in members_of(entry)}
+    named_by_files: set[Identifier] = set().union(*members.values())
     tied_samples = {ident for kind, ident in repository_ids if kind == SAMPLE}
     sample_slots = evidence.sample_slots
     sample_records, linked, conflicts = [], Counter(), []
+    with_donor: set[Identifier] = set()
     linked_by: Counter = Counter()
     collected_conflicts: list[dict] = []
     sample_settled: dict[Identifier, dict[str, str]] = {}
@@ -574,6 +589,7 @@ def reconcile_entities(
         if len(by_donor) == 1:
             ((donor, named_by),) = by_donor.items()
             record[COLLECTED_FROM] = {"donor": donor.to_dict(), "named_by": named_by}
+            with_donor.add(sample)
             linked[sample.namespace] += 1
             linked_by.update({a["source_type"] for a in named_by})
         elif by_donor:
@@ -616,6 +632,7 @@ def reconcile_entities(
     for (dataset, slot), named in named_in.items():
         noun, statuses = ("samples", sample_settled) if KIND_OF_SLOT[slot] == SAMPLE else ("donors", settled)
         by_dataset[dataset][slot] = {noun: len(named), **Counter(statuses[r][slot] for r in named)}
+    reach, no_donor = _donor_reach(files_by_list or Counter(), members, with_donor, evidence.outcomes)
     report = {
         "files": files,
         "skipped_files": skipped or [],
@@ -652,10 +669,43 @@ def reconcile_entities(
             "statuses": {slot: dict(Counter(s[slot] for s in sample_settled.values())) for slot in SAMPLE_SLOTS},
             UNKNOWN_SITE_LINES: _lines_per_table(evidence.no_value_lines.get(UNKNOWN_SITE_LINES, Counter())),
             "unreviewed": {slot: n for slot, n in unreviewed[SAMPLE].items() if n},
+            NO_DONOR: no_donor,
         },
+        DONOR_REACH: reach,
         REPOSITORY_IDS: {kind: _repository_id_counts(repository_ids, kind) for kind in (DONOR, SAMPLE)},
     }
     return EntityResult(donors, sample_records, report)
+
+
+def _donor_reach(
+    files_by_list: Counter,
+    members: dict[str, frozenset[Identifier]],
+    with_donor: set[Identifier],
+    outcomes: dict[Identifier, list[dict]],
+) -> tuple[dict, dict]:
+    """Per dataset, how many files whose samples settled have a donor for every sample, and how many do not, by
+    whether they name one sample or several (``donor_reach``); and each sample those files name with no donor, with
+    what each importer said of it where one did (``no_donor``, #718)."""
+    reach: dict[str, Counter] = defaultdict(Counter)
+    missing: dict[str, set[Identifier]] = defaultdict(set)
+    for (dataset, list_id), n in sorted(files_by_list.items()):
+        named = members[list_id]  # every list a file settled to is among the run's lists
+        lacking = named - with_donor
+        counts = reach[dataset]
+        counts["files_with_samples"] += n
+        if not lacking:
+            counts["every_sample_has_a_donor"] += n
+            continue
+        counts["one_sample_without_donor" if len(named) == 1 else "several_samples_some_without_donor"] += n
+        missing[dataset] |= lacking
+    no_donor = {
+        dataset: [
+            {"identifier": s.to_dict(), **({"outcomes": outcomes[s]} if s in outcomes else {})}
+            for s in sorted(missing[dataset], key=identifier_order)
+        ]
+        for dataset in sorted(missing)
+    }
+    return {dataset: dict(reach[dataset]) for dataset in sorted(reach)}, no_donor
 
 
 def _by_place(item: tuple[tuple[str | None, str | None], object]) -> tuple[str, str]:

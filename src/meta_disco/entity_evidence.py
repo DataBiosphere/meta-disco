@@ -17,10 +17,15 @@ to a reader that asks for it, which today is reconcile: an untranslated slot's (
 a sample's site), one carrying a repository's own identifier for a donor or sample
 (``models.REPOSITORY_ID_FIELDS``, #669), and an identity link naming a donor: a sample's donor or
 another identifier for a donor (``models.IDENTITY_LINK_FIELDS``, #559).
+
+A generation's :data:`OUTCOMES_FILE` (#718) is not ``.ndjson``, so no evidence reader takes it as
+evidence; reconcile reads it only to report why a sample has no donor.
 """
 
 from __future__ import annotations
 
+import json
+from collections import defaultdict
 from collections.abc import Collection, Iterable, Iterator
 from pathlib import Path
 
@@ -61,6 +66,8 @@ _REFUSED_LINE_KEYS = {
     "identifier": "which identifier a string is, is the identifier rules' to say at reconcile",
     "source_type": "one file is one kind of source, so it is on the envelope, not on every line",
 }
+
+OUTCOMES_FILE = "outcomes.json"
 
 
 def entity_root_beside(evidence_root: Path) -> Path:
@@ -115,3 +122,37 @@ def entries(
         if source is None:
             source = by_column[row.column] = claim_source_for(envelope.source, row.column)
         yield EvidenceEntry(row.field, row.target_key_value, row.raw_value, source)
+
+
+def write_outcomes(directory: Path, source: str, dataset: str, samples: Iterable[dict]) -> None:
+    """Write a generation's :data:`OUTCOMES_FILE`: what ``source`` found of each sample of ``dataset``, each a dict
+    naming its ``sample`` as the source wrote it."""
+    rows = list(samples)
+    if not all(isinstance(r.get("sample"), str) and r["sample"] and "source" not in r for r in rows):
+        # Refused before the generation is written: reconcile refuses to read such a file.
+        raise ValueError(f"{directory}: every outcome names its sample, and none its own source")
+    text = json.dumps({"source": source, "dataset": dataset, "samples": rows}, indent=1, sort_keys=True)
+    (directory / OUTCOMES_FILE).write_text(text + "\n", encoding="utf-8")
+
+
+def read_outcomes(paths: Iterable[Path]) -> dict[tuple[str, str], list[dict]]:
+    """The outcomes of the generations ``paths`` (entity files) are in, by (dataset, sample as written), one per
+    source that wrote one, each naming its ``source``; a generation without :data:`OUTCOMES_FILE` gives none.
+    ``ValueError`` where one is malformed."""
+    found: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for directory in sorted({p.parent for p in paths}):
+        path = directory / OUTCOMES_FILE
+        if not path.is_file():
+            continue
+        document = json.loads(path.read_text(encoding="utf-8"))
+        source, dataset, samples = document.get("source"), document.get("dataset"), document.get("samples")
+        if not isinstance(source, str) or not isinstance(dataset, str) or not isinstance(samples, list):
+            raise ValueError(f"{path}: not a source, a dataset and a list of samples")
+        for row in samples:
+            sample = row.get("sample") if isinstance(row, dict) else None
+            if not isinstance(sample, str) or not sample:
+                raise ValueError(f"{path}: an outcome names no sample")
+            if "source" in row:
+                raise ValueError(f"{path}: an outcome names its own source; the file's is {source!r}")
+            found[(dataset, sample)].append({"source": source, **row})
+    return dict(found)
