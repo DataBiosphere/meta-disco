@@ -606,6 +606,55 @@ class TestBamCramClassification:
         result = classify_from_header(f"@HD\tVN:1.6\n@RG\tID:rg1\tPM:{pm}\tSM:s")
         assert field_value(result, "platform") == platform
 
+    @pytest.mark.parametrize(
+        ("command", "platform"),
+        [
+            pytest.param(
+                "winnowmap -W ref_k15 -w 50 -k 15 -t 48 -x map-ont -a --MD ref.fasta r.fastq",
+                "ONT",
+                id="winnowmap map-ont",
+            ),
+            pytest.param(
+                "winnowmap -W rep.txt -ax map-pb -t 16 --MD ref.fa r.fastq", "PACBIO", id="winnowmap -ax map-pb"
+            ),
+            pytest.param("/opt/bin/minimap2 -ax map-pb ref.fa r.fq", "PACBIO", id="minimap2 map-pb, with a path"),
+            pytest.param("minimap2 -ax map-hifi ref.fa hifi.fq", None, id="map-hifi may be ONT duplex too"),
+            pytest.param("minimap2 -xmap-ont ref.fa r.fq", "ONT", id="preset joined to -x"),
+            pytest.param("winnowmap -W r.txt -ax map-pb-clr ref.fa r.fq", "PACBIO", id="winnowmap map-pb-clr"),
+            pytest.param("minimap2 -aX map-ont ref.fa r.fq", None, id="-X is another flag, not the preset"),
+            pytest.param("minimap2 -aYx map-ont ref.fa r.fq", "ONT", id="an upper-case flag grouped before -x"),
+            pytest.param("minimap2 -Hax map-pb ref.fa r.fq", "PACBIO", id="-H grouped before -ax"),
+            pytest.param("minimap2 -ax asm5 ref.fa asm.fa", None, id="an assembly preset names no platform"),
+            pytest.param("minimap2 -ax sr ref.fa r1.fq r2.fq", None, id="sr names no platform"),
+            pytest.param("minimap2 -ax splice ref.fa r.fq", None, id="splice names no platform"),
+            pytest.param("minimap2 -ax map-ontology ref.fa r.fq", None, id="a longer word is no preset"),
+            pytest.param("mytool -x map-ont ref.fa r.fq", None, id="another tool's -x is not read"),
+            pytest.param("mytool --aligner minimap2 -x map-ont ref.fa r.fq", None, id="minimap2 named mid-line"),
+            pytest.param("minimap2.py -x map-ont ref.fa r.fq", None, id="another program named like minimap2"),
+            pytest.param("samtools view -H x.bam", None, id="no aligner and no preset"),
+        ],
+    )
+    def test_platform_from_the_aligner_read_preset(self, command, platform):
+        """A minimap2/Winnowmap read preset on an @PG line names the reads' platform (#727)."""
+        header = f"@HD\tVN:1.6\n@PG\tID:aln\tPN:aligner\tCL:{command}\n@PG\tID:samtools\tPN:samtools\tCL:samtools sort"
+        result = classify_from_header(header)
+        assert field_value(result, "platform") == platform
+        assert field_status(result, "platform") == (CLASSIFIED if platform else NOT_CLASSIFIED)
+
+    def test_a_cram_reads_the_preset_too(self):
+        """The rules apply to a CRAM's header as to a BAM's (#727)."""
+        header = "@HD\tVN:1.6\n@PG\tID:aln\tPN:minimap2\tCL:minimap2 -ax map-ont ref.fa r.fq"
+        result = classify_from_header(header, name=FileName.parse("sample.cram"))
+        assert field_value(result, "platform") == "ONT"
+
+    def test_two_read_presets_in_one_header_conflict(self):
+        """ONT and PacBio presets in one header are not settled by either (#727)."""
+        header = (
+            "@HD\tVN:1.6\n@PG\tID:a\tPN:minimap2\tCL:minimap2 -ax map-ont ref.fa r.fq\n"
+            "@PG\tID:b\tPN:minimap2\tCL:minimap2 -ax map-pb ref.fa r.fq"
+        )
+        assert field_status(classify_from_header(header), "platform") == CONFLICT
+
     def test_grch38_from_sq(self):
         """Detect GRCh38 from @SQ AS field."""
         header = """@HD\tVN:1.6

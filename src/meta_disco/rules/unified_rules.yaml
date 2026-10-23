@@ -933,6 +933,44 @@ rules:
       platform: PACBIO
     rationale: "The 'ccs' program generates HiFi reads from PacBio subreads. Confirms PacBio platform (used for both WGS and IsoSeq)"
 
+  # ---------------------------------------------------------------------------
+  # Platform from the aligner's read preset (#727). minimap2 and Winnowmap take a
+  # preset (`-x`, which may be grouped with other flags, as in `-ax`; the `x` lower-case,
+  # as `-X` is another flag) naming the kind of reads they align: `map-ont` for Oxford
+  # Nanopore; `map-pb` (minimap2's PacBio CLR, Winnowmap's PacBio HiFi) and
+  # `map-pb-clr` (Winnowmap's PacBio CLR) for PacBio. The rules read it on any @PG line
+  # the header carries: the alignment's own, or one a later step (a sort, a CRAM
+  # conversion) carried in. Either way it was chosen for these reads, and a platform
+  # describes the reads, so it holds for the file (contract 3.13). Only presets that
+  # name one platform are read. Not read: `map-hifi` and its alias `map-ccs` (high-
+  # accuracy long reads, which may be used for ONT duplex too), minimap2's `map10k`
+  # alias, `map-iclr`, `lr:hq`, the assembly presets (`asm5`, `asm10`, `asm20`), `sr`
+  # and `splice`.
+  # ---------------------------------------------------------------------------
+  - id: platform_aligner_preset_ont
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@PG"
+      header_field: "CL"
+      header_pattern: "^(\\S*/)?(minimap2|winnowmap)\\s(.*\\s)?-(?-i:[a-zA-Z]*x)\\s*map-ont(\\s|$)"
+    then:
+      platform: ONT
+    rationale: "minimap2/Winnowmap's -x map-ont preset aligns Oxford Nanopore reads, so the alignment's reads are ONT"
+
+  - id: platform_aligner_preset_pacbio
+    tier: 3
+    scope: header
+    when:
+      extensions: [".bam", ".cram"]
+      header_section: "@PG"
+      header_field: "CL"
+      header_pattern: "^(\\S*/)?(minimap2|winnowmap)\\s(.*\\s)?-(?-i:[a-zA-Z]*x)\\s*map-(pb|pb-clr)(\\s|$)"
+    then:
+      platform: PACBIO
+    rationale: "minimap2/Winnowmap's -x map-pb and Winnowmap's map-pb-clr presets align PacBio reads (CLR or HiFi), so the alignment's reads are PacBio"
+
 
 
 

@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-10-22 11:51:37**
+Classification run: **2026-10-22 16:10:28**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,088** files.
@@ -24,7 +24,7 @@ Processed **708,088** files.
 |---|---:|---:|---:|
 | **Data Modality** | 379,527 (53.6%) | 328,561 (46.4%) | 0 (0.0%) |
 | **Data Type** | 685,435 (96.8%) | 22,653 (3.2%) | 0 (0.0%) |
-| **Platform** | 69,973 (9.9%) | 638,115 (90.1%) | 0 (0.0%) |
+| **Platform** | 70,125 (9.9%) | 637,963 (90.1%) | 0 (0.0%) |
 | **Reference Assembly** | 292,948 (41.4%) | 415,132 (58.6%) | 8 (0.0%) |
 | **Assay Type** | 28,145 (4.0%) | 679,943 (96.0%) | 0 (0.0%) |
 | **Instrument Model** | 23,202 (3.3%) | 684,886 (96.7%) | 0 (0.0%) |
@@ -158,8 +158,8 @@ Processed **708,088** files.
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 69,973 | 9.9% |
-| **Not classified** | 638,115 | 90.1% |
+| **Classified** | 70,125 | 9.9% |
+| **Not classified** | 637,963 | 90.1% |
 | **Conflict** | 0 | 0.0% |
 
 ### What's not classified?
@@ -173,7 +173,7 @@ Processed **708,088** files.
 | .csi | 41,186 | `No reason recorded` |
 | .bed | 11,523 | `No rule determined a value for platform` |
 | .crai | 10,317 | `No reason recorded` |
-| .bam | 3,664 | `No rule determined a value for platform` |
+| .bam | 3,512 | `No rule determined a value for platform` |
 | .pvar | 2,854 | `No rule determined a value for platform` |
 | .psam | 2,854 | `No rule determined a value for platform` |
 | .pgen | 2,854 | `No rule determined a value for platform` |
@@ -205,11 +205,11 @@ Processed **708,088** files.
 
 | Platform | count | % | extensions |
 |---|---:|---:|---|
-| `not_classified` | 638,115 | 90.1% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.bed (11,523)<br>.crai (10,317)<br>.bam (3,664)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.h5ad (350)<br>.paf (297)<br>.sam (192)<br>.csv (21)<br>.dict (9)<br>.pbi (7)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
+| `not_classified` | 637,963 | 90.1% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.bed (11,523)<br>.crai (10,317)<br>.bam (3,512)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.h5ad (350)<br>.paf (297)<br>.sam (192)<br>.csv (21)<br>.dict (9)<br>.pbi (7)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
 | `ILLUMINA` | 30,949 | 4.4% | .fastq (20,166)<br>.cram (10,623)<br>.idat (160) |
 | `not_applicable` | 22,290 | 3.1% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.fa (940)<br>.gfa (326)<br>.fasta (38)<br>.tsv (24)<br>.xg (8)<br>.gbwt (6)<br>.fna (2)<br>.gbz (2) |
-| `ONT` | 13,957 | 2.0% | .fast5 (12,509)<br>.bam (1,300)<br>.fastq (137)<br>.pod5 (11) |
-| `PACBIO` | 2,777 | 0.4% | .bam (1,810)<br>.fastq (967) |
+| `ONT` | 13,985 | 2.0% | .fast5 (12,509)<br>.bam (1,328)<br>.fastq (137)<br>.pod5 (11) |
+| `PACBIO` | 2,901 | 0.4% | .bam (1,934)<br>.fastq (967) |
 
 **Note**: Platform is inherently unknowable for most derived formats (VCF, BED, PLINK). It is read from a BAM/CRAM `@RG PL` header, FASTQ read name patterns, a nanopore signal file's extension, and an Illumina IDAT's run log, from whose scan software the array scanner is inferred (#603). The high not-classified rate is expected.
 
