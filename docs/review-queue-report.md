@@ -1,6 +1,6 @@
 # Review queue
 
-Source values the slot map or the entity map routed to a slot but that no authored translation rule reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per source, dataset, table and column it was found in; "rule it would use" names the seeded rule that matches it, or — where none does. For a donor's slot (phenotypic_sex, genetic_ancestry, organism_type, reported_ethnicity), files counts donors, and for a sample's slot (biosample_type), samples, each dataset's identifiers apart. 156 listed, from evidence under data/source_evidence and data/entity_evidence.
+Source values the slot map or the entity map routed to a slot but that no authored translation rule reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per source, dataset, table and column it was found in; "rule it would use" names the seeded rule that matches it, or — where none does. For a donor's slot (phenotypic_sex, genetic_ancestry, organism_type, reported_ethnicity), files counts donors, and for a sample's slot (biosample_type), samples, each dataset's identifiers apart. 157 listed, from evidence under data/source_evidence and data/entity_evidence.
 
 ## Published: the catalog's published columns
 
@@ -94,6 +94,7 @@ Source values the slot map or the entity map routed to a slot but that no author
 | 3 | `'Karitiana'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 3 | `'Mandenka'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 3 | `'Mixe'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 3 | `'Palestinian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 3 | `'Quechua'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 3 | `'Sardinian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 3 | `'Yoruba'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
@@ -102,6 +103,7 @@ Source values the slot map or the entity map routed to a slot but that no author
 | 2 | `'Aleut'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 2 | `'Ami'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 2 | `'Armenian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 2 | `'Australian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 2 | `'Balochi'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 2 | `'BantuHerero'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 2 | `'BantuKenya'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
@@ -163,7 +165,6 @@ Source values the slot map or the entity map routed to a slot but that no author
 | 2 | `'North_Ossetian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 2 | `'Orcadian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 2 | `'Oroqen'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
-| 2 | `'Palestinian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 2 | `'Pathan'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 2 | `'Piapoco'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 2 | `'Pima'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
@@ -194,7 +195,6 @@ Source values the slot map or the entity map routed to a slot but that no author
 | 1 | `'Albanian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 1 | `'Altaian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 1 | `'Atayal'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
-| 1 | `'Australian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 1 | `'Chane'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 1 | `'Chechen'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 1 | `'Chukchi'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
@@ -205,6 +205,7 @@ Source values the slot map or the entity map routed to a slot but that no author
 | 1 | `'Itelman'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 1 | `'Khonda_Dora'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 1 | `'Maori'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
+| 1 | `'Norwegian'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 1 | `'Polish'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 1 | `'Samaritan'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
 | 1 | `'Somali'` | `sgdp` |  | `SGDP_metadata` | `Population_ID` | — |
@@ -302,8 +303,9 @@ Every authored translation rule, by slot and most files first: the source values
 | 5,243 | 1,822 | 3,421 | 0 | phenotypic_sex.male | `any` | `'male'` | phenotypic_sex: Male | The term itself, as T2T, HPRC and NIA_CARD write it lower case and PRIMED and AnVIL capitalised. |
 | 1,603 | 0 | 1,603 | 0 | phenotypic_sex.pedigree_2 | `anvil / ANVIL_1000G_high_coverage_2019` | `'2'` | phenotypic_sex: Female | 1000 Genomes' `pedigree.sex` is a PED file's sex column, where 1 is male and 2 female; scoped to the dataset, since a bare `2` means this only in a PED file. |
 | 1,599 | 0 | 1,599 | 0 | phenotypic_sex.pedigree_1 | `anvil / ANVIL_1000G_high_coverage_2019` | `'1'` | phenotypic_sex: Male | 1000 Genomes' `pedigree.sex` is a PED file's sex column, where 1 is male and 2 female; scoped to the dataset, since a bare `1` means this only in a PED file. |
-| 174 | 0 | 0 | 174 | phenotypic_sex.sgdp_m | `sgdp` | `'M'` | phenotypic_sex: Male | SGDP's metadata file writes a genome's sex in `Gender` as M, F or U (not known); scoped to SGDP, since a bare `M` means male only there (#559). Its U has no row and makes no claim. |
-| 101 | 0 | 0 | 101 | phenotypic_sex.sgdp_f | `sgdp` | `'F'` | phenotypic_sex: Female | SGDP's metadata file writes a genome's sex in `Gender` as M, F or U (not known); scoped to SGDP, since a bare `F` means female only there (#559). Its U has no row and makes no claim. |
+| 175 | 0 | 0 | 175 | phenotypic_sex.sgdp_m | `sgdp` | `'M'` | phenotypic_sex: Male | SGDP's metadata file writes a genome's sex in `Gender` as M, F or U (not known); scoped to SGDP, since a bare `M` means male only there (#559). |
+| 101 | 0 | 0 | 101 | phenotypic_sex.sgdp_f | `sgdp` | `'F'` | phenotypic_sex: Female | SGDP's metadata file writes a genome's sex in `Gender` as M, F or U (not known); scoped to SGDP, since a bare `F` means female only there (#559). |
+| 2 | 0 | 0 | 2 | phenotypic_sex.sgdp_u | `sgdp` | `'U'` | nothing (reviewed, no claim) | SGDP's `U` is "not known": reviewed, and no claim. Two genomes linked by their genotypes (#718), S_Norwegian-1 and B_Australian-3, have it. |
 
 ### genetic_ancestry
 
