@@ -427,9 +427,9 @@ datasets:
 
 
 def stored_file(n: int, file_path: str) -> tuple[str, dict]:
-    """An `anvil_file` row with its storage path (#717)."""
+    """An `anvil_file` row with its storage path (#717), named as the path's last segment."""
     _, row = anvil_file(n)
-    return "anvil_file", {**row, "file_path": file_path}
+    return "anvil_file", {**row, "file_path": file_path, "file_name": file_path.rsplit("/", 1)[-1]}
 
 
 def run(n: int, folder: object) -> tuple[str, dict]:
@@ -513,9 +513,35 @@ class TestFolders:
     def test_a_name_that_only_mentions_an_index_or_checksum_is_no_sidecar(self, name):
         assert not ae.is_sidecar_file(name)
 
+    def test_a_sidecar_is_known_by_its_catalog_name_not_its_storage_name(self, tmp_path):
+        """The classification run routes a file by `file_name`; its storage path's last segment may differ."""
+        _, index = stored_file(7, "HG002/reads/object-7")
+        _, fast5 = stored_file(8, "HG002/reads/object-8.bai")
+        rows = [
+            *FOLDER_ROWS,
+            ("anvil_file", {**index, "file_name": "a.bam.bai"}),
+            ("anvil_file", {**fast5, "file_name": "b.fast5"}),
+        ]
+        write_dataset(tmp_path, "D", rows)
+        assert ae.check(slot_map(tmp_path, FOLDER_MAP), tmp_path, CATALOG) == [
+            "D/sequencing/seq_filename: reaches 1 index or checksum files (e.g. 'HG002/reads/object-7'), whose "
+            "slots are not their payload's (#437, #596) — narrow files_under"
+        ]
+
     def test_an_index_outside_the_folders_reach_is_no_problem(self, tmp_path):
         write_dataset(tmp_path, "D", [*FOLDER_ROWS, stored_file(7, "HG002/methylation/a.bam.bai")])
         assert ae.check(slot_map(tmp_path, FOLDER_MAP), tmp_path, CATALOG) == []
+
+    def test_a_table_with_a_link_column_beside_its_folder_column_checks_both(self, tmp_path):
+        """NIA_CARD's `sequencing` has both: `sequencing_id_fileref` links one file, `seq_filename` a folder.
+        An index outside the folders' reach is in the dataset, so the sidecar test meets the link column too."""
+        text = FOLDER_MAP.replace(
+            "    sequencing:\n",
+            "    sequencing:\n      fileref:\n        platform:\n          - {cell: sequencing_assay}\n",
+        )
+        runs = [("sequencing", {**row, "fileref": drs(3)}) for _, row in (run(1, "HG002"), run(2, "HG002_R10"))]
+        write_dataset(tmp_path, "D", [*FOLDER_ROWS[:-2], stored_file(9, "HG002/methylation/a.bam.bai"), *runs])
+        assert ae.check(slot_map(tmp_path, text), tmp_path, CATALOG) == []
 
     def test_check_names_a_folder_column_no_row_carries(self, tmp_path):
         write_dataset(

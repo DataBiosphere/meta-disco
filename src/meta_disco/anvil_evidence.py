@@ -68,6 +68,7 @@ from .file_name import EXTENSION_MAP, FileName
 from .models import (
     JOIN_KEY_DRS_URI,
     JOIN_KEY_FILE_ID,
+    JOIN_KEY_FILE_NAME,
     SAMPLES_FIELD,
     SOURCE_PUBLISHED_VALUE,
     SOURCE_REPOSITORY_METADATA,
@@ -191,12 +192,15 @@ class FileIndex:
     """A dataset's own files: every DRS URI its ``anvil_file`` entities carry
     (``ANVIL_FILE_HANDLE_COLUMNS``), every ``file_id``, and, where :func:`file_index` was asked
     for them, each file's normalised storage path with its ``file_ref``, sorted by path for
-    :meth:`under`. A file with no path or no ``file_ref`` is not in ``by_path``. Shared with
+    :meth:`under`, and the ``file_ref`` of each such file whose catalog ``file_name`` is an index
+    or checksum (:func:`is_sidecar_file`) in ``sidecars``. A file with no path or no
+    ``file_ref`` is in neither. Shared with
     the lineage importer (``anvil_lineage``, #583), which asks :meth:`has`."""
 
     handles: frozenset[str]
     file_ids: frozenset[str] = frozenset()
     by_path: tuple[tuple[str, str], ...] = ()
+    sidecars: frozenset[str] = frozenset()
 
     def has(self, key: str, value: str) -> bool:
         """Whether ``value``, a ``key`` (``drs_uri`` or ``file_id``), is one of these files; any other key raises."""
@@ -227,6 +231,7 @@ def file_index(path: Path, with_paths: bool) -> FileIndex:
     handles: set[str] = set()
     file_ids: set[str] = set()
     by_path = []
+    sidecars: set[str] = set()
     for _table, value in iter_verbatim_entities(path, {VERBATIM_FILE}):
         for column in ANVIL_FILE_HANDLE_COLUMNS:
             handles.update(link_handles(value.get(column)) or [])
@@ -238,7 +243,16 @@ def file_index(path: Path, with_paths: bool) -> FileIndex:
         if isinstance(file_path, str) and file_path and ref:
             normal = "/".join(segment for segment in file_path.split("/") if segment)
             by_path.extend((normal, handle) for handle in ref)
-    return FileIndex(handles=frozenset(handles), file_ids=frozenset(file_ids), by_path=tuple(sorted(by_path)))
+            # By the catalog's name, which the classification run routes a file by, not by the
+            # last segment of its storage path: the two may differ.
+            if is_sidecar_file(str(value.get(JOIN_KEY_FILE_NAME) or "")):
+                sidecars.update(ref)
+    return FileIndex(
+        handles=frozenset(handles),
+        file_ids=frozenset(file_ids),
+        by_path=tuple(sorted(by_path)),
+        sidecars=frozenset(sidecars),
+    )
 
 
 def is_sidecar_file(name: str) -> bool:
@@ -272,7 +286,7 @@ def check(slot_map: SlotMap, manifest_root: Path, catalog: str, datasets: list[s
     non-empty value names a top folder (:func:`folder_files`), each folder reaches at least
     one of the dataset's files, no file is reached from two rows — the one-to-one a
     folder entry is declared on, since two rows would give one file two rows' values — and
-    none is an index or checksum by its own name (:func:`is_sidecar_file`), whose
+    none is an index or checksum by its catalog name (:func:`is_sidecar_file`), whose
     slots are not its payload's (#437, #596) and which a folder's column name cannot
     exclude as a link column's name does. Per
     cell: the column appears on some row of its table
@@ -387,11 +401,15 @@ def _check_dataset(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
             twice = sum(1 for n in reached.get(key, Counter()).values() if n > 1)
             if twice:
                 problems.append(f"{at}: {twice:,} files are reached from more than one row")
-            sidecars = [
-                path
-                for path, handle in (files.by_path if files is not None else ())
-                if handle in reached.get(key, ()) and is_sidecar_file(path.rsplit("/", 1)[-1])
-            ]
+            sidecars = (
+                []
+                if files is None
+                else [
+                    path
+                    for path, handle in files.by_path
+                    if handle in files.sidecars and handle in reached.get(key, ())
+                ]
+            )
             if sidecars:
                 problems.append(
                     f"{at}: reaches {len(sidecars):,} index or checksum files (e.g. {sidecars[0]!r}), whose "
