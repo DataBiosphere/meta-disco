@@ -581,7 +581,7 @@ importer's half is built — 7.12 is enforced (below), and the published importe
 - **3.13 is held by what is read, not by a check.** No code tests whether a header field was carried in.
   The rules that read `@RG` fields read properties of the reads: `PL` (platform), `PM` (instrument model)
   and, in `ont_basecall_dna`, the ONT basecall model in `DS`; and the `platform_aligner_preset_*` rules read
-  a minimap2 or Winnowmap read preset (`-x map-ont`, `map-pb`) on any `@PG` command line (#727). A carried-in
+  a minimap2 or Winnowmap read preset (`map-ont`, `map-pb`, `map-pb-clr`) on any `@PG` command line (#727). A carried-in
   value of those is still true of the file. No rule reads a read-group field that describes processing, such as a reference named in `DS`,
   and the producer-step reader (#609) reads only command lines. A rule that reads such a field must test
   whether it was carried in first.

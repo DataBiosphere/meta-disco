@@ -617,9 +617,8 @@ class TestBamCramClassification:
             pytest.param(
                 "winnowmap -W rep.txt -ax map-pb -t 16 --MD ref.fa r.fastq", "PACBIO", id="winnowmap -ax map-pb"
             ),
-            pytest.param(
-                "/opt/bin/minimap2 -ax map-hifi ref.fa hifi.fq", "PACBIO", id="minimap2 map-hifi, with a path"
-            ),
+            pytest.param("/opt/bin/minimap2 -ax map-pb ref.fa r.fq", "PACBIO", id="minimap2 map-pb, with a path"),
+            pytest.param("minimap2 -ax map-hifi ref.fa hifi.fq", None, id="map-hifi may be ONT duplex too"),
             pytest.param("minimap2 -xmap-ont ref.fa r.fq", "ONT", id="preset joined to -x"),
             pytest.param("winnowmap -W r.txt -ax map-pb-clr ref.fa r.fq", "PACBIO", id="winnowmap map-pb-clr"),
             pytest.param("minimap2 -aX map-ont ref.fa r.fq", None, id="-X is another flag, not the preset"),
@@ -630,6 +629,8 @@ class TestBamCramClassification:
             pytest.param("minimap2 -ax splice ref.fa r.fq", None, id="splice names no platform"),
             pytest.param("minimap2 -ax map-ontology ref.fa r.fq", None, id="a longer word is no preset"),
             pytest.param("mytool -x map-ont ref.fa r.fq", None, id="another tool's -x is not read"),
+            pytest.param("mytool --aligner minimap2 -x map-ont ref.fa r.fq", None, id="minimap2 named mid-line"),
+            pytest.param("minimap2.py -x map-ont ref.fa r.fq", None, id="another program named like minimap2"),
             pytest.param("samtools view -H x.bam", None, id="no aligner and no preset"),
         ],
     )
@@ -639,6 +640,12 @@ class TestBamCramClassification:
         result = classify_from_header(header)
         assert field_value(result, "platform") == platform
         assert field_status(result, "platform") == (CLASSIFIED if platform else NOT_CLASSIFIED)
+
+    def test_a_cram_reads_the_preset_too(self):
+        """The rules apply to a CRAM's header as to a BAM's (#727)."""
+        header = "@HD\tVN:1.6\n@PG\tID:aln\tPN:minimap2\tCL:minimap2 -ax map-ont ref.fa r.fq"
+        result = classify_from_header(header, name=FileName.parse("sample.cram"))
+        assert field_value(result, "platform") == "ONT"
 
     def test_two_read_presets_in_one_header_conflict(self):
         """ONT and PacBio presets in one header are not settled by either (#727)."""
