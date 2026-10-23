@@ -6,9 +6,9 @@ It holds no vocabulary (1.5). `anvil_evidence` reads the AnVIL map to turn the v
 manifests into evidence files; the translation table (`value_map`, #414) is where raw
 values become terms.
 
-**One entry shape.** An entry is keyed by the **file-link column** — the column whose
-DRS URI says which file a row is about — and names, per slot, where the raw value comes
-from::
+**Two entry shapes.** A **link entry** is keyed by the **file-link column** — the column
+whose DRS URI says which file a row is about — and names, per slot, where the raw value
+comes from::
 
     datasets:
       AnVIL_HPRC_R2:
@@ -20,6 +20,29 @@ from::
             assay_type:
               - {cell: library_strategy}
               - {table_name: hic}
+
+**A folder entry** (#604) reaches its files by where they are stored rather than by DRS
+URI: its column holds the name of a top folder of the dataset's storage, and its one
+member that is not a slot, ``files_under``, names the path below it. The entry reaches
+every file with a ``file_ref`` whose ``anvil_file.file_path``, its empty segments dropped,
+begins ``<cell>/<files_under>/`` (``anvil_evidence.folder_files``)::
+
+    ANVIL_NIA_CARD_Coriell_Cell_Lines_Open:
+      sequencing:
+        seq_filename:              # holds a top folder's name, `HG002_R10`
+          files_under: reads       # reaches `HG002_R10/reads/…`
+          assay_type:
+            - {cell: sequencing_assay}
+
+Its column's name says nothing about the files it reaches, so the derivative and checksum
+exclusions below cannot be read off it: ``anvil_evidence.check`` refuses a folder entry that
+reaches a file whose own name says it is an index or checksum
+(``anvil_evidence.is_sidecar_file``), and the entry's ``files_under`` is narrowed instead. It is declared per table, so it reaches files only where a map names it. What it reaches
+is written as any other entry's evidence, keyed by the file's DRS URI. It may not carry
+two things a link entry may: a ``column_name`` span, because the folder column's name is a
+field label that describes no file, and the ``samples`` slot, until a folder row's sample
+can be compared with each file's own (#740). A cell of the same table may not name a folder
+column either: the column is a pointer, and a column is one kind, never two (2.7).
 
 A source is exactly one of three forms. ``{cell: <column>}`` is a metadata value in the
 same row. ``{table_name: <span>}`` and ``{column_name: <span>}`` are a span of the
@@ -96,6 +119,10 @@ from .models import (
     require_importer_source_type,
 )
 
+# The member of a folder entry that is not a slot (#604): the path below the folder its
+# column names, under which the entry's files are stored.
+FILES_UNDER = "files_under"
+
 # The three forms a source can take, by the key its mapping carries.
 SOURCE_CELL = "cell"
 SOURCE_TABLE_NAME = "table_name"
@@ -144,17 +171,29 @@ class SlotSource:
 
 @dataclass(frozen=True)
 class ColumnEntry:
-    """One file-link column and what its files' slots are read from.
+    """One file-link or folder column and what its files' slots are read from.
 
-    ``slots`` maps a slot to its sources in file order. Every non-empty value a column
-    named here holds in the source is a DRS URI or a list of them — `anvil_evidence.check`
-    verifies that against the manifests, since the map cannot.
+    ``slots`` maps a slot to its sources in file order. Every non-empty value a link
+    column holds in the source is a DRS URI or a list of them; every one a folder
+    column (``files_under`` set, #604) holds is a top folder's name. `anvil_evidence.check`
+    verifies either against the manifests, since the map cannot.
     """
 
     dataset: str
     table: str
     column: str
     slots: dict[str, tuple[SlotSource, ...]]
+    files_under: str | None = None
+
+    @property
+    def is_folder(self) -> bool:
+        return self.files_under is not None
+
+    def folder_prefix(self, folder: str) -> str:
+        """The storage-path prefix of the files this folder entry reaches from the folder a cell names."""
+        if self.files_under is None:
+            raise ValueError(f"{self.dataset}/{self.table}/{self.column} is a link column, not a folder column")
+        return f"{folder}/{self.files_under}/"
 
     @property
     def is_derivative(self) -> bool:
@@ -179,6 +218,10 @@ class SlotMap:
 
     def columns(self, dataset: str, table: str) -> list[ColumnEntry]:
         return [e for e in self.entries if e.dataset == dataset and e.table == table]
+
+    def has_folders(self, dataset: str) -> bool:
+        """Whether any of the dataset's entries is a folder entry, whose files are reached by storage path."""
+        return any(e.is_folder for e in self.entries if e.dataset == dataset)
 
     def cells(self, dataset: str, table: str) -> set[str]:
         """Every column a ``cell`` source of this table names."""
@@ -271,7 +314,7 @@ _UniqueKeyLoader = unique_key_loader(_WHERE, " — one entry per column, table a
 def load_slot_map(source: Readable | None = None) -> SlotMap:
     """Load and check a slot map; the bundled AnVIL one by default.
 
-    The shape rules — one entry shape, three source forms, a span inside its name, no
+    The shape rules — the two entry shapes, three source forms, a span inside its name, no
     source twice, no ``notes``, the three structural exclusions — are checked here, and
     the first violation raises ``ValueError`` naming where it sits, as far down as the
     level allows (dataset, table, column, slot; a duplicate key by its line). Source
@@ -310,15 +353,62 @@ def _entries(datasets: dict) -> Iterator[ColumnEntry]:
         _expect_nonempty_mapping(tables, f"{_WHERE} {dataset}", "table")
         for table, columns in tables.items():
             _expect_nonempty_mapping(columns, f"{_WHERE} {dataset}/{table}", "file-link column")
-            for column, slots in columns.items():
-                at = f"{_WHERE} {dataset}/{table}/{column}"
-                _expect_nonempty_mapping(slots, at, "slot")
-                yield ColumnEntry(
-                    dataset=dataset,
-                    table=table,
-                    column=column,
-                    slots={slot: _sources(slot, sources, table, column, at) for slot, sources in slots.items()},
-                )
+            entries = [_entry(dataset, table, column, members) for column, members in columns.items()]
+            _refuse_cells_naming_folders(entries, f"{_WHERE} {dataset}/{table}")
+            yield from entries
+
+
+def _entry(dataset: str, table: str, column: str, members: dict) -> ColumnEntry:
+    at = f"{_WHERE} {dataset}/{table}/{column}"
+    _expect_nonempty_mapping(members, at, "slot")
+    files_under = _files_under(members[FILES_UNDER], at) if FILES_UNDER in members else None
+    slots = {slot: sources for slot, sources in members.items() if slot != FILES_UNDER}
+    if not slots:
+        raise ValueError(f"{at}: names {FILES_UNDER} and no slot — a folder entry maps at least one slot")
+    if files_under is not None:
+        _refuse_in_folder_entry(slots, column, at)
+    parsed = {slot: _sources(slot, sources, table, column, at) for slot, sources in slots.items()}
+    return ColumnEntry(dataset=dataset, table=table, column=column, slots=parsed, files_under=files_under)
+
+
+def _files_under(value: object, at: str) -> str:
+    """Check a folder entry's ``files_under``: a relative path of plain segments, no ``.`` or ``..``."""
+    if isinstance(value, str) and all(segment not in ("", ".", "..") for segment in value.split("/")):
+        return value
+    raise ValueError(
+        f"{at}: {FILES_UNDER} is {value!r}, not a relative path of folder names below the folder the "
+        "column names (no leading or trailing '/', no '.' or '..')"
+    )
+
+
+def _refuse_in_folder_entry(slots: dict, column: str, at: str) -> None:
+    """Refuse what a link entry may carry and a folder entry may not: the ``samples`` slot, and a
+    span of the column's name. Read off the unparsed sources, so either is refused for what it is
+    before any other rule a source breaks is reported."""
+    if SAMPLES_FIELD in slots:
+        raise ValueError(
+            f"{at} {SAMPLES_FIELD}: a folder entry reads no samples — a folder row's sample is not yet "
+            "compared with each file's own (#740)"
+        )
+    for slot, sources in slots.items():
+        if isinstance(sources, list) and any(isinstance(s, dict) and SOURCE_COLUMN_NAME in s for s in sources):
+            raise ValueError(
+                f"{at} {slot}: column {column!r} names a folder, and its name is a field label that describes "
+                "no file, so no slot reads a span of it"
+            )
+
+
+def _refuse_cells_naming_folders(entries: list[ColumnEntry], at: str) -> None:
+    """A cell naming one of the table's folder columns reads a pointer as a value: refused (2.7)."""
+    folders = {entry.column for entry in entries if entry.is_folder}
+    for entry in entries:
+        for slot, sources in entry.slots.items():
+            for source in sources:
+                if source.form == SOURCE_CELL and source.value in folders:
+                    raise ValueError(
+                        f"{at}/{entry.column} {slot}: cell {source.value!r} is a folder column of this table, "
+                        "which holds a pointer and no value"
+                    )
 
 
 def _is_cell(item: object) -> bool:

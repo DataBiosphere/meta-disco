@@ -411,6 +411,179 @@ class TestLinks:
         assert table.unresolved == {"hifi": 1}
 
 
+# --- folder entries (#604) -------------------------------------------------------
+
+
+FOLDER_MAP = """
+catalog: anvil15
+datasets:
+  D:
+    sequencing:
+      seq_filename:
+        files_under: reads
+        assay_type:
+          - {cell: sequencing_assay}
+"""
+
+
+def stored_file(n: int, file_path: str) -> tuple[str, dict]:
+    """An `anvil_file` row with its storage path (#717), named as the path's last segment."""
+    _, row = anvil_file(n)
+    return "anvil_file", {**row, "file_path": file_path, "file_name": file_path.rsplit("/", 1)[-1]}
+
+
+def run(n: int, folder: object) -> tuple[str, dict]:
+    return "sequencing", {"sequencing_id": f"s{n}", "seq_filename": folder, "sequencing_assay": "WGS"}
+
+
+FOLDER_ROWS = [
+    stored_file(1, "HG002/reads/fast5/a.fast5"),
+    stored_file(2, "HG002/reads/b.bam"),
+    stored_file(3, "HG002/methylation/c.bed.gz"),
+    stored_file(4, "HG002_R10/reads/fast5/d.fast5"),
+    stored_file(5, "references/HG002/reads/e.fa"),
+    anvil_file(6),
+    run(1, "HG002"),
+    run(2, "HG002_R10"),
+]
+
+
+def folder_import(tmp_path: Path, rows: list[tuple[str, dict]]) -> ae.TableImport:
+    write_dataset(tmp_path, "D", rows)
+    result = ae.import_dataset(
+        slot_map(tmp_path, FOLDER_MAP), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
+    )
+    (table,) = result.tables
+    return table
+
+
+class TestFolders:
+    def test_a_folder_reaches_the_files_stored_under_its_path_and_no_others(self, tmp_path):
+        """`HG002/reads/` is a whole folder: not `HG002/methylation/`, not `HG002_R10/reads/`, and not a
+        `HG002/reads/` deeper down; a file with no storage path is reached by no folder."""
+        table = folder_import(tmp_path, FOLDER_ROWS)
+        assert sorted(rows_of(table.path)) == [("assay_type", drs(n), "WGS", "sequencing_assay") for n in (1, 2, 4)]
+        assert table.files == {drs(1), drs(2), drs(4)}
+
+    def test_a_map_whose_folders_agree_with_the_manifest_has_no_problems(self, tmp_path):
+        """An empty folder cell is no folder, as an empty link cell is no link, and no problem."""
+        write_dataset(tmp_path, "D", [*FOLDER_ROWS, run(3, None), run(4, "")])
+        assert ae.check(slot_map(tmp_path, FOLDER_MAP), tmp_path, CATALOG) == []
+
+    def test_a_folder_cell_that_reaches_nothing_is_counted_by_why(self, tmp_path):
+        rows = [*FOLDER_ROWS, run(3, None), run(4, "HG002/reads"), run(5, drs(1)), run(6, "HG404"), run(7, ".")]
+        table = folder_import(tmp_path, rows)
+        assert table.no_link == {"seq_filename": 1}
+        assert table.not_folder == {"seq_filename": 3}
+        assert table.empty_folder == {"seq_filename": 1}
+        assert table.files == {drs(1), drs(2), drs(4)}
+
+    def test_describe_names_a_folder_columns_counts(self, tmp_path):
+        rows = [*FOLDER_ROWS, run(4, "HG002/reads"), run(6, "HG404")]
+        write_dataset(tmp_path, "D", rows)
+        result = ae.import_dataset(
+            slot_map(tmp_path, FOLDER_MAP), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
+        )
+        lines = ae.describe([result])
+        assert "    seq_filename: not a top folder's name on 1 rows" in lines
+        assert "    seq_filename: folder reaches no file on 1 rows" in lines
+
+    def test_check_reports_every_way_a_folder_column_disagrees_at_once(self, tmp_path):
+        rows = [*FOLDER_ROWS, run(3, "HG002/reads"), run(4, "HG404"), run(5, "HG002")]
+        write_dataset(tmp_path, "D", rows)
+        at = "D/sequencing/seq_filename"
+        assert ae.check(slot_map(tmp_path, FOLDER_MAP), tmp_path, CATALOG) == [
+            f"{at}: holds 'HG002/reads', not a top folder's name — not a folder column",
+            f"{at}: reaches none of the dataset's files under 'HG404/reads/'",
+            f"{at}: 2 files are reached from more than one row",
+        ]
+
+    @pytest.mark.parametrize(
+        "name", ["a.bam.bai", "a.fast5.md5", "a.vcf.gz.tbi", "a.bam.pbi", "a.fa.fai.gz", "a.fast5.md5.gz"]
+    )
+    def test_check_refuses_a_folder_that_reaches_an_index_or_checksum(self, tmp_path, name):
+        """A folder column's name cannot exclude a sidecar as a link column's name does (#596)."""
+        write_dataset(tmp_path, "D", [*FOLDER_ROWS, stored_file(7, f"HG002/reads/{name}")])
+        assert ae.check(slot_map(tmp_path, FOLDER_MAP), tmp_path, CATALOG) == [
+            f"D/sequencing/seq_filename: reaches 1 index or checksum files (e.g. 'HG002/reads/{name}'), whose "
+            "slots are not their payload's (#437, #596) — narrow files_under"
+        ]
+
+    @pytest.mark.parametrize("name", ["HG_index.html", "md5_report.txt", "a.bam", "run.fast5.tar"])
+    def test_a_name_that_only_mentions_an_index_or_checksum_is_no_sidecar(self, name):
+        assert not ae.is_sidecar_file(name)
+
+    def test_a_sidecar_is_known_by_its_catalog_name_not_its_storage_name(self, tmp_path):
+        """The classification run routes a file by `file_name`; its storage path's last segment may differ."""
+        _, index = stored_file(7, "HG002/reads/object-7")
+        _, fast5 = stored_file(8, "HG002/reads/object-8.bai")
+        rows = [
+            *FOLDER_ROWS,
+            ("anvil_file", {**index, "file_name": "a.bam.bai"}),
+            ("anvil_file", {**fast5, "file_name": "b.fast5"}),
+        ]
+        write_dataset(tmp_path, "D", rows)
+        assert ae.check(slot_map(tmp_path, FOLDER_MAP), tmp_path, CATALOG) == [
+            "D/sequencing/seq_filename: reaches 1 index or checksum files (e.g. 'HG002/reads/object-7'), whose "
+            "slots are not their payload's (#437, #596) — narrow files_under"
+        ]
+
+    def test_an_index_outside_the_folders_reach_is_no_problem(self, tmp_path):
+        write_dataset(tmp_path, "D", [*FOLDER_ROWS, stored_file(7, "HG002/methylation/a.bam.bai")])
+        assert ae.check(slot_map(tmp_path, FOLDER_MAP), tmp_path, CATALOG) == []
+
+    def test_a_table_with_a_link_column_beside_its_folder_column_checks_both(self, tmp_path):
+        """NIA_CARD's `sequencing` has both: `sequencing_id_fileref` links one file, `seq_filename` a folder.
+        An index outside the folders' reach is in the dataset, so the sidecar test meets the link column too."""
+        text = FOLDER_MAP.replace(
+            "    sequencing:\n",
+            "    sequencing:\n      fileref:\n        platform:\n          - {cell: sequencing_assay}\n",
+        )
+        runs = [("sequencing", {**row, "fileref": drs(3)}) for _, row in (run(1, "HG002"), run(2, "HG002_R10"))]
+        write_dataset(tmp_path, "D", [*FOLDER_ROWS[:-2], stored_file(9, "HG002/methylation/a.bam.bai"), *runs])
+        assert ae.check(slot_map(tmp_path, text), tmp_path, CATALOG) == []
+
+    def test_check_names_a_folder_column_no_row_carries(self, tmp_path):
+        write_dataset(
+            tmp_path, "D", [stored_file(1, "HG002/reads/a.fast5"), ("sequencing", {"sequencing_assay": "WGS"})]
+        )
+        assert ae.check(slot_map(tmp_path, FOLDER_MAP), tmp_path, CATALOG) == [
+            "D/sequencing/seq_filename: no row carries this column"
+        ]
+
+    def test_the_file_index_finds_files_by_path_prefix_in_path_order(self, tmp_path):
+        write_dataset(tmp_path, "D", [*FOLDER_ROWS, stored_file(7, "HG002//reads/f.fast5")])
+        files = ae.file_index(manifest_path(tmp_path, CATALOG, "D", FORMAT_VERBATIM), with_paths=True)
+        assert files.under("HG002/") == [drs(3), drs(2), drs(7), drs(1)]
+        assert files.under("HG002/reads/") == [drs(2), drs(7), drs(1)]
+        assert files.under("HG003/") == []
+        assert files.handles == {drs(n) for n in range(1, 8)}
+        assert files.has("file_id", "f7") and files.has("drs_uri", drs(7))
+        assert not files.has("file_id", "f8")
+
+    def test_dot_segments_stay_as_written(self, tmp_path):
+        """An object name is literal: `x/../HG002/reads/a` is not under `HG002/`."""
+        write_dataset(
+            tmp_path, "D", [stored_file(1, "x/../HG002/reads/a.fast5"), stored_file(2, "/HG002/reads/b.fast5")]
+        )
+        files = ae.file_index(manifest_path(tmp_path, CATALOG, "D", FORMAT_VERBATIM), with_paths=True)
+        assert files.under("HG002/reads/") == [drs(2)]
+
+    def test_two_entities_naming_one_file_ref_are_one_file_reached_once(self, tmp_path):
+        _, first = stored_file(1, "HG002/reads/a.fast5")
+        _, copy = stored_file(1, "HG002/reads/a_copy.fast5")
+        rows = [("anvil_file", first), ("anvil_file", copy), run(1, "HG002")]
+        write_dataset(tmp_path, "D", rows)
+        assert ae.check(slot_map(tmp_path, FOLDER_MAP), tmp_path, CATALOG) == []
+        assert folder_import(tmp_path, rows).written == 1
+
+    def test_the_file_index_holds_paths_only_when_asked(self, tmp_path):
+        write_dataset(tmp_path, "D", FOLDER_ROWS)
+        files = ae.file_index(manifest_path(tmp_path, CATALOG, "D", FORMAT_VERBATIM), with_paths=False)
+        assert files.by_path == ()
+        assert files.handles == {drs(n) for n in range(1, 7)}
+
+
 class TestGenerations:
     def test_a_second_import_is_a_new_generation_and_only_it_is_discovered(self, tmp_path):
         write_dataset(tmp_path, "D", HIFI_ROWS)
@@ -516,7 +689,7 @@ def test_describe_names_the_generation_and_each_tables_counts(tmp_path):
     lines = ae.describe([result])
     assert lines[0].startswith("D -> ") and lines[0].endswith("(2 files)")
     assert "  hifi: 4 rows, 7 evidence rows" in lines
-    assert "    path: no link on 1 rows" in lines
+    assert "    path: no link or folder on 1 rows" in lines
     assert "    path: 1 links not among the dataset's files" in lines
     assert "    library_source: null on 1 rows" in lines
 

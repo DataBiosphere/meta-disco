@@ -206,7 +206,9 @@ evidence}` entry — plus the controlled vocabulary:
     submitter tables' `sources/anvil_slot_map.yaml` (`make check-slot-map` /
     `make import-anvil-evidence`, under `anvil/`) and the published columns'
     `sources/anvil_published_slot_map.yaml` (`make check-published-map` /
-    `make import-anvil-published`, under `anvil_published/`, #497). A map's top-level
+    `make import-anvil-published`, under `anvil_published/`, #497). An entry reaches its
+    files by the DRS URIs a cell holds or, as a **folder entry** (`files_under`, #604), by
+    storage path under the top folder a cell names (`anvil_file.file_path`). A map's top-level
     `source_type` is the label its evidence carries and decides its directory
     (`anvil_evidence.EVIDENCE_DIRS`). Line 1 is the envelope, naming both sides of the
     join and the source's kind (`source_type`, one of `IMPORTER_SOURCE_TYPES` less the lineage-only kinds, constant
