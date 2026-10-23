@@ -466,14 +466,15 @@ class TestFolders:
         assert table.files == {drs(1), drs(2), drs(4)}
 
     def test_a_map_whose_folders_agree_with_the_manifest_has_no_problems(self, tmp_path):
-        write_dataset(tmp_path, "D", FOLDER_ROWS)
+        """An empty folder cell is no folder, as an empty link cell is no link, and no problem."""
+        write_dataset(tmp_path, "D", [*FOLDER_ROWS, run(3, None), run(4, "")])
         assert ae.check(slot_map(tmp_path, FOLDER_MAP), tmp_path, CATALOG) == []
 
     def test_a_folder_cell_that_reaches_nothing_is_counted_by_why(self, tmp_path):
-        rows = [*FOLDER_ROWS, run(3, None), run(4, "HG002/reads"), run(5, drs(1)), run(6, "HG404")]
+        rows = [*FOLDER_ROWS, run(3, None), run(4, "HG002/reads"), run(5, drs(1)), run(6, "HG404"), run(7, ".")]
         table = folder_import(tmp_path, rows)
         assert table.no_link == {"seq_filename": 1}
-        assert table.not_folder == {"seq_filename": 2}
+        assert table.not_folder == {"seq_filename": 3}
         assert table.empty_folder == {"seq_filename": 1}
         assert table.files == {drs(1), drs(2), drs(4)}
 
@@ -497,6 +498,19 @@ class TestFolders:
             f"{at}: 2 files are reached from more than one row",
         ]
 
+    @pytest.mark.parametrize("name", ["a.bam.bai", "a.fast5.md5", "a.vcf.gz.tbi"])
+    def test_check_refuses_a_folder_that_reaches_an_index_or_checksum(self, tmp_path, name):
+        """A folder column's name cannot exclude a sidecar as a link column's name does (#596)."""
+        write_dataset(tmp_path, "D", [*FOLDER_ROWS, stored_file(7, f"HG002/reads/{name}")])
+        assert ae.check(slot_map(tmp_path, FOLDER_MAP), tmp_path, CATALOG) == [
+            f"D/sequencing/seq_filename: reaches 1 index or checksum files (e.g. 'HG002/reads/{name}'), whose "
+            "slots are not their payload's (#437, #596) — narrow files_under"
+        ]
+
+    def test_an_index_outside_the_folders_reach_is_no_problem(self, tmp_path):
+        write_dataset(tmp_path, "D", [*FOLDER_ROWS, stored_file(7, "HG002/methylation/a.bam.bai")])
+        assert ae.check(slot_map(tmp_path, FOLDER_MAP), tmp_path, CATALOG) == []
+
     def test_check_names_a_folder_column_no_row_carries(self, tmp_path):
         write_dataset(
             tmp_path, "D", [stored_file(1, "HG002/reads/a.fast5"), ("sequencing", {"sequencing_assay": "WGS"})]
@@ -514,6 +528,22 @@ class TestFolders:
         assert files.handles == {drs(n) for n in range(1, 8)}
         assert files.has("file_id", "f7") and files.has("drs_uri", drs(7))
         assert not files.has("file_id", "f8")
+
+    def test_dot_segments_stay_as_written(self, tmp_path):
+        """An object name is literal: `x/../HG002/reads/a` is not under `HG002/`."""
+        write_dataset(
+            tmp_path, "D", [stored_file(1, "x/../HG002/reads/a.fast5"), stored_file(2, "/HG002/reads/b.fast5")]
+        )
+        files = ae.file_index(manifest_path(tmp_path, CATALOG, "D", FORMAT_VERBATIM), with_paths=True)
+        assert files.under("HG002/reads/") == [drs(2)]
+
+    def test_two_entities_naming_one_file_ref_are_one_file_reached_once(self, tmp_path):
+        _, first = stored_file(1, "HG002/reads/a.fast5")
+        _, copy = stored_file(1, "HG002/reads/a_copy.fast5")
+        rows = [("anvil_file", first), ("anvil_file", copy), run(1, "HG002")]
+        write_dataset(tmp_path, "D", rows)
+        assert ae.check(slot_map(tmp_path, FOLDER_MAP), tmp_path, CATALOG) == []
+        assert folder_import(tmp_path, rows).written == 1
 
     def test_the_file_index_holds_paths_only_when_asked(self, tmp_path):
         write_dataset(tmp_path, "D", FOLDER_ROWS)
@@ -627,7 +657,7 @@ def test_describe_names_the_generation_and_each_tables_counts(tmp_path):
     lines = ae.describe([result])
     assert lines[0].startswith("D -> ") and lines[0].endswith("(2 files)")
     assert "  hifi: 4 rows, 7 evidence rows" in lines
-    assert "    path: no link on 1 rows" in lines
+    assert "    path: no link or folder on 1 rows" in lines
     assert "    path: 1 links not among the dataset's files" in lines
     assert "    library_source: null on 1 rows" in lines
 

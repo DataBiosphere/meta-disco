@@ -41,7 +41,6 @@ holds each map to AnVIL's published table (``PUBLISHED_TABLE``, contract 7.12), 
 
 from __future__ import annotations
 
-import posixpath
 from bisect import bisect_left
 from collections import Counter
 from collections.abc import Iterator
@@ -74,7 +73,7 @@ from .models import (
 )
 from .sample_identity import SAMPLE, Identifier, IdentifierRuleSet, identifier_rules, name_contradicts
 from .schema.classification_model import ImporterSourceTypeEnum, JoinKeyEnum
-from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource
+from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource, is_derivative_name
 from .source_evidence import (
     EvidenceEntry,
     EvidenceFileEnvelope,
@@ -186,7 +185,7 @@ class FileIndex:
     """A dataset's own files: every DRS URI its ``anvil_file`` entities carry
     (``ANVIL_FILE_HANDLE_COLUMNS``), every ``file_id``, and, where :func:`file_index` was asked
     for them, each file's normalised storage path with its ``file_ref``, sorted by path for
-    :meth:`under`. A file with no path or no ``file_ref`` is in ``handles`` only. Shared with
+    :meth:`under`. A file with no path or no ``file_ref`` is not in ``by_path``. Shared with
     the lineage importer (``anvil_lineage``, #583), which asks :meth:`has`."""
 
     handles: frozenset[str]
@@ -202,20 +201,23 @@ class FileIndex:
         raise ValueError(f"{key!r} names no file of the dataset")
 
     def under(self, prefix: str) -> list[str]:
-        """The ``file_ref`` of each file whose normalised storage path begins with ``prefix``, in path order."""
-        found = []
+        """The ``file_ref`` of each file whose normalised storage path begins with ``prefix``, in path
+        order, each once: two entities naming one ``file_ref`` are one file."""
+        found: dict[str, None] = {}
         for i in range(bisect_left(self.by_path, (prefix,)), len(self.by_path)):
             path, handle = self.by_path[i]
             if not path.startswith(prefix):
                 break
-            found.append(handle)
-        return found
+            found[handle] = None
+        return list(found)
 
 
 def file_index(path: Path, with_paths: bool) -> FileIndex:
     """The dataset's own files, from its verbatim manifest's ``anvil_file`` entities; their storage
-    paths only ``with_paths``, since only a folder entry reads them. Each path is normalised by
-    ``posixpath.normpath``, so ``a//b`` is ``a/b`` and ``./a`` is ``a``."""
+    paths only ``with_paths``, since only a folder entry reads them. A path is normalised by
+    dropping its empty segments only, so ``a//b`` is ``a/b`` (two ANVIL_HPRC paths have it) and a
+    leading or trailing ``/`` goes; ``.`` and ``..`` stay as written, since an object name is
+    literal and no folder cell may be either."""
     handles: set[str] = set()
     file_ids: set[str] = set()
     by_path = []
@@ -228,7 +230,7 @@ def file_index(path: Path, with_paths: bool) -> FileIndex:
             continue
         file_path, ref = value.get(ANVIL_FILE_PATH), link_handles(value.get(ANVIL_FILE_REF))
         if isinstance(file_path, str) and file_path and ref:
-            normal = posixpath.normpath(file_path)
+            normal = "/".join(segment for segment in file_path.split("/") if segment)
             by_path.extend((normal, handle) for handle in ref)
     return FileIndex(handles=frozenset(handles), file_ids=frozenset(file_ids), by_path=tuple(sorted(by_path)))
 
@@ -255,8 +257,11 @@ def check(slot_map: SlotMap, manifest_root: Path, catalog: str, datasets: list[s
     file-link column: it appears on some row, and every non-empty value it holds is a
     DRS URI or a list of them. Per folder column (#604): it appears on some row, every
     non-empty value names a top folder (:func:`folder_files`), each folder reaches at least
-    one of the dataset's files, and no file is reached from two rows — the one-to-one a
-    folder entry is declared on, since two rows would give one file two rows' values. Per
+    one of the dataset's files, no file is reached from two rows — the one-to-one a
+    folder entry is declared on, since two rows would give one file two rows' values — and
+    none is an index or checksum by its own name (``slot_map.is_derivative_name``), whose
+    slots are not its payload's (#437, #596) and which a folder's column name cannot
+    exclude as a link column's name does. Per
     cell: the column appears on some row of its table
     and is not itself a file-link column — a column is one kind, never two (contract
     2.7). Every chosen dataset is checked, and within one every table and column, so a
@@ -369,6 +374,16 @@ def _check_dataset(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
             twice = sum(1 for n in reached.get(key, Counter()).values() if n > 1)
             if twice:
                 problems.append(f"{at}: {twice:,} files are reached from more than one row")
+            sidecars = [
+                path
+                for path, handle in (files.by_path if files is not None else ())
+                if handle in reached.get(key, ()) and is_derivative_name(path.rsplit("/", 1)[-1])
+            ]
+            if sidecars:
+                problems.append(
+                    f"{at}: reaches {len(sidecars):,} index or checksum files (e.g. {sidecars[0]!r}), whose "
+                    "slots are not their payload's (#437, #596) — narrow files_under"
+                )
         for cell in cells[table]:
             if cell not in columns_seen[table]:
                 problems.append(f"{dataset}/{table}: cell {cell!r} is not a column of this table")
@@ -553,7 +568,7 @@ def import_dataset(
             result.written = write_evidence_file(evidence_file_path(staging, table), envelope, entries)
             if not result.written:
                 raise ValueError(
-                    f"{dataset}/{table}: no evidence row written — every link was empty or outside the "
+                    f"{dataset}/{table}: no evidence row written — every link or folder was empty or outside the "
                     f"dataset's files, or every mapped cell was null; the map disagrees with {catalog} here"
                 )
             tables.append(result)
@@ -652,7 +667,7 @@ def describe(imports: list[DatasetImport]) -> list[str]:
         for table in run.tables:
             lines.append(f"  {table.table}: {table.rows:,} rows, {table.written:,} evidence rows")
             for column, n in sorted(table.no_link.items()):
-                lines.append(f"    {column}: no link on {n:,} rows")
+                lines.append(f"    {column}: no link or folder on {n:,} rows")
             for column, n in sorted(table.not_link.items()):
                 lines.append(f"    {column}: not a DRS URI on {n:,} rows")
             for column, n in sorted(table.unresolved.items()):

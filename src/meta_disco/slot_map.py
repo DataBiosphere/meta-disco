@@ -24,7 +24,8 @@ comes from::
 **A folder entry** (#604) reaches its files by where they are stored rather than by DRS
 URI: its column holds the name of a top folder of the dataset's storage, and its one
 member that is not a slot, ``files_under``, names the path below it. The entry reaches
-every file whose ``anvil_file.file_path`` begins ``<cell>/<files_under>/``::
+every file with a ``file_ref`` whose ``anvil_file.file_path``, its empty segments dropped,
+begins ``<cell>/<files_under>/`` (``anvil_evidence.folder_files``)::
 
     ANVIL_NIA_CARD_Coriell_Cell_Lines_Open:
       sequencing:
@@ -33,7 +34,10 @@ every file whose ``anvil_file.file_path`` begins ``<cell>/<files_under>/``::
           assay_type:
             - {cell: sequencing_assay}
 
-It is declared per table, so it reaches files only where a map names it. What it reaches
+Its column's name says nothing about the files it reaches, so the derivative and checksum
+exclusions below cannot be read off it: ``anvil_evidence.check`` refuses a folder entry that
+reaches a file whose own name ends in one of those suffixes, and the entry's ``files_under``
+is narrowed instead. It is declared per table, so it reaches files only where a map names it. What it reaches
 is written as any other entry's evidence, keyed by the file's DRS URI. It may not carry
 two things a link entry may: a ``column_name`` span, because the folder column's name is a
 field label that describes no file, and the ``samples`` slot, until a folder row's sample
@@ -232,7 +236,13 @@ class SlotMap:
 
 def is_derivative_column(column: str) -> bool:
     """Whether a column name says its file is an index or checksum of another file."""
-    tokens = name_tokens(column)
+    return is_derivative_name(column)
+
+
+def is_derivative_name(name: str) -> bool:
+    """Whether a name — a column's, or a file's own (``x.bam.bai``) — ends in an index or checksum
+    suffix (:data:`DERIVATIVE_SUFFIXES`)."""
+    tokens = name_tokens(name)
     return bool(tokens) and tokens[-1] in DERIVATIVE_SUFFIXES
 
 
