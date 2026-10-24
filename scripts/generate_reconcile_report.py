@@ -23,6 +23,8 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import csv
+import io
 import json
 import math
 import sys
@@ -38,7 +40,13 @@ from meta_disco.models import (
     SOURCE_REPOSITORY_METADATA,
     STATUS_LABELS,
 )
-from meta_disco.output_utils import RECONCILED_DIR, find_latest_run, list_runs
+from meta_disco.output_utils import (
+    RECONCILED_DIR,
+    SAMPLE_CONFLICTS_FILE,
+    find_latest_run,
+    iter_reconciled_artifact,
+    list_runs,
+)
 from meta_disco.producer_steps import OUTCOMES as HEADER_STEP_OUTCOMES
 from meta_disco.reconcile import (
     CONFLICT_CATEGORIES,
@@ -54,9 +62,9 @@ from meta_disco.reconcile import (
 )
 from meta_disco.reconcile_inherit import OUTCOMES as INHERITANCE_COLUMNS
 from meta_disco.reconcile_lineage import OUTCOMES
+from meta_disco.reconcile_samples import LINK_OUTCOMES, PASSING_OUTCOMES
 from meta_disco.reconcile_samples import NONE as SAMPLE_NONE
 from meta_disco.reconcile_samples import OUTCOMES as SAMPLE_OUTCOMES
-from meta_disco.reconcile_samples import PASSING_OUTCOMES
 from meta_disco.sample_identity import NAMED, NO_SAMPLE, UNREAD, UNRECOGNISED
 from meta_disco.schema_vocab import top_term
 from meta_disco.summaries import embed_json, md_code, md_table
@@ -502,8 +510,29 @@ def samples_rows(report: dict) -> list[dict] | None:
             # None in a report written before #668, which never ran the check.
             "parent_disagreements": block.get("parent_disagreements"),
             "parent_disagreement_examples": block.get("parent_disagreement_examples") or [],
+            # None in a report written before #698, which read no activity link.
+            "activity_links": block.get("activity_links"),
         }
         for dataset, block in sorted(samples["by_dataset"].items())
+    ]
+
+
+def unreached_rows(report: dict) -> list[dict] | None:
+    """Per dataset, the samples and donors its entity evidence names that no file of it reaches (#698); None before #698.
+
+    Each row: ``samples`` and ``donors``, how many, and ``sample_examples`` / ``donor_examples``, the first few
+    identifiers.
+    """
+    unreached = (report.get("entities") or {}).get("unreached")
+    if unreached is None:
+        return None
+    return [
+        {
+            "dataset": dataset,
+            **{f"{kind}s": block.get(kind, {}).get("records", 0) for kind in ("sample", "donor")},
+            **{f"{kind}_examples": block.get(kind, {}).get("examples", []) for kind in ("sample", "donor")},
+        }
+        for dataset, block in sorted(unreached.items())
     ]
 
 
@@ -606,6 +635,7 @@ def dashboard_data(report: dict, previous: dict | None, source: Path) -> dict:
         "inheritance": inheritance_rows(report),
         "inheritance_columns": list(INHERITANCE_COLUMNS),
         "samples": samples_rows(report),
+        "unreached": unreached_rows(report),
     }
 
 
@@ -961,6 +991,7 @@ def render_markdown(data: dict) -> str:
     lines += ["", *_rebuilt_lists_section(data["rebuilt_lists"])]
     lines += ["", *_inheritance_section(data["inheritance"])]
     lines += ["", *_samples_section(data["samples"])]
+    lines += ["", *_unreached_section(data["unreached"])]
     lines += ["", "## Per dataset", ""]
     for scope in data["datasets"]:
         name = scope["name"]
@@ -1086,7 +1117,7 @@ def _lineage_section(lineage: dict | None) -> list[str]:
         "line, in the dataset its map declares, #594), and merges every source's step for a file into its "
         "`generated_by` (#577). *untranslated*: no authored activity-map row reads the line (the "
         "[review queue](review-queue-report.md) lists them); *sample_parent*: the parent is a sample, which becomes "
-        "an input later (#701); *undeclared_dataset*: the line names its parent's dataset, and the ENA run lineage "
+        "an input later (#701) and names the file's samples now (#698); *undeclared_dataset*: the line names its parent's dataset, and the ENA run lineage "
         "map declares no such pair; *external_undeclared*: the parent is a file held outside AnVIL (#710) that "
         "`sources/external_files.yaml` does not declare for the dataset; *not_in_dataset* / *several_match*: no "
         "file, or more than one, of the dataset "
@@ -1204,8 +1235,12 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
         "`rules/sample_namespaces.yaml` (#357). *named*: every string the header holds is recognised; "
         "*unrecognised*: it holds one no rule recognises (or a read group with no `SM`), so it names no samples; "
         "*no_sample*: it names none; *unread*: the head read ended before the samples (a VCF's `#CHROM` line). "
-        "Settled: *agreed*, header and table named the same samples; *header_only* / *table_only*: only the "
-        "header, or only tables (one or several, agreeing), did; *inherited*: only the file's parent did, across "
+        "The repository's record of the step that generated a file names them too: AnVIL's `anvil_activity` "
+        "(or `anvil_sequencingactivity`) rows generating the file, whose `used_biosample_id` ties to one of our sample records through the AnVIL "
+        "ids listed on it (#698), labelled *activity*. "
+        "Settled: *agreed*, two or more of header, table and activity named the same samples; *header_only* / "
+        "*table_only* / *activity_only*: only the header, only tables (one or several, agreeing), or only the "
+        "activity did; *inherited*: only the file's parent did, across "
         "a step that passes samples (an index, checksum, QC report, coverage track or cohort merge, #668), and a "
         "parent agreeing with the file's own sources is listed beside them without changing its column; "
         "*conflict*: they named different samples in one namespace; *incomparable*: different samples in "
@@ -1325,6 +1360,34 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
         lines.append("None in this run.")
     else:
         lines.append("This run's report predates this check (#668): run `make reconcile` again.")
+    linked = [r for r in rows if r["activity_links"]]
+    lines += [
+        "",
+        "### AnVIL's links from a file to its biosamples",
+        "",
+        "Per file the dataset's `anvil_activity` or `anvil_sequencingactivity` rows generate: *tied*: each biosample "
+        "they name ties to one of our sample records, so they are a source of the file's samples; *untied*: one ties "
+        "to none (no AnVIL id on any sample record is it, as where no identifier rule recognises the row the "
+        "biosample was made from), so they name none. Per line, a file no record of the run carries "
+        "(*child_not_in_run*) or several do (*child_several_match*).",
+        "",
+    ]
+    if linked:
+        lines += md_table(
+            ["dataset", *LINK_OUTCOMES, "untied biosamples"],
+            [
+                [
+                    md_code(shown(r["dataset"])),
+                    *(_n(r["activity_links"].get(o, 0)) for o in LINK_OUTCOMES),
+                    "<br>".join(md_code(b) for b in r["activity_links"].get("untied_examples", [])[:3]),
+                ]
+                for r in linked
+            ],
+        )
+    elif any(r["activity_links"] is not None for r in rows):
+        lines.append("None in this run.")
+    else:
+        lines.append("This run's report predates the activity links (#698): run `make reconcile` again.")
     examples = [
         r for r in rows if r["conflict_examples"] or r["incomparable_examples"] or r["name_disagreement_examples"]
     ]
@@ -1350,6 +1413,45 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
             ),
         ]
     return lines
+
+
+def _identifier(entry: dict) -> str:
+    """An ``EntityIdentifier`` dict as the report writes it: ``namespace:id``."""
+    return f"{entry['namespace']}:{entry['id']}"
+
+
+def _unreached_section(unreached: list[dict] | None) -> list[str]:
+    """What no route ties (#698): the lists of conflicting files and files without samples, and per dataset the
+    samples and donors no file reaches."""
+    lines = [
+        "## What no route ties",
+        "",
+        "The files whose sources named different samples (the *conflict* and *incomparable* columns above) are "
+        "listed with every source in `reconciled/sample_conflicts.ndjson.gz` and, for sending to the repository, "
+        "`docs/sample-conflicts.tsv`; the files no source names a sample for (the *none* column) in "
+        "`reconciled/files_without_samples.ndjson.gz`. Below, per dataset, the *samples* and *donors* its entity "
+        "evidence names (a line about the record, or the repository's own identifier tied to it) that no file of "
+        "the dataset settles to, or, for a donor, to a sample collected from it "
+        "(`reconciled/unreached_entities.ndjson.gz`).",
+        "",
+    ]
+    if unreached is None:
+        return [*lines, "This run's report predates these lists (#698): run `make reconcile` again."]
+    if not unreached:
+        return [*lines, "None in this run."]
+    return lines + md_table(
+        ["dataset", "samples", "donors", "samples, e.g.", "donors, e.g."],
+        [
+            [
+                md_code(shown(r["dataset"])),
+                _n(r["samples"]),
+                _n(r["donors"]),
+                "<br>".join(md_code(_identifier(e)) for e in r["sample_examples"][:3]),
+                "<br>".join(md_code(_identifier(e)) for e in r["donor_examples"][:3]),
+            ]
+            for r in unreached
+        ],
+    )
 
 
 def _inheritance_section(rows: list[dict] | None) -> list[str]:
@@ -1382,6 +1484,51 @@ def _inheritance_section(rows: list[dict] | None) -> list[str]:
     )
 
 
+# The conflicts TSV's columns (#698): one row per file and source attribution, for sending to the repository.
+CONFLICT_COLUMNS = (
+    "dataset",
+    "file_id",
+    "file_name",
+    "outcome",
+    "source_kind",
+    "source_type",
+    "table",
+    "column",
+    "rule_id",
+    "activity_id",
+    "samples",
+)
+
+
+def conflict_tsv(conflicts) -> str:
+    """The rows of ``reconciled/sample_conflicts.ndjson.gz`` as a TSV: one line per file and attribution of each source,
+    its samples as ``namespace:id``, comma-separated; header first, files in the order the artifact holds them."""
+    out = io.StringIO()
+    writer = csv.writer(out, delimiter="\t", lineterminator="\n")
+    writer.writerow(CONFLICT_COLUMNS)
+    for row in conflicts:
+        for source in row["sources"]:
+            samples = ",".join(_identifier(m) for m in source["samples"])
+            for attribution in source["named_by"]:
+                where = attribution.get("source") or {}
+                writer.writerow(
+                    (
+                        row["dataset_title"],
+                        row.get("file_id"),
+                        row["file_name"],
+                        row["outcome"],
+                        source["kind"],
+                        attribution["source_type"],
+                        where.get("table"),
+                        where.get("column"),
+                        attribution["rule_id"],
+                        attribution.get("activity_id"),
+                        samples,
+                    )
+                )
+    return out.getvalue()
+
+
 def render_html(data: dict, template: str) -> str:
     return embed_json(template, PLACEHOLDER, data)
 
@@ -1395,6 +1542,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-previous", action="store_true", help="Compare with no earlier run")
     parser.add_argument("--markdown", type=Path, default=PROJECT_ROOT / "docs" / "reconcile-report.md")
     parser.add_argument("--html", type=Path, default=PROJECT_ROOT / "docs" / "reconcile-dashboard.html")
+    parser.add_argument("--conflicts-tsv", type=Path, default=PROJECT_ROOT / "docs" / "sample-conflicts.tsv")
     args = parser.parse_args(argv)
     try:
         run_dir = args.run_dir or find_latest_run(Path("output/anvil"))
@@ -1407,8 +1555,16 @@ def main(argv: list[str] | None = None) -> int:
     data = dashboard_data(report, previous, run_dir / RECONCILED_DIR / REPORT_FILE)
     args.markdown.write_text(render_markdown(data))
     args.html.write_text(render_html(data, TEMPLATE.read_text()))
+    written = [args.markdown, args.html]
+    try:
+        args.conflicts_tsv.write_text(conflict_tsv(iter_reconciled_artifact(run_dir, SAMPLE_CONFLICTS_FILE)))
+        written.append(args.conflicts_tsv)
+    except FileNotFoundError:
+        # Removed rather than left behind, so it never stands beside a report of another run.
+        args.conflicts_tsv.unlink(missing_ok=True)
+        print(f"reconcile-report: {run_dir.name} predates {SAMPLE_CONFLICTS_FILE} (#698); {args.conflicts_tsv} removed")
     compared = f", compared with {previous_dir.name}" if previous_dir else ""
-    print(f"Reconcile report for {run_dir.name}{compared} -> {args.markdown}, {args.html}")
+    print(f"Reconcile report for {run_dir.name}{compared} -> {', '.join(str(p) for p in written)}")
     return 0
 
 

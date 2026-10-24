@@ -987,7 +987,9 @@ classes:
           input or sample list: for inference's, a `code_rules.EDGE_RULES` id for a step or
           input and a `code_rules.SAMPLE_RULES` id for samples; for a submitter table's
           samples, the identifier rule (`rules/sample_namespaces.yaml`) that read the cell;
-          for inherited samples, `code_rules.SAMPLES_INHERITED_FROM_PARENT`'s id.
+          for inherited samples, `code_rules.SAMPLES_INHERITED_FROM_PARENT`'s id; for samples
+          the repository's record of the step names (#698),
+          `code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE`'s id.
       # On inherited samples only (#668): the step crossed, the role its parent plays in
       # it, and the parents' record keys. Required on a step, not here.
       activity:
@@ -2737,10 +2739,12 @@ enums:
       repository_activity:
         description: >-
           The repository's own record of a step — AnVIL's `anvil_activity` table, whose
-          columns are FSS's and the same in every dataset (#583): which files and
-          samples a step used, which files it generated, and what the source calls
-          the step. It says how a file was made, not what a file is, so it is written
-          only as lineage evidence (`LineageRow`), never as slot evidence.
+          columns are FSS's and the same in every dataset (#583), or the typed
+          `anvil_sequencingactivity` where a dataset's transform wrote that instead (#698):
+          which files and samples a step used, which files it generated, and what the
+          source calls the step. It says how a file was made, not what a file is, so it is
+          written only as lineage evidence (`LineageRow`), never as slot evidence; at
+          reconcile, the samples a step used are a source of the file's samples (#698).
       published_value:
         description: >-
           The value the repository's own system of record publishes for the file

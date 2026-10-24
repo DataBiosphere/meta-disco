@@ -94,6 +94,10 @@ VERBATIM_FILE = "anvil_file"
 # per repository; `anvil_evidence` holds its slot maps to it.
 PUBLISHED_TABLE = VERBATIM_FILE
 VERBATIM_ACTIVITY = "anvil_activity"
+# AnVIL's own records of a step (#583): the generic `anvil_activity`, and the typed sequencing
+# one, which NIA_CARD's transform writes instead (6 rows in anvil15, the only dataset with it, #698).
+VERBATIM_SEQUENCING_ACTIVITY = "anvil_sequencingactivity"
+ACTIVITY_TABLES = (VERBATIM_ACTIVITY, VERBATIM_SEQUENCING_ACTIVITY)
 VERBATIM_BIOSAMPLE = "anvil_biosample"
 # An entity type starting with this is read as harmonized; any other type is read as a
 # submitter's own table.

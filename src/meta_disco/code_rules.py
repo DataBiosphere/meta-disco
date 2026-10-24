@@ -27,7 +27,8 @@ is what an edge's ``rule_id`` carries, and nothing else lists it.
 A **sample rule** (#357) reads which samples a file's data comes from, so it sets no
 dimension either: out of the file's own content (a header, a GATK sample map's rows, a GenomicsDB
 workspace's ``callset.json``), or, at
-reconcile, out of its parent's settled samples (#668). It is declared in ``SAMPLE_RULES``; its
+reconcile, out of its parent's settled samples (#668) or the repository's record of the step that
+generated it (#698). It is declared in ``SAMPLE_RULES``; its
 id is what a file's ``samples.named_by`` carries for that source.
 
 An **entity rule** (#582) gives a donor's slot an answer, not a file's dimension. It is
@@ -60,6 +61,7 @@ from .models import (
     SOURCE_EXTERNAL_GROUND_TRUTH,
     SOURCE_FILENAME_RULE,
     SOURCE_PUBLISHED_VALUE,
+    SOURCE_REPOSITORY_ACTIVITY,
     SOURCE_REPOSITORY_METADATA,
 )
 
@@ -91,6 +93,7 @@ COHORT_STEPS = "src/meta_disco/cohort_steps.py"
 METADATA_SCHEMA = "src/meta_disco/metadata_schema.py"
 SAMPLE_IDENTITY = "src/meta_disco/sample_identity.py"
 RECONCILE_SAMPLES = "src/meta_disco/reconcile_samples.py"
+RECONCILE_LINEAGE = "src/meta_disco/reconcile_lineage.py"
 RECONCILE_ENTITIES = "src/meta_disco/reconcile_entities.py"
 RECONCILE_EXTERNAL = "src/meta_disco/reconcile_external.py"
 SGDP_ENTITIES = "src/meta_disco/sgdp_entities.py"
@@ -147,7 +150,7 @@ class EdgeRule:
 class SampleRule:
     """A rule that reads which samples a file's data comes from (#357): out of the file's own
     content (a header, a sample map's rows, a workspace's ``callset.json``), or at reconcile its parent's
-    settled samples (#668).
+    settled samples (#668) or the repository's record of the step that generated it (#698).
 
     ``reads`` says where; ``rationale`` says why that names the samples. Each string a content
     reader reads becomes a sample only through ``rules/sample_namespaces.yaml``.
@@ -912,6 +915,26 @@ SAMPLES_INHERITED_FROM_PARENT = SampleRule(
     ),
 )
 
+SAMPLES_FROM_ACTIVITY_BIOSAMPLE = SampleRule(
+    id="samples_from_activity_biosample",
+    module=RECONCILE_LINEAGE,
+    source_type=SOURCE_REPOSITORY_ACTIVITY,
+    reads=(
+        "at reconcile, the repository's own record of the steps that generated the file (AnVIL's "
+        "anvil_activity rows, or anvil_sequencingactivity where a dataset's transform wrote that, naming it "
+        "as a generated_file_id): each row's used_biosample_id, tied to one of our sample records through "
+        "that record's repository_ids"
+    ),
+    rationale=(
+        "A step that used a biosample and generated a file made the file from that biosample's material, "
+        "so the repository says the file holds that sample's data (#698). The biosamples every such row "
+        "names are one source; a biosample tying to no sample record names none, and the file is "
+        "counted. It settles with the file's other sources as any two do, so where it disagrees the file "
+        "has no samples and is listed: ANVIL_HPRC's activities generate a parent's reads from the child's "
+        "biosample."
+    ),
+)
+
 EXTERNAL_SAMPLE_MAP_ROWS = SampleRule(
     id="external_sample_map_rows",
     module=SAMPLE_IDENTITY,
@@ -934,6 +957,7 @@ SAMPLE_RULES = (
     FAST5_TRACKING_SAMPLE,
     TAR_CALLSET_SAMPLES,
     SAMPLES_INHERITED_FROM_PARENT,
+    SAMPLES_FROM_ACTIVITY_BIOSAMPLE,
     EXTERNAL_SAMPLE_MAP_ROWS,
 )
 

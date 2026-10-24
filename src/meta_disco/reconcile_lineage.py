@@ -9,8 +9,11 @@ reconcile's slot-evidence join (``reconcile.join``) and shaped like it:
    selects an activity-map row (``activity_map.keyed_lines``, which also joins each
    file's raw ``data_type``). A line selecting no authored row is counted
    ``untranslated`` and gives nothing. A line whose parent is a sample
-   (``parent_key_type: biosample_id``) is counted ``sample_parent`` and gives nothing:
-   only file parents become inputs here (a sample parent is #701).
+   (``parent_key_type: biosample_id``) is counted ``sample_parent`` and gives no step:
+   only file parents become inputs here (a sample parent is #701). It is kept as a
+   :class:`BiosampleLink` instead, cited by ``code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE``, whose
+   child is resolved as a step's is and which names the child's samples (#698,
+   ``reconcile_samples.activity_sources``).
 2. **Resolve, within the child's dataset.** The child by the envelope's ``target_key``
    and the parent by its ``parent_key_type`` (``file_id`` or ``drs_uri``; an IGVF
    accession was already written as its DRS URI by the importer), each against that
@@ -47,9 +50,11 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import code_rules
 from .activity_map import ActivityMap, Row, generation_stamp, keyed_lines
 from .edges import PARENT_REF, LineageStep, lineage_attribution, parent_kind_of
 from .lineage_evidence import read_lineage_envelope
+from .models import SOURCE_REPOSITORY_ACTIVITY, ClaimSource
 from .output_utils import relative_to
 from .records import JOIN_KEY_OUTPUT_FIELDS
 from .run_lineage_map import RunLineageMap
@@ -107,6 +112,17 @@ def applies(target: EvidenceTarget, repository: str, catalog: str | None) -> boo
     return target.system == repository and (catalog is None or target.version == catalog)
 
 
+@dataclass(frozen=True)
+class BiosampleLink:
+    """A lineage line whose parent is a sample (#698): its child's locator, the repository and its id for the
+    biosample, and how the line is cited (``edges.lineage_attribution``), one dict shared by the lines of a step."""
+
+    child: Locator
+    repository: str
+    biosample: str
+    attribution: dict
+
+
 @dataclass
 class PendingLineage:
     """The first half's result: the translated lines waiting for their files, and the locators they need."""
@@ -116,6 +132,8 @@ class PendingLineage:
     wanted: set[Locator] = field(default_factory=set)
     # The external files the lines name, as ``(dataset, address)`` (#710).
     external: set[tuple[str, str]] = field(default_factory=set)
+    # The lines whose parent is a sample, each a source of its child's samples (#698).
+    biosample_links: list[BiosampleLink] = field(default_factory=list)
     # Per source type and dataset: offered lines, and each outcome's count.
     counts: dict[str, dict[str, Counter]] = field(default_factory=lambda: defaultdict(lambda: defaultdict(Counter)))
     # The lineage files read, relative to the lineage root.
@@ -129,6 +147,10 @@ class LineageJoin:
     steps: dict[str, list[LineageStep]] = field(default_factory=lambda: defaultdict(list))
     counts: dict[str, dict[str, Counter]] = field(default_factory=dict)
     files: list[str] = field(default_factory=list)
+    # Per child record key, the lines naming a biosample it was made from (#698); and per dataset, the
+    # lines whose child no record or several carry (``CHILD_NOT_IN_RUN``, ``CHILD_SEVERAL_MATCH``).
+    biosamples: dict[str, list[BiosampleLink]] = field(default_factory=lambda: defaultdict(list))
+    biosample_misses: dict[str, Counter] = field(default_factory=lambda: defaultdict(Counter))
 
 
 def latest_catalog(paths: list[Path]) -> list[Path]:
@@ -160,6 +182,9 @@ def translate_lineage(
     if catalog is None:
         paths = latest_catalog(paths)
     pending.files = [relative_to(p, lineage_root) for p in paths]
+    # A source is one per file and column, and a biosample line's citation one per step: built once, shared.
+    sources: dict[tuple, ClaimSource] = {}
+    sample_attributions: dict[tuple, dict] = {}
     for keyed in keyed_lines(lineage_root, evidence_root, paths):
         envelope, line = keyed.envelope, keyed.line
         # Scoped by the target's name for the dataset, as `reconcile.join` scopes slot evidence.
@@ -170,14 +195,31 @@ def translate_lineage(
         if line.parent_dataset is not None and not run_map.declares(envelope, line):
             counts[UNDECLARED_DATASET] += 1
             continue
+        child = (JOIN_KEY_OUTPUT_FIELDS[str(envelope.target_key)], dataset, line.target_key_value)
+        where = envelope.source
+        source_key = (where.repository, where.dataset, where.table, where.url, line.parent_column)
+        if (source := sources.get(source_key)) is None:
+            source = sources[source_key] = claim_source_for(where, line.parent_column)
         if str(line.parent_key_type) == LineageParentKeyEnum.biosample_id.value:
             counts[SAMPLE_PARENT] += 1
+            # Only the repository's record of a step names a biosample the samples rule reads (#698).
+            if line.parent is not None and str(envelope.source_type) == SOURCE_REPOSITORY_ACTIVITY:
+                pending.wanted.add(child)
+                cited = sample_attributions.setdefault(
+                    (source_key, line.activity_id),
+                    lineage_attribution(
+                        str(envelope.source_type),
+                        code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE.id,
+                        source,
+                        line.activity_id,
+                    ),
+                )
+                pending.biosample_links.append(BiosampleLink(child, str(where.repository), line.parent, cited))
             continue
         row = table.select(keyed.key)
         if row is None or not row.authored:
             counts[UNTRANSLATED] += 1
             continue
-        child = (JOIN_KEY_OUTPUT_FIELDS[str(envelope.target_key)], dataset, line.target_key_value)
         parent_dataset = line.parent_dataset or dataset
         parent = None
         if str(line.parent_key_type) == LineageParentKeyEnum.external_file.value and line.parent is not None:
@@ -187,7 +229,6 @@ def translate_lineage(
             parent = (JOIN_KEY_OUTPUT_FIELDS[str(line.parent_key_type)], parent_dataset, line.parent)
             pending.wanted.add(parent)
         pending.wanted.add(child)
-        source = claim_source_for(envelope.source, line.parent_column)
         attribution = lineage_attribution(str(envelope.source_type), row.id, source, line.activity_id)
         pending.lines.append((counts, attribution, row, child, parent))
     return pending
@@ -197,20 +238,27 @@ def resolve_lineage(pending: PendingLineage, carriers: dict[Locator, list[Carrie
     """Hand each translated line whose child one record carries, and whose parent one carrier does, to that child; count the rest.
 
     A parent's carrier is a record, or a file held outside AnVIL that reconcile adds to ``carriers``
-    (``reconcile_external.carriers``, #710), whose step names it by ``parent_ref``.
+    (``reconcile_external.carriers``, #710), whose step names it by ``parent_ref``. A line whose parent
+    is a biosample is handed to its child the same way, in ``LineageJoin.biosamples`` (#698).
     """
     result = LineageJoin(counts=pending.counts, files=pending.files)
+    for link in pending.biosample_links:
+        found, miss = _one_child(carriers, link.child)
+        if found is None:
+            result.biosample_misses[str(link.child[1])][miss] += 1
+        else:
+            result.biosamples[found.key].append(link)
     for counts, attribution, row, child, parent in pending.lines:
-        children = carriers.get(child, [])
-        if len(children) != 1:
-            counts[CHILD_NOT_IN_RUN if not children else CHILD_SEVERAL_MATCH] += 1
+        found_child, miss = _one_child(carriers, child)
+        if found_child is None:
+            counts[miss] += 1
             continue
         parents = carriers.get(parent, []) if parent is not None else []
         external = parent is not None and parent[0] == PARENT_REF
         if len(parents) != 1:
             counts[(EXTERNAL_UNDECLARED if external else NOT_IN_DATASET) if not parents else SEVERAL_MATCH] += 1
             continue
-        ((found_child,), (found_parent,)) = children, parents
+        (found_parent,) = parents
         if found_parent.key == found_child.key:
             counts[PARENT_IS_CHILD] += 1
             continue
@@ -229,3 +277,11 @@ def resolve_lineage(pending: PendingLineage, carriers: dict[Locator, list[Carrie
             )
         )
     return result
+
+
+def _one_child(carriers: dict[Locator, list[Carrier]], child: Locator) -> tuple[Carrier | None, str]:
+    """The one record carrying ``child``, or None and why: ``CHILD_NOT_IN_RUN`` or ``CHILD_SEVERAL_MATCH``."""
+    found = carriers.get(child, [])
+    if len(found) == 1:
+        return found[0], RESOLVED
+    return None, CHILD_NOT_IN_RUN if not found else CHILD_SEVERAL_MATCH

@@ -52,7 +52,25 @@ datasets:
 
 def test_the_kind_of_source_follows_from_the_table():
     assert source_type_of("anvil_activity") == SOURCE_REPOSITORY_ACTIVITY
+    assert source_type_of("anvil_sequencingactivity") == SOURCE_REPOSITORY_ACTIVITY
     assert source_type_of("participant") == SOURCE_REPOSITORY_METADATA
+
+
+def test_the_typed_sequencing_activity_table_maps_like_anvil_activity(tmp_path):
+    """NIA_CARD's transform writes its steps to ``anvil_sequencingactivity`` (#698)."""
+    lineage_map = load(
+        tmp_path,
+        "catalog: anvil15\ndatasets:\n  D:\n    anvil_sequencingactivity:\n"
+        "      - child: {column: generated_file_id, key: file_id}\n"
+        "        parent: {column: used_biosample_id, key: biosample_id}\n"
+        "        activity_id: {cell: sequencingactivity_id}\n",
+    )
+    (link,) = lineage_map.links
+    assert (link.table, link.parent_key_type, link.activity_id_cell) == (
+        "anvil_sequencingactivity",
+        "biosample_id",
+        "sequencingactivity_id",
+    )
 
 
 @pytest.mark.parametrize(
@@ -84,7 +102,7 @@ def test_a_malformed_link_is_refused_naming_it(tmp_path, entry, message):
         load(tmp_path, f"catalog: anvil15\ndatasets:\n  D:\n    t:\n      {entry}\n")
 
 
-def test_a_harmonized_table_other_than_anvil_activity_is_refused(tmp_path):
+def test_a_harmonized_table_other_than_an_activity_table_is_refused(tmp_path):
     with pytest.raises(ValueError, match="states no lineage"):
         load(
             tmp_path,

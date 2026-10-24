@@ -35,7 +35,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     and in the code. `samples` (#357) is not a dimension: it says which sample a file's data comes from. Its raw value is
     read through the identifier rules (`rules/sample_namespaces.yaml`), never translated by a row (3.4–3.12):
     a sample identifier is recognised by its namespace's pattern, one rule for a family of thousands of
-    values, rather than authored value by value. Reconcile settles it with a header's samples, and a
+    values, rather than authored value by value. Reconcile settles it with a header's samples, the
+    repository's own record of the step that generated the file (an `anvil_activity` or
+    `anvil_sequencingactivity` line whose parent is a biosample, tied to a sample record through its
+    `repository_ids`, #698), and a
     parent's across a step that passes them (4.9, #668), as a file's step is settled (ADR-0002 decision 6),
     not by 4.x's resolution, and only a reader that asks for it is
     given its lines (`source_evidence.iter_evidence`).
