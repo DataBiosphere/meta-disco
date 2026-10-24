@@ -1117,7 +1117,7 @@ def _lineage_section(lineage: dict | None) -> list[str]:
         "line, in the dataset its map declares, #594), and merges every source's step for a file into its "
         "`generated_by` (#577). *untranslated*: no authored activity-map row reads the line (the "
         "[review queue](review-queue-report.md) lists them); *sample_parent*: the parent is a sample, which becomes "
-        "an input later (#701) and names the file's samples now (#698); *undeclared_dataset*: the line names its parent's dataset, and the ENA run lineage "
+        "an input later (#701) and, from an activity table, may name the file's samples (#698); *undeclared_dataset*: the line names its parent's dataset, and the ENA run lineage "
         "map declares no such pair; *external_undeclared*: the parent is a file held outside AnVIL (#710) that "
         "`sources/external_files.yaml` does not declare for the dataset; *not_in_dataset* / *several_match*: no "
         "file, or more than one, of the dataset "
@@ -1429,8 +1429,10 @@ def _unreached_section(unreached: list[dict] | None) -> list[str]:
         "The files whose sources named different samples (the *conflict* and *incomparable* columns above) are "
         "listed with every source in `reconciled/sample_conflicts.ndjson.gz` and, for sending to the repository, "
         "`docs/sample-conflicts.tsv`; the files no source names a sample for (the *none* column) in "
-        "`reconciled/files_without_samples.ndjson.gz`. Below, per dataset, the *samples* and *donors* its entity "
-        "evidence names (a line about the record, or the repository's own identifier tied to it) that no file of "
+        "`reconciled/files_without_samples.ndjson.gz`, each naming the parents whose conflict left it none "
+        "(`parent_conflict`). Below, per dataset, the *samples* and *donors* its entity evidence names (a line "
+        "about the record, one naming it as a parent or linked donor, or the repository's own identifier tied "
+        "to it) that no file of "
         "the dataset settles to, or, for a donor, to a sample collected from it "
         "(`reconciled/unreached_entities.ndjson.gz`).",
         "",

@@ -316,7 +316,7 @@ evidence}` entry — plus the controlled vocabulary:
     parents than inference names there, #609; a generic `Activity` beside a specific one naming another
     parent) gives no
     `generated_by`; both are counted in the report's `lineage` block, never written on a record. A
-    sample parent gives no input (#701), but names the file's samples (#698). A file whose only steps are generic gets none, counted as
+    sample parent gives no input (#701); an activity table's can name the file's samples (#698). A file whose only steps are generic gets none, counted as
     `generic_only`. The inference artifact's `generated_by` is never changed.
   - **Reconcile carries each parent's answer across that step** (#571, contract 4.9,
     `reconcile_inherit`): for each input role and each dimension its activity passes, the

@@ -325,6 +325,8 @@ class SampleReport:
     _inherited: dict[str, tuple[Named, ...]] = field(default_factory=dict, init=False, repr=False)
     # The record keys whose sources named different samples (a conflict, or incomparable).
     _conflicted: set[str] = field(default_factory=set, init=False, repr=False)
+    # Per child, the parents in conflict that passed it nothing (``PARENT_CONFLICT``), named on its row if it has none.
+    _conflicted_parents: dict[str, list[str]] = field(default_factory=dict, init=False, repr=False)
 
     def _own_sources(
         self, identity: str, record: dict, inference_lists: dict[str, dict], table: list[Named]
@@ -377,6 +379,8 @@ class SampleReport:
                     outcome = PARENTS_DIFFER
                 elif any(p in self._conflicted for p in parent_keys):
                     outcome = PARENT_CONFLICT
+                    held = self._conflicted_parents.setdefault(key, [])
+                    held.extend(p for p in parent_keys if p in self._conflicted and p not in held)
                 elif all(p in self.names_none for p in parent_keys):
                     outcome = LIST_NAMES_NONE
                 elif any(p not in self.held for p in parent_keys):
@@ -406,7 +410,8 @@ class SampleReport:
         passed; ``generated_by`` its reconciled step (None where it has none), whose parents in
         roles passing no samples are checked against the settled samples (:func:`lists_disagree`).
         A file whose sources differ is kept in :attr:`conflicts` with every source, and one no
-        source names samples for in :attr:`without_samples`, with ``data_type``, its reconciled one;
+        source names samples for in :attr:`without_samples`, with ``data_type``, its reconciled one, and
+        ``parent_conflict``, the record keys of the parents whose conflict passed it nothing, where any did;
         each row names the file by ``record_key`` (``identity``) beside the catalog identity, which an
         HPRC record does not carry.
         """
@@ -427,15 +432,16 @@ class SampleReport:
                 }
             )
         elif outcome == NONE:
-            self.without_samples.append(
-                {
-                    "dataset_title": dataset,
-                    "file_name": file_name,
-                    "record_key": identity,
-                    **identity_from(record),
-                    "data_type": data_type,
-                }
-            )
+            row = {
+                "dataset_title": dataset,
+                "file_name": file_name,
+                "record_key": identity,
+                **identity_from(record),
+                "data_type": data_type,
+            }
+            if parents := self._conflicted_parents.get(identity):
+                row["parent_conflict"] = parents  # the conflict rows, by record key, that left it none
+            self.without_samples.append(row)
         if samples is not None:
             key = samples["list_id"]
             self.files_by_list[(dataset, key)] += 1

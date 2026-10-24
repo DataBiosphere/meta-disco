@@ -636,7 +636,8 @@ classes:
         pattern: "^[^\\r\\n]+\\Z"
         description: >-
           The source's id for the step, where it has one (`anvil_activity`'s
-          `activity_id`), so lines from one step can be told apart from another's.
+          `activity_id`, `anvil_sequencingactivity`'s `sequencingactivity_id`), so lines from one
+          step can be told apart from another's.
       child_column:
         required: true
         pattern: "^[^\\r\\n]+\\Z"
@@ -1774,7 +1775,8 @@ slots:
     required: true
   activity_id:
     description: >-
-      The source's own id for the step (`anvil_activity.activity_id`), where it gives one.
+      The source's own id for the step (`anvil_activity.activity_id`, or
+      `anvil_sequencingactivity.sequencingactivity_id`), where it gives one.
   parent_file:
     description: >-
       The input file's name: the matched record's own spelling where the input resolves

@@ -52,8 +52,8 @@ rule recognises is counted and read no further), and every donor a donor's ``mot
 points to, so a join from a file to its donors, or from a donor to its parents, finds a record for each.
 
 Nothing here reads or writes a file record: a file reaches its donors through its
-``samples`` (epic #692, decision 5). The report lists, per dataset, each sample and donor its
-entity evidence names that no file of the dataset reaches (:func:`_unreached`, #698).
+``samples`` (epic #692, decision 5). Each sample and donor a dataset's entity evidence names that no
+file of the dataset reaches is listed (:func:`_unreached`, #698), and the report counts them.
 """
 
 from __future__ import annotations
@@ -182,9 +182,10 @@ class EntityEvidence:
     # The sample record each repository's sample identifier ties to, keyed by ``(repository, id)``
     # (``RepositoryId.key``); :func:`gather` refuses one tying to two records (#698).
     samples_by_repository_id: dict[tuple[str, str], Identifier] = field(default_factory=dict)
-    # Per dataset and kind, the records an identity link line is about (``collected_from``'s sample,
-    # ``same_donor_as``'s donor), which :attr:`named_in` does not hold (#698).
-    linked_in: dict[tuple[str, EntityKind], set[Identifier]] = field(default_factory=dict)
+    # Per dataset and kind, the records its lines name that :attr:`named_in` does not hold (#698): the subject of
+    # an identity link line, and a donor a line names as its value (a parent, a ``collected_from`` donor, a
+    # ``same_donor_as`` identifier).
+    referenced_in: dict[tuple[str, EntityKind], set[Identifier]] = field(default_factory=dict)
 
 
 @dataclass
@@ -336,7 +337,7 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
     slots: dict[Identifier, dict[str, SlotEvidence]] = defaultdict(lambda: defaultdict(SlotEvidence))
     sample_slots: dict[Identifier, dict[str, SlotEvidence]] = defaultdict(lambda: defaultdict(SlotEvidence))
     named_in: dict[tuple[str, str], set[Identifier]] = defaultdict(set)
-    linked_in: dict[tuple[str, EntityKind], set[Identifier]] = defaultdict(set)
+    referenced_in: dict[tuple[str, EntityKind], set[Identifier]] = defaultdict(set)
     files, unrecognised = [], defaultdict(Counter)
     repository_ids: dict[tuple[EntityKind, Identifier], set[RepositoryId]] = defaultdict(set)
     tied: dict[tuple[EntityKind, str, str], tuple[Identifier, Path]] = {}
@@ -380,11 +381,12 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
             if entry.field in IDENTITY_LINK_FIELDS:
                 # The donor or sample a link names has a record, whether or not the link joins it to another.
                 (sample_slots if kind == SAMPLE else slots)[ident]
-                linked_in[(str(dataset), kind)].add(ident)
+                referenced_in[(str(dataset), kind)].add(ident)
             if entry.field == SAME_DONOR_AS:
                 named = rules.recognise(entry.raw_value, dataset, DONOR)
                 if named is not None:
                     slots[links.main(named.identifier)]  # the identifier it names has a record, joined or not
+                    referenced_in[(str(dataset), DONOR)].add(links.main(named.identifier))
                 continue  # the link itself is read by _main_identifiers
             if entry.field == COLLECTED_FROM:
                 donor = rules.recognise(entry.raw_value, dataset, DONOR)
@@ -393,6 +395,7 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
                     continue
                 attribution = _link_attribution(envelope.source_type, donor.rule_id, entry)
                 links.collected_from[ident].append((links.main(donor.identifier), attribution))
+                referenced_in[(str(dataset), DONOR)].add(links.main(donor.identifier))
                 continue
             if alias_kind is not None:
                 alias = RepositoryId(
@@ -426,6 +429,8 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
                 continue
             if claim not in record_slots[entry.field].claims:
                 record_slots[entry.field].claims.append(claim)
+            if entry.field in PARENT_FIELDS:
+                referenced_in[(str(dataset), DONOR)].add(Identifier(**claim["value"]))
         files.append(
             {
                 "path": relative_to(path, entity_root),
@@ -440,7 +445,7 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
         slots=slots,
         sample_slots=sample_slots,
         named_in=named_in,
-        linked_in=dict(linked_in),
+        referenced_in=dict(referenced_in),
         files=files,
         unrecognised=unrecognised,
         repository_ids=repository_ids,
@@ -706,15 +711,16 @@ def _unreached(
     """Per dataset, each sample and donor its entity evidence names that no file of the dataset reaches (#698).
 
     A dataset's evidence names a record where a line of it is about the record (a slot's line, named in
-    :attr:`EntityEvidence.named_in`, or an identity link's, in :attr:`EntityEvidence.linked_in`) or ties one
-    of the repository's identifiers to it. A file of the dataset
+    :attr:`EntityEvidence.named_in`, or an identity link's), names it as its value (a parent, a
+    ``collected_from`` donor, a ``same_donor_as`` identifier; both in :attr:`EntityEvidence.referenced_in`),
+    or ties one of the repository's identifiers to it. A file of the dataset
     reaches each sample of the list its samples settled to, and each of those samples' donor (``collected_from``).
     Rows in dataset order, samples before donors, each kind in identifier order.
     """
     named: dict[tuple[str, EntityKind], set[Identifier]] = defaultdict(set)
     for (dataset, slot), idents in evidence.named_in.items():
         named[(dataset, KIND_OF_SLOT[slot])] |= idents
-    for where, idents in evidence.linked_in.items():
+    for where, idents in evidence.referenced_in.items():
         named[where] |= idents
     for (kind, ident), aliases in evidence.repository_ids.items():
         for alias in aliases:

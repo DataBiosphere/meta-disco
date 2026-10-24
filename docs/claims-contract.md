@@ -298,8 +298,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     answer carried across a derivation edge (4.9), built at reconcile through `make_claim` (#571).
 
     Lineage evidence is not an input kind either: it names a file's parent and the step that made it,
-    not a value (#583). Its files declare `repository_activity` (AnVIL's `anvil_activity`) or
-    `repository_metadata` (a submitter's table); reconcile reads them to build each file's step (#577).
+    not a value (#583). Its files declare `repository_activity` (AnVIL's `anvil_activity`, or a dataset's
+    `anvil_sequencingactivity`) or `repository_metadata` (a submitter's table); reconcile reads them to build
+    each file's step (#577), and a `repository_activity` line whose parent is a biosample as a source of the
+    file's samples (2.1, #698).
 
     **Kind 2 was retired by #424 and reinstated by #472 and #497.** The retirement argued that a
     target's current state is not an input to producing it. It is an input once the circularity it
@@ -587,7 +589,7 @@ importer's half is built — 7.12 is enforced (below), and the published importe
 - **4.9 does not reach every derivation edge.** It is built at reconcile (#571, `reconcile_inherit`) and
   crosses only a reconciled file's step: the edges inference writes from a file's name (#356) and the links
   the source tables state (#583, #584), merged into that step (#577). Nothing is inherited across a link that
-  gives no step: a sample parent (no issue yet; #582 became a donor's family), a parent no file or two files of the dataset carry, a step
+  gives no step: a sample parent (#701; it can name the file's samples instead, 2.1), a parent no file or two files of the dataset carry, a step
   conflict, or a step only the generic `Activity` names. Nor does the inference artifact carry any of it: an
   index file's carried dimensions are `not_classified` there, and filled only at reconcile. (A checksum's
   are `not_applicable`: `ChecksumActivity` passes nothing, #596.)

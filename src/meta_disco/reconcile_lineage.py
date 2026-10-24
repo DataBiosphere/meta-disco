@@ -10,9 +10,10 @@ reconcile's slot-evidence join (``reconcile.join``) and shaped like it:
    file's raw ``data_type``). A line selecting no authored row is counted
    ``untranslated`` and gives nothing. A line whose parent is a sample
    (``parent_key_type: biosample_id``) is counted ``sample_parent`` and gives no step:
-   only file parents become inputs here (a sample parent is #701). It is kept as a
-   :class:`BiosampleLink` instead, cited by ``code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE``, whose
-   child is resolved as a step's is and which names the child's samples (#698,
+   only file parents become inputs here (a sample parent is #701). A ``repository_activity``
+   line naming its parent is kept as a :class:`BiosampleLink` instead, cited by
+   ``code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE``, whose child is resolved as a step's is: a source
+   of the child's samples where every biosample of the child ties to a sample record (#698,
    ``reconcile_samples.activity_sources``).
 2. **Resolve, within the child's dataset.** The child by the envelope's ``target_key``
    and the parent by its ``parent_key_type`` (``file_id`` or ``drs_uri``; an IGVF
@@ -132,7 +133,7 @@ class PendingLineage:
     wanted: set[Locator] = field(default_factory=set)
     # The external files the lines name, as ``(dataset, address)`` (#710).
     external: set[tuple[str, str]] = field(default_factory=set)
-    # The lines whose parent is a sample, each a source of its child's samples (#698).
+    # The repository_activity lines whose parent is a sample, which may name their child's samples (#698).
     biosample_links: list[BiosampleLink] = field(default_factory=list)
     # Per source type and dataset: offered lines, and each outcome's count.
     counts: dict[str, dict[str, Counter]] = field(default_factory=lambda: defaultdict(lambda: defaultdict(Counter)))
