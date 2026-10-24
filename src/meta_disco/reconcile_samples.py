@@ -406,7 +406,9 @@ class SampleReport:
         passed; ``generated_by`` its reconciled step (None where it has none), whose parents in
         roles passing no samples are checked against the settled samples (:func:`lists_disagree`).
         A file whose sources differ is kept in :attr:`conflicts` with every source, and one no
-        source names samples for in :attr:`without_samples`, with ``data_type``, its reconciled one.
+        source names samples for in :attr:`without_samples`, with ``data_type``, its reconciled one;
+        each row names the file by ``record_key`` (``identity``) beside the catalog identity, which an
+        HPRC record does not carry.
         """
         named = self._own_sources(identity, record, inference_lists, table) + list(self._inherited.get(identity, ()))
         outcome, samples, members = settle(named)
@@ -418,6 +420,7 @@ class SampleReport:
                 {
                     "dataset_title": dataset,
                     "file_name": file_name,
+                    "record_key": identity,
                     **identity_from(record),
                     "outcome": outcome,
                     "sources": [_source_row(n) for n in named],
@@ -425,7 +428,13 @@ class SampleReport:
             )
         elif outcome == NONE:
             self.without_samples.append(
-                {"dataset_title": dataset, "file_name": file_name, **identity_from(record), "data_type": data_type}
+                {
+                    "dataset_title": dataset,
+                    "file_name": file_name,
+                    "record_key": identity,
+                    **identity_from(record),
+                    "data_type": data_type,
+                }
             )
         if samples is not None:
             key = samples["list_id"]

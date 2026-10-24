@@ -1557,9 +1557,13 @@ def main(argv: list[str] | None = None) -> int:
     args.html.write_text(render_html(data, TEMPLATE.read_text()))
     written = [args.markdown, args.html]
     try:
-        args.conflicts_tsv.write_text(conflict_tsv(iter_reconciled_artifact(run_dir, SAMPLE_CONFLICTS_FILE)))
-        written.append(args.conflicts_tsv)
+        conflicts = list(iter_reconciled_artifact(run_dir, SAMPLE_CONFLICTS_FILE))
     except FileNotFoundError:
+        conflicts = None
+    if conflicts is not None:
+        args.conflicts_tsv.write_text(conflict_tsv(conflicts))
+        written.append(args.conflicts_tsv)
+    else:
         # Removed rather than left behind, so it never stands beside a report of another run.
         args.conflicts_tsv.unlink(missing_ok=True)
         print(f"reconcile-report: {run_dir.name} predates {SAMPLE_CONFLICTS_FILE} (#698); {args.conflicts_tsv} removed")

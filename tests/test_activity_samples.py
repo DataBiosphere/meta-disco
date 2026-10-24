@@ -8,7 +8,7 @@ evidence line carrying AnVIL's id for it (#669), written as the entity importer 
 from pathlib import Path
 
 import pytest
-from generate_reconcile_report import CONFLICT_COLUMNS, conflict_tsv, dashboard_data, render_markdown
+from generate_reconcile_report import CONFLICT_COLUMNS, conflict_tsv, dashboard_data, main, render_markdown
 
 from meta_disco import code_rules
 from meta_disco.edges import lineage_attribution
@@ -22,6 +22,7 @@ from meta_disco.models import (
 )
 from meta_disco.output_utils import (
     FILES_WITHOUT_SAMPLES_FILE,
+    RECONCILED_DIR,
     SAMPLE_CONFLICTS_FILE,
     UNREACHED_ENTITIES_FILE,
     iter_reconciled_artifact,
@@ -228,14 +229,23 @@ def test_a_run_reads_anvils_links_beside_its_other_sources(tmp_path, run, eviden
     assert report["lineage"]["sources"][SOURCE_REPOSITORY_ACTIVITY][DATASET][SAMPLE_PARENT] == 3
 
     (conflict,) = iter_reconciled_artifact(run, SAMPLE_CONFLICTS_FILE)
-    assert (conflict["file_id"], conflict["file_name"], conflict["outcome"]) == ("file-2", "f2.bam", CONFLICT)
+    assert (conflict["record_key"], conflict["file_name"], conflict["outcome"]) == ("file-2", "f2.bam", CONFLICT)
     assert [(s["kind"], s["samples"]) for s in conflict["sources"]] == [
         ("header", [{"id": "HG01105", "namespace": "coriell"}]),
         (ACTIVITY, [{"id": "HG01106", "namespace": "coriell"}]),
     ]
     without = list(iter_reconciled_artifact(run, FILES_WITHOUT_SAMPLES_FILE))
     assert [r["file_id"] for r in without] == ["file-3", "file-4", "file-5"]
-    assert set(without[0]) == {"dataset_title", "file_name", "entry_id", "file_id", "drs_uri", "data_type"}
+    assert set(without[0]) == {
+        "dataset_title",
+        "file_name",
+        "record_key",
+        "entry_id",
+        "file_id",
+        "drs_uri",
+        "data_type",
+    }
+    assert without[0]["record_key"] == "file-3"
 
 
 def test_the_conflicts_tsv_has_a_line_per_file_source_and_attribution(tmp_path, run, evidence, table):
@@ -310,3 +320,31 @@ def test_a_sample_named_only_by_an_identity_link_and_reached_by_no_file_is_liste
     assert list(iter_reconciled_artifact(run, UNREACHED_ENTITIES_FILE)) == [
         {"dataset": DATASET, "kind": "sample", "identifier": {"id": "HG00097", "namespace": "coriell"}},
     ]
+
+
+def _conflicted_run(tmp_path, run, evidence, table) -> None:
+    parental, entry = with_header_samples(record(2), "HG01105")
+    write_bam_run(run, [parental], [entry])
+    biosample_lines(evidence, (2, "b-child", "a1"))
+    biosamples(evidence, ("b-child", "HG01106"))
+    go(run, tmp_path, evidence, table)
+
+
+def _render(tmp_path: Path, run: Path, tsv: Path) -> int:
+    reports = ["--markdown", str(tmp_path / "r.md"), "--html", str(tmp_path / "r.html")]
+    return main(["--run-dir", str(run), "--no-previous", *reports, "--conflicts-tsv", str(tsv)])
+
+
+def test_a_tsv_that_cannot_be_written_fails_the_report(tmp_path, run, evidence, table):
+    _conflicted_run(tmp_path, run, evidence, table)
+    with pytest.raises(FileNotFoundError):
+        _render(tmp_path, run, tmp_path / "missing" / "sample-conflicts.tsv")
+
+
+def test_a_run_without_the_conflicts_artifact_removes_a_tsv_left_from_another(tmp_path, run, evidence, table):
+    _conflicted_run(tmp_path, run, evidence, table)
+    tsv = tmp_path / "sample-conflicts.tsv"
+    assert _render(tmp_path, run, tsv) == 0 and tsv.read_text().count("\n") == 3
+    (run / RECONCILED_DIR / SAMPLE_CONFLICTS_FILE).unlink()  # as a run reconciled before #698
+    assert _render(tmp_path, run, tsv) == 0
+    assert not tsv.exists()
