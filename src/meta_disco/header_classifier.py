@@ -1219,31 +1219,26 @@ FAST5_DEVICES: dict[str, str] = {
     "minion": "MinION",
     "gridion": "GridION",
 }
-# Why a FAST5 head gives no instrument model (#747), as the fast5 type counts it per dataset.
-NO_DEVICE_TYPE = "no_device_type"
-UNKNOWN_DEVICE_TYPE = "unknown_device_type"
-SEVERAL_DEVICE_TYPES = "several_device_types"
 
 
 def fast5_instrument(header: Fast5Header) -> tuple[str | None, str]:
-    """The instrument model a FAST5 head's ``device_type`` names, and the outcome as counted.
+    """The instrument model a FAST5 head's ``device_type`` names, and the reason given for it.
 
     Returns:
-        ``(model, model)`` where the head holds one value ``FAST5_DEVICES`` lists; else
-        ``(None, cause)``, the cause one of ``NO_DEVICE_TYPE``, ``UNKNOWN_DEVICE_TYPE`` and
-        ``SEVERAL_DEVICE_TYPES``.
+        ``(model, reason)`` where the head holds one value ``FAST5_DEVICES`` lists; else
+        ``(None, reason)``, the reason naming what was read.
     """
-    if not header.device_types:
-        return None, NO_DEVICE_TYPE
-    if len(header.device_types) > 1:
-        return None, SEVERAL_DEVICE_TYPES
-    model = FAST5_DEVICES.get(header.device_types[0])
-    return (model, model) if model is not None else (None, UNKNOWN_DEVICE_TYPE)
-
-
-def fast5_outcome(header: Fast5Header) -> str:
-    """The outcome :func:`fast5_instrument` gives ``header``: the model, or why there is none."""
-    return fast5_instrument(header)[1]
+    devices = header.device_types
+    if devices is None:
+        return None, "a device_type attribute laid out otherwise than the reader parses"
+    if not devices:
+        return None, "the head read holds no device_type"
+    if len(devices) > 1:
+        return None, f"the head names several device_types [{', '.join(_quoted(d) for d in devices)}]"
+    model = FAST5_DEVICES.get(devices[0])
+    if model is None:
+        return None, f"the head's device_type is {_quoted(devices[0])}: not a device this rule recognises"
+    return model, f"the head's device_type is {devices[0]!r}"
 
 
 def classify_from_fast5_header(
@@ -1255,26 +1250,27 @@ def classify_from_fast5_header(
 ) -> dict:
     """Classify a nanopore FAST5: the rule engine's answers from its name (``nanopore_fast5``, #605), and its instrument model from its header (#747).
 
-    The instrument model is claimed at ``CONTENT_TIER`` where :func:`fast5_instrument`
-    recognises the head's ``device_type``; otherwise, and for a head not read (``header``
-    None, ``FileTypeConfig.answers_from_name``), nothing is claimed for it here. The
-    header's ``sample_id`` is read for the file's samples (``sample_identity.FAST5_SAMPLES``),
-    not here. ``file_format`` is accepted to match the uniform ``_fetch_and_classify`` call,
-    and not read: ``.fast5`` stands in for it, the format a file this type claims carries in
-    its name or, failing that, declares.
+    The instrument model is claimed at ``CONTENT_TIER``: the model where
+    :func:`fast5_instrument` recognises the head's ``device_type``, else ``not_classified``
+    naming what was read. A head not read (``header`` None, ``FileTypeConfig.answers_from_name``)
+    gets no claim here. The header's ``sample_id`` is read for the file's samples
+    (``sample_identity.FAST5_SAMPLES``), not here. ``file_format`` is accepted to match the
+    uniform ``_fetch_and_classify`` call, and not read: ``.fast5`` stands in for it, the format
+    a file this type claims carries in its name or, failing that, declares.
     """
     from .rule_engine import CONTENT_TIER
 
     result = _classify_by_name(name, ".fast5", file_size)
-    model = fast5_instrument(header)[0] if header is not None else None
-    if header is not None and model is not None:
+    if header is not None:
+        model, why = fast5_instrument(header)
         result.add_claim(
             "instrument_model",
             rule_id=code_rules.FAST5_DEVICE_TYPE.id,
             tier=CONTENT_TIER,
             source_type=SOURCE_CONTENT_READ,
-            reason=f"the head's device_type is {header.device_types[0]!r}",
+            reason=why,
             value=model,
+            status=NOT_CLASSIFIED if model is None else None,
         )
     return result.to_output_dict()
 

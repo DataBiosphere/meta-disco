@@ -28,7 +28,6 @@ from .producers import producer_for
 from .provenance import run_provenance
 from .record_keys import record_key
 from .records import (
-    CONTENT_OUTCOMES_KEY,
     REBUILT_LISTS_KEY,
     SAMPLE_LISTS_KEY,
     SAMPLE_OUTCOMES_KEY,
@@ -126,9 +125,6 @@ class RecordOutcome(NamedTuple):
     # (``FileTypeConfig.samples``, #357); None for every other type, for a file not read, and
     # for a file its type's sample reader does not read (``SampleReader.reads``, #724).
     samples: HeaderSamples | None = None
-    # What the type's content read gave, where it counts one (``FileTypeConfig.content_outcome``,
-    # #747); None for every other type and for a file not read.
-    content_outcome: str | None = None
 
 
 def _fetch_and_classify(
@@ -590,9 +586,6 @@ class ClassifyPipeline:
         samples = None
         if self.config.samples is not None and not content_unreadable and self.config.samples.reads(payload):
             samples = self.config.samples.read(payload, dataset)
-        content_outcome = None
-        if self.config.content_outcome is not None and not content_unreadable:
-            content_outcome = self.config.content_outcome(payload)
         return RecordOutcome(
             OutputRecord.from_work_item(
                 item,
@@ -605,7 +598,6 @@ class ClassifyPipeline:
             validation_failed=False,
             step_outcome=step_outcome,
             samples=samples,
-            content_outcome=content_outcome,
         )
 
     def _run_parallel(self, work: list[ClassifierRecord | InvalidRecord], provenance: dict) -> list[dict]:
@@ -626,8 +618,6 @@ class ClassifyPipeline:
         unrecognised_samples: dict[str, Counter] = defaultdict(Counter)
         unread_samples: dict[str, Counter] = defaultdict(Counter)
         lists: dict[str, dict] = {}
-        # For a type that counts its content read (#747): per dataset, each outcome's files.
-        content_counts: dict[str, Counter] = defaultdict(Counter)
 
         print(f"Using {self.workers} parallel workers")
 
@@ -642,8 +632,6 @@ class ClassifyPipeline:
                     dataset = str(outcome.result.dataset_title or "")
                     if outcome.step_outcome is not None:
                         step_counts[dataset][outcome.step_outcome] += 1
-                    if outcome.content_outcome is not None:
-                        content_counts[dataset][outcome.content_outcome] += 1
                     if outcome.samples is not None:
                         sample_counts[dataset][outcome.samples.outcome] += 1
                         unrecognised_samples[dataset].update(outcome.samples.unrecognised)
@@ -714,13 +702,6 @@ class ClassifyPipeline:
                 print(f"  Header samples, {dataset}: {', '.join(f'{k} {v:,}' for k, v in counts.items())}")
             for dataset, counts in details[UNREAD_SAMPLES_KEY].items():
                 print(f"  Samples not read, {dataset}: {', '.join(f'{k} {v:,}' for k, v in counts.items())}")
-        if self.config.content_outcome is not None:
-            details = {
-                **(details or {}),
-                CONTENT_OUTCOMES_KEY: {dataset: dict(counts) for dataset, counts in sorted(content_counts.items())},
-            }
-            for dataset, counts in details[CONTENT_OUTCOMES_KEY].items():
-                print(f"  Content read, {dataset}: {', '.join(f'{k} {v:,}' for k, v in counts.items())}")
         rebuilt_lists = self._step.rebuilt_lists() if isinstance(self._step, RebuildsLists) else None
         if rebuilt_lists:
             print(f"  Lists rebuilt: {len(rebuilt_lists):,}")

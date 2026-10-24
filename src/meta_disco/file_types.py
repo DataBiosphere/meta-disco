@@ -40,7 +40,6 @@ from .header_classifier import (
     classify_from_tar_head,
     classify_from_vcf_header,
     classify_sample_map,
-    fast5_outcome,
     tar_head_is_conclusive,
     workspace_header_member,
 )
@@ -95,9 +94,6 @@ class FileTypeConfig:
     # #605, and its instrument, #747): a failed read keeps the classifier's answers from the name,
     # rather than none, the classifier given None for the content.
     answers_from_name: bool = False
-    # Given the payload, the outcome of a content read the classifier makes, counted per dataset
-    # in the producer's metadata ``details`` (#747): a value read, or why none was. None counts none.
-    content_outcome: Callable | None = None
 
     def __post_init__(self):
         if self.step is not None and self.parser is None:
@@ -220,7 +216,7 @@ IDAT_CONFIG = FileTypeConfig(
 
 # Nanopore FAST5 (#605): the rule engine gives the dimensions from the name, as the auxiliary
 # producer did (`nanopore_fast5`); the first 64 KiB are read for the run's sample_id, the file's
-# sample, and its device_type, the file's instrument model (#747), each head's outcome counted.
+# sample, and its device_type, the file's instrument model (#747).
 FAST5_CONFIG = FileTypeConfig(
     name="fast5",
     extensions=(".fast5",),
@@ -228,7 +224,6 @@ FAST5_CONFIG = FileTypeConfig(
     classifier=classify_from_fast5_header,
     samples=FAST5_SAMPLES,
     answers_from_name=True,
-    content_outcome=fast5_outcome,
 )
 
 FILE_TYPE_REGISTRY = {

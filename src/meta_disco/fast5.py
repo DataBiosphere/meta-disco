@@ -13,7 +13,8 @@ The layout read is these files': a version 1 object header message of type 0x000
 version 1 attribute message (name padded to 8), a version 1 fixed-length string datatype, a
 version 1 scalar dataspace and the string. The name with no such message header of its length
 before it (one in a version 2 object header included) is skipped, as is a message running past
-the bytes read; one laid out otherwise is refused.
+the bytes read; one laid out otherwise is refused. A ``device_type`` refused costs only the
+device: :func:`read_header` keeps the samples, and records the device as unread (#747).
 """
 
 import struct
@@ -42,14 +43,21 @@ class Fast5Error(ValueError):
 
 
 def read_header(fetch: Fetch) -> Fast5Header:
-    """The ``sample_id`` and ``device_type`` values in the first :data:`HEAD_LENGTH` bytes ``fetch`` reads; raises as :func:`attribute_values`."""
+    """The ``sample_id`` and ``device_type`` values in the first :data:`HEAD_LENGTH` bytes ``fetch`` reads.
+
+    ``device_types`` is None where a ``device_type`` attribute is laid out otherwise than the
+    one this module parses, so a file whose device cannot be read keeps its samples.
+
+    Raises:
+        Fast5Error: as :func:`attribute_values` does for ``sample_id``.
+    """
     head = fetch(0, HEAD_LENGTH - 1)
-    return Fast5Header(sample_ids=attribute_values(head, SAMPLE_ID), device_types=attribute_values(head, DEVICE_TYPE))
-
-
-def sample_ids(head: bytes) -> list[str]:
-    """Each distinct ``sample_id`` attribute value in ``head``; raises as :func:`attribute_values`."""
-    return attribute_values(head, SAMPLE_ID)
+    samples = attribute_values(head, SAMPLE_ID)
+    try:
+        devices: list[str] | None = attribute_values(head, DEVICE_TYPE)
+    except Fast5Error:
+        devices = None
+    return Fast5Header(sample_ids=samples, device_types=devices)
 
 
 def attribute_values(head: bytes, name: str) -> list[str]:

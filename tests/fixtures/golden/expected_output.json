@@ -441,11 +441,6 @@
       "complete": true,
       "content_unreadable": 0,
       "details": {
-        "content_outcomes": {
-          "GOLDEN_FIXTURE": {
-            "PromethION": 1
-          }
-        },
         "sample_outcomes": {
           "GOLDEN_FIXTURE": {
             "named": 1

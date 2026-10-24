@@ -592,8 +592,8 @@ FAST5_DEVICE_TYPE = CodeRule(
         "MinKNOW records the kind of device that ran the sequencing run as every read's tracking_id "
         "device_type, beside the sample_id (#747). Its promethion, minion and gridion are Oxford "
         "Nanopore's PromethION, MinION and GridION. A head holding one of them names the instrument; "
-        "one holding none, another value or two or more values makes no claim, and the producer "
-        "counts each case by cause. Found by name in the bytes already read for the sample, its "
+        "one holding none, another value, two or more values or one laid out otherwise is left not_classified "
+        "with what was read. Found by name in the bytes already read for the sample, its "
         "message parsed whole."
     ),
 )
