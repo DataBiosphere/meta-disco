@@ -28,6 +28,7 @@ from meta_disco.pipeline import ClassifyPipeline
 from meta_disco.producers import producer_of
 from meta_disco.rule_engine import CONTENT_TIER
 from meta_disco.sample_identity import FAST5_SAMPLES, NAMED, SEVERAL_SAMPLE_IDS, UNREAD, UNRECOGNISED, Identifier
+from meta_disco.schema_vocab import dimension_values
 from meta_disco.unprocessable import CONTENT_UNREADABLE
 from meta_disco.unprocessable import _reason_for as reason_for
 from tests.metadata_fixtures import valid_record, write_metadata
@@ -244,6 +245,12 @@ def test_a_device_type_laid_out_otherwise_costs_the_device_not_the_sample():
     assert fast5.read_header(_reader(head, [])) == Fast5Header(sample_ids=["HG02723"], device_types=None)
 
 
+def test_a_sample_id_laid_out_otherwise_still_fails_the_head():
+    head = _fast5(_attribute("sample_id", "HG02723", version=2), _attribute("device_type", "promethion"))
+    with pytest.raises(Fast5Error, match="a sample_id attribute message of version 2"):
+        fast5.read_header(_reader(head, []))
+
+
 def test_the_reader_reads_one_range_from_the_start():
     calls = []
     fetch = _reader(_fast5(REAL_MESSAGE, pad=100_000), calls)
@@ -271,9 +278,16 @@ def test_a_cached_header_of_the_wrong_type_is_a_cache_miss():
     assert Fast5Evidence.from_json({"md5sum": MD5, "header": {"sample_ids": [], "device_types": "minion"}}) is None
 
 
-def test_a_device_type_read_as_unreadable_is_cached_as_null():
+def test_a_device_type_read_as_unreadable_is_cached_as_null(monkeypatch, tmp_path):
     entry = {"md5sum": MD5, "header": {"sample_ids": ["HG02723"], "device_types": None}}
     assert Fast5Evidence.from_json(entry).header == Fast5Header(sample_ids=["HG02723"], device_types=None)
+
+    _install(monkeypatch, _fast5(REAL_MESSAGE, _attribute("device_type", "promethion", version=2)))
+    header = fetch_fast5_header(tmp_path, MD5, file_name=NAME)
+    assert header == Fast5Header(sample_ids=["HG02723"], device_types=None)
+    assert json.loads((tmp_path / MD5[:2] / f"{MD5}.json").read_text())["header"]["device_types"] is None
+    monkeypatch.setattr(fetchers, "_fetch_range", _raise_transport)
+    assert fetch_fast5_header(tmp_path, MD5) == header
 
 
 def test_a_cached_header_from_before_the_device_type_is_read_again(monkeypatch, tmp_path):
@@ -352,6 +366,10 @@ def _instrument(device_types: list[str] | None) -> dict:
     ]
 
 
+def test_every_device_names_a_term_of_the_instrument_vocabulary():
+    assert set(FAST5_DEVICES.values()) <= dimension_values("instrument_model")
+
+
 @pytest.mark.parametrize("device_type, model", sorted(FAST5_DEVICES.items()))
 def test_a_recognised_device_type_gives_the_instrument_model_at_the_content_tier(device_type, model):
     entry = _instrument([device_type])
@@ -364,7 +382,7 @@ def test_a_recognised_device_type_gives_the_instrument_model_at_the_content_tier
 @pytest.mark.parametrize(
     "device_types, said",
     [
-        pytest.param([], "holds no device_type", id="none"),
+        pytest.param([], "holds no readable device_type", id="none"),
         pytest.param(["flongle"], "'flongle': not a device", id="a value the table lacks"),
         pytest.param(["PromethION"], "'PromethION': not a device", id="a value in another case"),
         pytest.param(["promethion", "minion"], "several device_types ['promethion', 'minion']", id="two values"),
@@ -392,7 +410,8 @@ def _run(tmp_path, record) -> dict:
 
 
 def test_a_failed_read_keeps_what_the_name_gives_and_is_counted_unreadable(monkeypatch, tmp_path):
-    """A fast5's dimensions come from its name, so a read that fails costs it only its samples."""
+    """A fast5's dimensions come from its name, so a read that fails costs it only its samples and its instrument
+    model, and makes no claim about the bytes it did not read."""
     monkeypatch.setattr(fetchers, "_fetch_range", _raise_transport)
     row = _run(tmp_path, valid_record(file_name=NAME, file_format=".fast5", file_md5sum=MD5))
     assert row["samples"] is None
@@ -402,6 +421,7 @@ def test_a_failed_read_keeps_what_the_name_gives_and_is_counted_unreadable(monke
     slots = row["classifications"]
     marked = {s for s, e in slots.items() if any(x.get("rule_id") == code_rules.FETCH_FAILED.id for x in e["evidence"])}
     assert marked and marked == {s for s, e in slots.items() if e["status"] == "not_classified"}
+    assert not [x for e in slots.values() for x in e["evidence"] if x.get("rule_id") == code_rules.FAST5_DEVICE_TYPE.id]
     envelope = json.loads((tmp_path / "out.json").read_text())
     assert envelope["metadata"]["content_unreadable"] == 1
 
@@ -448,5 +468,5 @@ def test_a_head_with_no_device_type_keeps_its_sample_and_says_why_it_has_no_inst
     entry = row["classifications"]["instrument_model"]
     assert entry["status"] == NOT_CLASSIFIED
     assert [e["reason"] for e in entry["evidence"] if e.get("rule_id") == code_rules.FAST5_DEVICE_TYPE.id] == [
-        "the head read holds no device_type"
+        "the head read holds no readable device_type"
     ]

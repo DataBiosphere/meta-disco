@@ -208,7 +208,7 @@ A bare `rna` in a name no longer says transcriptomic.
 
 **platform**: `ONT` (always)
 
-**instrument_model**: a `.fast5`'s from the `device_type` MinKNOW writes in its first 64 KiB (`promethion` → `PromethION`, `minion` → `MinION`, `gridion` → `GridION`; issue #747); none for a `.pod5`
+**instrument_model**: a `.fast5`'s from the `device_type` MinKNOW writes, read from its first 64 KiB (`promethion` → `PromethION`, `minion` → `MinION`, `gridion` → `GridION`; issue #747); none for a `.pod5`
 
 **reference_assembly**: `not_applicable` (raw signal, pre-basecalling)
 

@@ -25,7 +25,7 @@ help:
 	@echo "  make classify-bed       Classify BED files"
 	@echo "  make classify-sample_map  Read GATK sample maps' cohort steps (network required)"
 	@echo "  make classify-idat      Classify Illumina IDATs from their headers (network required)"
-	@echo "  make classify-fast5     Read nanopore FAST5s' samples from their heads (network required)"
+	@echo "  make classify-fast5     Read nanopore FAST5s' samples and instrument from their heads (network required)"
 	@echo "  make classify-hprc      Classify HPRC catalog files (network required)"
 	@echo "  make coverage-report    Generate the coverage report from a run (RUN_DIR=, default the latest)"
 	@echo "  make consistency-report Check a run's records for internal consistency (RUN_DIR=, default the latest)"

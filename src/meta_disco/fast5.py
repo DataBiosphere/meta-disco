@@ -2,8 +2,9 @@
 
 A FAST5 is an HDF5 file MinKNOW writes, one sequencing run's reads to a file, each read's
 ``tracking_id`` group holding the run's ``sample_id`` and ``device_type``. In the one NIA_CARD
-file read whole the reads share one such group, so each attribute is stored once, about 5 KB
-in (#605). Walking the file to it read about 7.5 MB per file (h5py and pyfive, measured on
+file read whole the reads share one such group, so each attribute is stored once, the
+``sample_id`` about 5 KB in (#605); the ``device_type`` was within the first 64 KiB of each of
+12 NIA_CARD heads probed (#747). Walking the file to it read about 7.5 MB per file (h5py and pyfive, measured on
 #605; pyfive spends it loading the root group's index of the reads' UUID-named groups), so
 this reader finds each attribute *named* ``sample_id`` or ``device_type`` in the first
 :data:`HEAD_LENGTH` bytes and parses its message whole from the header before the name. It

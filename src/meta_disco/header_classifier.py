@@ -1232,7 +1232,7 @@ def fast5_instrument(header: Fast5Header) -> tuple[str | None, str]:
     if devices is None:
         return None, "a device_type attribute laid out otherwise than the reader parses"
     if not devices:
-        return None, "the head read holds no device_type"
+        return None, "the head read holds no readable device_type"
     if len(devices) > 1:
         return None, f"the head names several device_types [{', '.join(_quoted(d) for d in devices)}]"
     model = FAST5_DEVICES.get(devices[0])

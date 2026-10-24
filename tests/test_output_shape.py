@@ -274,7 +274,8 @@ STUB_PAYLOADS = {
         chip_type="1-95um_multi-swath_for_8x2-5M",
         scan_software=["iScan Control Software"],
     ),
-    # fast5 returns a Fast5Header: one run's sample_id, so the golden carries its `samples` (#605).
+    # fast5 returns a Fast5Header: one run's sample_id, so the golden carries its `samples` (#605), and its
+    # device_type, so it carries the instrument model the content rule gives (#747).
     "fast5": Fast5Header(sample_ids=["HG02723"], device_types=["promethion"]),
 }
 # Every evidence entry has a reason, and is either a synthetic resolution marker
