@@ -411,6 +411,219 @@ class TestLinks:
         assert table.unresolved == {"hifi": 1}
 
 
+# --- a cell of a linked row (#562) ------------------------------------------------
+
+
+LINKED_MAP = """
+catalog: anvil15
+datasets:
+  D:
+    plink:
+      pgen:
+        platform:
+          - {cell: seq_platform, row_of: sequencing_dataset}
+        data_type:
+          - {table_name: plink}
+"""
+
+
+def sequencing_dataset(key, platform) -> tuple[str, dict]:
+    return "sequencing_dataset", {"sequencing_dataset_id": key, "seq_platform": platform}
+
+
+def plink(n: int, link) -> tuple[str, dict]:
+    return "plink", {"plink_id": f"p{n}", "pgen": drs(n), "sequencing_dataset_id": link}
+
+
+LINKED_ROWS = [
+    *(anvil_file(n) for n in range(1, 5)),
+    sequencing_dataset("A", "Illumina"),
+    sequencing_dataset("B", None),
+    plink(1, "A"),
+    plink(2, "B"),
+    plink(3, "Z"),
+    plink(4, None),
+]
+
+
+def linked_import(tmp_path: Path, rows=LINKED_ROWS, text: str = LINKED_MAP) -> ae.DatasetImport:
+    write_dataset(tmp_path, "D", rows)
+    return ae.import_dataset(
+        slot_map(tmp_path, text), tmp_path, CATALOG, SERVICE, "D", tmp_path / "ev", "20260920T000000Z"
+    )
+
+
+class TestLinkedRows:
+    def test_a_linked_value_is_written_as_its_own_tables_and_columns(self, tmp_path):
+        linked, own = linked_import(tmp_path).tables
+        assert (linked.table, own.table) == ("sequencing_dataset", "plink")
+        assert rows_of(linked.path) == [("platform", drs(1), "Illumina", "seq_platform")]
+        assert read_envelope(linked.path).source.table == "sequencing_dataset"
+        # The row's own sources are untouched: every reached file takes the table-name span.
+        assert {(r[0], r[1]) for r in rows_of(own.path)} == {("data_type", drs(n)) for n in range(1, 5)}
+
+    def test_an_empty_or_unknown_link_and_a_null_linked_cell_are_counted(self, tmp_path):
+        result = linked_import(tmp_path)
+        linked = result.tables[0]
+        assert linked.rows == 4
+        assert linked.unlinked == {"sequencing_dataset_id": 2}
+        assert linked.null_cells == {"seq_platform": 1}
+        assert "    sequencing_dataset_id: links to no row on 2 rows" in ae.describe([result])
+
+    def test_a_table_read_only_through_links_writes_no_file_of_its_own(self, tmp_path):
+        text = LINKED_MAP.replace("        data_type:\n          - {table_name: plink}\n", "")
+        (table,) = linked_import(tmp_path, text=text).tables
+        assert table.table == "sequencing_dataset"
+
+    def test_a_mapped_table_none_of_whose_rows_link_is_refused(self, tmp_path):
+        """Another table's rows filling the linked file does not stand in for this one's."""
+        text = LINKED_MAP.replace("        data_type:\n          - {table_name: plink}\n", "") + (
+            "    vcf:\n      path:\n        platform:\n          - {cell: seq_platform, row_of: sequencing_dataset}\n"
+        )
+        rows = [anvil_file(1), anvil_file(2), sequencing_dataset("A", "Illumina"), plink(1, "Z")]
+        rows.append(("vcf", {"vcf_id": "v", "path": drs(2), "sequencing_dataset_id": "A"}))
+        with pytest.raises(ValueError, match="D/plink: no evidence row written from sequencing_dataset"):
+            linked_import(tmp_path, rows, text)
+
+    def test_two_linked_rows_under_one_key_are_refused(self, tmp_path):
+        with pytest.raises(ValueError, match="D/sequencing_dataset: sequencing_dataset_id 'A' names two rows"):
+            linked_import(tmp_path, [*LINKED_ROWS, sequencing_dataset("A", "Illumina")])
+
+    def test_check_passes_a_link_that_holds(self, tmp_path):
+        rows = [r for r in LINKED_ROWS if r[1].get("sequencing_dataset_id") != "Z"]
+        write_dataset(tmp_path, "D", rows)
+        assert ae.check(slot_map(tmp_path, LINKED_MAP), tmp_path, CATALOG) == []
+
+    def test_check_reports_every_way_a_link_fails(self, tmp_path):
+        rows = [
+            anvil_file(1),
+            sequencing_dataset("A", drs(1)),
+            sequencing_dataset("A", drs(1)),
+            plink(1, "Z"),
+            ("vcf", {"vcf_id": "v", "path": drs(1)}),
+        ]
+        write_dataset(tmp_path, "D", rows)
+        text = LINKED_MAP + (
+            "    vcf:\n      path:\n        assay_type:\n          - {cell: sequencing_assay, row_of: sequencing_dataset}\n"
+        )
+        problems = ae.check(slot_map(tmp_path, text), tmp_path, CATALOG)
+        assert "D/sequencing_dataset: 1 sequencing_dataset_id values name several rows (e.g. 'A')" in problems
+        assert (
+            "D/sequencing_dataset: cell 'seq_platform' holds DRS URIs — a file-link column, not a metadata value"
+            in problems
+        )
+        assert "D/sequencing_dataset: cell 'sequencing_assay' is not a column of this table" in problems
+        assert "D/plink: 1 sequencing_dataset_id values name no row of sequencing_dataset (e.g. 'Z')" in problems
+        assert "D/vcf: no row carries 'sequencing_dataset_id', its link to sequencing_dataset" in problems
+
+    def test_check_reports_a_linked_table_with_no_keyed_row(self, tmp_path):
+        rows = [anvil_file(1), ("sequencing_dataset", {"seq_platform": "Illumina"}), plink(1, "A")]
+        write_dataset(tmp_path, "D", rows)
+        problems = ae.check(slot_map(tmp_path, LINKED_MAP), tmp_path, CATALOG)
+        # The links are not reported again: the missing key is the cause.
+        assert problems == [
+            "D/sequencing_dataset: no row of this type carries 'sequencing_dataset_id', the key a link to it names",
+        ]
+
+    def test_check_reports_a_key_or_link_that_is_not_a_string(self, tmp_path):
+        rows = [anvil_file(1), sequencing_dataset(7, "Illumina"), sequencing_dataset("A", "Illumina"), plink(1, ["A"])]
+        write_dataset(tmp_path, "D", rows)
+        problems = ae.check(slot_map(tmp_path, LINKED_MAP), tmp_path, CATALOG)
+        assert "D/sequencing_dataset: sequencing_dataset_id holds 7, not a string naming a row (#562)" in problems
+        assert "D/plink: sequencing_dataset_id holds ['A'], not a string naming a row (#562)" in problems
+
+    def test_a_submitter_map_may_not_write_the_published_table_through_a_link(self, tmp_path):
+        text = LINKED_MAP.replace("row_of: sequencing_dataset", "row_of: anvil_file")
+        write_dataset(tmp_path, "D", LINKED_ROWS)
+        problems = ae.check(slot_map(tmp_path, text), tmp_path, CATALOG)
+        assert any(p.startswith("D/anvil_file: anvil's published table") for p in problems), problems
+
+    def test_an_empty_link_never_names_a_keyless_row(self, tmp_path):
+        rows = [
+            *LINKED_ROWS,
+            anvil_file(5),
+            ("sequencing_dataset", {"sequencing_dataset_id": "", "seq_platform": "X"}),
+            plink(5, ""),
+        ]
+        linked = linked_import(tmp_path, rows).tables[0]
+        assert linked.unlinked == {"sequencing_dataset_id": 3}
+        assert all(raw != "X" for _, _, raw, _ in rows_of(linked.path))
+
+    def test_a_linked_files_link_counters_name_the_linking_table(self, tmp_path):
+        result = linked_import(tmp_path, [*LINKED_ROWS, plink(9, "A")])
+        linked = result.tables[0]
+        assert (linked.via, linked.unresolved) == (("plink",), {"plink.pgen": 1})
+        assert "  sequencing_dataset: 5 rows of plink, 1 evidence rows" in ae.describe([result])
+
+    def test_check_asks_only_a_linking_table_for_its_link(self, tmp_path):
+        text = LINKED_MAP + "    vcf:\n      path:\n        platform:\n          - {cell: platform}\n"
+        rows = [r for r in LINKED_ROWS if r[1].get("sequencing_dataset_id") != "Z"]
+        rows.append(("vcf", {"vcf_id": "v", "path": drs(1), "platform": "x"}))
+        write_dataset(tmp_path, "D", rows)
+        assert ae.check(slot_map(tmp_path, text), tmp_path, CATALOG) == []
+
+    def test_a_link_that_is_not_a_string_names_no_row(self, tmp_path):
+        rows = [anvil_file(1), anvil_file(2), sequencing_dataset("A", "Illumina"), plink(1, "A"), plink(2, 7)]
+        rows.append(("sequencing_dataset", {"sequencing_dataset_id": "7", "seq_platform": "X"}))
+        linked = linked_import(tmp_path, rows).tables[0]
+        assert linked.unlinked == {"sequencing_dataset_id": 1}
+        assert {r[1] for r in rows_of(linked.path)} == {drs(1)}
+
+    def test_each_files_counters_count_only_the_entries_reading_it(self, tmp_path):
+        text = (
+            "catalog: anvil15\ndatasets:\n  D:\n    plink:\n"
+            "      pgen:\n        platform:\n          - {cell: seq_platform, row_of: sequencing_dataset}\n"
+            "      pvar:\n        data_type:\n          - {table_name: plink}\n"
+        )
+        rows = [anvil_file(1), sequencing_dataset("A", "Illumina")]
+        rows.append(("plink", {"plink_id": "p", "pgen": drs(1), "pvar": drs(9), "sequencing_dataset_id": "A"}))
+        rows.append(("plink", {"plink_id": "q", "pgen": drs(1), "pvar": drs(1), "sequencing_dataset_id": "A"}))
+        linked, own = linked_import(tmp_path, rows, text).tables
+        assert (linked.table, linked.unresolved) == ("sequencing_dataset", {})
+        assert (own.table, own.unresolved) == ("plink", {"pvar": 1})
+
+    def test_two_linked_tables_each_give_their_own_cells_and_file(self, tmp_path):
+        text = LINKED_MAP.replace("        data_type:\n          - {table_name: plink}\n", "") + (
+            "        assay_type:\n          - {cell: sample_assay, row_of: sample_set}\n"
+        )
+        rows = [anvil_file(1), sequencing_dataset("A", "Illumina")]
+        rows.append(("sample_set", {"sample_set_id": "S", "sample_assay": "WGS", "seq_platform": "WRONG"}))
+        rows.append(("plink", {"plink_id": "p", "pgen": drs(1), "sequencing_dataset_id": "A", "sample_set_id": "S"}))
+        files = {t.table: rows_of(t.path) for t in linked_import(tmp_path, rows, text).tables}
+        assert files == {
+            "sequencing_dataset": [("platform", drs(1), "Illumina", "seq_platform")],
+            "sample_set": [("assay_type", drs(1), "WGS", "sample_assay")],
+        }
+
+    def test_a_linked_file_whose_every_cell_is_null_is_refused(self, tmp_path):
+        rows = [anvil_file(1), sequencing_dataset("A", None), plink(1, "A")]
+        text = LINKED_MAP.replace("        data_type:\n          - {table_name: plink}\n", "")
+        with pytest.raises(ValueError, match="D/plink: no evidence row written from sequencing_dataset"):
+            linked_import(tmp_path, rows, text)
+
+    def test_check_ignores_an_empty_link_and_asks_each_linking_table(self, tmp_path):
+        text = (
+            LINKED_MAP
+            + "    vcf:\n      path:\n        platform:\n          - {cell: seq_platform, row_of: sequencing_dataset}\n"
+        )
+        rows = [anvil_file(1), anvil_file(2), sequencing_dataset("A", "Illumina"), plink(1, "A"), plink(2, "")]
+        rows.append(("vcf", {"vcf_id": "v", "path": drs(1), "sequencing_dataset_id": "Z"}))
+        write_dataset(tmp_path, "D", rows)
+        problems = ae.check(slot_map(tmp_path, text), tmp_path, CATALOG)
+        assert problems == ["D/vcf: 1 sequencing_dataset_id values name no row of sequencing_dataset (e.g. 'Z')"]
+
+    def test_check_reports_a_non_string_key_once_not_as_missing(self, tmp_path):
+        write_dataset(tmp_path, "D", [anvil_file(1), sequencing_dataset(7, "Illumina"), plink(1, "7")])
+        problems = ae.check(slot_map(tmp_path, LINKED_MAP), tmp_path, CATALOG)
+        assert "D/sequencing_dataset: sequencing_dataset_id holds 7, not a string naming a row (#562)" in problems
+        assert not any("no row of this type carries" in p for p in problems), problems
+
+    def test_check_reports_a_linked_table_with_no_rows(self, tmp_path):
+        write_dataset(tmp_path, "D", [anvil_file(1), plink(1, "A")])
+        problems = ae.check(slot_map(tmp_path, LINKED_MAP), tmp_path, CATALOG)
+        assert "D/sequencing_dataset: no row of this type in the manifest" in problems
+
+
 # --- folder entries (#604) -------------------------------------------------------
 
 

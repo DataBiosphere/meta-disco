@@ -183,6 +183,19 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     catalog map's (4.9). This ends when AnVIL holds the maps (#624): the catalog maps then take over, and the
     declaration, its cache and its lineage are deleted.
 
+2.12 **A metadata value may be read across a foreign key, from the one row it names** (#562). A row of a
+    file table may name a row of another table of the same dataset in its `<table>_id` column:
+    1000G_PRIMED's `plink_file_wide.sequencing_dataset_id` names a `sequencing_dataset` row, which states the
+    reference, platform and assay of the whole set. The slot map declares such a source on the file-link
+    entry (`row_of`). The files are the ones the linking row reaches, and the value is the linked row's
+    metadata value, recorded as its table's and column's: the evidence file is named for the linked table,
+    so its provenance says where the value was written, not how the file was reached. The link resolves by
+    equality on the linked table's own `<table>_id`, which must name one row; `make check-slot-map` refuses a
+    key naming two rows, a non-empty link naming none, and a linked cell that is not a column of its table or
+    holds file links, and the loader refuses reading a link column, on either side, as a value (2.7). A
+    sample is never read this way, since a linked row is shared by every row naming it. Routing stays at
+    table and column (3.4): no row is skipped for a value it holds.
+
 ## 3. Claims
 
 3.1 A claim is a rule's declaration about a slot, derived from source evidence (2.1), from inference's own

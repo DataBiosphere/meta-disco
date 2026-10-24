@@ -81,6 +81,12 @@ folder they are stored in: `seq_filename` is `HG002_R10`, and the run's 2,436 fa
 under `HG002_R10/reads/fast5/`. The slot map declares such a column a folder (#604), and
 the importer reaches the files by storage path.
 
+A foreign key can carry a file's metadata values too, one table over. 1000G_PRIMED's
+`plink_file_wide` rows hold three file links and a `sequencing_dataset_id`; the
+`sequencing_dataset` row it names states the set's `reference_assembly`, `seq_platform` and
+`sequencing_assay`, and holds no file of its own. The slot map reads such a cell through the
+link (`row_of`, #562, contract 2.12), and the value is recorded as `sequencing_dataset`'s.
+
 Read that way, `assembly` needs no classification at all: `assembly_method` is a value,
 `assembly_fai` is an index edge, `sample_id` is the subject.
 

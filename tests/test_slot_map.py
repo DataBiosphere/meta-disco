@@ -25,6 +25,7 @@ from meta_disco.slot_map import (
     is_derivative_column,
     load_slot_map,
     published_slot_map_resource,
+    row_key,
 )
 
 MINIMAL = """
@@ -426,3 +427,124 @@ def test_a_cell_may_not_read_a_folder_column_of_its_table_as_a_value(tmp_path):
         "    sequencing:\n      seq_fileref:\n        platform:\n          - {cell: seq_filename}\n",
     )
     refuses(tmp_path, text, "cell 'seq_filename' is a folder column of this table")
+
+
+# --- a cell of a linked row (#562) ---------------------------------------------
+
+LINKED = """
+catalog: anvil15
+datasets:
+  D:
+    plink_file_wide:
+      pgen:
+        platform:
+          - {cell: seq_platform, row_of: sequencing_dataset}
+        data_type:
+          - {table_name: plink}
+"""
+
+
+def test_a_cell_may_be_read_from_the_row_its_row_links_to(tmp_path):
+    slot_map = load(tmp_path, LINKED)
+    (entry,) = slot_map.entries
+    (source,) = entry.slots["platform"]
+    assert (source.form, source.value, source.row_of) == (SOURCE_CELL, "seq_platform", "sequencing_dataset")
+    assert slot_map.cells("D", "plink_file_wide") == set()
+    assert slot_map.cells("D", "sequencing_dataset") == {"seq_platform"}
+    assert slot_map.linked_tables("D") == ["sequencing_dataset"]
+    assert slot_map.source_tables("D") == ["sequencing_dataset", "plink_file_wide"]
+    assert slot_map.readers("D", "sequencing_dataset") == ["plink_file_wide"]
+    assert slot_map.readers("D", "plink_file_wide") == ["plink_file_wide"]
+    assert row_key("sequencing_dataset") == "sequencing_dataset_id"
+
+
+def test_row_of_is_for_a_cell_never_a_span_of_the_entrys_own_names(tmp_path):
+    text = LINKED.replace("{table_name: plink}", "{table_name: plink, row_of: sequencing_dataset}")
+    refuses(tmp_path, text, "row_of reads a cell of a linked row")
+
+
+@pytest.mark.parametrize(
+    ("value", "fragment"),
+    [
+        ("plink_file_wide", "is the entry's own table"),
+        ('""', "not the name of"),
+        ("3", "not the name of"),
+        ("[x]", "not the name of"),
+    ],
+)
+def test_row_of_names_another_table(tmp_path, value, fragment):
+    text = LINKED.replace("row_of: sequencing_dataset", f"row_of: {value}")
+    refuses(tmp_path, text, fragment)
+
+
+def test_a_cell_and_row_of_are_the_only_pair_a_source_may_hold(tmp_path):
+    text = LINKED.replace("row_of: sequencing_dataset}", "row_of: sequencing_dataset, table_name: plink}")
+    refuses(tmp_path, text, "one mapping with one key", "may add row_of")
+
+
+def test_a_sample_is_never_read_through_a_link(tmp_path):
+    text = LINKED + "        samples:\n          - {cell: sample_id, row_of: sample}\n"
+    refuses(tmp_path, text, "through row_of")
+
+
+def test_a_linked_table_is_not_also_mapped_by_its_own_file_links(tmp_path):
+    text = LINKED + "    sequencing_dataset:\n      readme:\n        platform:\n          - {cell: seq_platform}\n"
+    refuses(tmp_path, text, "row_of 'sequencing_dataset' is a table this map also maps")
+
+
+def test_a_cell_of_the_row_and_the_same_cell_of_a_linked_row_are_two_sources(tmp_path):
+    text = LINKED.replace("        platform:\n", "        platform:\n          - {cell: seq_platform}\n")
+    entry = load(tmp_path, text).entries[0]
+    assert [s.row_of for s in entry.slots["platform"]] == [None, "sequencing_dataset"]
+    twice = LINKED.replace(
+        "          - {cell: seq_platform, row_of: sequencing_dataset}\n",
+        "          - {cell: seq_platform, row_of: sequencing_dataset}\n" * 2,
+    )
+    refuses(tmp_path, twice, "the same fact spelled twice")
+
+
+@pytest.mark.parametrize(
+    ("column", "slot", "fragment"),
+    [("pgen_md5", "platform", "checksum column"), ("pgen_index", "data_type", "index column")],
+)
+def test_a_linked_cell_obeys_the_link_columns_structural_exclusions(tmp_path, column, slot, fragment):
+    text = f"catalog: anvil15\ndatasets:\n  D:\n    plink_file_wide:\n      {column}:\n        {slot}:\n          - {{cell: x, row_of: sequencing_dataset}}\n"
+    refuses(tmp_path, text, fragment)
+
+
+def test_a_linked_tables_key_is_a_pointer_not_a_value(tmp_path):
+    text = LINKED.replace("{cell: seq_platform, row_of", "{cell: sequencing_dataset_id, row_of")
+    refuses(tmp_path, text, "is sequencing_dataset's key")
+
+
+def test_a_rows_own_link_to_another_table_is_a_pointer_not_a_value(tmp_path):
+    text = LINKED.replace(
+        "{table_name: plink}", "{table_name: plink}\n        assay_type:\n          - {cell: sequencing_dataset_id}"
+    )
+    refuses(tmp_path, text, "cell 'sequencing_dataset_id' is a link to another table's row")
+
+
+def test_a_linked_cell_may_share_a_name_with_a_column_of_the_linking_table(tmp_path):
+    """The own-row refusals are about the row's own columns; a linked row's `pgen` or `seq_filename` is another table's."""
+    text = LINKED.replace("{cell: seq_platform, row_of", "{cell: pgen, row_of")
+    assert load(tmp_path, text).entries[0].slots["platform"][0].value == "pgen"
+    folder = FOLDER + "        platform:\n          - {cell: seq_filename, row_of: sequencing_dataset}\n"
+    assert load(tmp_path, folder).linked_tables("D") == ["sequencing_dataset"]
+
+
+def test_no_link_to_a_linked_table_is_read_as_a_value_on_either_side_anywhere_in_the_dataset(tmp_path):
+    """The link column is a pointer whichever row holds it, and whichever of the dataset's tables reads it."""
+    two = LINKED + "        assay_type:\n          - {cell: x, row_of: sample_set}\n"
+    assert load(tmp_path, two).linked_tables("D") == ["sequencing_dataset", "sample_set"]
+    linked_side = two + "        data_modality:\n          - {cell: sample_set_id, row_of: sequencing_dataset}\n"
+    refuses(tmp_path, linked_side, "cell 'sample_set_id' is a link to another table's row")
+    elsewhere = LINKED + "    vcf:\n      path:\n        assay_type:\n          - {cell: sequencing_dataset_id}\n"
+    refuses(tmp_path, elsewhere, "D/vcf/path assay_type: cell 'sequencing_dataset_id' is a link")
+
+
+def test_two_sources_differing_where_a_dot_falls_are_two_sources(tmp_path):
+    text = LINKED.replace(
+        "          - {cell: seq_platform, row_of: sequencing_dataset}\n",
+        "          - {cell: c, row_of: a.b}\n          - {cell: b.c, row_of: a}\n",
+    )
+    assert len(load(tmp_path, text).entries[0].slots["platform"]) == 2

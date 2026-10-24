@@ -45,7 +45,23 @@ can be compared with each file's own (#740). A cell of the same table may not na
 column either: the column is a pointer, and a column is one kind, never two (2.7).
 
 A source is exactly one of three forms. ``{cell: <column>}`` is a metadata value in the
-same row. ``{table_name: <span>}`` and ``{column_name: <span>}`` are a span of the
+same row, or, with ``row_of`` (#562), in the one row of another table that this row links
+to::
+
+    ANVIL_1000G_PRIMED_data_model:
+      plink_file_wide:
+        pgen:
+          platform:
+            - {cell: seq_platform, row_of: sequencing_dataset}
+
+The link is the row's ``<table>_id`` cell (:func:`row_key`), here ``sequencing_dataset_id``,
+naming the row of ``sequencing_dataset`` whose own ``sequencing_dataset_id`` holds the same
+string, in the same dataset; ``anvil_evidence.check`` holds the manifests to that. The value
+is that row's metadata value and is recorded as its table's and column's (contract 2.12).
+A table a source reads this way is not also mapped by its own entries in the dataset: the map
+reads it only through links. A link column, on the linking row or the linked one, is a pointer
+and never read as a value. A sample is never read this way.
+``{table_name: <span>}`` and ``{column_name: <span>}`` are a span of the
 table's or the link column's own name, transcribed in the name's casing (``CHM13v2``,
 not ``chm13``): a name is evidence the same as a cell is (contract 2.6), and the span
 is what the evidence row carries as its raw value. A slot may name several sources —
@@ -129,6 +145,8 @@ SOURCE_TABLE_NAME = "table_name"
 SOURCE_COLUMN_NAME = "column_name"
 SOURCE_FORMS = (SOURCE_CELL, SOURCE_TABLE_NAME, SOURCE_COLUMN_NAME)
 _NAME_FORMS = frozenset({SOURCE_TABLE_NAME, SOURCE_COLUMN_NAME})
+# The member a cell source may carry beside its form (#562): the table whose linked row holds the cell.
+ROW_OF = "row_of"
 
 # A column whose last name token (`name_tokens`) is one of these is a sidecar of
 # another column's file: an index or a checksum. It takes no `data_type` from any
@@ -157,12 +175,18 @@ _FIELDS = frozenset(EVIDENCE_FIELDS)
 DATA_TYPE = "data_type"
 
 
+def row_key(table: str) -> str:
+    """The column naming a row of ``table``: its key in ``table``, and the link to it in a row that reads it (#562)."""
+    return f"{table}_id"
+
+
 @dataclass(frozen=True)
 class SlotSource:
-    """Where one slot's raw value comes from: a cell of the row, or a span of a name."""
+    """Where one slot's raw value comes from: a cell of the row or of the row it links to in ``row_of``, or a span of a name."""
 
     form: str
     value: str
+    row_of: str | None = None
 
     @property
     def is_name(self) -> bool:
@@ -224,14 +248,39 @@ class SlotMap:
         return any(e.is_folder for e in self.entries if e.dataset == dataset)
 
     def cells(self, dataset: str, table: str) -> set[str]:
-        """Every column a ``cell`` source of this table names."""
-        return {
-            source.value
-            for entry in self.columns(dataset, table)
-            for sources in entry.slots.values()
-            for source in sources
-            if source.form == SOURCE_CELL
-        }
+        """Every column of ``table`` a ``cell`` source of the dataset reads: in the table's own row, or through a link (#562)."""
+        return {s.value for e, _, s in self._sources(dataset) if s.form == SOURCE_CELL and source_table(e, s) == table}
+
+    def source_tables(self, dataset: str) -> list[str]:
+        """Every table the dataset's sources read a value from, in file order: a mapped table's own
+        cells and names, or a table read through a link (#562). One evidence file each."""
+        return list(dict.fromkeys(source_table(e, s) for e, _, s in self._sources(dataset)))
+
+    def linked_tables(self, dataset: str) -> list[str]:
+        """The tables a ``row_of`` source of the dataset reads (#562), in file order."""
+        return list(dict.fromkeys(s.row_of for _, _, s in self._sources(dataset) if s.row_of))
+
+    def readers(self, dataset: str, table: str) -> list[str]:
+        """The mapped tables whose entries read a value from ``table``: itself, for its own row, or those linking to it."""
+        return list(dict.fromkeys(e.table for e, _, s in self._sources(dataset) if source_table(e, s) == table))
+
+    def _sources(self, dataset: str) -> Iterator[tuple[ColumnEntry, str, SlotSource]]:
+        for entry in self.entries:
+            if entry.dataset == dataset:
+                for slot, source in entry_sources(entry):
+                    yield entry, slot, source
+
+
+def entry_sources(entry: ColumnEntry) -> Iterator[tuple[str, SlotSource]]:
+    """Each of an entry's sources with its slot, in file order."""
+    for slot, sources in entry.slots.items():
+        for source in sources:
+            yield slot, source
+
+
+def source_table(entry: ColumnEntry, source: SlotSource) -> str:
+    """The table whose row or name ``source`` reads its value from: the one it links to (#562), else the entry's own."""
+    return source.row_of or entry.table
 
 
 def is_derivative_column(column: str) -> bool:
@@ -351,11 +400,33 @@ def load_slot_map(source: Readable | None = None) -> SlotMap:
 def _entries(datasets: dict) -> Iterator[ColumnEntry]:
     for dataset, tables in datasets.items():
         _expect_nonempty_mapping(tables, f"{_WHERE} {dataset}", "table")
+        mapped: list[ColumnEntry] = []
         for table, columns in tables.items():
             _expect_nonempty_mapping(columns, f"{_WHERE} {dataset}/{table}", "file-link column")
             entries = [_entry(dataset, table, column, members) for column, members in columns.items()]
             _refuse_cells_naming_folders(entries, f"{_WHERE} {dataset}/{table}")
-            yield from entries
+            mapped += entries
+        _refuse_linked_tables_mapped(mapped, set(tables), f"{_WHERE} {dataset}")
+        yield from mapped
+
+
+def _refuse_linked_tables_mapped(entries: list[ColumnEntry], tables: set[str], at: str) -> None:
+    """A table a ``row_of`` source reads is not also mapped in the dataset: the map reads it only
+    through links (#562). Nor is a link to any of the dataset's linked tables read as a value, on
+    the row's own cells or a linked row's: the link column is a pointer (2.7)."""
+    links = {row_key(s.row_of) for e in entries for _, s in entry_sources(e) if s.row_of}
+    for entry in entries:
+        for slot, source in entry_sources(entry):
+            if source.form == SOURCE_CELL and source.value in links:
+                raise ValueError(
+                    f"{at}/{entry.table}/{entry.column} {slot}: cell {source.value!r} is a link to another table's "
+                    "row, which holds a pointer and no value"
+                )
+            if source.row_of in tables:
+                raise ValueError(
+                    f"{at}/{entry.table}/{entry.column} {slot}: row_of {source.row_of!r} is a table this map "
+                    "also maps by its own file links; the map reads a linked table only through links"
+                )
 
 
 def _entry(dataset: str, table: str, column: str, members: dict) -> ColumnEntry:
@@ -402,13 +473,12 @@ def _refuse_cells_naming_folders(entries: list[ColumnEntry], at: str) -> None:
     """A cell naming one of the table's folder columns reads a pointer as a value: refused (2.7)."""
     folders = {entry.column for entry in entries if entry.is_folder}
     for entry in entries:
-        for slot, sources in entry.slots.items():
-            for source in sources:
-                if source.form == SOURCE_CELL and source.value in folders:
-                    raise ValueError(
-                        f"{at}/{entry.column} {slot}: cell {source.value!r} is a folder column of this table, "
-                        "which holds a pointer and no value"
-                    )
+        for slot, source in entry_sources(entry):
+            if source.form == SOURCE_CELL and source_table(entry, source) == entry.table and source.value in folders:
+                raise ValueError(
+                    f"{at}/{entry.column} {slot}: cell {source.value!r} is a folder column of this table, "
+                    "which holds a pointer and no value"
+                )
 
 
 def _is_cell(item: object) -> bool:
@@ -422,9 +492,13 @@ def _sources(slot: str, sources: object, table: str, column: str, at: str) -> tu
     at = f"{at} {slot}"
     # A sample is read from one cell of the row (#357): a table's or a column's name says what
     # the files are, never which sample they are of, and a second cell would be a second
-    # source for the same fact from the same row.
+    # source for the same fact from the same row. Nor from a linked row (#562), which is shared
+    # by every row that links to it and so names no one file's sample: `_is_cell` refuses `row_of`.
     if slot == SAMPLES_FIELD and isinstance(sources, list) and (len(sources) != 1 or not _is_cell(sources[0])):
-        raise ValueError(f"{at}: a sample is read from exactly one {SOURCE_CELL}, never from a name")
+        raise ValueError(
+            f"{at}: a sample is read from exactly one {SOURCE_CELL} of the row itself, never from a name or "
+            f"through {ROW_OF}"
+        )
     if isinstance(sources, str):
         raise ValueError(
             f"{at}: is the bare term {sources!r} — a slot names where its raw value comes from "
@@ -433,9 +507,9 @@ def _sources(slot: str, sources: object, table: str, column: str, at: str) -> tu
     if not isinstance(sources, list) or not sources:
         raise ValueError(f"{at}: must be a non-empty list of sources, not {type(sources).__name__}")
     parsed = [_source(slot, item, table, column, at) for item in sources]
-    seen: dict[tuple[str, str], SlotSource] = {}
+    seen: dict[tuple[str, ...], SlotSource] = {}
     for source in parsed:
-        key = ("name", source.value.casefold()) if source.is_name else (source.form, source.value)
+        key = ("name", source.value.casefold()) if source.is_name else (source.form, source.row_of or "", source.value)
         if key in seen:
             raise ValueError(
                 f"{at}: {source.form} {source.value!r} repeats {seen[key].form} {seen[key].value!r} — "
@@ -446,17 +520,24 @@ def _sources(slot: str, sources: object, table: str, column: str, at: str) -> tu
 
 
 def _source(slot: str, item: object, table: str, column: str, at: str) -> SlotSource:
-    if not isinstance(item, dict) or len(item) != 1:
-        raise ValueError(f"{at}: a source is one mapping with one key ({', '.join(SOURCE_FORMS)}), not {item!r}")
-    ((form, value),) = item.items()
+    forms = {k: v for k, v in item.items() if k != ROW_OF} if isinstance(item, dict) else {}
+    if not isinstance(item, dict) or len(forms) != 1:
+        raise ValueError(
+            f"{at}: a source is one mapping with one key ({', '.join(SOURCE_FORMS)}), and a {SOURCE_CELL} "
+            f"may add {ROW_OF}; not {item!r}"
+        )
+    ((form, value),) = forms.items()
     if form == NOTES:
         raise ValueError(f"{at}: {NO_NOTES}")
     if form not in SOURCE_FORMS:
         raise ValueError(f"{at}: {form!r} is not a source form (expected one of {SOURCE_FORMS})")
     if not isinstance(value, str) or not value:
         raise ValueError(f"{at}: {form} is {value!r}, not a non-empty string")
-    if form == SOURCE_CELL and value == column:
+    row_of = _row_of(item[ROW_OF], form, table, at) if ROW_OF in item else None
+    if form == SOURCE_CELL and not row_of and value == column:
         raise ValueError(f"{at}: cell {value!r} is the file-link column itself, which holds a pointer and no value")
+    if row_of and value == row_key(row_of):
+        raise ValueError(f"{at}: cell {value!r} is {row_of}'s key, which a link names and which holds no value (2.7)")
     if form == SOURCE_TABLE_NAME and not _span_of(value, table):
         raise ValueError(
             f"{at}: span {value!r} is not a run of whole tokens of the table name {table!r}, in the name's own casing"
@@ -481,7 +562,18 @@ def _source(slot: str, item: object, table: str, column: str, at: str) -> SlotSo
             f"{at}: {column!r} is an index column and carries no data_type of its own "
             f"payload (suffixes {sorted(DERIVATIVE_SUFFIXES - CHECKSUM_SUFFIXES)}); its reference_assembly may be mapped"
         )
-    return SlotSource(form=form, value=value)
+    return SlotSource(form=form, value=value, row_of=row_of)
+
+
+def _row_of(row_of: object, form: str, table: str, at: str) -> str:
+    """Check a source's ``row_of``: on a cell, naming a table other than the entry's own."""
+    if form != SOURCE_CELL:
+        raise ValueError(f"{at}: {ROW_OF} reads a cell of a linked row; a {form} span is of the entry's own names")
+    if not isinstance(row_of, str) or not row_of:
+        raise ValueError(f"{at}: {ROW_OF} is {row_of!r}, not the name of the table the row links to")
+    if row_of == table:
+        raise ValueError(f"{at}: {ROW_OF} {row_of!r} is the entry's own table; a cell of its own row needs no {ROW_OF}")
+    return row_of
 
 
 def _span_of(span: str, name: str) -> bool:

@@ -791,10 +791,18 @@ rows:
     match: {slot: reference_assembly, value: "t2t-chm13.20200921.HG002chrY.chrEBV"}
     declares: {reference_assembly: t2t-chm13.20200921.HG002chrY.chrEBV}
     reason: The term itself, CHM13 v1.0 with HG002's chrY (#473).
+  - id: "reference_assembly.grch37"
+    match: {slot: reference_assembly, value: "GRCh37"}
+    declares: {reference_assembly: GRCh37}
+    reason: >-
+      The term itself, as 1000G_PRIMED's `sequencing_dataset.reference_assembly` writes it (#562).
+      UCSC's hg19 is left out: its chrM is not GRCh37's.
   - id: "reference_assembly.grch38"
     match: {slot: reference_assembly, value: "grch38", alternates: ["hg38"]}
     declares: {reference_assembly: GRCh38}
-    reason: Column-name spans naming the GRCh38 assembly; hg38 is UCSC's name for the same assembly.
+    reason: >-
+      The GRCh38 assembly, as column-name spans and 1000G_PRIMED's `sequencing_dataset.reference_assembly`
+      write it (#562); hg38 is UCSC's name for the same assembly.
     seeded_from: ["anvil/anvil15/ANVIL_HPRC/20260920T175642Z", "anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
   - id: "reference_assembly.unaligned"
     match: {slot: reference_assembly, value: "unaligned"}
