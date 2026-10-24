@@ -58,8 +58,9 @@ The link is the row's ``<table>_id`` cell (:func:`row_key`), here ``sequencing_d
 naming the row of ``sequencing_dataset`` whose own ``sequencing_dataset_id`` holds the same
 string, in the same dataset; ``anvil_evidence.check`` holds the manifests to that. The value
 is that row's metadata value and is recorded as its table's and column's (contract 2.12).
-A table a source reads this way is not also mapped by its own entry in the dataset: its rows
-link no file, and its name is not the file table's. A sample is never read this way.
+A table a source reads this way is not also mapped by its own entries in the dataset: the map
+reads it only through links. A link column, on the linking row or the linked one, is a pointer
+and never read as a value. A sample is never read this way.
 ``{table_name: <span>}`` and ``{column_name: <span>}`` are a span of the
 table's or the link column's own name, transcribed in the name's casing (``CHM13v2``,
 not ``chm13``): a name is evidence the same as a cell is (contract 2.6), and the span
@@ -410,12 +411,13 @@ def _entries(datasets: dict) -> Iterator[ColumnEntry]:
 
 
 def _refuse_linked_tables_mapped(entries: list[ColumnEntry], tables: set[str], at: str) -> None:
-    """A table a ``row_of`` source reads is not also mapped in the dataset: its rows link no file (#562).
-    Nor is a mapped row's link to it read as a value: the link column is a pointer (2.7)."""
+    """A table a ``row_of`` source reads is not also mapped in the dataset: the map reads it only
+    through links (#562). Nor is a link to any of the dataset's linked tables read as a value, on
+    the row's own cells or a linked row's: the link column is a pointer (2.7)."""
     links = {row_key(s.row_of) for e in entries for _, s in entry_sources(e) if s.row_of}
     for entry in entries:
         for slot, source in entry_sources(entry):
-            if source.form == SOURCE_CELL and not source.row_of and source.value in links:
+            if source.form == SOURCE_CELL and source.value in links:
                 raise ValueError(
                     f"{at}/{entry.table}/{entry.column} {slot}: cell {source.value!r} is a link to another table's "
                     "row, which holds a pointer and no value"
@@ -423,7 +425,7 @@ def _refuse_linked_tables_mapped(entries: list[ColumnEntry], tables: set[str], a
             if source.row_of in tables:
                 raise ValueError(
                     f"{at}/{entry.table}/{entry.column} {slot}: row_of {source.row_of!r} is a table this map "
-                    "also maps by its own file links; a table read through a link holds no file link of its own"
+                    "also maps by its own file links; the map reads a linked table only through links"
                 )
 
 
@@ -505,9 +507,9 @@ def _sources(slot: str, sources: object, table: str, column: str, at: str) -> tu
     if not isinstance(sources, list) or not sources:
         raise ValueError(f"{at}: must be a non-empty list of sources, not {type(sources).__name__}")
     parsed = [_source(slot, item, table, column, at) for item in sources]
-    seen: dict[tuple[str, str], SlotSource] = {}
+    seen: dict[tuple[str, ...], SlotSource] = {}
     for source in parsed:
-        key = ("name", source.value.casefold()) if source.is_name else (source.form, f"{source.row_of}.{source.value}")
+        key = ("name", source.value.casefold()) if source.is_name else (source.form, source.row_of or "", source.value)
         if key in seen:
             raise ValueError(
                 f"{at}: {source.form} {source.value!r} repeats {seen[key].form} {seen[key].value!r} — "

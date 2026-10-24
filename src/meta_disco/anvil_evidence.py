@@ -149,9 +149,10 @@ class TableImport:
 
     ``table`` is the table the file's values were read from. For a mapped table that is the
     table whose rows it reads. For a table read through a link (#562) the rows read are the
-    linking tables', named in ``via``: ``rows`` counts theirs, the link-column counters are
-    keyed ``<linking table>.<column>``, and ``null_cells`` (by the linked column) and
-    ``unlinked`` (by the link column) count linking rows, summed over the linking tables.
+    linking tables', named in ``via``: ``rows`` counts theirs; the file-link counters are keyed
+    ``<linking table>.<column>`` and count only the rows whose link to the table named a row;
+    and ``null_cells`` (by the linked column) and ``unlinked`` (by the link column) count
+    linking rows, summed over the linking tables.
 
     ``no_link``, ``not_link`` and ``unresolved`` are per file-link column: rows whose link
     cell held nothing, rows whose cell held something that is not a DRS URI (which
@@ -419,7 +420,7 @@ def _check_dataset(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
             problems.append(f"{dataset}/{table}: no row of this type in the manifest")
             continue
         if table in keys:
-            problems += _key_problems(f"{dataset}/{table}", table, keys[table])
+            problems += _key_problems(f"{dataset}/{table}", table, keys[table], (table, row_key(table)) in not_keys)
         problems += [
             f"{dataset}/{table}: {column} holds {value!r}, not a string naming a row (#562)"
             for (t, column), value in not_keys.items()
@@ -475,9 +476,10 @@ def _check_dataset(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
     return problems
 
 
-def _key_problems(at: str, table: str, keys: Counter) -> list[str]:
-    """A linked table's keys against what a link needs (#562): some row carrying one, each naming one row."""
-    if not keys:
+def _key_problems(at: str, table: str, keys: Counter, odd: bool) -> list[str]:
+    """A linked table's string keys against what a link needs (#562): some row carrying one, each naming
+    one row. ``odd`` is whether a row holds a key that is not a string, which is reported on its own."""
+    if not keys and not odd:
         return [f"{at}: no row of this type carries {row_key(table)!r}, the key a link to it names"]
     twice = sorted(key for key, n in keys.items() if n > 1)
     return [f"{at}: {len(twice):,} {row_key(table)} values name several rows (e.g. {twice[0]!r})"] if twice else []
@@ -594,8 +596,8 @@ def import_dataset(
     (:func:`file_index`: its ``anvil_file`` DRS URIs, and their storage paths where a folder
     entry reads them), then one per table a value is read from (``SlotMap.source_tables``) to
     write that table's file: over each mapped table reading it, which is the table itself for
-    its own cells and names, or the tables linking to it (#562), whose rows are first read by
-    key (:func:`linked_rows`). Per-table passes rather than one pass fanning out to every
+    its own cells and names, or the tables linking to it (#562), the linked table's rows first
+    read by key (:func:`linked_rows`). Per-table passes rather than one pass fanning out to every
     table's writer, so each file keeps ``write_evidence_file``'s write-then-rename guarantee on
     its own; each pass parses only the lines that name its table (``iter_verbatim_entities``'s gate).
 
@@ -642,7 +644,7 @@ def import_dataset(
     target_key = JoinKeyEnum(JOIN_KEY_DRS_URI)
     fetched = fetched_at.isoformat()
     # Each table a source reads through a link (#562), its rows by key.
-    linked = {table: linked_rows(path, table) for table in slot_map.linked_tables(dataset)}
+    linked = {table: linked_rows(path, dataset, table) for table in slot_map.linked_tables(dataset)}
     # The (reader, source table) pairs that yielded a row: each must, as each mapped table did before links.
     yielded: set[tuple[str, str]] = set()
     tables = []
@@ -691,7 +693,7 @@ def import_dataset(
     return DatasetImport(dataset=dataset, generation=stamp, directory=directory, tables=tables)
 
 
-def linked_rows(path: Path, table: str) -> dict[str, dict]:
+def linked_rows(path: Path, dataset: str, table: str) -> dict[str, dict]:
     """The rows of ``table``, by the key a row linking to one names it with (:func:`~.slot_map.row_key`, #562).
 
     A row with no key is no row a link can name and is left out; two rows under one key are
@@ -703,7 +705,9 @@ def linked_rows(path: Path, table: str) -> dict[str, dict]:
         if value is None:
             continue
         if value in rows:
-            raise ValueError(f"{table}: {row_key(table)} {value!r} names two rows, so a link to it names no one row")
+            raise ValueError(
+                f"{dataset}/{table}: {row_key(table)} {value!r} names two rows, so a link to it names no one row"
+            )
         rows[value] = row
     return rows
 

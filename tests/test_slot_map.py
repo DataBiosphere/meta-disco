@@ -530,3 +530,21 @@ def test_a_linked_cell_may_share_a_name_with_a_column_of_the_linking_table(tmp_p
     assert load(tmp_path, text).entries[0].slots["platform"][0].value == "pgen"
     folder = FOLDER + "        platform:\n          - {cell: seq_filename, row_of: sequencing_dataset}\n"
     assert load(tmp_path, folder).linked_tables("D") == ["sequencing_dataset"]
+
+
+def test_no_link_to_a_linked_table_is_read_as_a_value_on_either_side_anywhere_in_the_dataset(tmp_path):
+    """The link column is a pointer whichever row holds it, and whichever of the dataset's tables reads it."""
+    two = LINKED + "        assay_type:\n          - {cell: x, row_of: sample_set}\n"
+    assert load(tmp_path, two).linked_tables("D") == ["sequencing_dataset", "sample_set"]
+    linked_side = two + "        data_modality:\n          - {cell: sample_set_id, row_of: sequencing_dataset}\n"
+    refuses(tmp_path, linked_side, "cell 'sample_set_id' is a link to another table's row")
+    elsewhere = LINKED + "    vcf:\n      path:\n        assay_type:\n          - {cell: sequencing_dataset_id}\n"
+    refuses(tmp_path, elsewhere, "D/vcf/path assay_type: cell 'sequencing_dataset_id' is a link")
+
+
+def test_two_sources_differing_where_a_dot_falls_are_two_sources(tmp_path):
+    text = LINKED.replace(
+        "          - {cell: seq_platform, row_of: sequencing_dataset}\n",
+        "          - {cell: c, row_of: a.b}\n          - {cell: b.c, row_of: a}\n",
+    )
+    assert len(load(tmp_path, text).entries[0].slots["platform"]) == 2
