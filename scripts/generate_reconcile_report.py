@@ -1489,6 +1489,7 @@ def _inheritance_section(rows: list[dict] | None) -> list[str]:
 # The conflicts TSV's columns (#698): one row per file and source attribution, for sending to the repository.
 CONFLICT_COLUMNS = (
     "dataset",
+    "record_key",
     "file_id",
     "file_name",
     "outcome",
@@ -1516,6 +1517,7 @@ def conflict_tsv(conflicts) -> str:
                 writer.writerow(
                     (
                         row["dataset_title"],
+                        row.get("record_key"),
                         row.get("file_id"),
                         row["file_name"],
                         row["outcome"],

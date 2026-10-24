@@ -254,13 +254,13 @@ def test_the_conflicts_tsv_has_a_line_per_file_source_and_attribution(tmp_path, 
     go(run, tmp_path, evidence, table)
     header_line, *lines = conflict_tsv(iter_reconciled_artifact(run, SAMPLE_CONFLICTS_FILE)).splitlines()
     assert header_line.split("\t") == list(CONFLICT_COLUMNS)
-    by_kind = {
-        cells[4]: dict(zip(CONFLICT_COLUMNS, cells, strict=True)) for cells in (row.split("\t") for row in lines)
-    }
+    rows = [dict(zip(CONFLICT_COLUMNS, row.split("\t"), strict=True)) for row in lines]
+    by_kind = {row["source_kind"]: row for row in rows}
     assert set(by_kind) == {"header", ACTIVITY}
     assert by_kind["header"]["samples"] == "coriell:HG01105"
     assert by_kind[ACTIVITY] == {
         "dataset": DATASET,
+        "record_key": "file-2",
         "file_id": "file-2",
         "file_name": "f2.bam",
         "outcome": CONFLICT,
@@ -393,7 +393,8 @@ def test_each_activity_naming_a_file_is_one_attribution_and_one_tsv_line(tmp_pat
     (activity,) = [s for s in conflict["sources"] if s["kind"] == ACTIVITY]
     assert [a["activity_id"] for a in activity["named_by"]] == ["a1", "a2"]
     _, *lines = conflict_tsv([conflict]).splitlines()
-    assert [cells.split("\t")[9] for cells in lines if cells.split("\t")[4] == ACTIVITY] == ["a1", "a2"]
+    rows = [dict(zip(CONFLICT_COLUMNS, row.split("\t"), strict=True)) for row in lines]
+    assert [row["activity_id"] for row in rows if row["source_kind"] == ACTIVITY] == ["a1", "a2"]
 
 
 def test_a_conflict_with_its_parents_samples_lists_the_parent_as_a_source(tmp_path, run, evidence, table):
@@ -462,4 +463,30 @@ def test_a_parent_a_table_names_whom_no_file_reaches_is_an_unreached_donor(tmp_p
     go(run, tmp_path, evidence, table)
     assert list(iter_reconciled_artifact(run, UNREACHED_ENTITIES_FILE)) == [
         {"dataset": DATASET, "kind": "donor", "identifier": {"id": "HG00095", "namespace": "coriell"}},
+    ]
+
+
+def test_two_files_of_one_name_and_no_file_id_are_told_apart_in_the_tsv_by_record_key():
+    """HPRC's records carry no file_id; their record key, the md5, is what tells two same-named files apart."""
+    source = {
+        "kind": "header",
+        "named_by": [{"source_type": "content_read", "rule_id": code_rules.BAM_READ_GROUP_SAMPLES.id}],
+        "samples": [{"id": "HG00096", "namespace": "coriell"}],
+    }
+    conflicts = [
+        {
+            "dataset_title": None,
+            "file_name": "reads.bam",
+            "record_key": md5,
+            "file_id": None,
+            "outcome": CONFLICT,
+            "sources": [source],
+        }
+        for md5 in ("md5-a", "md5-b")
+    ]
+    _, *lines = conflict_tsv(conflicts).splitlines()
+    rows = [dict(zip(CONFLICT_COLUMNS, line.split("\t"), strict=True)) for line in lines]
+    assert [(row["record_key"], row["file_id"], row["file_name"]) for row in rows] == [
+        ("md5-a", "", "reads.bam"),
+        ("md5-b", "", "reads.bam"),
     ]
