@@ -367,7 +367,7 @@ Every authored translation rule, by slot and most files first: the source values
 
 ## Lineage: what each step is (the activity map)
 
-Lineage lines (a file made from a parent) whose step no authored activity-map row names yet, so reconcile cannot say what the parent passes on. One entry per key: the source's table, its words for the step, the columns the child and parent came from, and the data type the same table gives each. 28 keys listed, from the lineage evidence.
+Lineage lines (a file made from a parent) whose step no authored activity-map row names yet, so reconcile cannot say what the parent passes on. One entry per key: the source's table, its words for the step, the columns the child and parent came from, and the data type the same table gives each. 29 keys listed, from the lineage evidence.
 
 ### Repository activity: the repository's own record of each step
 
@@ -387,6 +387,7 @@ Lineage lines (a file made from a parent) whose step no authored activity-map ro
 | 634 | `'anvil_activity'` | `'Quantificatioin: salmon'` | `'generated_file_id'` | `'used_biosample_id'` |  |  | `AnVIL_ENCORE_293T, AnVIL_ENCORE_RS293` | activity.anvil_activity_quantificatioin_salmon_generated_file_id_used_biosample_id |
 | 16 | `'anvil_activity'` | `''` | `'generated_file_id'` | `'used_biosample_id'` |  |  | `AnVIL_IGVF_Mouse_R1` | activity.anvil_activity_generated_file_id_used_biosample_id_ca9968 |
 | 8 | `'anvil_activity'` | `'Merger: multiple FASTQ files'` | `'generated_file_id'` | `'used_biosample_id'` |  |  | `AnVIL_ENCORE_293T` | activity.anvil_activity_merger_multiple_fastq_files_generated_file_id_used_biosample_id |
+| 6 | `'anvil_sequencingactivity'` | `'Sequencing'` | `'generated_file_id'` | `'used_biosample_id'` |  |  | `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` | — |
 
 ### Submitter: the submitter tables
 
