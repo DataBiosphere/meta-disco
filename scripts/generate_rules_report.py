@@ -188,7 +188,7 @@ SAMPLE_RULES_NOTE = (
     "Rules that say which samples a file's data comes from, rather than giving a field an answer (#357). The code "
     "rules read the file's own content (a header, a sample map's rows, a workspace's `callset.json`), or at "
     "reconcile its parent's settled "
-    "samples (#668); the identifier rules (`rules/sample_namespaces.yaml`) say which strings are "
+    "samples (#668) or the biosamples AnVIL's record of its step names (#698); the identifier rules (`rules/sample_namespaces.yaml`) say which strings are "
     "samples and in which namespace, and are what a submitter table's sample, and a donor's parent (#582), is "
     "cited by. The donor rule `family_id_as_written` gives a donor its family id, and the sample rule "
     "`anatomical_site_as_written` a sample its site (#699). Counted by the sources a reconciled record's "
@@ -587,7 +587,8 @@ def _names(rule) -> str:
 
 
 def sample_rule_rows() -> list[dict]:
-    """The sample and donor rules: ``code_rules.SAMPLE_RULES`` (#357; the file-content readers and the parent's, #668),
+    """The sample and donor rules: ``code_rules.SAMPLE_RULES`` (#357; the file-content readers, the parent's, #668, and
+    the activity link's, #698),
     ``code_rules.ENTITY_RULES`` (#582), ``code_rules.IDENTITY_CHECKS`` (#718), then each identifier rule."""
     rows = [
         {"id": r.id, "reads": r.reads, "rationale": r.rationale, "defined_in": r.module}

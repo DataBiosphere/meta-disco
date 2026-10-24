@@ -69,7 +69,8 @@ make classify
 make classify-bam        # or classify-vcf / classify-fastq / classify-fasta / classify-gfa
 
 # Reconcile a stored run again (RUN_DIR=, default the latest), then render its
-# reconcile_report.json as docs/reconcile-report.md + docs/reconcile-dashboard.html (#395)
+# reconcile_report.json as docs/reconcile-report.md + docs/reconcile-dashboard.html (#395), and its
+# sample conflicts as docs/sample-conflicts.tsv (#698)
 make reconcile
 make reconcile-report
 
@@ -315,7 +316,7 @@ evidence}` entry — plus the controlled vocabulary:
     parents than inference names there, #609; a generic `Activity` beside a specific one naming another
     parent) gives no
     `generated_by`; both are counted in the report's `lineage` block, never written on a record. A
-    sample parent gives no input (no issue yet). A file whose only steps are generic gets none, counted as
+    sample parent gives no input (#701); an activity table's can name the file's samples (#698). A file whose only steps are generic gets none, counted as
     `generic_only`. The inference artifact's `generated_by` is never changed.
   - **Reconcile carries each parent's answer across that step** (#571, contract 4.9,
     `reconcile_inherit`): for each input role and each dimension its activity passes, the
@@ -448,10 +449,18 @@ evidence}` entry — plus the controlled vocabulary:
     `sample_lists`. A submitter table states it through the slot map, one cell per column
     (`samples` is the one non-dimension in `models.EVIDENCE_FIELDS`, never translated by the
     value map), and `make check-slot-map` refuses a column whose files' names mostly name
-    another sample. Reconcile (`reconcile_samples`) settles the two by the step rule:
+    another sample. AnVIL's record of the step that generated a file names them too (#698): an
+    `anvil_activity` (or NIA_CARD's `anvil_sequencingactivity`) lineage line whose parent is a biosample,
+    tied to a sample record through its `repository_ids`, all of a file's biosamples or none
+    (`reconcile_samples.activity_sources`, `code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE`). Reconcile
+    (`reconcile_samples`) settles them by the step rule:
     agreeing sources are each listed, different samples give none, counted as a conflict or
     as incomparable; a file name is a check, never a source. It writes
-    `reconciled/sample_lists.ndjson.gz`. A derived file takes its parent's samples across a step whose
+    `reconciled/sample_lists.ndjson.gz`, and three lists the report counts per dataset:
+    `sample_conflicts.ndjson.gz` (each conflicting file with every source; `make reconcile-report`
+    also writes it as `docs/sample-conflicts.tsv`, to send to AnVIL), `files_without_samples.ndjson.gz`
+    and `unreached_entities.ndjson.gz` (samples and donors a dataset's entity evidence names that no
+    file of it reaches). A derived file takes its parent's samples across a step whose
     role declares `passes_samples` in `rules/activities.yaml` (index, checksum, QC report, coverage track,
     cohort merge from its sample map, whose own rows name its samples), as one more source credited
     `samples_inherited_from_parent` (#668, contract 4.9); across any other step the child keeps its own and a

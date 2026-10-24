@@ -53,7 +53,7 @@ help:
 	@echo "  make validation-report  Generate validation report against ground truth"
 	@echo "  make corpus-diff        Compare two corpus generations (snapshots by md5, runs by label; ARGS=--artifact ...)"
 	@echo "  make reconcile          Reconcile a stored run with source evidence into <run>/reconciled/ (RUN_DIR=, DEPLOYMENT=)"
-	@echo "  make reconcile-report   Render a reconciled run's report to docs/reconcile-report.md + dashboard (RUN_DIR=, PREVIOUS=)"
+	@echo "  make reconcile-report   Render a reconciled run's report to docs/reconcile-report.md + dashboard + sample-conflicts.tsv (RUN_DIR=, PREVIOUS=)"
 	@echo "  make rules-report       List every rule, its basis and how often it fired in a reconciled run (RUN_DIR=)"
 	@echo "  make all-reports        Generate every report (hprc, coverage, validation, consistency, unprocessable, reconcile, review queue, rules; RUN_DIR= for the five that read a run, PREVIOUS= for reconcile)"
 	@echo ""
@@ -383,7 +383,9 @@ reconcile:
 	uv run python scripts/reconcile.py $(if $(RUN_DIR),--run $(RUN_DIR)) $(if $(DEPLOYMENT),--deployment $(DEPLOYMENT)) $(ARGS)
 
 # Render a reconciled run's reconcile_report.json (#395) as docs/reconcile-report.md and
-# docs/reconcile-dashboard.html, reading nothing else of the run. RUN_DIR defaults to the
+# docs/reconcile-dashboard.html, and its reconciled/sample_conflicts.ndjson.gz as
+# docs/sample-conflicts.tsv, one line per file, source and attribution, to send to AnVIL (#698); it reads
+# nothing else of the run. RUN_DIR defaults to the
 # latest run, which must have been reconciled (`make reconcile`); PREVIOUS is the run to
 # compare with, by default the newest earlier run holding a reconcile report.
 reconcile-report:

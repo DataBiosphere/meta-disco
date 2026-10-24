@@ -32,6 +32,14 @@ datasets:
     anvil_activity: *fss_activity
   ANVIL_nhp_dGTEx_V1:
     anvil_activity: *fss_activity
+  # NIA CARD's transform wrote its steps to the typed sequencing activity table instead: 6 rows, each
+  # generating one file (a hapdup_contigs_1.fasta assembly) from one biosample, no used_file_id (#698).
+  ANVIL_NIA_CARD_Coriell_Cell_Lines_Open:
+    anvil_sequencingactivity:
+      - child: {column: generated_file_id, key: file_id}
+        parent: {column: used_biosample_id, key: biosample_id}
+        raw_activity: {cell: activity_type}
+        activity_id: {cell: sequencingactivity_id}
   ANVIL_T2T:
     anvil_activity: *fss_activity
     participant:

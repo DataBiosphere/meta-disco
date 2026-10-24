@@ -220,6 +220,22 @@ EXTERNAL_LISTS_FILE = "external_lists.ndjson.gz"
 # The lists inference rebuilt that the run's steps read through (#726, `reconcile_rebuilt`): a
 # `RebuiltList` per line, where an input's `parent_ref` points.
 REBUILT_LISTS_FILE = "rebuilt_lists.ndjson.gz"
+# Diagnostics the report counts, not records the indexer reads (#698): files whose sources named
+# different samples, files no source names a sample for, and samples and donors no file reaches.
+SAMPLE_CONFLICTS_FILE = "sample_conflicts.ndjson.gz"
+FILES_WITHOUT_SAMPLES_FILE = "files_without_samples.ndjson.gz"
+UNREACHED_ENTITIES_FILE = "unreached_entities.ndjson.gz"
+# Every file reconcile writes beside the records, in its line format.
+RECONCILED_SIDE_FILES = (
+    SAMPLE_LISTS_FILE,
+    DONORS_FILE,
+    SAMPLES_FILE,
+    EXTERNAL_LISTS_FILE,
+    REBUILT_LISTS_FILE,
+    SAMPLE_CONFLICTS_FILE,
+    FILES_WITHOUT_SAMPLES_FILE,
+    UNREACHED_ENTITIES_FILE,
+)
 # The gzip level. On a run's BAM file, 6 measured nearly as small as 9 (25x vs 26x), and 9
 # took 1.6-1.7 times as long to write; 1 was faster still but compressed only 14x.
 RECONCILED_GZIP_LEVEL = 6
@@ -257,22 +273,15 @@ def iter_reconciled_records(run_dir: Path):
     :func:`iter_records` skips one a run did not write.
     Raises FileNotFoundError when the run has no reconciled artifact at all — reading
     nothing would pass for a run with no coverage. Raises ValueError, before any record is
-    yielded, when the artifact holds a name other than the reconciled names, ``REPORT_FILE``,
-    ``SAMPLE_LISTS_FILE``, ``DONORS_FILE``, ``SAMPLES_FILE``, ``EXTERNAL_LISTS_FILE`` and ``REBUILT_LISTS_FILE`` (dot-files aside), such as an uncompressed ``.ndjson`` written before
+    yielded, when the artifact holds a name other than the reconciled names, ``REPORT_FILE`` and
+    ``RECONCILED_SIDE_FILES`` (dot-files aside), such as an uncompressed ``.ndjson`` written before
     #554, whose records this reader would otherwise skip as unwritten; and, when it is
     reached, on a file that is not gzip or is cut short.
     """
     directory = run_dir / RECONCILED_DIR
     if not directory.is_dir():
         raise FileNotFoundError(f"No reconciled artifact in {run_dir}. Run 'make reconcile' first.")
-    expected = {reconciled_name(fname) for fname in CLASSIFICATION_FILES} | {
-        REPORT_FILE,
-        SAMPLE_LISTS_FILE,
-        DONORS_FILE,
-        SAMPLES_FILE,
-        EXTERNAL_LISTS_FILE,
-        REBUILT_LISTS_FILE,
-    }
+    expected = {reconciled_name(fname) for fname in CLASSIFICATION_FILES} | {REPORT_FILE, *RECONCILED_SIDE_FILES}
     unexpected = sorted(p.name for p in directory.iterdir() if not p.name.startswith(".") and p.name not in expected)
     if unexpected:
         raise ValueError(
@@ -297,9 +306,8 @@ def iter_reconciled_sample_lists(run_dir: Path):
 def iter_reconciled_artifact(run_dir: Path, name: str):
     """Yield each line after the envelope of one reconciled artifact file, ``run_dir/reconciled/<name>``.
 
-    For the files beside the records: ``SAMPLE_LISTS_FILE``, ``DONORS_FILE``, ``SAMPLES_FILE``
-    (#693), ``EXTERNAL_LISTS_FILE`` (#710), ``REBUILT_LISTS_FILE`` (#726). Line 1 is the envelope, checked and skipped. Raises FileNotFoundError when the
-    file is absent.
+    For the files beside the records, ``RECONCILED_SIDE_FILES``. Line 1 is the envelope, checked and skipped.
+    Raises FileNotFoundError when the file is absent.
     """
     path = run_dir / RECONCILED_DIR / name
     if not path.exists():

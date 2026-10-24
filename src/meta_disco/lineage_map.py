@@ -34,7 +34,8 @@ identifier beside it.
 **One table, one child key.** A table's lines go to one file, whose envelope names one
 ``target_key``, so every link of a table names its child the same way.
 
-**The kind of source follows from the table.** ``anvil_activity`` is the repository's
+**The kind of source follows from the table.** ``anvil_activity``, and the typed
+``anvil_sequencingactivity`` (``azul_manifest.ACTIVITY_TABLES``, #698), are the repository's
 own record of a step (``repository_activity``); any other ``anvil_*`` table is AnVIL's
 harmonized data and has no lineage to map, and is refused; a submitter's table is
 ``repository_metadata``.
@@ -49,7 +50,7 @@ from importlib.resources import files
 
 import yaml
 
-from .azul_manifest import HARMONIZED_PREFIX, VERBATIM_ACTIVITY
+from .azul_manifest import ACTIVITY_TABLES, HARMONIZED_PREFIX
 from .models import (
     JOIN_KEY_DRS_URI,
     JOIN_KEY_FILE_ID,
@@ -120,8 +121,8 @@ class LineageMap:
 
 
 def source_type_of(table: str) -> str:
-    """The kind of source a table's lines are: ``repository_activity`` for ``anvil_activity``, else ``repository_metadata``."""
-    return SOURCE_REPOSITORY_ACTIVITY if table == VERBATIM_ACTIVITY else SOURCE_REPOSITORY_METADATA
+    """The kind of source a table's lines are: ``repository_activity`` for one of ``ACTIVITY_TABLES``, else ``repository_metadata``."""
+    return SOURCE_REPOSITORY_ACTIVITY if table in ACTIVITY_TABLES else SOURCE_REPOSITORY_METADATA
 
 
 def default_lineage_map_resource():
@@ -136,7 +137,7 @@ def load_lineage_map(source: Readable | None = None) -> LineageMap:
     """Load and check a lineage map, the bundled one by default; ``ValueError`` naming where it is wrong.
 
     Checked here: the entry shape, the keys each side may hold, one child key per
-    table, no ``notes``, no harmonized table but ``anvil_activity``. Whether the
+    table, no ``notes``, no harmonized table but ``ACTIVITY_TABLES``. Whether the
     columns exist and hold what the map says is ``anvil_lineage.check``'s, against the
     manifests.
     """
@@ -148,8 +149,10 @@ def load_lineage_map(source: Readable | None = None) -> LineageMap:
         expect_mapping(tables, f"{_WHERE} {dataset}", "table")
         for table, entries in tables.items():
             at = f"{_WHERE} {dataset}/{table}"
-            if table.startswith(HARMONIZED_PREFIX) and table != VERBATIM_ACTIVITY:
-                raise ValueError(f"{at}: a harmonized table other than {VERBATIM_ACTIVITY!r} states no lineage")
+            if table.startswith(HARMONIZED_PREFIX) and table not in ACTIVITY_TABLES:
+                raise ValueError(
+                    f"{at}: a harmonized table other than {' or '.join(ACTIVITY_TABLES)} states no lineage"
+                )
             if not isinstance(entries, list) or not entries:
                 raise ValueError(f"{at}: must be a non-empty list of links, not {type(entries).__name__}")
             table_links = [_link(dataset, table, entry, f"{at} link {i}") for i, entry in enumerate(entries, 1)]

@@ -46,12 +46,12 @@ from pathlib import Path
 from typing import Any
 
 from .azul_manifest import (
+    ACTIVITY_TABLES,
     ANVIL_FILE_HANDLE_COLUMNS,
     FORMAT_COMPACT,
     FORMAT_VERBATIM,
     FORMATS,
     HARMONIZED_PREFIX,
-    VERBATIM_ACTIVITY,
     VERBATIM_BIOSAMPLE,
     VERBATIM_FILE,
     compact_header,
@@ -706,7 +706,7 @@ def _verbatim_reach(
         if not entity_type.startswith(HARMONIZED_PREFIX):
             named[entity_type] |= _file_ids_in(value, file_keys)
             continue
-        if entity_type != VERBATIM_ACTIVITY:
+        if entity_type not in ACTIVITY_TABLES:
             continue
         used = _id_list(value, "used_file_id", path)
         generated = _id_list(value, "generated_file_id", path)

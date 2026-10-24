@@ -87,6 +87,7 @@ from .models import (
     UNMAPPED,
     field_detail,
     field_label,
+    field_value,
     settled_value,
     stored_value,
 )
@@ -94,11 +95,14 @@ from .output_utils import (
     CLASSIFICATION_FILES,
     DONORS_FILE,
     EXTERNAL_LISTS_FILE,
+    FILES_WITHOUT_SAMPLES_FILE,
     REBUILT_LISTS_FILE,
     RECONCILED_DIR,
     REPORT_FILE,
+    SAMPLE_CONFLICTS_FILE,
     SAMPLE_LISTS_FILE,
     SAMPLES_FILE,
+    UNREACHED_ENTITIES_FILE,
     find_latest_run,
     iter_records,
     iter_run_file_contents,
@@ -1322,7 +1326,11 @@ def reconcile_run(
     # The first pass: each record's own settled answers and samples, and each child's step;
     # and the sample lists inference's records point to (#357).
     graph = _Graph()
-    samples = reconcile_samples.SampleReport(rules)
+    # The repository's links from each file to its biosamples (#698), each file's a source of its samples.
+    activity = reconcile_samples.activity_sources(lineage, entity_evidence.samples_by_repository_id)
+    lineage.biosamples.clear()  # held in `activity` now; the lines are not read again
+    pending.biosample_links.clear()
+    samples = reconcile_samples.SampleReport(rules, activity=activity)
     seen: set[str] = set()
     inference_lists: dict[str, dict] = {}
     # The external lists first (#710): each is held under its address, as a record is under its key.
@@ -1360,7 +1368,12 @@ def reconcile_run(
             reconciled = reconcile_record(record, record_slots, inheritance.declarations.get(identity))
             reconciled["generated_by"], conflict = step_of(record, identity)
             reconciled["samples"] = samples.settle(
-                record, inference_lists, joined.samples.get(identity, []), identity, reconciled["generated_by"]
+                record,
+                inference_lists,
+                joined.samples.get(identity, []),
+                identity,
+                reconciled["generated_by"],
+                field_value(reconciled, "data_type"),
             )
             report.add(reconciled, record_slots)
             report.add_step(reconciled, conflict, lineage.steps.get(identity, []))
@@ -1383,6 +1396,9 @@ def reconcile_run(
     written = {entry["list_id"] for entry in run_lists}
     write_reconciled_file(staging / EXTERNAL_LISTS_FILE, header, (h.row(written) for h in external_held))
     write_reconciled_file(staging / REBUILT_LISTS_FILE, header, (rebuilt[ref] for ref in sorted(rebuilt)))
+    write_reconciled_file(staging / SAMPLE_CONFLICTS_FILE, header, samples.conflicts)
+    write_reconciled_file(staging / FILES_WITHOUT_SAMPLES_FILE, header, samples.without_samples)
+    write_reconciled_file(staging / UNREACHED_ENTITIES_FILE, header, entities.unreached)
 
     full_report = {
         **header,

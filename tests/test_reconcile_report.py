@@ -37,8 +37,8 @@ def reconcile(tmp_path: Path, name: str, evidence: Path, table, records: list[di
 
 
 def render(tmp_path: Path, *argv: str) -> tuple[int, str, str]:
-    md, html = tmp_path / "report.md", tmp_path / "dashboard.html"
-    code = rr.main([*argv, "--markdown", str(md), "--html", str(html)])
+    md, html, tsv = tmp_path / "report.md", tmp_path / "dashboard.html", tmp_path / "sample-conflicts.tsv"
+    code = rr.main([*argv, "--markdown", str(md), "--html", str(html), "--conflicts-tsv", str(tsv)])
     return code, md.read_text() if md.exists() else "", html.read_text() if html.exists() else ""
 
 
@@ -613,10 +613,10 @@ def test_the_samples_section_counts_how_each_dataset_settled(tmp_path, evidence,
     assert "## Samples: whose data each file holds" in md
     header = (
         "| dataset | header named | header unrecognised | header no_sample | header unread | agreed | header_only "
-        "| table_only | inherited |"
+        "| table_only | activity_only | inherited |"
     )
     assert header in md
-    assert f"| `{DATASET}` | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 1 | 0 |" in md
+    assert f"| `{DATASET}` | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 1 | 0 |" in md
     assert "None in this run." in md
     assert "`Sample` (1)" in md
     # Every table value no rule recognises, with its table, column and files (contract 5.2).
