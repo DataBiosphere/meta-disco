@@ -37,9 +37,9 @@ AnVIL's `anvil_activity` says 1,314 files of a child's parents were made from th
 | `sample.mat_ilmn` → `maternal_id` | `HG01105` |
 | `anvil_activity` `2a80a7ab-5f73-f475-e77b-5ffc98508fab` → `used_biosample_id` | `HG01106` (the child) |
 
-**Scale.** 1,314 files, from 50 child rows and 100 parent pairings. HG005's row alone carries 1,212: 612 `NA24695_*` FASTQs of HG007 (the mother) and 600 `NA24694_*` of HG006 (the father). Four `.md5` checksums of those files are affected too. Each file is listed with every source in `docs/sample-conflicts.tsv`, one line per file, source and attribution; the TSV also holds issue 2's two AnVIL_HPRC_R2 files and issue 10's file.
+**Scale.** 1,314 files, from 50 child rows and 100 parent pairings. HG005's row alone carries 1,212: 612 `NA24695_*` FASTQs of HG007 (the mother) and 600 `NA24694_*` of HG006 (the father). The 1,314 are listed with every source in `docs/sample-conflicts.tsv`, one line per file, source and attribution; the TSV also holds issue 2's two AnVIL_HPRC_R2 files and issue 10's file. Four `.md5` checksums of those files are affected too: they take nothing from their conflicting parents, so they have no sample, and meta-disco lists them in `reconciled/files_without_samples.ndjson.gz` with the parent's key (`parent_conflict`), not in the TSV.
 
-**Effect.** Anyone joining files to biosamples through AnVIL's activities finds the parents' reads under the child. In meta-disco these files are now conflicts and name no sample, so 1,318 ANVIL\_HPRC files lose their donor.
+**Effect.** Anyone joining files to biosamples through AnVIL's activities finds the parents' reads under the child. In meta-disco these files are now conflicts and name no sample, so 1,318 ANVIL\_HPRC files lose their donor: the 1,314 and the four checksums.
 
 **Suggested fix.** In AnVIL's HPRC transform, make a biosample for each parent named by `maternal_id` / `paternal_id`. Link the `mat_ilmn` and `pat_ilmn` files to the parent's biosample, not the child's.
 
@@ -129,7 +129,7 @@ Two of the 279 SGDP samples in the `SGDP_*_sample` tables don't match what their
 | Sample | Table says | What we found |
 | --- | --- | --- |
 | `simons_data_sample_187` | `sgdp_id` `S_Palestinian-2`, karyotype `XX` | The `sgdp_id` is right: its genotypes match HGDP00725, which is S_Palestinian-2's genome, recorded as male by SGDP and HGDP. Its own chrX gVCF shows one X: 155 heterozygous against 921 homozygous-alternate calls on chrX 40–42 Mb, where a female control has 1,394 against 420. So `XX` looks wrong. It may be a male cell line that lost its Y; that is not checked. |
-| `simons_data_sample_273` | `sgdp_id` `S_Naxi-2` | SGDP's metadata has `S_Naxi-1` and `S_Naxi-3` but no `S_Naxi-2`, and neither release holds it. The sample matches no public genome; its nearest, `S_Naxi-3`, differs at 2.6% of sites. |
+| `simons_data_sample_273` | `sgdp_id` `S_Naxi-2` | SGDP's metadata has `S_Naxi-1` and `S_Naxi-3` but no `S_Naxi-2`, and neither release holds it. The sample matches no genome in SGDP's or HGDP's release (compared over a chr22 window); its nearest, `S_Naxi-3`, differs at 2.6% of sites. |
 
 **Effect.** `simons_data_sample_273` reaches no donor, so its 118 single-sample files, and every joint-called file naming it, have a sample with no donor.
 
