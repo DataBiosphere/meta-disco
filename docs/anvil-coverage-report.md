@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-10-24 12:51:35**
+Classification run: **2026-10-24 15:15:07**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,088** files.
@@ -27,7 +27,7 @@ Processed **708,088** files.
 | **Platform** | 70,125 (9.9%) | 637,963 (90.1%) | 0 (0.0%) |
 | **Reference Assembly** | 292,948 (41.4%) | 415,132 (58.6%) | 8 (0.0%) |
 | **Assay Type** | 28,145 (4.0%) | 679,943 (96.0%) | 0 (0.0%) |
-| **Instrument Model** | 23,202 (3.3%) | 684,886 (96.7%) | 0 (0.0%) |
+| **Instrument Model** | 35,596 (5.0%) | 672,492 (95.0%) | 0 (0.0%) |
 | **Variant Kind** | 416,503 (58.8%) | 291,585 (41.2%) | 0 (0.0%) |
 | **Variant Origin** | 416,515 (58.8%) | 291,573 (41.2%) | 0 (0.0%) |
 
@@ -354,8 +354,8 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 23,202 | 3.3% |
-| **Not classified** | 684,886 | 96.7% |
+| **Classified** | 35,596 | 5.0% |
+| **Not classified** | 672,492 | 95.0% |
 | **Conflict** | 0 | 0.0% |
 
 ### What's not classified?
@@ -368,7 +368,6 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | .txt | 42,479 | `No rule determined a value for instrument_model` |
 | .csi | 41,186 | `No reason recorded` |
 | .fastq | 21,270 | `No rule determined a value for instrument_model` |
-| .fast5 | 12,509 | `No rule determined a value for instrument_model` |
 | .bed | 11,523 | `No rule determined a value for instrument_model` |
 | .cram | 10,555 | `No rule determined a value for instrument_model` |
 | .crai | 10,317 | `No reason recorded` |
@@ -390,6 +389,7 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | .h5ad | 350 | `No rule determined a value for instrument_model` |
 | .paf | 297 | `No rule determined a value for instrument_model` |
 | .sam | 192 | `No rule determined a value for instrument_model` |
+| .fast5 | 115 | `No rule determined a value for instrument_model` |
 | .csv | 21 | `No rule determined a value for instrument_model` |
 | .pod5 | 11 | `No rule determined a value for instrument_model` |
 | .dict | 9 | `No rule determined a value for instrument_model` |
@@ -405,8 +405,9 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 
 | Instrument Model | count | % | extensions |
 |---|---:|---:|---|
-| `not_classified` | 684,886 | 96.7% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.bed (11,523)<br>.cram (10,555)<br>.crai (10,317)<br>.bam (6,090)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.h5ad (350)<br>.paf (297)<br>.sam (192)<br>.csv (21)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
+| `not_classified` | 672,492 | 95.0% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.fastq (21,270)<br>.bed (11,523)<br>.cram (10,555)<br>.crai (10,317)<br>.bam (6,090)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.h5ad (350)<br>.paf (297)<br>.sam (192)<br>.fast5 (115)<br>.csv (21)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
 | `not_applicable` | 22,290 | 3.1% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.fa (940)<br>.gfa (326)<br>.fasta (38)<br>.tsv (24)<br>.xg (8)<br>.gbwt (6)<br>.fna (2)<br>.gbz (2) |
+| `PromethION` | 12,394 | 1.8% | .fast5 (12,394) |
 | `Revio` | 684 | 0.1% | .bam (684) |
 | `Illumina iScan` | 160 | 0.0% | .idat (160) |
 | `Illumina NovaSeq X` | 68 | 0.0% | .cram (68) |
