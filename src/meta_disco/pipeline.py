@@ -28,6 +28,7 @@ from .producers import producer_for
 from .provenance import run_provenance
 from .record_keys import record_key
 from .records import (
+    CONTENT_OUTCOMES_KEY,
     REBUILT_LISTS_KEY,
     SAMPLE_LISTS_KEY,
     SAMPLE_OUTCOMES_KEY,
@@ -109,7 +110,7 @@ class RecordOutcome(NamedTuple):
     The three flags are mutually exclusive and only one, at most, is set:
     ``validation_failed`` (failed the input contract), ``was_cached`` (evidence already
     on disk), ``content_unreadable`` (fetch failed; the record is fully not_classified,
-    #293, or for a samples-only type keeps its answers from the name, #605), or none of these (a fresh fetch). Named so the fields cannot be transposed
+    #293, or for a type whose answers come from its name keeps them, #605), or none of these (a fresh fetch). Named so the fields cannot be transposed
     at the unpack sites.
     """
 
@@ -125,6 +126,9 @@ class RecordOutcome(NamedTuple):
     # (``FileTypeConfig.samples``, #357); None for every other type, for a file not read, and
     # for a file its type's sample reader does not read (``SampleReader.reads``, #724).
     samples: HeaderSamples | None = None
+    # What the type's content read gave, where it counts one (``FileTypeConfig.content_outcome``,
+    # #747); None for every other type and for a file not read.
+    content_outcome: str | None = None
 
 
 def _fetch_and_classify(
@@ -153,9 +157,9 @@ def _fetch_and_classify(
     * content unreadable  -> ``(all-not_classified classifications, True, None)``, when the
       fetcher raised ``FetchError``; the file stays in the output as a fully
       ``not_classified`` row rather than vanishing (#155), asserting nothing about
-      a file we could not read (#293). A type that reads content only for samples
-      (``FileTypeConfig.reads_samples_only``, #605) keeps its answers from the name
-      instead, the failure noted on each ``not_classified`` dimension.
+      a file we could not read (#293). A type whose dimensions come from its name, its
+      content only adding to them (``FileTypeConfig.answers_from_name``, #605), keeps
+      its answers from the name instead, the failure noted on each ``not_classified`` dimension.
 
     A fetcher signals failure by raising ``FetchError``, not by returning ``None``.
     An exception the fetcher does not wrap (e.g. a missing-tool ``FileNotFoundError``)
@@ -192,7 +196,7 @@ def _fetch_and_classify(
             url=url,
         )
     except FetchError as e:
-        if config.reads_samples_only:
+        if config.answers_from_name:
             print(f"Content unreadable, classified from the name only — {file_name or md5sum}: {e.reason}")
             named = config.classifier(None, name=name, file_size=file_size, file_format=file_format)
             return classify_from_name_only(named, e.reason), True, None
@@ -586,6 +590,9 @@ class ClassifyPipeline:
         samples = None
         if self.config.samples is not None and not content_unreadable and self.config.samples.reads(payload):
             samples = self.config.samples.read(payload, dataset)
+        content_outcome = None
+        if self.config.content_outcome is not None and not content_unreadable:
+            content_outcome = self.config.content_outcome(payload)
         return RecordOutcome(
             OutputRecord.from_work_item(
                 item,
@@ -598,6 +605,7 @@ class ClassifyPipeline:
             validation_failed=False,
             step_outcome=step_outcome,
             samples=samples,
+            content_outcome=content_outcome,
         )
 
     def _run_parallel(self, work: list[ClassifierRecord | InvalidRecord], provenance: dict) -> list[dict]:
@@ -618,6 +626,8 @@ class ClassifyPipeline:
         unrecognised_samples: dict[str, Counter] = defaultdict(Counter)
         unread_samples: dict[str, Counter] = defaultdict(Counter)
         lists: dict[str, dict] = {}
+        # For a type that counts its content read (#747): per dataset, each outcome's files.
+        content_counts: dict[str, Counter] = defaultdict(Counter)
 
         print(f"Using {self.workers} parallel workers")
 
@@ -632,6 +642,8 @@ class ClassifyPipeline:
                     dataset = str(outcome.result.dataset_title or "")
                     if outcome.step_outcome is not None:
                         step_counts[dataset][outcome.step_outcome] += 1
+                    if outcome.content_outcome is not None:
+                        content_counts[dataset][outcome.content_outcome] += 1
                     if outcome.samples is not None:
                         sample_counts[dataset][outcome.samples.outcome] += 1
                         unrecognised_samples[dataset].update(outcome.samples.unrecognised)
@@ -702,6 +714,13 @@ class ClassifyPipeline:
                 print(f"  Header samples, {dataset}: {', '.join(f'{k} {v:,}' for k, v in counts.items())}")
             for dataset, counts in details[UNREAD_SAMPLES_KEY].items():
                 print(f"  Samples not read, {dataset}: {', '.join(f'{k} {v:,}' for k, v in counts.items())}")
+        if self.config.content_outcome is not None:
+            details = {
+                **(details or {}),
+                CONTENT_OUTCOMES_KEY: {dataset: dict(counts) for dataset, counts in sorted(content_counts.items())},
+            }
+            for dataset, counts in details[CONTENT_OUTCOMES_KEY].items():
+                print(f"  Content read, {dataset}: {', '.join(f'{k} {v:,}' for k, v in counts.items())}")
         rebuilt_lists = self._step.rebuilt_lists() if isinstance(self._step, RebuildsLists) else None
         if rebuilt_lists:
             print(f"  Lists rebuilt: {len(rebuilt_lists):,}")

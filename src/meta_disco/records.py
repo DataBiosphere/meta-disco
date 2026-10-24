@@ -129,6 +129,9 @@ STEP_OUTCOMES_KEY = "producer_steps"
 SAMPLE_OUTCOMES_KEY = "sample_outcomes"
 UNRECOGNISED_SAMPLES_KEY = "unrecognised_samples"
 UNREAD_SAMPLES_KEY = "unread_samples"
+# Where a type that reads a dimension from content and counts what it read (``FileTypeConfig.content_outcome``,
+# #747) writes, under its file's metadata `details`, each outcome's files per dataset.
+CONTENT_OUTCOMES_KEY = "content_outcomes"
 # The top-level key of a producer's file holding the sample lists its records point to (#357).
 SAMPLE_LISTS_KEY = "sample_lists"
 # The top-level key of a producer's file holding the lists its records' steps name by address (#726).

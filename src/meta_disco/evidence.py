@@ -701,22 +701,26 @@ class IdatEvidence(_RecordEvidence):
 
 @dataclass(frozen=True)
 class Fast5Header:
-    """What the FAST5 reader takes from a nanopore FAST5's first bytes (#605): each distinct
-    ``sample_id`` attribute value, in the order found; ``[]`` where the bytes read hold none."""
+    """What the FAST5 reader takes from a nanopore FAST5's first bytes: each distinct
+    ``sample_id`` (#605) and ``device_type`` (#747) attribute value, each in the order found;
+    ``[]`` where the bytes read hold none."""
 
     sample_ids: list[str]
+    device_types: list[str] = field(default_factory=list)
 
     @classmethod
     def from_evidence(cls, raw: dict) -> Fast5Header:
-        """Parse cached evidence JSON into a header.
+        """Parse cached evidence JSON into a header. An entry written before #747 has no
+        ``device_types``, so it is a miss and the head is read again.
 
         Raises:
-            KeyError: the field is missing.
-            TypeError: it is not a list of strings.
+            KeyError: a field is missing.
+            TypeError: one is not a list of strings.
         """
-        header = cls(sample_ids=raw["sample_ids"])
-        if not (isinstance(header.sample_ids, list) and all(isinstance(s, str) for s in header.sample_ids)):
-            raise TypeError(f"cached FAST5 header has a field of the wrong type: {raw!r}")
+        header = cls(sample_ids=raw["sample_ids"], device_types=raw["device_types"])
+        for values in (header.sample_ids, header.device_types):
+            if not (isinstance(values, list) and all(isinstance(s, str) for s in values)):
+                raise TypeError(f"cached FAST5 header has a field of the wrong type: {raw!r}")
         return header
 
 

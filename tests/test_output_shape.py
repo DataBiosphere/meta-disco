@@ -275,7 +275,7 @@ STUB_PAYLOADS = {
         scan_software=["iScan Control Software"],
     ),
     # fast5 returns a Fast5Header: one run's sample_id, so the golden carries its `samples` (#605).
-    "fast5": Fast5Header(sample_ids=["HG02723"]),
+    "fast5": Fast5Header(sample_ids=["HG02723"], device_types=["promethion"]),
 }
 # Every evidence entry has a reason, and is either a synthetic resolution marker
 # (carries `marker`) or something a producer made — the two are mutually exclusive

@@ -581,6 +581,22 @@ IDAT_SCANNER = CodeRule(
         "what was read."
     ),
 )
+FAST5_DEVICE_TYPE = CodeRule(
+    id="fast5_device_type",
+    module=HEADER_CLASSIFIER,
+    basis=BASIS_CONTENT,
+    source_type=SOURCE_CONTENT_READ,
+    reads="a nanopore FAST5's first 64 KiB: each attribute named device_type (MinKNOW writes it in tracking_id)",
+    sets=("instrument_model",),
+    rationale=(
+        "MinKNOW records the kind of device that ran the sequencing run as every read's tracking_id "
+        "device_type, beside the sample_id (#747). Its promethion, minion and gridion are Oxford "
+        "Nanopore's PromethION, MinION and GridION. A head holding one of them names the instrument; "
+        "one holding none, another value or two or more values makes no claim, and the producer "
+        "counts each case by cause. Found by name in the bytes already read for the sample, its "
+        "message parsed whole."
+    ),
+)
 INDEX_BY_EXTENSION = CodeRule(
     id="index_by_extension",
     module=INDEX_PRODUCER,
@@ -636,6 +652,7 @@ CODE_RULES = (
     SAMPLE_MAP_CONTENT,
     IDAT_CHIP_TYPE,
     IDAT_SCANNER,
+    FAST5_DEVICE_TYPE,
     INDEX_BY_EXTENSION,
     INHERITED_FROM_PARENT,
 )
@@ -1027,8 +1044,8 @@ FETCH_FAILED = CodeMarker(
     id="fetch_failed",
     module=HEADER_CLASSIFIER,
     meaning=(
-        "The file's content could not be read, so every dimension is not_classified (#293); a type that "
-        "reads content only for samples keeps its answers from the name, the marker on the rest (#605)."
+        "The file's content could not be read, so every dimension is not_classified (#293); a type whose "
+        "dimensions come from its name keeps its answers from the name, the marker on the rest (#605)."
     ),
 )
 INPUT_VALIDATION = CodeMarker(

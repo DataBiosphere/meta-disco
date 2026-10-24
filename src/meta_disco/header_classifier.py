@@ -595,7 +595,7 @@ FETCH_FAILED_RULE_ID = code_rules.FETCH_FAILED.id
 
 def classify_from_name_only(classifications: dict, reason: str) -> dict:
     """``classifications`` (a classifier's answers from the name) with the fetch failure ``reason``
-    noted on each ``not_classified`` dimension, for a type that reads content only for samples (#605).
+    noted on each ``not_classified`` dimension, for a type whose dimensions come from its name (#605).
     The note declares nothing; it is what the unprocessable report counts the file by, so a
     type whose name leaves no dimension not_classified would be counted unreadable but not listed."""
     for entry in classifications.values():
@@ -1213,21 +1213,70 @@ def classify_from_idat_header(
     return result.to_output_dict()
 
 
+# MinKNOW's device types recognised (`code_rules.FAST5_DEVICE_TYPE`), and the instrument model each is.
+FAST5_DEVICES: dict[str, str] = {
+    "promethion": "PromethION",
+    "minion": "MinION",
+    "gridion": "GridION",
+}
+# Why a FAST5 head gives no instrument model (#747), as the fast5 type counts it per dataset.
+NO_DEVICE_TYPE = "no_device_type"
+UNKNOWN_DEVICE_TYPE = "unknown_device_type"
+SEVERAL_DEVICE_TYPES = "several_device_types"
+
+
+def fast5_instrument(header: Fast5Header) -> tuple[str | None, str]:
+    """The instrument model a FAST5 head's ``device_type`` names, and the outcome as counted.
+
+    Returns:
+        ``(model, model)`` where the head holds one value ``FAST5_DEVICES`` lists; else
+        ``(None, cause)``, the cause one of ``NO_DEVICE_TYPE``, ``UNKNOWN_DEVICE_TYPE`` and
+        ``SEVERAL_DEVICE_TYPES``.
+    """
+    if not header.device_types:
+        return None, NO_DEVICE_TYPE
+    if len(header.device_types) > 1:
+        return None, SEVERAL_DEVICE_TYPES
+    model = FAST5_DEVICES.get(header.device_types[0])
+    return (model, model) if model is not None else (None, UNKNOWN_DEVICE_TYPE)
+
+
+def fast5_outcome(header: Fast5Header) -> str:
+    """The outcome :func:`fast5_instrument` gives ``header``: the model, or why there is none."""
+    return fast5_instrument(header)[1]
+
+
 def classify_from_fast5_header(
-    header: Fast5Header,
+    header: Fast5Header | None,
     *,
     name: FileName = FileName.EMPTY,
     file_size: int | None = None,
     file_format: str | None = None,
 ) -> dict:
-    """Classify a nanopore FAST5 from its name, through the rule engine (``nanopore_fast5``), not its header (#605).
+    """Classify a nanopore FAST5: the rule engine's answers from its name (``nanopore_fast5``, #605), and its instrument model from its header (#747).
 
-    The header is read for the file's samples (``sample_identity.FAST5_SAMPLES``), not for
-    any dimension, so ``header`` is not read here. ``file_format`` is accepted to match the
-    uniform ``_fetch_and_classify`` call, and not read: ``.fast5`` stands in for it, the
-    format a file this type claims carries in its name or, failing that, declares.
+    The instrument model is claimed at ``CONTENT_TIER`` where :func:`fast5_instrument`
+    recognises the head's ``device_type``; otherwise, and for a head not read (``header``
+    None, ``FileTypeConfig.answers_from_name``), nothing is claimed for it here. The
+    header's ``sample_id`` is read for the file's samples (``sample_identity.FAST5_SAMPLES``),
+    not here. ``file_format`` is accepted to match the uniform ``_fetch_and_classify`` call,
+    and not read: ``.fast5`` stands in for it, the format a file this type claims carries in
+    its name or, failing that, declares.
     """
-    return _classify_by_name(name, ".fast5", file_size).to_output_dict()
+    from .rule_engine import CONTENT_TIER
+
+    result = _classify_by_name(name, ".fast5", file_size)
+    model = fast5_instrument(header)[0] if header is not None else None
+    if header is not None and model is not None:
+        result.add_claim(
+            "instrument_model",
+            rule_id=code_rules.FAST5_DEVICE_TYPE.id,
+            tier=CONTENT_TIER,
+            source_type=SOURCE_CONTENT_READ,
+            reason=f"the head's device_type is {header.device_types[0]!r}",
+            value=model,
+        )
+    return result.to_output_dict()
 
 
 @cache

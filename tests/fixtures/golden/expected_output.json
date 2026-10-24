@@ -353,13 +353,15 @@
           "instrument_model": {
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for instrument_model",
-                "status": "not_classified"
+                "reason": "the head's device_type is 'promethion'",
+                "rule_id": "fast5_device_type",
+                "source_type": "content_read",
+                "tier": 4,
+                "value": "PromethION"
               }
             ],
-            "status": "not_classified",
-            "value": null
+            "status": "classified",
+            "value": "PromethION"
           },
           "platform": {
             "evidence": [
@@ -439,6 +441,11 @@
       "complete": true,
       "content_unreadable": 0,
       "details": {
+        "content_outcomes": {
+          "GOLDEN_FIXTURE": {
+            "PromethION": 1
+          }
+        },
         "sample_outcomes": {
           "GOLDEN_FIXTURE": {
             "named": 1
