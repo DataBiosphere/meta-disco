@@ -191,8 +191,9 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     metadata value, recorded as its table's and column's: the evidence file is named for the linked table,
     so its provenance says where the value was written, not how the file was reached. The link resolves by
     equality on the linked table's own `<table>_id`, which must name one row; `make check-slot-map` refuses a
-    key naming two rows, a non-empty link naming none, and a linked cell that is not a metadata value of its table (2.7).
-    A sample is never read this way, since a linked row is shared by every row naming it. Routing stays at
+    key naming two rows, a non-empty link naming none, and a linked cell that is not a column of its table or
+    holds file links, and the loader refuses reading a link column, on either side, as a value (2.7). A
+    sample is never read this way, since a linked row is shared by every row naming it. Routing stays at
     table and column (3.4): no row is skipped for a value it holds.
 
 ## 3. Claims

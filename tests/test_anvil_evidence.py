@@ -538,6 +538,30 @@ class TestLinkedRows:
         problems = ae.check(slot_map(tmp_path, text), tmp_path, CATALOG)
         assert any(p.startswith("D/anvil_file: anvil's published table") for p in problems), problems
 
+    def test_an_empty_link_never_names_a_keyless_row(self, tmp_path):
+        rows = [
+            *LINKED_ROWS,
+            anvil_file(5),
+            ("sequencing_dataset", {"sequencing_dataset_id": "", "seq_platform": "X"}),
+            plink(5, ""),
+        ]
+        linked = linked_import(tmp_path, rows).tables[0]
+        assert linked.unlinked == {"sequencing_dataset_id": 3}
+        assert all(raw != "X" for _, _, raw, _ in rows_of(linked.path))
+
+    def test_a_linked_files_link_counters_name_the_linking_table(self, tmp_path):
+        result = linked_import(tmp_path, [*LINKED_ROWS, plink(9, "A")])
+        linked = result.tables[0]
+        assert (linked.via, linked.unresolved) == (("plink",), {"plink.pgen": 1})
+        assert "  sequencing_dataset: 5 rows of plink, 1 evidence rows" in ae.describe([result])
+
+    def test_check_asks_only_a_linking_table_for_its_link(self, tmp_path):
+        text = LINKED_MAP + "    vcf:\n      path:\n        platform:\n          - {cell: platform}\n"
+        rows = [r for r in LINKED_ROWS if r[1].get("sequencing_dataset_id") != "Z"]
+        rows.append(("vcf", {"vcf_id": "v", "path": drs(1), "platform": "x"}))
+        write_dataset(tmp_path, "D", rows)
+        assert ae.check(slot_map(tmp_path, text), tmp_path, CATALOG) == []
+
     def test_check_reports_a_linked_table_with_no_rows(self, tmp_path):
         write_dataset(tmp_path, "D", [anvil_file(1), plink(1, "A")])
         problems = ae.check(slot_map(tmp_path, LINKED_MAP), tmp_path, CATALOG)

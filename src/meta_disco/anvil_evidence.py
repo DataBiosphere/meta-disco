@@ -148,9 +148,10 @@ class TableImport:
     """What one evidence file's table produced, and what it could not.
 
     ``table`` is the table the file's values were read from. For a mapped table that is the
-    table whose rows it reads; for a table read through a link (#562) the rows are the
-    linking tables', so ``rows`` counts theirs and the per-column counters below are keyed
-    ``<linking table>.<column>``.
+    table whose rows it reads. For a table read through a link (#562) the rows read are the
+    linking tables', named in ``via``: ``rows`` counts theirs, the link-column counters are
+    keyed ``<linking table>.<column>``, and ``null_cells`` (by the linked column) and
+    ``unlinked`` (by the link column) count linking rows, summed over the linking tables.
 
     ``no_link``, ``not_link`` and ``unresolved`` are per file-link column: rows whose link
     cell held nothing, rows whose cell held something that is not a DRS URI (which
@@ -168,6 +169,7 @@ class TableImport:
 
     table: str
     path: Path
+    via: tuple[str, ...] = ()
     rows: int = 0
     written: int = 0
     files: set[str] = field(default_factory=set)
@@ -658,8 +660,9 @@ def import_dataset(
                 target_key=target_key,
                 fetched_at=fetched,
             )
-            result = TableImport(table=table, path=evidence_file_path(directory, table))
             readers = slot_map.readers(dataset, table)
+            via = tuple(reader for reader in readers if reader != table)
+            result = TableImport(table=table, path=evidence_file_path(directory, table), via=via)
             entries = (
                 entry
                 for reader in readers
@@ -706,7 +709,7 @@ def linked_rows(path: Path, table: str) -> dict[str, dict]:
 
 
 def key_of(row: dict, table: str) -> str | None:
-    """The row of ``table`` that ``row`` names by its :func:`~.slot_map.row_key` cell, or None for an empty or non-string one.
+    """The key of the row of ``table`` that ``row`` names in its :func:`~.slot_map.row_key` cell; None for an empty or non-string cell.
 
     In a row of ``table`` itself, that row's own key. Shared by ``check`` and the import (#562).
     """
@@ -840,7 +843,8 @@ def describe(imports: list[DatasetImport]) -> list[str]:
     for run in imports:
         lines.append(f"{run.dataset} -> {run.directory} ({run.files:,} files)")
         for table in run.tables:
-            lines.append(f"  {table.table}: {table.rows:,} rows, {table.written:,} evidence rows")
+            read = f"{table.rows:,} rows of {', '.join(table.via)}" if table.via else f"{table.rows:,} rows"
+            lines.append(f"  {table.table}: {read}, {table.written:,} evidence rows")
             for column, n in sorted(table.no_link.items()):
                 lines.append(f"    {column}: no link or folder on {n:,} rows")
             for column, n in sorted(table.not_link.items()):

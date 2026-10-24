@@ -410,9 +410,16 @@ def _entries(datasets: dict) -> Iterator[ColumnEntry]:
 
 
 def _refuse_linked_tables_mapped(entries: list[ColumnEntry], tables: set[str], at: str) -> None:
-    """A table a ``row_of`` source reads is not also mapped in the dataset: its rows link no file (#562)."""
+    """A table a ``row_of`` source reads is not also mapped in the dataset: its rows link no file (#562).
+    Nor is a mapped row's link to it read as a value: the link column is a pointer (2.7)."""
+    links = {row_key(s.row_of) for e in entries for _, s in entry_sources(e) if s.row_of}
     for entry in entries:
         for slot, source in entry_sources(entry):
+            if source.form == SOURCE_CELL and not source.row_of and source.value in links:
+                raise ValueError(
+                    f"{at}/{entry.table}/{entry.column} {slot}: cell {source.value!r} is a link to another table's "
+                    "row, which holds a pointer and no value"
+                )
             if source.row_of in tables:
                 raise ValueError(
                     f"{at}/{entry.table}/{entry.column} {slot}: row_of {source.row_of!r} is a table this map "

@@ -463,10 +463,18 @@ def test_row_of_is_for_a_cell_never_a_span_of_the_entrys_own_names(tmp_path):
     refuses(tmp_path, text, "row_of reads a cell of a linked row")
 
 
-@pytest.mark.parametrize("value", ["plink_file_wide", '""', "3", "[sequencing_dataset]"])
-def test_row_of_names_another_table(tmp_path, value):
+@pytest.mark.parametrize(
+    ("value", "fragment"),
+    [
+        ("plink_file_wide", "is the entry's own table"),
+        ('""', "not the name of"),
+        ("3", "not the name of"),
+        ("[x]", "not the name of"),
+    ],
+)
+def test_row_of_names_another_table(tmp_path, value, fragment):
     text = LINKED.replace("row_of: sequencing_dataset", f"row_of: {value}")
-    refuses(tmp_path, text, "row_of")
+    refuses(tmp_path, text, fragment)
 
 
 def test_a_cell_and_row_of_are_the_only_pair_a_source_may_hold(tmp_path):
@@ -507,3 +515,18 @@ def test_a_linked_cell_obeys_the_link_columns_structural_exclusions(tmp_path, co
 def test_a_linked_tables_key_is_a_pointer_not_a_value(tmp_path):
     text = LINKED.replace("{cell: seq_platform, row_of", "{cell: sequencing_dataset_id, row_of")
     refuses(tmp_path, text, "is sequencing_dataset's key")
+
+
+def test_a_rows_own_link_to_another_table_is_a_pointer_not_a_value(tmp_path):
+    text = LINKED.replace(
+        "{table_name: plink}", "{table_name: plink}\n        assay_type:\n          - {cell: sequencing_dataset_id}"
+    )
+    refuses(tmp_path, text, "cell 'sequencing_dataset_id' is a link to another table's row")
+
+
+def test_a_linked_cell_may_share_a_name_with_a_column_of_the_linking_table(tmp_path):
+    """The own-row refusals are about the row's own columns; a linked row's `pgen` or `seq_filename` is another table's."""
+    text = LINKED.replace("{cell: seq_platform, row_of", "{cell: pgen, row_of")
+    assert load(tmp_path, text).entries[0].slots["platform"][0].value == "pgen"
+    folder = FOLDER + "        platform:\n          - {cell: seq_filename, row_of: sequencing_dataset}\n"
+    assert load(tmp_path, folder).linked_tables("D") == ["sequencing_dataset"]
