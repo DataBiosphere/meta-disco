@@ -31,9 +31,15 @@ datasets:
   ANVIL_1000G_PRIMED_data_model:
     plink_file_wide:
       pgen: &primed_plink
-        data_type:
-          - {table_name: plink}
-      psam: *primed_plink
+        reference_assembly:
+          - {cell: reference_assembly, row_of: sequencing_dataset}
+        platform: &primed_platform
+          - {cell: seq_platform, row_of: sequencing_dataset}
+        assay_type: &primed_assay
+          - {cell: sequencing_assay, row_of: sequencing_dataset}
+      psam:
+        platform: *primed_platform
+        assay_type: *primed_assay
       pvar: *primed_plink
   ANVIL_HPRC:
     assembly_annotation:

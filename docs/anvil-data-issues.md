@@ -20,6 +20,7 @@ Each issue names the dataset, what AnVIL holds, what the files themselves or the
 | 8 | `ANVIL_T2T_CHRY` | Two SGDP samples whose rows disagree with their genomes | 2 samples |
 | 9 | `AnVIL_HPRC_R2`, ENCORE | Swapped columns; a misspelled activity type | 230 + 634 rows |
 | 10 | `ANVIL_HPRC` | One HG005 assembly BAM listed under HG00621 too | 1 |
+| 11 | `ANVIL_1000G_PRIMED_data_model` | Phase 3 sequencing datasets say only WGS, with no depth | 4,281 |
 
 ## 1. ANVIL\_HPRC: parents' reads generated from the child's biosample
 
@@ -151,6 +152,15 @@ HPRC's `assembly_sample` table lists `HG005.paternal.GRCh38_no_alt.bam` as `pat_
 - **Effect:** the two rows name different people, so meta-disco gives the file no sample (listed as `incomparable` in `docs/sample-conflicts.tsv`).
 - **Ask:** confirm which assembly the BAM aligns, and point HG00621's `pat_grch38_aln_bam` at HG00621's own file.
 
+## 11. ANVIL\_1000G\_PRIMED\_data\_model: phase 3 sequencing datasets say only WGS, with no depth
+
+The 63 GRCh37 rows of the submitter's `sequencing_dataset` table each say `sequencing_assay` `WGS`, with `average_target_depth` empty and `seq_center` and `alignment_method` `Unknown`. Their `sample_set_id`s name 1000 Genomes phase 3 (`ITU_phase3_unrelated`). Phase 3's calls came from more than whole genomes: "All individuals were sequenced using both whole-genome sequencing (mean depth = 7.4×) and targeted exome sequencing (mean depth = 65.7×)", and were also genotyped on SNP arrays ([The 1000 Genomes Project Consortium, 2015](https://pmc.ncbi.nlm.nih.gov/articles/PMC4750478/)). The 63 GRCh38 rows are the 30× high-coverage genomes, and say so.
+
+- **Example:** `ITU_hg19_hm3`: `WGS`, `Illumina`, `GRCh37`, depth empty, centre and aligner `Unknown`.
+- **Scale:** 63 rows; 4,281 PLINK files (`plink_file_wide`'s `pgen`, `psam` and `pvar`) link to them.
+- **Effect:** meta-disco takes the assay as stated, so these files show whole-genome sequencing alone ([meta-disco #562](https://github.com/DataBiosphere/meta-disco/issues/562)). It is incomplete rather than wrong; low priority.
+- **Suggested fix:** give the phase 3 rows their depth (7.4×), and say the calls also used exome sequencing and arrays, if the data model has a way to.
+
 ## Checked, not reported
 
 These looked like defects and turned out not to be, or were already handled.
@@ -173,4 +183,4 @@ These looked like defects and turned out not to be, or were already handled.
 - [ ] Issue 4: send [meta-disco #624](https://github.com/DataBiosphere/meta-disco/issues/624)'s drafted email as it stands, or fold it in here.
 - [ ] Issues 2 and 8 go to the submitters (HPRC, T2T) as much as to AnVIL; decide the route.
 
-Issues 5, 6, 7, 9 and 10 were checked against the `anvil15` manifests on 2026-10-24; issue 8 rests on the genotype checks of 2026-10-22 ([meta-disco #718](https://github.com/DataBiosphere/meta-disco/issues/718)).
+Issues 5, 6, 7, 9, 10 and 11 were checked against the `anvil15` manifests on 2026-10-24; issue 8 rests on the genotype checks of 2026-10-22 ([meta-disco #718](https://github.com/DataBiosphere/meta-disco/issues/718)).

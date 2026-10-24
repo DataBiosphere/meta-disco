@@ -76,7 +76,7 @@ from .models import (
 )
 from .sample_identity import SAMPLE, Identifier, IdentifierRuleSet, identifier_rules, name_contradicts
 from .schema.classification_model import ImporterSourceTypeEnum, JoinKeyEnum
-from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource
+from .slot_map import SOURCE_CELL, SOURCE_COLUMN_NAME, ColumnEntry, SlotMap, SlotSource, row_key, source_table
 from .source_evidence import (
     EvidenceEntry,
     EvidenceFileEnvelope,
@@ -145,7 +145,12 @@ def verbatim_manifest(manifest_root: Path, catalog: str, dataset: str, named: di
 
 @dataclass
 class TableImport:
-    """What one mapped table produced, and what it could not.
+    """What one evidence file's table produced, and what it could not.
+
+    ``table`` is the table the file's values were read from. For a mapped table that is the
+    table whose rows it reads; for a table read through a link (#562) the rows are the
+    linking tables', so ``rows`` counts theirs and the per-column counters below are keyed
+    ``<linking table>.<column>``.
 
     ``no_link``, ``not_link`` and ``unresolved`` are per file-link column: rows whose link
     cell held nothing, rows whose cell held something that is not a DRS URI (which
@@ -155,6 +160,8 @@ class TableImport:
     folder's name, and ``empty_folder``, rows whose folder reaches none of the dataset's
     files; ``check`` reports both. ``null_cells`` is per cell column, once per row
     and column, counting null and empty-list cells on the rows whose link resolved.
+    ``unlinked`` is per link to another table (#562), the rows whose ``<table>_id`` cell
+    is empty or names no row of that table; it is counted on the linked table's file.
     ``files`` is the distinct files that received at least one evidence row;
     ``written`` counts the rows, and exceeds it wherever a file receives more than one.
     """
@@ -170,6 +177,7 @@ class TableImport:
     not_folder: Counter = field(default_factory=Counter)
     empty_folder: Counter = field(default_factory=Counter)
     null_cells: Counter = field(default_factory=Counter)
+    unlinked: Counter = field(default_factory=Counter)
 
 
 @dataclass
@@ -291,7 +299,10 @@ def check(slot_map: SlotMap, manifest_root: Path, catalog: str, datasets: list[s
     exclude as a link column's name does. Per
     cell: the column appears on some row of its table
     and is not itself a file-link column — a column is one kind, never two (contract
-    2.7). Every chosen dataset is checked, and within one every table and column, so a
+    2.7). Per table a source reads through a link (``row_of``, #562): it has rows, some
+    carrying its key (``slot_map.row_key``), no key names two rows, and its cells are held
+    to the same rule; each mapped table reading it carries the link column, and every
+    non-empty link names one of its rows. Every chosen dataset is checked, and within one every table and column, so a
     map edited in one sitting is answered in one pass; a dataset whose manifest is
     missing, or a table with no rows, masks the problems beneath it until that one is
     fixed.
@@ -325,7 +336,10 @@ def _check_kind(slot_map: SlotMap, datasets: set[str]) -> list[str]:
     except ValueError as exc:
         return [str(exc)]
     published = PUBLISHED_TABLE
-    tables = {(e.dataset, e.table) for e in slot_map.entries if e.dataset in datasets}
+    # The mapped tables and those a source reads through a link (#562): each linked one is written as a file too.
+    tables = {(e.dataset, e.table) for e in slot_map.entries if e.dataset in datasets} | {
+        (dataset, table) for dataset in datasets for table in slot_map.linked_tables(dataset)
+    }
     if slot_map.source_type == SOURCE_PUBLISHED_VALUE:
         return [
             f"{dataset}/{table}: a {SOURCE_PUBLISHED_VALUE} map maps only {REPOSITORY}'s published table, {published!r}"
@@ -342,25 +356,43 @@ def _check_kind(slot_map: SlotMap, datasets: set[str]) -> list[str]:
 
 def _check_dataset(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
     tables = slot_map.tables(dataset)
-    entries = {table: slot_map.columns(dataset, table) for table in tables}
-    wanted = {table: [entry.column for entry in entries[table]] for table in tables}
-    folders = {table: [entry for entry in entries[table] if entry.is_folder] for table in tables}
+    # The tables sources read through a link (#562): scanned beside the mapped ones, for their cells and keys.
+    linked = slot_map.linked_tables(dataset)
+    scanned = [*tables, *linked]
+    entries = {table: slot_map.columns(dataset, table) for table in scanned}
+    wanted = {table: [entry.column for entry in entries[table]] for table in scanned}
+    folders = {table: [entry for entry in entries[table] if entry.is_folder] for table in scanned}
     folder_columns = {(entry.table, entry.column) for table in tables for entry in folders[table]}
     # Built only for a dataset with a folder entry: no other check reads storage paths.
     files = file_index(path, with_paths=True) if slot_map.has_folders(dataset) else None
-    cells = {table: sorted(slot_map.cells(dataset, table)) for table in tables}
+    cells = {table: sorted(slot_map.cells(dataset, table)) for table in scanned}
     rows: Counter = Counter()
-    columns_seen: dict[str, set[str]] = {table: set() for table in tables}
+    columns_seen: dict[str, set[str]] = {table: set() for table in scanned}
+    # Each linked table's keys, counted; each mapped table's links to it, as the values its rows hold.
+    keys: dict[str, Counter] = {table: Counter() for table in linked}
+    # A key or link cell holding a value that is not a string, by table and column: the first one seen.
+    not_keys: dict[tuple[str, str], object] = {}
+    targets = {table: [t for t in linked if table in slot_map.readers(dataset, t)] for table in tables}
+    links: dict[tuple[str, str], set[str]] = {(table, t): set() for table in tables for t in targets[table]}
     not_links: dict[tuple[str, str], object] = {}
     not_folders: dict[tuple[str, str], object] = {}
     empty_folders: dict[tuple[str, str], set[str]] = {}
     reached: dict[tuple[str, str], Counter] = {key: Counter() for key in folder_columns}
     # A cell is a link column when every non-empty value it holds is a link: `None`
     # until a non-empty value is seen, then whether all of them so far were links.
-    cell_is_link: dict[tuple[str, str], bool | None] = {(t, c): None for t in tables for c in cells[t]}
-    for table, row in iter_verbatim_entities(path, tables):
+    cell_is_link: dict[tuple[str, str], bool | None] = {(t, c): None for t in scanned for c in cells[t]}
+    for table, row in iter_verbatim_entities(path, scanned):
         rows[table] += 1
         columns_seen[table].update(row)
+        if table in keys and (key := key_of(row, table)):
+            keys[table][key] += 1
+        for target in targets.get(table, ()):
+            if value := key_of(row, target):
+                links[(table, target)].add(value)
+        for target in [table] if table in keys else targets.get(table, []):
+            cell = row.get(row_key(target))
+            if cell not in (None, "") and not isinstance(cell, str):
+                not_keys.setdefault((table, row_key(target)), cell)
         for column in wanted[table]:
             key = (table, column)
             if key not in folder_columns and key not in not_links and link_handles(row.get(column)) == []:
@@ -380,10 +412,26 @@ def _check_dataset(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
             if handles is not None and cell_is_link[(table, cell)] is not False:
                 cell_is_link[(table, cell)] = handles != []
     problems = _check_sample_names(slot_map, dataset, path)
-    for table in tables:
+    for table in scanned:
         if not rows[table]:
             problems.append(f"{dataset}/{table}: no row of this type in the manifest")
             continue
+        if table in keys:
+            problems += _key_problems(f"{dataset}/{table}", table, keys[table])
+        problems += [
+            f"{dataset}/{table}: {column} holds {value!r}, not a string naming a row (#562)"
+            for (t, column), value in not_keys.items()
+            if t == table
+        ]
+        for target in targets.get(table, ()):
+            if row_key(target) not in columns_seen[table]:
+                problems.append(f"{dataset}/{table}: no row carries {row_key(target)!r}, its link to {target}")
+            # A linked table with no keyed row is reported as such, below; every link would repeat it.
+            elif keys[target] and (missing := sorted(links[(table, target)] - set(keys[target]))):
+                problems.append(
+                    f"{dataset}/{table}: {len(missing):,} {row_key(target)} values name no row of {target} "
+                    f"(e.g. {missing[0]!r})"
+                )
         for column in wanted[table]:
             key, at = (table, column), f"{dataset}/{table}/{column}"
             if column not in columns_seen[table]:
@@ -423,6 +471,14 @@ def _check_dataset(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
                     f"{dataset}/{table}: cell {cell!r} holds DRS URIs — a file-link column, not a metadata value"
                 )
     return problems
+
+
+def _key_problems(at: str, table: str, keys: Counter) -> list[str]:
+    """A linked table's keys against what a link needs (#562): some row carrying one, each naming one row."""
+    if not keys:
+        return [f"{at}: no row of this type carries {row_key(table)!r}, the key a link to it names"]
+    twice = sorted(key for key, n in keys.items() if n > 1)
+    return [f"{at}: {len(twice):,} {row_key(table)} values name several rows (e.g. {twice[0]!r})"] if twice else []
 
 
 def _check_sample_names(slot_map: SlotMap, dataset: str, path: Path) -> list[str]:
@@ -534,10 +590,12 @@ def import_dataset(
 
     Two kinds of pass over the manifest: one to collect the dataset's own files
     (:func:`file_index`: its ``anvil_file`` DRS URIs, and their storage paths where a folder
-    entry reads them), then one per mapped table to write that table's file.
-    Per-table passes rather than one pass fanning out to every table's writer, so each
-    file keeps ``write_evidence_file``'s write-then-rename guarantee on its own; each
-    pass parses only the lines that name its table (``iter_verbatim_entities``'s gate).
+    entry reads them), then one per table a value is read from (``SlotMap.source_tables``) to
+    write that table's file: over each mapped table reading it, which is the table itself for
+    its own cells and names, or the tables linking to it (#562), whose rows are first read by
+    key (:func:`linked_rows`). Per-table passes rather than one pass fanning out to every
+    table's writer, so each file keeps ``write_evidence_file``'s write-then-rename guarantee on
+    its own; each pass parses only the lines that name its table (``iter_verbatim_entities``'s gate).
 
     The generation directory must not exist: an import never writes over another. It
     is a generation only once every table is written: the files go to a staging
@@ -546,8 +604,8 @@ def import_dataset(
     disk, an interrupt — removes the staging directory before the error propagates; a
     hard kill leaves it as ``<stamp>.partial``, which ``discover`` never reads, the run
     reports as unfinished, and this refuses to write over. A mapped table that writes
-    no row at all is such a failure: a table the map names should reach files, and one
-    that reaches none is the map disagreeing with the catalog (contract 5.3), not an
+    no row from a table it reads is such a failure: a table the map names should reach files,
+    and one that reaches none is the map disagreeing with the catalog (contract 5.3), not an
     empty result.
     The target system and the envelope's source repository are both ``REPOSITORY``, the
     repository the manifests came from, and the envelope's source ``url`` is ``service``,
@@ -581,9 +639,15 @@ def import_dataset(
     target = EvidenceTarget(system=REPOSITORY, dataset=dataset, version=catalog)
     target_key = JoinKeyEnum(JOIN_KEY_DRS_URI)
     fetched = fetched_at.isoformat()
+    # Each table a source reads through a link (#562), its rows by key.
+    linked = {table: linked_rows(path, table) for table in slot_map.linked_tables(dataset)}
+    # The (reader, source table) pairs that yielded a row: each must, as each mapped table did before links.
+    yielded: set[tuple[str, str]] = set()
     tables = []
     with staged_generation(directory) as staging:
-        for table in slot_map.tables(dataset):
+        # One file per table a value is read from (`SlotMap.source_tables`): a mapped table's own cells and
+        # names, or a linked table's cells, which are its metadata values whichever row reached the file.
+        for table in slot_map.source_tables(dataset):
             file_source = EvidenceFileSource(repository=REPOSITORY, dataset=dataset, table=table, url=service)
             envelope = EvidenceFileEnvelope(
                 source=file_source,
@@ -595,15 +659,59 @@ def import_dataset(
                 fetched_at=fetched,
             )
             result = TableImport(table=table, path=evidence_file_path(directory, table))
-            entries = _table_entries(path, table, slot_map.columns(dataset, table), files, file_source, result)
-            result.written = write_evidence_file(evidence_file_path(staging, table), envelope, entries)
-            if not result.written:
-                raise ValueError(
-                    f"{dataset}/{table}: no evidence row written — every link or folder was empty or outside the "
-                    f"dataset's files, or every mapped cell was null; the map disagrees with {catalog} here"
+            readers = slot_map.readers(dataset, table)
+            entries = (
+                entry
+                for reader in readers
+                for entry in _table_entries(
+                    path,
+                    reader,
+                    slot_map.columns(dataset, reader),
+                    files,
+                    file_source,
+                    table,
+                    result,
+                    yielded,
+                    linked.get(table),
                 )
+            )
+            result.written = write_evidence_file(evidence_file_path(staging, table), envelope, entries)
+            for reader in readers:
+                if (reader, table) not in yielded:
+                    via = "" if reader == table else f" from {table}"
+                    raise ValueError(
+                        f"{dataset}/{reader}: no evidence row written{via} — every link or folder was empty or "
+                        "outside the dataset's files, every link to another table empty or naming no row of it, "
+                        f"or every mapped cell null; the map disagrees with {catalog} here"
+                    )
             tables.append(result)
     return DatasetImport(dataset=dataset, generation=stamp, directory=directory, tables=tables)
+
+
+def linked_rows(path: Path, table: str) -> dict[str, dict]:
+    """The rows of ``table``, by the key a row linking to one names it with (:func:`~.slot_map.row_key`, #562).
+
+    A row with no key is no row a link can name and is left out; two rows under one key are
+    refused, since a link to it would name two rows (``check`` reports it first).
+    """
+    rows: dict[str, dict] = {}
+    for _type, row in iter_verbatim_entities(path, {table}):
+        value = key_of(row, table)
+        if value is None:
+            continue
+        if value in rows:
+            raise ValueError(f"{table}: {row_key(table)} {value!r} names two rows, so a link to it names no one row")
+        rows[value] = row
+    return rows
+
+
+def key_of(row: dict, table: str) -> str | None:
+    """The row of ``table`` that ``row`` names by its :func:`~.slot_map.row_key` cell, or None for an empty or non-string one.
+
+    In a row of ``table`` itself, that row's own key. Shared by ``check`` and the import (#562).
+    """
+    value = row.get(row_key(table))
+    return value if isinstance(value, str) and value else None
 
 
 def _table_entries(
@@ -612,21 +720,34 @@ def _table_entries(
     columns: list[ColumnEntry],
     files: FileIndex,
     source: EvidenceFileSource,
+    reads: str,
     result: TableImport,
+    yielded: set[tuple[str, str]],
+    linked: dict[str, dict] | None = None,
 ) -> Iterator[EvidenceEntry]:
-    """Every evidence row one table yields, streamed row by row, counting into ``result``."""
+    """Every evidence row ``table``'s rows yield from ``reads``, ``source``'s table, streamed row by row,
+    counting into ``result`` and adding ``(table, reads)`` to ``yielded`` once a row is yielded.
+
+    ``reads`` is ``table`` itself, read from each row's own cells and names, or a table its rows link to,
+    ``linked`` holding that table's rows by key (:func:`linked_rows`, #562). The file reached is the row's
+    own either way.
+    """
     by_column: dict[str | None, ClaimSource] = {}
+    wanted = [(entry, slots) for entry in columns if (slots := _reading(entry, reads))]
     for _type, row in iter_verbatim_entities(path, {table}):
         result.rows += 1
         nulls: set[str] = set()
-        for entry in columns:
+        values = row if linked is None else _linked_row(row, reads, linked, result)
+        if values is None:
+            continue
+        for entry, slots in wanted:
             for handle in _reached(entry, row, files, result):
                 if handle not in files.handles:
-                    result.unresolved[entry.column] += 1
+                    result.unresolved[_counted_as(entry, result)] += 1
                     continue
-                for slot, sources in entry.slots.items():
+                for slot, sources in slots.items():
                     for spec in sources:
-                        raw, column = _transcribe(spec, row, entry.column, nulls, result)
+                        raw, column = _transcribe(spec, values, entry.column, nulls, result)
                         if raw is None:
                             continue
                         claim_source = by_column.get(column)
@@ -635,7 +756,30 @@ def _table_entries(
                         # Counted here and not when the link resolved: a file whose every
                         # mapped cell is null receives nothing, and is not "a file with evidence".
                         result.files.add(handle)
+                        yielded.add((table, reads))
                         yield EvidenceEntry(field=slot, target_key_value=handle, raw_value=raw, source=claim_source)
+
+
+def _reading(entry: ColumnEntry, table: str) -> dict[str, tuple[SlotSource, ...]]:
+    """The entry's slots and the sources of each that read ``table`` (:func:`~.slot_map.source_table`), slots with none left out."""
+    slots = {
+        slot: tuple(s for s in sources if source_table(entry, s) == table) for slot, sources in entry.slots.items()
+    }
+    return {slot: sources for slot, sources in slots.items() if sources}
+
+
+def _linked_row(row: dict, table: str, linked: dict[str, dict], result: TableImport) -> dict | None:
+    """The row of ``table`` (``linked``, by key) this row names, or None, counted in ``result.unlinked``, where it names none."""
+    target = linked.get(key_of(row, table) or "")
+    if target is None:
+        result.unlinked[row_key(table)] += 1
+    return target
+
+
+def _counted_as(entry: ColumnEntry, result: TableImport) -> str:
+    """The key ``result``'s per-column counters count ``entry``'s link column under: the column, or
+    ``<table>.<column>`` where the entry is another table's, linking to ``result``'s (#562)."""
+    return entry.column if entry.table == result.table else f"{entry.table}.{entry.column}"
 
 
 def _reached(entry: ColumnEntry, row: dict, files: FileIndex, result: TableImport) -> list[str]:
@@ -647,18 +791,18 @@ def _reached(entry: ColumnEntry, row: dict, files: FileIndex, result: TableImpor
     value = row.get(entry.column)
     links = link_handles(value)
     if links is None:
-        result.no_link[entry.column] += 1
+        result.no_link[_counted_as(entry, result)] += 1
         return []
     if not entry.is_folder:
         if not links:
-            result.not_link[entry.column] += 1
+            result.not_link[_counted_as(entry, result)] += 1
         return links
     handles = folder_files(entry, value, files)
     if handles is None:
-        result.not_folder[entry.column] += 1
+        result.not_folder[_counted_as(entry, result)] += 1
         return []
     if not handles:
-        result.empty_folder[entry.column] += 1
+        result.empty_folder[_counted_as(entry, result)] += 1
     return handles
 
 
@@ -709,4 +853,6 @@ def describe(imports: list[DatasetImport]) -> list[str]:
                 lines.append(f"    {column}: folder reaches no file on {n:,} rows")
             for column, n in sorted(table.null_cells.items()):
                 lines.append(f"    {column}: null on {n:,} rows")
+            for column, n in sorted(table.unlinked.items()):
+                lines.append(f"    {column}: links to no row on {n:,} rows")
     return lines
