@@ -182,6 +182,9 @@ class EntityEvidence:
     # The sample record each repository's sample identifier ties to, keyed by ``(repository, id)``
     # (``RepositoryId.key``); :func:`gather` refuses one tying to two records (#698).
     samples_by_repository_id: dict[tuple[str, str], Identifier] = field(default_factory=dict)
+    # Per dataset and kind, the records an identity link line is about (``collected_from``'s sample,
+    # ``same_donor_as``'s donor), which :attr:`named_in` does not hold (#698).
+    linked_in: dict[tuple[str, EntityKind], set[Identifier]] = field(default_factory=dict)
 
 
 @dataclass
@@ -333,6 +336,7 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
     slots: dict[Identifier, dict[str, SlotEvidence]] = defaultdict(lambda: defaultdict(SlotEvidence))
     sample_slots: dict[Identifier, dict[str, SlotEvidence]] = defaultdict(lambda: defaultdict(SlotEvidence))
     named_in: dict[tuple[str, str], set[Identifier]] = defaultdict(set)
+    linked_in: dict[tuple[str, EntityKind], set[Identifier]] = defaultdict(set)
     files, unrecognised = [], defaultdict(Counter)
     repository_ids: dict[tuple[EntityKind, Identifier], set[RepositoryId]] = defaultdict(set)
     tied: dict[tuple[EntityKind, str, str], tuple[Identifier, Path]] = {}
@@ -376,6 +380,7 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
             if entry.field in IDENTITY_LINK_FIELDS:
                 # The donor or sample a link names has a record, whether or not the link joins it to another.
                 (sample_slots if kind == SAMPLE else slots)[ident]
+                linked_in[(str(dataset), kind)].add(ident)
             if entry.field == SAME_DONOR_AS:
                 named = rules.recognise(entry.raw_value, dataset, DONOR)
                 if named is not None:
@@ -435,6 +440,7 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
         slots=slots,
         sample_slots=sample_slots,
         named_in=named_in,
+        linked_in=dict(linked_in),
         files=files,
         unrecognised=unrecognised,
         repository_ids=repository_ids,
@@ -700,13 +706,16 @@ def _unreached(
     """Per dataset, each sample and donor its entity evidence names that no file of the dataset reaches (#698).
 
     A dataset's evidence names a record where a line of it is about the record (a slot's line, named in
-    :attr:`EntityEvidence.named_in`) or ties one of the repository's identifiers to it. A file of the dataset
+    :attr:`EntityEvidence.named_in`, or an identity link's, in :attr:`EntityEvidence.linked_in`) or ties one
+    of the repository's identifiers to it. A file of the dataset
     reaches each sample of the list its samples settled to, and each of those samples' donor (``collected_from``).
     Rows in dataset order, samples before donors, each kind in identifier order.
     """
     named: dict[tuple[str, EntityKind], set[Identifier]] = defaultdict(set)
     for (dataset, slot), idents in evidence.named_in.items():
         named[(dataset, KIND_OF_SLOT[slot])] |= idents
+    for where, idents in evidence.linked_in.items():
+        named[where] |= idents
     for (kind, ident), aliases in evidence.repository_ids.items():
         for alias in aliases:
             named[(alias.dataset, kind)].add(ident)

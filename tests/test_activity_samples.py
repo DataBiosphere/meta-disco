@@ -13,6 +13,7 @@ from generate_reconcile_report import CONFLICT_COLUMNS, conflict_tsv, dashboard_
 from meta_disco import code_rules
 from meta_disco.edges import lineage_attribution
 from meta_disco.models import (
+    COLLECTED_FROM,
     SAMPLE_REPOSITORY_ID,
     SAMPLES_FIELD,
     SOURCE_REPOSITORY_ACTIVITY,
@@ -292,3 +293,20 @@ def test_samples_and_donors_no_file_of_their_dataset_reaches_are_listed(tmp_path
     markdown = render_markdown(dashboard_data(report, None, run / "report.json"))
     assert "## What no route ties" in markdown
     assert "`coriell:HG00097`" in markdown and "`coriell:HG00098`" in markdown
+
+
+def test_a_sample_named_only_by_an_identity_link_and_reached_by_no_file_is_listed(tmp_path, run, evidence, table):
+    """A ``collected_from`` line is about its sample, as a slot's line is: HG00097 is named by one, and no file reaches it."""
+    bam, entry = with_header_samples(record(1), "HG00096")
+    write_bam_run(run, [bam], [entry])
+    write_entity_lines(
+        evidence.parent / "entity_evidence",
+        DATASET,
+        COLLECTED_FROM,
+        [("HG00097", "HG00097")],
+        source_type=SOURCE_REPOSITORY_METADATA,
+    )
+    go(run, tmp_path, evidence, table)
+    assert list(iter_reconciled_artifact(run, UNREACHED_ENTITIES_FILE)) == [
+        {"dataset": DATASET, "kind": "sample", "identifier": {"id": "HG00097", "namespace": "coriell"}},
+    ]
