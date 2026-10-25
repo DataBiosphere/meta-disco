@@ -1,4 +1,5 @@
-"""Reading a nanopore FAST5's sample from its first bytes, and the file's samples from it (#605).
+"""Reading a nanopore FAST5's sample and device from its first bytes, the file's samples from the
+one (#605) and its instrument model from the other (#747).
 
 The FAST5 bytes are built here: the HDF5 signature, padding standing in for the superblock
 and the other objects, and attribute messages laid out as NIA_CARD's files lay them out.
@@ -13,15 +14,21 @@ import pytest
 
 from meta_disco import code_rules, fast5, fetchers
 from meta_disco.evidence import Fast5Evidence, Fast5Header
-from meta_disco.fast5 import Fast5Error, sample_ids
+from meta_disco.fast5 import Fast5Error
 from meta_disco.fetchers import FetchError, fetch_fast5_header
 from meta_disco.file_name import FileName
 from meta_disco.file_types import FAST5_CONFIG
-from meta_disco.header_classifier import classify_from_fast5_header
-from meta_disco.models import CLASSIFIED, NOT_APPLICABLE
+from meta_disco.header_classifier import (
+    FAST5_DEVICES,
+    classify_from_fast5_header,
+    fast5_instrument,
+)
+from meta_disco.models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED
 from meta_disco.pipeline import ClassifyPipeline
 from meta_disco.producers import producer_of
+from meta_disco.rule_engine import CONTENT_TIER
 from meta_disco.sample_identity import FAST5_SAMPLES, NAMED, SEVERAL_SAMPLE_IDS, UNREAD, UNRECOGNISED, Identifier
+from meta_disco.schema_vocab import dimension_values
 from meta_disco.unprocessable import CONTENT_UNREADABLE
 from meta_disco.unprocessable import _reason_for as reason_for
 from tests.metadata_fixtures import valid_record, write_metadata
@@ -72,6 +79,10 @@ def _attribute(
         + raw_value.ljust(size, b"\x00")
     )
     return struct.pack("<HHB3x", kind, len(body), 0) + body
+
+
+def sample_ids(head: bytes) -> list[str]:
+    return fast5.attribute_values(head, fast5.SAMPLE_ID)
 
 
 def _fast5(*messages: bytes, pad: int = 4096) -> bytes:
@@ -213,10 +224,37 @@ def test_a_value_longer_than_its_message_is_refused():
         sample_ids(_fast5(bytes(message)))
 
 
+def test_the_device_type_is_read_beside_the_sample_id():
+    head = _fast5(REAL_MESSAGE, _attribute("device_type", "promethion"))
+    assert fast5.read_header(_reader(head, [])) == Fast5Header(sample_ids=["HG02723"], device_types=["promethion"])
+    assert fast5.read_header(_reader(_fast5(REAL_MESSAGE), [])).device_types == []
+
+
+def test_each_distinct_device_type_is_read_once_in_the_order_found():
+    head = _fast5(*(_attribute("device_type", v) for v in ("promethion", "minion", "promethion")))
+    assert fast5.attribute_values(head, fast5.DEVICE_TYPE) == ["promethion", "minion"]
+
+
+def test_a_device_type_laid_out_otherwise_is_refused_by_its_name():
+    with pytest.raises(Fast5Error, match="a device_type attribute message of version 2"):
+        fast5.attribute_values(_fast5(_attribute("device_type", "promethion", version=2)), fast5.DEVICE_TYPE)
+
+
+def test_a_device_type_laid_out_otherwise_costs_the_device_not_the_sample():
+    head = _fast5(REAL_MESSAGE, _attribute("device_type", "promethion", version=2))
+    assert fast5.read_header(_reader(head, [])) == Fast5Header(sample_ids=["HG02723"], device_types=None)
+
+
+def test_a_sample_id_laid_out_otherwise_still_fails_the_head():
+    head = _fast5(_attribute("sample_id", "HG02723", version=2), _attribute("device_type", "promethion"))
+    with pytest.raises(Fast5Error, match="a sample_id attribute message of version 2"):
+        fast5.read_header(_reader(head, []))
+
+
 def test_the_reader_reads_one_range_from_the_start():
     calls = []
     fetch = _reader(_fast5(REAL_MESSAGE, pad=100_000), calls)
-    assert fast5.read_header(fetch) == Fast5Header(sample_ids=[])  # the attribute sits past the head
+    assert fast5.read_header(fetch) == Fast5Header(sample_ids=[], device_types=[])  # the attribute sits past the head
     assert calls == [(0, fast5.HEAD_LENGTH - 1)]
 
 
@@ -237,6 +275,30 @@ def test_a_cached_header_of_the_wrong_type_is_a_cache_miss():
     assert Fast5Evidence.from_json({"md5sum": MD5, "header": {"sample_ids": "HG02723"}}) is None
     assert Fast5Evidence.from_json({"md5sum": MD5, "header": {}}) is None
     assert Fast5Evidence.from_json({"md5sum": MD5, "header": {"sample_ids": [1]}}) is None
+    assert Fast5Evidence.from_json({"md5sum": MD5, "header": {"sample_ids": [], "device_types": "minion"}}) is None
+
+
+def test_a_device_type_read_as_unreadable_is_cached_as_null(monkeypatch, tmp_path):
+    entry = {"md5sum": MD5, "header": {"sample_ids": ["HG02723"], "device_types": None}}
+    assert Fast5Evidence.from_json(entry).header == Fast5Header(sample_ids=["HG02723"], device_types=None)
+
+    _install(monkeypatch, _fast5(REAL_MESSAGE, _attribute("device_type", "promethion", version=2)))
+    header = fetch_fast5_header(tmp_path, MD5, file_name=NAME)
+    assert header == Fast5Header(sample_ids=["HG02723"], device_types=None)
+    assert json.loads((tmp_path / MD5[:2] / f"{MD5}.json").read_text())["header"]["device_types"] is None
+    monkeypatch.setattr(fetchers, "_fetch_range", _raise_transport)
+    assert fetch_fast5_header(tmp_path, MD5) == header
+
+
+def test_a_cached_header_from_before_the_device_type_is_read_again(monkeypatch, tmp_path):
+    """An entry holding only the sample ids (#605) is a miss, so the head is fetched again (#747)."""
+    old = {"md5sum": MD5, "file_name": NAME, "raw_bytes_fetched": 1, "header": {"sample_ids": ["HG02723"]}}
+    assert Fast5Evidence.from_json(old) is None
+    _install(monkeypatch, _fast5(REAL_MESSAGE, _attribute("device_type", "promethion")))
+    path = tmp_path / MD5[:2] / f"{MD5}.json"
+    path.parent.mkdir()
+    path.write_text(json.dumps(old))
+    assert fetch_fast5_header(tmp_path, MD5, file_name=NAME).device_types == ["promethion"]
 
 
 def test_bytes_that_are_no_fast5_are_a_fetch_error(monkeypatch, tmp_path):
@@ -249,13 +311,15 @@ def test_bytes_that_are_no_fast5_are_a_fetch_error(monkeypatch, tmp_path):
 
 
 def test_one_recognised_sample_id_names_the_files_sample():
-    reading = FAST5_SAMPLES.read(Fast5Header(sample_ids=["GM24385"]), "ANVIL_NIA_CARD_Coriell_Cell_Lines_Open")
+    reading = FAST5_SAMPLES.read(
+        Fast5Header(sample_ids=["GM24385"], device_types=[]), "ANVIL_NIA_CARD_Coriell_Cell_Lines_Open"
+    )
     assert reading.outcome == NAMED
     assert reading.members == frozenset({Identifier("coriell", "NA24385")})
 
 
 def test_a_head_holding_none_is_unread():
-    assert FAST5_SAMPLES.read(Fast5Header(sample_ids=[]), "d").outcome == UNREAD
+    assert FAST5_SAMPLES.read(Fast5Header(sample_ids=[], device_types=[]), "d").outcome == UNREAD
 
 
 @pytest.mark.parametrize(
@@ -266,7 +330,7 @@ def test_a_head_holding_none_is_unread():
     ],
 )
 def test_two_values_or_an_unrecognised_one_name_no_sample(ids, unrecognised):
-    reading = FAST5_SAMPLES.read(Fast5Header(sample_ids=ids), "d")
+    reading = FAST5_SAMPLES.read(Fast5Header(sample_ids=ids, device_types=[]), "d")
     assert (reading.outcome, reading.unrecognised, reading.reference()) == (UNRECOGNISED, unrecognised, None)
 
 
@@ -283,13 +347,54 @@ def test_a_fast5_is_the_fast5_types_and_its_neighbours_stay_where_they_were(name
 
 
 def test_the_classifier_gives_what_the_extension_gives():
-    result = classify_from_fast5_header(Fast5Header(sample_ids=["HG02723"]), name=FileName.parse(NAME))
+    result = classify_from_fast5_header(Fast5Header(sample_ids=["HG02723"], device_types=[]), name=FileName.parse(NAME))
     assert {slot: (result[slot]["value"], result[slot]["status"]) for slot in ("data_type", "platform")} == {
         "data_type": ("raw_signal", CLASSIFIED),
         "platform": ("ONT", CLASSIFIED),
     }
     assert result["reference_assembly"]["status"] == NOT_APPLICABLE
-    assert {e.get("rule_id") for entry in result.values() for e in entry["evidence"]} <= {"nanopore_fast5", None}
+    assert {e.get("rule_id") for entry in result.values() for e in entry["evidence"]} <= {
+        "nanopore_fast5",
+        code_rules.FAST5_DEVICE_TYPE.id,
+        None,
+    }
+
+
+def _instrument(device_types: list[str] | None) -> dict:
+    return classify_from_fast5_header(Fast5Header(sample_ids=[], device_types=device_types), name=FileName.parse(NAME))[
+        "instrument_model"
+    ]
+
+
+def test_every_device_names_a_term_of_the_instrument_vocabulary():
+    assert set(FAST5_DEVICES.values()) <= dimension_values("instrument_model")
+
+
+@pytest.mark.parametrize("device_type, model", sorted(FAST5_DEVICES.items()))
+def test_a_recognised_device_type_gives_the_instrument_model_at_the_content_tier(device_type, model):
+    entry = _instrument([device_type])
+    assert (entry["value"], entry["status"]) == (model, CLASSIFIED)
+    (claim,) = [e for e in entry["evidence"] if e.get("rule_id") == code_rules.FAST5_DEVICE_TYPE.id]
+    assert (claim["tier"], claim["source_type"]) == (CONTENT_TIER, "content_read")
+    assert fast5_instrument(Fast5Header(sample_ids=[], device_types=[device_type]))[0] == model
+
+
+@pytest.mark.parametrize(
+    "device_types, said",
+    [
+        pytest.param([], "holds no readable device_type", id="none"),
+        pytest.param(["flongle"], "'flongle': not a device", id="a value the table lacks"),
+        pytest.param(["PromethION"], "'PromethION': not a device", id="a value in another case"),
+        pytest.param(["promethion", "minion"], "several device_types ['promethion', 'minion']", id="two values"),
+        pytest.param(None, "laid out otherwise", id="one laid out otherwise"),
+    ],
+)
+def test_a_head_naming_no_one_recognised_device_is_left_not_classified_with_what_was_read(device_types, said):
+    entry = _instrument(device_types)
+    assert (entry["value"], entry["status"]) == (None, NOT_CLASSIFIED)
+    (claim,) = [e for e in entry["evidence"] if e.get("rule_id") == code_rules.FAST5_DEVICE_TYPE.id]
+    assert (claim["tier"], claim["status"]) == (CONTENT_TIER, NOT_CLASSIFIED)
+    assert said in claim["reason"]
 
 
 def _run(tmp_path, record) -> dict:
@@ -305,7 +410,8 @@ def _run(tmp_path, record) -> dict:
 
 
 def test_a_failed_read_keeps_what_the_name_gives_and_is_counted_unreadable(monkeypatch, tmp_path):
-    """A fast5's dimensions come from its name, so a read that fails costs it only its samples."""
+    """A fast5's dimensions come from its name, so a read that fails costs it only its samples and its instrument
+    model, and makes no claim about the bytes it did not read."""
     monkeypatch.setattr(fetchers, "_fetch_range", _raise_transport)
     row = _run(tmp_path, valid_record(file_name=NAME, file_format=".fast5", file_md5sum=MD5))
     assert row["samples"] is None
@@ -315,6 +421,7 @@ def test_a_failed_read_keeps_what_the_name_gives_and_is_counted_unreadable(monke
     slots = row["classifications"]
     marked = {s for s, e in slots.items() if any(x.get("rule_id") == code_rules.FETCH_FAILED.id for x in e["evidence"])}
     assert marked and marked == {s for s, e in slots.items() if e["status"] == "not_classified"}
+    assert not [x for e in slots.values() for x in e["evidence"] if x.get("rule_id") == code_rules.FAST5_DEVICE_TYPE.id]
     envelope = json.loads((tmp_path / "out.json").read_text())
     assert envelope["metadata"]["content_unreadable"] == 1
 
@@ -332,8 +439,9 @@ def test_an_archive_declaring_fast5_that_no_type_claims_keeps_what_its_name_give
 
 
 def test_the_pipeline_writes_the_sample_a_real_fast5_names(monkeypatch, tmp_path):
-    """The batch path, with the real fetcher: the row carries the sample, credited to the content rule."""
-    _install(monkeypatch, _fast5(REAL_MESSAGE))
+    """The batch path, with the real fetcher: the row carries the sample and the instrument, each credited to its
+    content rule."""
+    _install(monkeypatch, _fast5(REAL_MESSAGE, _attribute("device_type", "promethion")))
     record = valid_record(
         file_name=NAME, file_format=".fast5", file_md5sum=MD5, dataset_title="ANVIL_NIA_CARD_Coriell_Cell_Lines_Open"
     )
@@ -350,3 +458,15 @@ def test_the_pipeline_writes_the_sample_a_real_fast5_names(monkeypatch, tmp_path
         {"source_type": "content_read", "rule_id": code_rules.FAST5_TRACKING_SAMPLE.id}
     ]
     assert row["classifications"]["data_type"]["value"] == "raw_signal"
+    assert row["classifications"]["instrument_model"]["value"] == "PromethION"
+
+
+def test_a_head_with_no_device_type_keeps_its_sample_and_says_why_it_has_no_instrument(monkeypatch, tmp_path):
+    _install(monkeypatch, _fast5(REAL_MESSAGE))
+    row = _run(tmp_path, valid_record(file_name=NAME, file_format=".fast5", file_md5sum=MD5, dataset_title="d"))
+    assert row["samples"]["count"] == 1
+    entry = row["classifications"]["instrument_model"]
+    assert entry["status"] == NOT_CLASSIFIED
+    assert [e["reason"] for e in entry["evidence"] if e.get("rule_id") == code_rules.FAST5_DEVICE_TYPE.id] == [
+        "the head read holds no readable device_type"
+    ]

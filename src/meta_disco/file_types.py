@@ -90,15 +90,14 @@ class FileTypeConfig:
     # The samples a file's own content names (#357; a header, a sample map's rows, #668, a tar's ``callset.json``, #724),
     # read from the parse (or the payload, for a type without a ``parser``). None means the type reads no samples.
     samples: SampleReader | None = None
-    # The content is read only for ``samples``, the dimensions coming from the name (#605): a
-    # failed read keeps the classifier's answers from the name, rather than none.
-    reads_samples_only: bool = False
+    # The dimensions come from the name, the content read only to add to them (a FAST5's samples,
+    # #605, and its instrument, #747): a failed read keeps the classifier's answers from the name,
+    # rather than none, the classifier given None for the content.
+    answers_from_name: bool = False
 
     def __post_init__(self):
         if self.step is not None and self.parser is None:
             raise ValueError(f"file type {self.name!r} reads a step but declares no parser to read it from")
-        if self.reads_samples_only and self.samples is None:
-            raise ValueError(f"file type {self.name!r} reads content only for samples but declares no sample reader")
 
 
 BAM_CONFIG = FileTypeConfig(
@@ -216,14 +215,15 @@ IDAT_CONFIG = FileTypeConfig(
 )
 
 # Nanopore FAST5 (#605): the rule engine gives the dimensions from the name, as the auxiliary
-# producer did (`nanopore_fast5`); the first 64 KiB are read for the run's sample_id, the file's sample.
+# producer did (`nanopore_fast5`); the first 64 KiB are read for the run's sample_id, the file's
+# sample, and its device_type, the file's instrument model (#747).
 FAST5_CONFIG = FileTypeConfig(
     name="fast5",
     extensions=(".fast5",),
     fetcher=fetch_fast5_header,
     classifier=classify_from_fast5_header,
     samples=FAST5_SAMPLES,
-    reads_samples_only=True,
+    answers_from_name=True,
 )
 
 FILE_TYPE_REGISTRY = {

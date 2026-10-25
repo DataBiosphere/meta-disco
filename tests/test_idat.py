@@ -19,6 +19,7 @@ from meta_disco.file_types import IDAT_CONFIG
 from meta_disco.header_classifier import IDAT_CHIPS, IDAT_SCANNERS, classify_from_idat_header
 from meta_disco.models import CLASSIFIED, NOT_APPLICABLE, NOT_CLASSIFIED
 from meta_disco.pipeline import ClassifyPipeline
+from meta_disco.schema_vocab import dimension_values
 from tests.metadata_fixtures import valid_record, write_metadata
 from tests.test_fetchers import _install, _raise_transport
 
@@ -265,6 +266,13 @@ def _classify(header: IdatHeader) -> dict:
 def _entry(result: dict, field: str) -> tuple:
     entry = result[field]
     return entry["value"], entry["status"], [e.get("rule_id") for e in entry["evidence"]]
+
+
+def test_every_recognised_chip_and_scanner_names_terms_of_the_vocabulary():
+    assert {platform for platform, _ in IDAT_SCANNERS.values()} <= dimension_values("platform")
+    assert {model for _, model in IDAT_SCANNERS.values()} <= dimension_values("instrument_model")
+    assert {modality for _, modality, _ in IDAT_CHIPS.values()} <= dimension_values("data_modality")
+    assert {assay for _, _, assay in IDAT_CHIPS.values()} <= dimension_values("assay_type")
 
 
 def test_a_recognised_chip_and_scanner_decide_four_dimensions():

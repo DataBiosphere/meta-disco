@@ -592,21 +592,23 @@
             "value": "raw_signal"
           },
           "instrument_model": {
-            "credited_to": "not_classified",
+            "credited_to": "filled_by_inference",
             "evidence": [
               {
-                "marker": "not_classified",
-                "reason": "No rule determined a value for instrument_model",
-                "status": "not_classified"
+                "reason": "the head's device_type is 'promethion'",
+                "rule_id": "fast5_device_type",
+                "source_type": "content_read",
+                "tier": 4,
+                "value": "PromethION"
               }
             ],
             "inferred": {
-              "status": "not_classified",
-              "value": null
+              "status": "classified",
+              "value": "PromethION"
             },
-            "status": "not_classified",
-            "use": "published",
-            "value": null
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "PromethION"
           },
           "platform": {
             "credited_to": "conflict_sources",

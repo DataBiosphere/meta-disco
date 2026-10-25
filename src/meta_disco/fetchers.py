@@ -1513,7 +1513,7 @@ def fetch_fast5_header(
     url: str | None = None,
     **kwargs,
 ) -> Fast5Header:
-    """Read the ``sample_id`` values in a nanopore FAST5's first bytes (#605), by one byte range.
+    """Read the ``sample_id`` (#605) and ``device_type`` (#747) values in a nanopore FAST5's first bytes, by one byte range.
 
     ``fast5.read_header`` reads ``fast5.HEAD_LENGTH`` bytes from the start. If url is provided,
     fetches from that URL directly. Otherwise uses the AnVIL S3 mirror. ``is_gzipped`` is ignored: gzipped bytes have no HDF5 signature, and the reader
