@@ -517,13 +517,14 @@ def header_samples(metadata: dict[str, dict]) -> dict[str, dict]:
 
 
 def content_step_counts(metadata: dict[str, dict]) -> dict[str, dict[str, dict[str, int]]]:
-    """Per producer and dataset, the outcomes of the producer's step reader (#609, #621).
+    """Per producer and dataset, the outcomes of the producer's step reader (#609, #621, #683).
 
     Read from each classification file's ``metadata.details.producer_steps`` (``metadata``
     as :func:`run_metadata` gives it), which a
     producer whose type states a step writes (``FileTypeConfig.step``): the VCF producer's
     outcomes are ``producer_steps.OUTCOMES``, the tar and sample-map producers'
-    ``cohort_steps.OUTCOMES``, so each producer's are kept apart. Empty for a run written
+    ``cohort_steps.OUTCOMES``, the bcftools stats producer's ``bcftools_stats.OUTCOMES`` (#683), so each
+    producer's are kept apart. Empty for a run written
     before the readers, or with no such producer.
     """
     found: dict[str, dict[str, dict[str, int]]] = {}
@@ -818,8 +819,8 @@ class Report:
     # do not fit their declaration (`edges.misfits`).
     lineage_counts: dict = field(default_factory=dict)
     # Per producer and dataset, what its step reader made of each file's content
-    # (`producer_steps.OUTCOMES`, #609; `cohort_steps.OUTCOMES`, #621), as the producers'
-    # metadata records it.
+    # (`producer_steps.OUTCOMES`, #609; `cohort_steps.OUTCOMES`, #621; `bcftools_stats.OUTCOMES`, #683), as
+    # the producers' metadata records it.
     content_steps: dict = field(default_factory=dict)
     steps: dict = field(default_factory=lambda: defaultdict(Counter))
     step_conflicts: dict = field(

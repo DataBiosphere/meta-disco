@@ -52,8 +52,8 @@ from .producer_steps import (
     PARENT_AMBIGUOUS,
     PARENT_NOT_FOUND,
     STEPPED,
+    NameStepReader,
     data_name,
-    resolve_names,
 )
 from .record_keys import RecordKey
 from .records import dataset_of, folder_of
@@ -284,28 +284,7 @@ def _is_member_path(path: str) -> bool:
     return edges.parent_kind_of(PurePosixPath(path).name) == MEMBER_KIND
 
 
-class _StepReader:
-    """A run's step reader: the name index its parents resolve in, built once per run from every
-    loaded record (:meth:`for_run`), keeping the records :meth:`keeps` takes (and, for :class:`TarSteps`,
-    the gVCFs a rebuilt list could name), and called per file."""
-
-    PURPOSE = "ground a cohort step's input on its parent"
-
-    def __init__(self, index: edges.NameIndex, key: RecordKey):
-        self.index = index
-        self.key = key
-
-    @staticmethod
-    def keeps(name: str) -> bool:
-        raise NotImplementedError
-
-    @classmethod
-    def for_run(cls, records: Iterable[dict], key: RecordKey, evidence_base: Path):
-        # ``evidence_base`` is every step reader's third argument; these read no other file's content.
-        return cls(edges.parent_index(records, key, cls.keeps, cls.PURPOSE), key)
-
-
-class TarSteps(_StepReader):
+class TarSteps(NameStepReader):
     """A run's reader of the step each GenomicsDB workspace tar's ``vcfheader.vcf`` states, its parents the sample
     maps, or in a folder :data:`REBUILT_MAP_FOLDERS` declares the lists it rebuilds (#726), which it keeps for the
     producer file (:meth:`rebuilt_lists`)."""
@@ -360,10 +339,7 @@ class TarSteps(_StepReader):
         if title is not None and folder is not None and folder in REBUILT_MAP_FOLDERS.get(title, ()):
             reference = PurePosixPath(folder).parent.as_posix()
             return self._rebuild(head, PurePosixPath(named).name, dataset_id, title, reference)
-        parents, outcome = resolve_names(self.index, dataset_id, [PurePosixPath(named).name], folder)
-        if parents is None:
-            return None, outcome
-        return edges.generated_by(code_rules.MERGE_BY_WORKSPACE_HEADER, parents, self.key), STEPPED
+        return self.step(code_rules.MERGE_BY_WORKSPACE_HEADER, [named], dataset_id, folder)
 
     def _rebuild(
         self, head: ParsedTarHead, map_name: str, dataset_id: str, title: str, reference: str
@@ -436,7 +412,7 @@ _GVCF_ROOTS = {
 }
 
 
-class SampleMapSteps(_StepReader):
+class SampleMapSteps(NameStepReader):
     """A run's reader of the cohort each sample map lists, its parents the VCFs."""
 
     @staticmethod
@@ -456,8 +432,4 @@ class SampleMapSteps(_StepReader):
         """
         if rows is None:
             return None, NOT_A_LIST
-        names = [PurePosixPath(path).name for _, path in rows]
-        parents, outcome = resolve_names(self.index, dataset_id, names, folder)
-        if parents is None:
-            return None, outcome
-        return edges.generated_by(code_rules.COHORT_BY_SAMPLE_MAP, parents, self.key), STEPPED
+        return self.step(code_rules.COHORT_BY_SAMPLE_MAP, [path for _, path in rows], dataset_id, folder)

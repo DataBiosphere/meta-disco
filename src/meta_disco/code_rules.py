@@ -90,6 +90,7 @@ RECONCILE_INHERIT = "src/meta_disco/reconcile_inherit.py"
 EDGES = "src/meta_disco/edges.py"
 PRODUCER_STEPS = "src/meta_disco/producer_steps.py"
 COHORT_STEPS = "src/meta_disco/cohort_steps.py"
+BCFTOOLS_STATS = "src/meta_disco/bcftools_stats.py"
 METADATA_SCHEMA = "src/meta_disco/metadata_schema.py"
 SAMPLE_IDENTITY = "src/meta_disco/sample_identity.py"
 RECONCILE_SAMPLES = "src/meta_disco/reconcile_samples.py"
@@ -841,6 +842,24 @@ COHORT_BY_EXTERNAL_SAMPLE_MAP = EdgeRule(
     ),
 )
 
+QC_REPORT_BY_CONTENT = EdgeRule(
+    id="qc_report_by_content",
+    module=BCFTOOLS_STATS,
+    activity=activities.QUALITY_CONTROL,
+    role="reported_on",
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "a bcftools stats report's own text: line 1 naming bcftools stats, and its one ID line's input path, "
+        "the path's base name matched case-insensitively among the dataset's VCFs" + _FOLDER_READ
+    ),
+    rationale=(
+        "bcftools stats writes the path of each file it reports on as an ID line of its report, so the "
+        "report names the VCF its numbers describe (#683). The path is where the workflow ran, so only the "
+        "name is matched. A report on two or more inputs, or whose input no file or two files of the dataset "
+        "carry (the folder not settling it, #717), gives no step."
+    ),
+)
+
 EDGE_RULES = (
     INDEX_BY_NAME,
     CHECKSUM_BY_NAME,
@@ -850,6 +869,7 @@ EDGE_RULES = (
     COHORT_BY_SAMPLE_MAP,
     COHORT_BY_REBUILT_SAMPLE_MAP,
     COHORT_BY_EXTERNAL_SAMPLE_MAP,
+    QC_REPORT_BY_CONTENT,
 )
 
 BAM_READ_GROUP_SAMPLES = SampleRule(
@@ -928,6 +948,19 @@ PSAM_SAMPLE_IDS = SampleRule(
         "with an IID no identifier rule recognises names none, and one with no #FID or #IID header is not read."
     ),
 )
+BCFTOOLS_STATS_SAMPLES = SampleRule(
+    id="bcftools_stats_samples",
+    module=BCFTOOLS_STATS,
+    source_type=SOURCE_CONTENT_READ,
+    reads="a bcftools stats report's PSC lines: the sample name on each",
+    rationale=(
+        "Given samples, bcftools stats reports on exactly those samples' genotypes, one PSC line each, named "
+        "for the sample (#683). A report whose every name is recognised names the file's samples; one with "
+        "a name no identifier rule recognises names none. One with no PSC line names none of its own: where "
+        "its step resolves, its samples are those of the VCF it reports on, passed across it (#668)."
+    ),
+)
+
 SAMPLES_INHERITED_FROM_PARENT = SampleRule(
     id="samples_inherited_from_parent",
     module=RECONCILE_SAMPLES,
@@ -1005,6 +1038,7 @@ SAMPLE_RULES = (
     FAST5_TRACKING_SAMPLE,
     TAR_CALLSET_SAMPLES,
     PSAM_SAMPLE_IDS,
+    BCFTOOLS_STATS_SAMPLES,
     SAMPLES_INHERITED_FROM_PARENT,
     SAMPLES_FROM_ACTIVITY_BIOSAMPLE,
     SAMPLES_FROM_FILESET_SAMPLE_TABLE,

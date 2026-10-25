@@ -35,7 +35,7 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     and in the code. `samples` (#357) is not a dimension: it says which sample a file's data comes from. Its raw value is
     read through the identifier rules (`rules/sample_namespaces.yaml`), never translated by a row (3.4–3.12):
     a sample identifier is recognised by its namespace's pattern, one rule for a family of thousands of
-    values, rather than authored value by value. Reconcile settles it with a header's samples, the
+    values, rather than authored value by value. Reconcile settles it with the samples the file's own content names (a header, a sample map's rows, a bcftools stats report's `PSC` lines, #683), the
     repository's own record of the step that generated the file (an `anvil_activity` or
     `anvil_sequencingactivity` line whose parent is a biosample, tied to a sample record through its
     `repository_ids`, #698), a PLINK fileset's sample table (the `.psam` written beside a `.pgen`, `.pvar`

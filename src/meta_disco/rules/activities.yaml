@@ -138,7 +138,7 @@ activities:
         passes: [data_modality, assay_type, platform, instrument_model, reference_assembly]
         passes_samples: true
     reason: >-
-      A report on one file's content (samtools stats, mosdepth) describes that file's data,
+      A report on one file's content (samtools stats, mosdepth, bcftools stats, #683) describes that file's data,
       so it takes every dimension but its own kind, and that file's samples (#668).
   - term: CoverageActivity
     output: {form: [file], kind: [annotations]}

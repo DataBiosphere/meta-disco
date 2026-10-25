@@ -251,7 +251,7 @@ TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `gener
 |---|---|---|---|
 | `IndexActivity` | index ← indexed file | filename convention, `anvil_activity` `Indexing` | `index_of` |
 | `ChecksumActivity` | checksum ← checked file | filename convention, `anvil_activity` `Checksum` | `checksum_of` |
-| `QualityControlActivity` (ours, under `AnalysisActivity`) | QC report ← the file it reports on | submitter same-row (T2T `samtools_stats`, `mosdepth_*` → `cram`) | `summarizes` |
+| `QualityControlActivity` (ours, under `AnalysisActivity`) | QC report ← the file it reports on | submitter same-row (T2T `samtools_stats`, `mosdepth_*` → `cram`), a bcftools stats report's own `ID` line (T2T report → its VCF, #683) | `summarizes` |
 | `AlignmentActivity` | alignment ← reads | submitter same-row, `@PG`, `anvil_activity` (ENCORE `Alignment: STAR`) | `aligned_from` |
 | `VariantCallActivity` | variants ← alignments | VCF caller command lines, submitter same-row (1000G `cram` → `gvcf`) | `called_from` |
 | `JointGenotypingActivity` (ours, under `VariantCallActivity`; amended by #678) | genotyped callset ← the gVCF store it genotypes (`genotyped_from`) | submitter same-row (T2T `interval`: region VCF ← GenomicsDB tar, #610) | — |

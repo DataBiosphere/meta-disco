@@ -30,6 +30,7 @@ import math
 import sys
 from pathlib import Path
 
+from meta_disco.bcftools_stats import OUTCOMES as STATS_REPORT_STEP_OUTCOMES
 from meta_disco.cohort_steps import OUTCOMES as COHORT_STEP_OUTCOMES
 from meta_disco.models import (
     CLASSIFICATION_FIELDS,
@@ -69,8 +70,8 @@ from meta_disco.sample_identity import NAMED, NO_SAMPLE, UNREAD, UNRECOGNISED
 from meta_disco.schema_vocab import top_term
 from meta_disco.summaries import embed_json, md_code, md_table
 
-# Every outcome a producer's step reader gives, the VCF producer's first (#609, #621).
-CONTENT_STEP_COLUMNS = tuple(dict.fromkeys((*HEADER_STEP_OUTCOMES, *COHORT_STEP_OUTCOMES)))
+# Every outcome a producer's step reader gives, the VCF producer's first (#609, #621, #683).
+CONTENT_STEP_COLUMNS = tuple(dict.fromkeys((*HEADER_STEP_OUTCOMES, *COHORT_STEP_OUTCOMES, *STATS_REPORT_STEP_OUTCOMES)))
 
 PROJECT_ROOT = Path(__file__).parent.parent
 TEMPLATE = PROJECT_ROOT / "docs" / "reconcile-dashboard-template.html"
@@ -1069,7 +1070,7 @@ def _lists_section(heading: str, note: str, empty: str, columns: tuple[str, ...]
 
 
 def _content_steps_section(rows: list[dict]) -> list[str]:
-    """What each producer's step reader made of each file's content, per dataset (#609, #621)."""
+    """What each producer's step reader made of each file's content, per dataset (#609, #621, #683)."""
     lines = [
         "### Steps read from file content",
         "",
@@ -1096,7 +1097,11 @@ def _content_steps_section(rows: list[dict]) -> list[str]:
         "folder whose maps are rebuilt (ANVIL_T2T_CHRY's SGDP tars, #726, below) is *stepped* through the list rebuilt "
         "from its own samples; *map_not_in_layout*: its map is none the run's layout places gVCFs for; *no_samples*: "
         "its `callset.json` gave no samples; *member_not_found* / *member_ambiguous*: a sample's gVCF no file, or more "
-        "than one, carries in the tar's reference folder, or a sample listed twice.",
+        "than one, carries in the tar's reference folder, or a sample listed twice. "
+        "The bcftools stats producer reads the VCF a report's `ID` line names (#683): *stepped*, a "
+        "`QualityControlActivity` with that VCF `reported_on`; *not_a_report*: line 1 is not bcftools stats'; "
+        "*no_input* / *several_inputs*: no `ID` line, or two or more; *input_not_a_vcf*: its one input is not a VCF "
+        "by name; *parent_not_found* / *parent_ambiguous* as above, the report's folder settling a shared name.",
         "",
     ]
     if not rows:

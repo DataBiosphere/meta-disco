@@ -1,8 +1,8 @@
 """The producers of a classification run, and the one rule that routes a file to one.
 
 A *producer* writes one ``*_classifications.json`` file, holding one row per file it
-claims. There are fifteen: the eleven header/content types, which share
-``ClassifyPipeline``, and the four standalone scripts. All fifteen are declared here, and
+claims. There are sixteen: the twelve header/content types, which share
+``ClassifyPipeline``, and the four standalone scripts. All sixteen are declared here, and
 this is where the question every one of them asks — "is this file mine?" — is answered.
 
 Routing was four predicates in four places, and the producer list was three lists that
@@ -79,7 +79,7 @@ class Producer:
         """Whether this producer owns ``record`` — the public "does this type take this file".
 
         The catch-all answers ``False`` for everything, including the records it writes:
-        what it takes is decided by what the other fourteen did not write.
+        what it takes is decided by what the other fifteen did not write.
         """
         return self.claim(record) is not None
 
@@ -87,7 +87,7 @@ class Producer:
 def _header_producer(config: FileTypeConfig) -> Producer:
     """The registry entry for one header/content type.
 
-    All eleven are invoked as ``classify_headers.py --type <name>`` and write
+    All twelve are invoked as ``classify_headers.py --type <name>`` and write
     ``<name>_classifications.json`` — the name that script derives from ``--type``.
     Derived here rather than spelled per type, so registering a type is enough to get it
     produced (#151).
@@ -238,7 +238,7 @@ def route(record: dict, producers: Collection[Producer] | None = None) -> Route 
     ``file_format`` must not raise before the record can be written as a
     ``validation_failed`` row (#155/#161).
 
-    ``None`` is the catch-all's claim — every record the other fourteen did not write. Whether
+    ``None`` is the catch-all's claim — every record the other fifteen did not write. Whether
     a record is *worth* classifying is a separate question with its own home (the #376
     exclusion at load), so no eligibility marker is read here: this answers only who owns
     the file.

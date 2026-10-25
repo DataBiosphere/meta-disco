@@ -2,7 +2,7 @@
 """Classify files no other producer wrote a row for.
 
 The catch-all: the one producer claiming nothing by extension. It takes whatever the
-other fourteen left and runs it through the rule engine. Most files get not_classified on
+other fifteen left and runs it through the rule engine. Most files get not_classified on
 every dimension, which is the point — it makes them visible in coverage reports rather
 than absent from the output.
 

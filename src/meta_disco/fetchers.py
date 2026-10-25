@@ -1435,7 +1435,7 @@ def _read_kept(
 
 
 # =============================================================================
-# WHOLE-TEXT FETCHERS: SAMPLE MAP (#621), PLINK .psam (#751)
+# WHOLE-TEXT FETCHERS: SAMPLE MAP (#621), PLINK .psam (#751), BCFTOOLS STATS REPORT (#683)
 # =============================================================================
 
 
@@ -1461,42 +1461,38 @@ def _fetch_whole_text(
     return text
 
 
-@wrap_as_fetch_error("sample map")
-def fetch_sample_map(
-    evidence_dir: Path,
-    md5sum: str,
-    file_name: str = "",
-    is_gzipped: bool = False,
-    use_cache: bool = True,
-    url: str | None = None,
-    **kwargs,
-) -> str:
-    """Read a GATK sample-name map whole: its text, to the file's end.
+def _whole_text_fetcher(what: str, why_whole: str) -> Callable[..., str]:
+    """A fetcher reading a file whole, its text to the file's end, cached as ``WholeTextEvidence``.
 
-    If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
-    Raises ``FetchError`` when the read fails or stops at ``MAX_DECOMPRESSED`` bytes before
-    the end: a list read in part names part of a cohort.
+    ``what`` names the file in a failure's reason; ``why_whole`` ends the fetcher's docstring, saying
+    what a part read would get wrong.
     """
-    return _fetch_whole_text("sample map", evidence_dir, md5sum, file_name, is_gzipped, use_cache, url)
+
+    @wrap_as_fetch_error(what)
+    def fetch(
+        evidence_dir: Path,
+        md5sum: str,
+        file_name: str = "",
+        is_gzipped: bool = False,
+        use_cache: bool = True,
+        url: str | None = None,
+        **kwargs,
+    ) -> str:
+        return _fetch_whole_text(what, evidence_dir, md5sum, file_name, is_gzipped, use_cache, url)
+
+    fetch.__doc__ = (
+        f"Read a {what} whole: its text, to the file's end.\n\n"
+        "If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.\n"
+        f"Raises ``FetchError`` when the read fails or stops at ``MAX_DECOMPRESSED`` bytes before the end: {why_whole}."
+    )
+    return fetch
 
 
-@wrap_as_fetch_error("PLINK .psam")
-def fetch_psam(
-    evidence_dir: Path,
-    md5sum: str,
-    file_name: str = "",
-    is_gzipped: bool = False,
-    use_cache: bool = True,
-    url: str | None = None,
-    **kwargs,
-) -> str:
-    """Read a PLINK 2 ``.psam`` whole: its text, to the file's end.
-
-    If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
-    Raises ``FetchError`` when the read fails or stops at ``MAX_DECOMPRESSED`` bytes before
-    the end: a sample table read in part names part of a fileset's samples.
-    """
-    return _fetch_whole_text("PLINK .psam", evidence_dir, md5sum, file_name, is_gzipped, use_cache, url)
+fetch_sample_map = _whole_text_fetcher("sample map", "a list read in part names part of a cohort")
+fetch_psam = _whole_text_fetcher("PLINK .psam", "a sample table read in part names part of a fileset's samples")
+fetch_stats_report = _whole_text_fetcher(
+    "bcftools stats report", "a per-sample report read in part names part of its samples"
+)
 
 
 # =============================================================================

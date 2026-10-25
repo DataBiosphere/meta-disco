@@ -336,3 +336,36 @@ def resolve_names(
     if len({name.lower() for name in names}) < len(names) or any(len(parents) > 1 for parents in found):
         return None, PARENT_AMBIGUOUS
     return [parents[0] for parents in found], STEPPED
+
+
+class NameStepReader:
+    """A run's reader of a step whose parents a file's own content names (``cohort_steps``, #621;
+    ``bcftools_stats``, #683): the name index its parents resolve in, built once per run from every
+    loaded record (:meth:`for_run`), keeping the records :meth:`keeps` takes (a subclass may keep
+    more, as ``cohort_steps.TarSteps`` keeps the gVCFs a rebuilt list could name), and called per file."""
+
+    PURPOSE = "ground a step's input on its parent"
+
+    def __init__(self, index: edges.NameIndex, key: RecordKey):
+        self.index = index
+        self.key = key
+
+    @staticmethod
+    def keeps(name: str) -> bool:
+        raise NotImplementedError
+
+    @classmethod
+    def for_run(cls, records: Iterable[dict], key: RecordKey, evidence_base: Path):
+        # ``evidence_base`` is every step reader's third argument; these read no other file's content.
+        return cls(edges.parent_index(records, key, cls.keeps, cls.PURPOSE), key)
+
+    def step(self, rule: EdgeRule, paths: list[str], dataset_id: str, folder: str | None) -> tuple[dict | None, str]:
+        """``rule``'s step with each of ``paths``' base names an input, and :data:`STEPPED`; or None and why not.
+
+        Each base name resolves as :func:`resolve_names` settles it, by the child's ``folder``.
+        """
+        names = [PurePosixPath(path).name for path in paths]
+        parents, outcome = resolve_names(self.index, dataset_id, names, folder)
+        if parents is None:
+            return None, outcome
+        return edges.generated_by(rule, parents, self.key), STEPPED

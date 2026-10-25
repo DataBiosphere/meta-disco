@@ -358,6 +358,248 @@
       }
     ]
   },
+  "bcftools_stats": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "credited_to": "not_classified",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for assay_type",
+                "status": "not_classified"
+              },
+              {
+                "activity": "QualityControlActivity",
+                "claim_state": "mixed",
+                "parent_keys": [
+                  "g-file-c"
+                ],
+                "parent_role": "reported_on",
+                "reason": "Inherited across QualityControlActivity: its reported_on input(s) disagree",
+                "rule_id": "inherited_from_parent",
+                "source_type": "derivation_inheritance"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "data_modality": {
+            "credited_to": "inherited",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for data_modality",
+                "status": "not_classified"
+              },
+              {
+                "activity": "QualityControlActivity",
+                "parent_keys": [
+                  "g-file-c"
+                ],
+                "parent_role": "reported_on",
+                "reason": "Inherited across QualityControlActivity: its reported_on input(s) say genomic",
+                "rule_id": "inherited_from_parent",
+                "source_type": "derivation_inheritance",
+                "value": "genomic"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "genomic"
+          },
+          "data_type": {
+            "credited_to": "filled_by_inference",
+            "evidence": [
+              {
+                "reason": "QC report (samtools stats, mosdepth, bcftools stats) about another file",
+                "rule_id": "text_stats",
+                "source_type": "filename_rule",
+                "tier": 2,
+                "value": "qc_report"
+              }
+            ],
+            "inferred": {
+              "status": "classified",
+              "value": "qc_report"
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "qc_report"
+          },
+          "instrument_model": {
+            "credited_to": "not_classified",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for instrument_model",
+                "status": "not_classified"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "not_classified",
+            "use": "published",
+            "value": null
+          },
+          "platform": {
+            "credited_to": "filled_by_submitter_harmonized",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for platform",
+                "status": "not_classified"
+              },
+              {
+                "join_key": "drs_uri",
+                "match_exact": true,
+                "raw_value": "PacBio",
+                "rule_id": "platform.golden",
+                "source": {
+                  "column": "platform",
+                  "dataset": "AnVIL_GOLDEN",
+                  "name": "anvil",
+                  "table": "sequencing"
+                },
+                "source_type": "repository_metadata",
+                "value": "PACBIO"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "PACBIO"
+          },
+          "reference_assembly": {
+            "build": {
+              "base": "GRCh38",
+              "version": "p14"
+            },
+            "credited_to": "inherited",
+            "evidence": [
+              {
+                "marker": "not_classified",
+                "reason": "No rule determined a value for reference_assembly",
+                "status": "not_classified"
+              },
+              {
+                "activity": "QualityControlActivity",
+                "parent_keys": [
+                  "g-file-c"
+                ],
+                "parent_role": "reported_on",
+                "reason": "Inherited across QualityControlActivity: its reported_on input(s) say GRCh38",
+                "rule_id": "inherited_from_parent",
+                "source_type": "derivation_inheritance",
+                "value": "GRCh38"
+              }
+            ],
+            "inferred": {
+              "status": "not_classified",
+              "value": null
+            },
+            "status": "classified",
+            "use": "meta_disco",
+            "value": "GRCh38"
+          },
+          "variant_kind": {
+            "credited_to": "not_applicable",
+            "evidence": [
+              {
+                "reason": "QC report (samtools stats, mosdepth, bcftools stats) about another file",
+                "rule_id": "text_stats",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          },
+          "variant_origin": {
+            "credited_to": "not_applicable",
+            "evidence": [
+              {
+                "reason": "QC report (samtools stats, mosdepth, bcftools stats) about another file",
+                "rule_id": "text_stats",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 2
+              }
+            ],
+            "inferred": {
+              "status": "not_applicable",
+              "value": null
+            },
+            "status": "not_applicable",
+            "use": "meta_disco",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "drs_uri": "drs://golden/v2_g-object-af",
+        "entry_id": "g-bcftools-stats-1",
+        "file_format": ".txt",
+        "file_id": "g-file-af",
+        "file_name": "sample.per_sample.stats.txt",
+        "file_size": 67516,
+        "generated_by": {
+          "activity": "QualityControlActivity",
+          "inputs": [
+            {
+              "named_by": [
+                {
+                  "rule_id": "qc_report_by_content",
+                  "source_type": "content_read"
+                }
+              ],
+              "parent_file": "sample.vcf.gz",
+              "parent_key": "g-file-c",
+              "parent_kind": "variants",
+              "role": "reported_on"
+            }
+          ],
+          "named_by": [
+            {
+              "rule_id": "qc_report_by_content",
+              "source_type": "content_read"
+            }
+          ]
+        },
+        "md5sum": "afafafafafafafafafafafafafafafaf",
+        "samples": {
+          "count": 1,
+          "list_id": "c07c82cdb7ba8282",
+          "named_by": [
+            {
+              "rule_id": "bcftools_stats_samples",
+              "source_type": "content_read"
+            }
+          ]
+        }
+      }
+    ]
+  },
   "bed": {
     "classifications": [
       {
