@@ -114,11 +114,13 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     Such a name is *also* slot evidence, and the map declares which span of it speaks to which slot
     (#369). Measured on files inference can read it is an agreeing input, which 4.4 records; where
     inference has a content ceiling, or a source's tables carry no metadata values at all — the T2T
-    datasets, 85% of the corpus — it is the only signal there is. Three exclusions are structural, read
+    datasets, 85% of the corpus — it is the only signal there is. Four exclusions are structural, read
     off the source's own naming and enforced by the map's loader: an **entity-shaped** token
     (`interval`) describes a row, not its files; a **derivative** column (`*_index`, `*_bai`)
-    carries no `data_type` of its own payload while keeping the payload's `reference_assembly`; and a
-    **checksum** column (`*_md5`) takes no slot at all, since a checksum holds no data (#596).
+    carries no `data_type` of its own payload while keeping the payload's `reference_assembly`; a
+    **checksum** column (`*_md5`) takes no slot at all, since a checksum holds no data (#596); and a
+    **sample-table** column (`psam`) takes no dimension, only `samples`: PLINK 2 defines the file as
+    its fileset's sample table, so a row's sequencing facts describe its genotype files, not it (#751).
     `docs/interpreting-submitter-tables.md` is the companion reference: what shapes these tables
     come in, why, and what each is worth.
 

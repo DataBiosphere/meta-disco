@@ -38,7 +38,7 @@ datasets:
         assay_type:
           - {cell: sequencing_assay, row_of: sequencing_dataset}
       pvar: *primed_plink
-      # No `psam`: a sample table has no sequencer or library of its own (#751).
+      # No `psam`: a sample table takes no dimension, only samples, which the loader enforces (#751).
   ANVIL_HPRC:
     assembly_annotation:
       all_flagger: &hprc_annotation

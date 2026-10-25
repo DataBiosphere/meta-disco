@@ -86,7 +86,7 @@ table is which.
 
 **Sources stay pure** (3.4). Nothing in a map may cite what a classification run
 concluded; ``test_slot_map`` checks the file for the strings that would. The only
-exclusions are structural. Three are enforced by the loader:
+exclusions are structural. Four are enforced by the loader:
 
 - A **derivative column** — an index or a checksum sidecar, named by
   :data:`DERIVATIVE_SUFFIXES` — carries no ``data_type`` of its own payload. An index is
@@ -96,6 +96,10 @@ exclusions are structural. Three are enforced by the loader:
   holds no data, so its ``data_type`` is ``checksum`` and every carried dimension is
   ``not_applicable`` (the ``checksum_file`` rule,
   #596), and a source value for one would only conflict with it.
+- A **sample-table column** (:data:`SAMPLE_TABLE_SUFFIXES`, a PLINK 2 ``.psam``) takes no
+  dimension, as a checksum takes none: PLINK defines the file as its fileset's sample table,
+  one row per sample and none of their data, so a row's sequencing facts describe its
+  genotype files and not it (#751). Its ``samples`` may be mapped.
 - An **entity-shaped name token** (:data:`ENTITY_TOKENS`) describes a row, not a file. A
   table keyed by ``interval_id`` with chromosome and start columns is one row per
   scatter window; its ``interval`` token says what the row is, and its files are that
@@ -156,6 +160,9 @@ DERIVATIVE_SUFFIXES = frozenset({"index", "idx", "bai", "crai", "tbi", "csi", "f
 # The derivative suffixes that name a checksum, which takes no slot from any source (#596):
 # its own `data_type` is `checksum` and its carried dimensions are `not_applicable`.
 CHECKSUM_SUFFIXES = frozenset({"md5"})
+# A column whose last name token is one of these holds a PLINK 2 fileset's sample table, which takes
+# no dimension from any source, only `samples` (#751).
+SAMPLE_TABLE_SUFFIXES = frozenset({"psam"})
 
 # Name tokens that describe what a *row* is rather than what its files are. Only the
 # ones a slot could otherwise read are listed: `sample`, `participant` and `donor` are
@@ -295,23 +302,32 @@ def is_checksum_column(column: str) -> bool:
     return bool(tokens) and tokens[-1] in CHECKSUM_SUFFIXES
 
 
+def is_sample_table_column(column: str) -> bool:
+    """Whether a column name says its file is a PLINK 2 fileset's sample table."""
+    tokens = name_tokens(column)
+    return bool(tokens) and tokens[-1] in SAMPLE_TABLE_SUFFIXES
+
+
 ENTITY = "entity"
 DERIVATIVE = "derivative"
 CHECKSUM = "checksum"
+SAMPLE_TABLE = "sample_table"
 
 
 def structural_exclusion(slot: str, column: str, span: str) -> str | None:
-    """Which of the three structural rules refuses ``span`` as a source for ``slot`` on ``column``, if any.
+    """Which of the four structural rules refuses ``span`` as a source for ``slot`` on ``column``, if any.
 
     The one statement of the rules: the loader raises on what this returns. ``ENTITY`` — a
     token of the span names what a row is; ``CHECKSUM`` — the column is a checksum sidecar,
-    which takes no slot; ``DERIVATIVE`` — the slot is ``data_type`` and the column is an
-    index sidecar.
+    which takes no slot; ``SAMPLE_TABLE`` — the column is a sample table and the slot a
+    dimension; ``DERIVATIVE`` — the slot is ``data_type`` and the column is an index sidecar.
     """
     if any(token in ENTITY_TOKENS for token in name_tokens(span)):
         return ENTITY
     if is_checksum_column(column):
         return CHECKSUM
+    if slot != SAMPLES_FIELD and is_sample_table_column(column):
+        return SAMPLE_TABLE
     if slot == DATA_TYPE and is_derivative_column(column):
         return DERIVATIVE
     return None
@@ -364,7 +380,7 @@ def load_slot_map(source: Readable | None = None) -> SlotMap:
     """Load and check a slot map; the bundled AnVIL one by default.
 
     The shape rules — the two entry shapes, three source forms, a span inside its name, no
-    source twice, no ``notes``, the three structural exclusions — are checked here, and
+    source twice, no ``notes``, the four structural exclusions — are checked here, and
     the first violation raises ``ValueError`` naming where it sits, as far down as the
     level allows (dataset, table, column, slot; a duplicate key by its line). Source
     purity (contract 3.4) is not a shape and is ``test_slot_map``'s to check. Checked
@@ -556,6 +572,11 @@ def _source(slot: str, item: object, table: str, column: str, at: str) -> SlotSo
         raise ValueError(
             f"{at}: {column!r} is a checksum column (suffixes {sorted(CHECKSUM_SUFFIXES)}), which holds no data, so "
             f"it takes no slot: a checksum's data_type is checksum and its carried dimensions are not_applicable (#596)"
+        )
+    if excluded == SAMPLE_TABLE:
+        raise ValueError(
+            f"{at}: {column!r} is a sample-table column (suffixes {sorted(SAMPLE_TABLE_SUFFIXES)}), a list of "
+            f"samples holding none of their data, so it takes no dimension, only samples (#751)"
         )
     if excluded == DERIVATIVE:
         raise ValueError(
