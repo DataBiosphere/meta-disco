@@ -1,23 +1,30 @@
-"""A file's samples settled at reconcile (#357): header and table, by the step rule, and a parent's across a step (#668)."""
+"""A file's samples settled at reconcile (#357): header and table, by the step rule, a parent's across a step (#668),
+and a PLINK fileset's sample table's (#751)."""
 
 import gzip
 import json
 from pathlib import Path
 
 import pytest
+from generate_reconcile_report import CONFLICT_COLUMNS, conflict_tsv
 
 from meta_disco import code_rules, edges
 from meta_disco.models import SAMPLES_FIELD, SOURCE_REPOSITORY_METADATA, ClaimSource
 from meta_disco.output_utils import (
+    FILES_WITHOUT_SAMPLES_FILE,
     RECONCILED_DIR,
+    SAMPLE_CONFLICTS_FILE,
     SAMPLE_LISTS_FILE,
+    iter_reconciled_artifact,
     iter_reconciled_records,
     iter_reconciled_sample_lists,
+    run_filesets,
 )
 from meta_disco.reconcile_inherit import Step
 from meta_disco.reconcile_samples import (
     AGREED,
     CONFLICT,
+    FILESET_ONLY,
     HEADER_ONLY,
     INCOMPARABLE,
     INHERITED,
@@ -36,9 +43,10 @@ from meta_disco.reconcile_samples import (
     lists_disagree,
     name_disagrees,
     settle,
+    tables_of,
 )
 from meta_disco.record_keys import SOURCE_RECORD_KEYS
-from meta_disco.records import SAMPLE_LISTS_KEY, SAMPLE_OUTCOMES_KEY, UNRECOGNISED_SAMPLES_KEY
+from meta_disco.records import FILESETS_KEY, SAMPLE_LISTS_KEY, SAMPLE_OUTCOMES_KEY, UNRECOGNISED_SAMPLES_KEY
 from meta_disco.sample_identity import Identifier, identifier_rules, reference, sample_list
 from meta_disco.schema.classification_model import ClassificationRecord, SampleList
 from tests.test_reconcile import DATASET, drs, go, record, write_evidence
@@ -473,3 +481,191 @@ def test_a_parent_named_twice_in_a_step_is_one_disagreement():
         DATASET, "c.vcf.gz", frozenset({coriell("HG00097")}), {"activity": "VariantCallActivity", "inputs": twice}
     )
     assert report.parent_disagreements[DATASET] == {"VariantCallActivity": 1}
+
+
+# --- a PLINK fileset's sample table (#751) --------------------------------------------
+
+PSAM = {"source_type": "content_read", "rule_id": code_rules.PSAM_SAMPLE_IDS.id}
+
+
+def write_psam_run(run_dir: Path, psam: dict, entry: dict | None, members: list[int]) -> None:
+    """``psam`` in the psam producer's file, paired with the rows ``members`` names (in the bam file here)."""
+    run_dir.mkdir(parents=True, exist_ok=True)
+    filesets = [{"sample_table": psam["file_id"], "members": [f"file-{n}" for n in members]}]
+    body = {
+        "metadata": {},
+        "classifications": [psam],
+        SAMPLE_LISTS_KEY: [entry] if entry else [],
+        FILESETS_KEY: filesets,
+    }
+    (run_dir / "psam_classifications.json").write_text(json.dumps(body))
+
+
+def psam_row(n: int, *ids: str) -> tuple[dict, dict]:
+    """A `.psam`'s row naming ``ids``, and its list."""
+    row = member(n, f"ACB.{n}.psam")
+    members = [coriell(i) for i in ids]
+    row["samples"] = reference(members, [PSAM])
+    return row, sample_list(members)
+
+
+def member(n: int, name: str) -> dict:
+    row = record(n)
+    row["file_name"] = name
+    return row
+
+
+def test_a_filesets_members_take_its_sample_tables_samples(tmp_path, run, table):
+    psam, entry = psam_row(1, "HG01879", "NA19700")
+    write_psam_run(run, psam, entry, [2, 3, 4])
+    write_bam_run(run, [member(2, "ACB.1.pgen"), member(3, "ACB.1.pvar"), member(4, "ACB.1.log")], [])
+    report = go(run, tmp_path, None, table)
+    rows = reconciled(run)
+    for key in ("file-2", "file-3", "file-4"):
+        samples = rows[key]["samples"]
+        assert samples["list_id"] == entry["list_id"] and samples["count"] == 2
+        assert samples["named_by"] == [
+            {
+                "source_type": "content_read",
+                "rule_id": code_rules.SAMPLES_FROM_FILESET_SAMPLE_TABLE.id,
+                "sample_table_key": "file-1",
+            }
+        ]
+        ClassificationRecord(**rows[key])
+    block = report[SAMPLES_FIELD]["by_dataset"][DATASET]
+    assert block["settled"] == {HEADER_ONLY: 1, FILESET_ONLY: 3}
+    assert block["filesets"] == {PASSED: 3}
+
+
+def test_a_sample_table_naming_none_passes_nothing_and_is_counted(tmp_path, run, table):
+    write_psam_run(run, member(1, "ACB.1.psam"), None, [2])
+    write_bam_run(run, [member(2, "ACB.1.pgen")], [])
+    report = go(run, tmp_path, None, table)
+    assert reconciled(run)["file-2"]["samples"] is None
+    assert report[SAMPLES_FIELD]["by_dataset"][DATASET]["filesets"] == {PARENT_NONE: 1}
+
+
+def test_a_sample_table_in_conflict_passes_nothing(tmp_path, run, evidence, table):
+    psam, entry = psam_row(1, "HG01879")
+    write_psam_run(run, psam, entry, [2])
+    write_bam_run(run, [member(2, "ACB.1.pgen")], [])
+    write_evidence(evidence, [(SAMPLES_FIELD, drs(1), "HG01880")], table="participant", column="participant_id")
+    report = go(run, tmp_path, evidence, table)
+    assert reconciled(run)["file-2"]["samples"] is None
+    block = report[SAMPLES_FIELD]["by_dataset"][DATASET]
+    assert block["settled"] == {CONFLICT: 1, NONE: 1}
+    assert block["filesets"] == {PARENT_CONFLICT: 1}
+    # The member's row names the table apart from a parent: the table is no parent (#751).
+    (row,) = iter_reconciled_artifact(run, FILES_WITHOUT_SAMPLES_FILE)
+    assert row["sample_table_conflict"] == ["file-1"] and "parent_conflict" not in row
+
+
+@pytest.mark.parametrize(
+    ("said", "outcome"),
+    [pytest.param("HG01879", AGREED, id="agreeing"), pytest.param("HG01880", CONFLICT, id="differing")],
+)
+def test_a_members_own_source_settles_with_its_sample_tables(tmp_path, run, evidence, table, said, outcome):
+    psam, entry = psam_row(1, "HG01879")
+    write_psam_run(run, psam, entry, [2])
+    write_bam_run(run, [member(2, "ACB.1.pgen")], [])
+    write_evidence(evidence, [(SAMPLES_FIELD, drs(2), said)], table="participant", column="participant_id")
+    report = go(run, tmp_path, evidence, table)
+    samples = reconciled(run)["file-2"]["samples"]
+    if outcome == AGREED:
+        assert [a["rule_id"] for a in samples["named_by"]] == [
+            "coriell_hg",
+            code_rules.SAMPLES_FROM_FILESET_SAMPLE_TABLE.id,
+        ]
+    else:
+        assert samples is None
+        # The conflicts TSV names the sample table the fileset source came from.
+        _, *lines = conflict_tsv(iter_reconciled_artifact(run, SAMPLE_CONFLICTS_FILE)).splitlines()
+        rows = [dict(zip(CONFLICT_COLUMNS, line.split("\t"), strict=True)) for line in lines]
+        assert {row["source_kind"]: row["from_records"] for row in rows} == {"table": "", "fileset": "file-1"}
+    assert report[SAMPLES_FIELD]["by_dataset"][DATASET]["settled"][outcome] == 1
+
+
+def test_a_members_checksum_takes_what_the_member_took_from_its_table(tmp_path, run, table):
+    """The pairing settles before inheritance, so a step from a member passes the table's samples on."""
+    psam, entry = psam_row(1, "HG01879")
+    write_psam_run(run, psam, entry, [2])
+    md5 = child(3, "ACB.1.pgen.md5", code_rules.CHECKSUM_BY_NAME, 2, "ACB.1.pgen")
+    write_bam_run(run, [md5, member(2, "ACB.1.pgen")], [])
+    report = go(run, tmp_path, None, table)
+    samples = reconciled(run)["file-3"]["samples"]
+    assert samples["list_id"] == entry["list_id"]
+    assert samples["named_by"][0]["rule_id"] == code_rules.SAMPLES_INHERITED_FROM_PARENT.id
+    assert report[SAMPLES_FIELD]["by_dataset"][DATASET]["settled"] == {HEADER_ONLY: 1, FILESET_ONLY: 1, INHERITED: 1}
+
+
+def test_a_member_two_tables_paired_takes_from_neither_where_they_differ():
+    tables = tables_of([{"sample_table": "a", "members": ["m", "x"]}, {"sample_table": "b", "members": ["m"]}])
+    assert tables == {"m": ("a", "b"), "x": ("a",)}
+    report = SampleReport(identifier_rules(), tables=tables)
+    report.members.update({"l1": frozenset({coriell("HG00096")}), "l2": frozenset({coriell("HG00097")})})
+    report.held.update({"a": "l1", "b": "l2"})
+    report._member_own["m"] = ([], DATASET)
+    report.pair()
+    assert report.fileset_outcomes[DATASET] == {PARENTS_DIFFER: 1}
+    assert "m" not in report.held
+
+
+def test_a_damaged_filesets_block_is_refused(run):
+    run.mkdir(parents=True)
+    (run / "psam_classifications.json").write_text(
+        json.dumps({"classifications": [], FILESETS_KEY: [{"sample_table": "a", "members": []}]})
+    )
+    with pytest.raises(ValueError, match="does not name its members"):
+        run_filesets(run)
+
+
+@pytest.mark.parametrize(
+    ("held", "conflicted", "outcome"),
+    [
+        pytest.param({"a": "l1", "b": "l2"}, {"b"}, PARENTS_DIFFER, id="different lists before a conflict"),
+        pytest.param({"a": "l1"}, set(), PARENT_NONE, id="one holding a list, one holding none"),
+        pytest.param({"a": "l1", "b": "l1"}, set(), PASSED, id="two holding one list"),
+    ],
+)
+def test_what_two_sources_pass_first_match_wins(held, conflicted, outcome):
+    report = SampleReport(identifier_rules())
+    report.members.update({"l1": frozenset({coriell("HG00096")}), "l2": frozenset({coriell("HG00097")})})
+    report.held.update(held)
+    report._conflicted.update(conflicted)
+    assert report._passing("c", ("a", "b"), report._conflicted_parents)[0] == outcome
+
+
+def test_two_tables_naming_one_list_both_pass_and_are_both_cited():
+    report = SampleReport(identifier_rules(), tables={"m": ("a", "b")})
+    report.members["l"] = frozenset({coriell("HG00096")})
+    report.held.update({"a": "l", "b": "l"})
+    report._member_own["m"] = ([], DATASET)
+    report.pair()
+    assert [a["sample_table_key"] for a in report._from_table["m"].named_by] == ["a", "b"]
+    assert report.held["m"] == "l"
+
+
+def test_a_member_whose_step_passes_other_samples_keeps_its_tables_source_through_inheritance():
+    """The table's source joins the member's own, so a parent naming another sample makes the member a conflict."""
+    report = SampleReport(identifier_rules(), tables={"m": ("t",)})
+    report.members.update({"l1": frozenset({coriell("HG00096")}), "l2": frozenset({coriell("HG00097")})})
+    report.held.update({"t": "l1", "p": "l2"})
+    own: list[Named] = []
+    report._own["m"] = report._member_own["m"] = (own, DATASET)
+    report.pair()
+    report.inherit({"m": Step("IndexActivity", (("indexed", "p"),))})
+    assert "m" not in report.held and "m" in report._conflicted
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        pytest.param({"sample_table": "a", "members": "x"}, id="members not a list"),
+        pytest.param({"sample_table": "a\nb", "members": ["x"]}, id="a key holding a newline"),
+    ],
+)
+def test_a_filesets_entry_off_the_schema_is_refused(run, entry):
+    run.mkdir(parents=True)
+    (run / "psam_classifications.json").write_text(json.dumps({"classifications": [], FILESETS_KEY: [entry]}))
+    with pytest.raises(ValueError, match="does not name its members"):
+        run_filesets(run)

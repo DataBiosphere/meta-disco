@@ -110,6 +110,7 @@ from .output_utils import (
     reconciled_name,
     relative_to,
     run_file_metadata,
+    run_filesets,
     write_reconciled_file,
 )
 from .producers import PRODUCERS
@@ -1207,6 +1208,10 @@ def reconcile_run(
     ``evidence_root=None`` excludes the entity evidence too: the samples the files name and the
     donors they point to are still written, each record's slots ``not_classified``.
 
+    The PLINK filesets a run's producer files pair (#751, ``output_utils.run_filesets``) are read before
+    the first pass; each member's samples are settled with its ``.psam``'s after it, before inheritance
+    (``reconcile_samples.SampleReport.pair``).
+
     Inheritance (#571, :mod:`reconcile_inherit`) needs every parent's answer before its
     child is written, and the records come file by file, so inheritance reads the run twice,
     after the join's own scan (made when there is evidence or lineage to place). The
@@ -1330,7 +1335,9 @@ def reconcile_run(
     activity = reconcile_samples.activity_sources(lineage, entity_evidence.samples_by_repository_id)
     lineage.biosamples.clear()  # held in `activity` now; the lines are not read again
     pending.biosample_links.clear()
-    samples = reconcile_samples.SampleReport(rules, activity=activity)
+    # The PLINK filesets inference paired (#751), read first: the first pass keeps each member's own sources.
+    tables = reconcile_samples.tables_of(run_filesets(run_dir))
+    samples = reconcile_samples.SampleReport(rules, activity=activity, tables=tables)
     seen: set[str] = set()
     inference_lists: dict[str, dict] = {}
     # The external lists first (#710): each is held under its address, as a record is under its key.
@@ -1358,6 +1365,7 @@ def reconcile_run(
         inheritance = inherit(graph.steps, graph.base.get, graph.resolve, graph.intern)
     except InheritanceCycle as exc:
         raise ReconcileError(str(exc)) from None
+    samples.pair()
     samples.inherit(graph.steps)
     del graph
 

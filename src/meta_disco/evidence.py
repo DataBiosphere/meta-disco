@@ -423,10 +423,10 @@ class TarEvidence(CachedEvidence):
 
 
 @dataclass(frozen=True, kw_only=True)
-class SampleMapEvidence(CachedEvidence):
-    """Cached text of a GATK sample-name map (#621): the whole file, read to its end.
+class WholeTextEvidence(CachedEvidence):
+    """Cached text of a file read whole, to its end: a GATK sample-name map (#621), a PLINK 2 ``.psam`` (#751).
 
-    Empty text is a valid hit (an empty file), which the parse reads as not a list.
+    Empty text is a valid hit (an empty file), which each type's parse reads as giving nothing.
     """
 
     PAYLOAD_KEY: ClassVar[str] = "text"

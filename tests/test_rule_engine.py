@@ -857,7 +857,6 @@ class TestSpecialFileTypes:
         [
             pytest.param("sample.pgen", "genomic", id="PLINK .pgen is genomic"),
             pytest.param("sample.pvar", "genomic", id="PLINK .pvar is genomic"),
-            pytest.param("sample.psam", "genomic", id="PLINK .psam is genomic"),
             pytest.param("sample.h5ad", "transcriptomic", id="single-cell matrix"),
             pytest.param("GTEX-18A6Q-1126.svs", "imaging.microscopy", id="SVS is histology"),
         ],
@@ -1023,6 +1022,21 @@ class TestIntegration:
             pytest.param("NA19189.chr2.hc.vcf.gz", {"data_modality": "genomic"}, id="VCF with chromosome in the name"),
             pytest.param("GTEX-18A6Q-1126.svs", {"data_modality": "imaging.microscopy"}, id="GTEx histology image"),
             pytest.param("HG02558.final.cram.md5", {"data_modality": NOT_APPLICABLE}, id="CRAM MD5 is not_applicable"),
+            # A PLINK 2 sample table holds no data of its own (#751).
+            pytest.param(
+                "ACB.1.psam",
+                {
+                    "data_type": "sample_table",
+                    "data_modality": NOT_APPLICABLE,
+                    "reference_assembly": NOT_APPLICABLE,
+                    "assay_type": NOT_APPLICABLE,
+                    "platform": NOT_APPLICABLE,
+                    "instrument_model": NOT_APPLICABLE,
+                    "variant_kind": NOT_APPLICABLE,
+                    "variant_origin": NOT_APPLICABLE,
+                },
+                id="PLINK .psam is a sample table",
+            ),
             pytest.param("sample.xyz", {"data_modality": NOT_CLASSIFIED}, id="unknown extension is not classified"),
         ],
     )

@@ -1137,6 +1137,197 @@
       "validation_failed": 0
     }
   },
+  "psam": {
+    "classifications": [
+      {
+        "classifications": {
+          "assay_type": {
+            "evidence": [
+              {
+                "reason": "PLINK 2 defines a .psam as its sample information file: a table of samples, one row each, holding none of their data",
+                "rule_id": "plink_sample_table",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
+          "data_modality": {
+            "evidence": [
+              {
+                "reason": "PLINK 2 defines a .psam as its sample information file: a table of samples, one row each, holding none of their data",
+                "rule_id": "plink_sample_table",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
+          "data_type": {
+            "evidence": [
+              {
+                "reason": "PLINK 2 defines a .psam as its sample information file: a table of samples, one row each, holding none of their data",
+                "rule_id": "plink_sample_table",
+                "source_type": "filename_rule",
+                "tier": 1,
+                "value": "sample_table"
+              }
+            ],
+            "status": "classified",
+            "value": "sample_table"
+          },
+          "instrument_model": {
+            "evidence": [
+              {
+                "reason": "PLINK 2 defines a .psam as its sample information file: a table of samples, one row each, holding none of their data",
+                "rule_id": "plink_sample_table",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
+          "platform": {
+            "evidence": [
+              {
+                "reason": "PLINK 2 defines a .psam as its sample information file: a table of samples, one row each, holding none of their data",
+                "rule_id": "plink_sample_table",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
+          "reference_assembly": {
+            "evidence": [
+              {
+                "reason": "PLINK 2 defines a .psam as its sample information file: a table of samples, one row each, holding none of their data",
+                "rule_id": "plink_sample_table",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
+          "variant_kind": {
+            "evidence": [
+              {
+                "reason": "PLINK 2 defines a .psam as its sample information file: a table of samples, one row each, holding none of their data",
+                "rule_id": "plink_sample_table",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          },
+          "variant_origin": {
+            "evidence": [
+              {
+                "reason": "PLINK 2 defines a .psam as its sample information file: a table of samples, one row each, holding none of their data",
+                "rule_id": "plink_sample_table",
+                "source_type": "filename_rule",
+                "status": "not_applicable",
+                "tier": 1
+              }
+            ],
+            "status": "not_applicable",
+            "value": null
+          }
+        },
+        "dataset_title": "GOLDEN_FIXTURE",
+        "drs_uri": "drs://golden/v2_g-object-ad",
+        "entry_id": "g-psam-1",
+        "file_format": ".psam",
+        "file_id": "g-file-ad",
+        "file_name": "ACB.1.psam",
+        "file_size": 1300,
+        "generated_by": null,
+        "md5sum": "adadadadadadadadadadadadadadadad",
+        "samples": {
+          "count": 1,
+          "list_id": "6aaea4d6cc111ddb",
+          "named_by": [
+            {
+              "rule_id": "psam_sample_ids",
+              "source_type": "content_read"
+            }
+          ]
+        }
+      }
+    ],
+    "filesets": [
+      {
+        "members": [
+          "g-file-ae"
+        ],
+        "sample_table": "g-file-ad"
+      }
+    ],
+    "metadata": {
+      "complete": true,
+      "content_unreadable": 0,
+      "details": {
+        "fileset_outcomes": {
+          "GOLDEN_FIXTURE": {
+            "members": 1,
+            "sample_tables": 1
+          }
+        },
+        "sample_outcomes": {
+          "GOLDEN_FIXTURE": {
+            "named": 1
+          }
+        },
+        "unread_samples": {},
+        "unrecognised_samples": {}
+      },
+      "dropped": 0,
+      "errored": 0,
+      "failed": 0,
+      "from_cache": 0,
+      "processed": 1,
+      "provenance": {
+        "code": {
+          "commit": "<commit>",
+          "dirty": "<dirty>",
+          "version": "<version>"
+        },
+        "input": {
+          "catalog": null,
+          "downloaded_at": null,
+          "path": "<path>",
+          "repository": "anvil"
+        },
+        "started_at": "<started_at>"
+      },
+      "successful": 1,
+      "total_to_process": 1,
+      "validation_failed": 0
+    },
+    "sample_lists": [
+      {
+        "list_id": "6aaea4d6cc111ddb",
+        "members": [
+          {
+            "id": "HG01879",
+            "namespace": "coriell"
+          }
+        ]
+      }
+    ]
+  },
   "sample_map": {
     "classifications": [
       {

@@ -249,7 +249,7 @@ Every authored translation rule, by slot and most files first: the source values
 
 | files | published | submitter | external | rule | scope | matches | declares | reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 25,124 | 0 | 18,162 | 6,962 | platform.illumina | `any` | `'ILLUMINA' · 'illumina'` | platform: ILLUMINA | Spelled as our term, as SRA's platform value and as a table-name span. Identity by ruling. |
+| 22,270 | 0 | 15,308 | 6,962 | platform.illumina | `any` | `'ILLUMINA' · 'illumina'` | platform: ILLUMINA | Spelled as our term, as SRA's platform value and as a table-name span. Identity by ruling. |
 | 21,209 | 0 | 14,805 | 6,404 | platform.illumina_novaseq_6000 | `any` | `'Illumina NovaSeq 6000'` | platform: ILLUMINA; instrument_model: Illumina NovaSeq 6000 | An Illumina instrument model, spelled as ENA/SRA's; the model implies the platform. |
 | 1,688 | 0 | 1,688 | 0 | platform.pacbio_smrt | `any` | `'PACBIO_SMRT'` | platform: PACBIO | SRA's platform value for PacBio. |
 | 1,680 | 0 | 1,680 | 0 | platform.illumina_novaseq_x | `any` | `'Illumina NovaSeq X'` | platform: ILLUMINA; instrument_model: Illumina NovaSeq X | An Illumina instrument model, spelled as ENA/SRA's; the model implies the platform. |
@@ -289,7 +289,7 @@ Every authored translation rule, by slot and most files first: the source values
 
 | files | published | submitter | external | rule | scope | matches | declares | reason |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 40,367 | 0 | 33,405 | 6,962 | assay_type.wgs | `any` | `'WGS'` | assay_type: WGS; data_modality: genomic | Whole-genome sequencing, spelled as our term; a WGS library is genomic DNA. |
+| 37,513 | 0 | 30,551 | 6,962 | assay_type.wgs | `any` | `'WGS'` | assay_type: WGS; data_modality: genomic | Whole-genome sequencing, spelled as our term; a WGS library is genomic DNA. |
 | 6,733 | 0 | 6,733 | 0 | assay_type.single_nucleus_rna_sequencing_assay | `any` | `['single-nucleus RNA sequencing assay']` | assay_type: snRNA-seq; data_modality: transcriptomic | IGVF's `file.assay_titles`. Single-nucleus RNA sequencing, EFO:0009809 (#533); RNA-seq measures the transcriptome. |
 | 3,770 | 0 | 3,770 | 0 | assay_type.hi_c | `any` | `'Hi-C' · 'hic'` | data_modality: epigenomic.3d_contact_maps | Hi-C measures chromatin contacts, which MODAL's `3D contact maps` names (#563); the modality is the information measured, not the use HPRC puts it to (scaffolding). The vocabulary has no assay term for it yet (#399), so nothing is declared for assay_type. `hic` is the table-name span of the same data. |
 | 12 | 0 | 12 | 0 | assay_type.single_nucleus_atac_seq+single_nucleus_rna_sequencing_assay | `anvil / AnVIL_IGVF_Mouse_R1` | `['single-nucleus ATAC-seq', 'single-nucleus RNA sequencing assay']` | assay_type: SHARE-seq | IGVF's `file.assay_titles`. Both assays of one SHARE-seq experiment: IGVF's analysis sets that carry the pair (IGVFDS5339UKYM, IGVFDS5530HYKI) give `preferred_assay_titles: ["SHARE-seq"]`, EFO:0022962. Nothing is declared for data_modality. The value is the analysis set's label, on every file of the set, and each file holds one half: the count matrices and kallisto outputs are RNA, the fragment files ATAC. Any one modality would be wrong for some of them, and the vocabulary holds one per file, so each file's own evidence decides. Scoped to this dataset: the two titles alone do not name the protocol, since another joint assay (10x Multiome for one) could carry the same pair, so elsewhere the value selects no row and is queued. |

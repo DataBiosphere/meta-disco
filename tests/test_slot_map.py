@@ -505,7 +505,12 @@ def test_a_cell_of_the_row_and_the_same_cell_of_a_linked_row_are_two_sources(tmp
 
 @pytest.mark.parametrize(
     ("column", "slot", "fragment"),
-    [("pgen_md5", "platform", "checksum column"), ("pgen_index", "data_type", "index column")],
+    [
+        ("pgen_md5", "platform", "checksum column"),
+        ("pgen_index", "data_type", "index column"),
+        ("psam", "platform", "sample-table column"),
+        ("psam", "assay_type", "sample-table column"),
+    ],
 )
 def test_a_linked_cell_obeys_the_link_columns_structural_exclusions(tmp_path, column, slot, fragment):
     text = f"catalog: anvil15\ndatasets:\n  D:\n    plink_file_wide:\n      {column}:\n        {slot}:\n          - {{cell: x, row_of: sequencing_dataset}}\n"
@@ -548,3 +553,9 @@ def test_two_sources_differing_where_a_dot_falls_are_two_sources(tmp_path):
         "          - {cell: c, row_of: a.b}\n          - {cell: b.c, row_of: a}\n",
     )
     assert len(load(tmp_path, text).entries[0].slots["platform"]) == 2
+
+
+def test_a_sample_table_column_may_name_its_samples(tmp_path):
+    """A `.psam` takes no dimension (#751), but a cell naming its samples is the one slot it may take."""
+    text = "catalog: anvil15\ndatasets:\n  D:\n    plink_file_wide:\n      psam:\n        samples:\n          - {cell: sample_id}\n"
+    assert load(tmp_path, text).entries[0].slots["samples"][0].value == "sample_id"

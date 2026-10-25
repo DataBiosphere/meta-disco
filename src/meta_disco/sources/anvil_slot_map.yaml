@@ -33,14 +33,12 @@ datasets:
       pgen: &primed_plink
         reference_assembly:
           - {cell: reference_assembly, row_of: sequencing_dataset}
-        platform: &primed_platform
+        platform:
           - {cell: seq_platform, row_of: sequencing_dataset}
-        assay_type: &primed_assay
+        assay_type:
           - {cell: sequencing_assay, row_of: sequencing_dataset}
-      psam:
-        platform: *primed_platform
-        assay_type: *primed_assay
       pvar: *primed_plink
+      # No `psam`: a sample table takes no dimension, only samples, which the loader enforces (#751).
   ANVIL_HPRC:
     assembly_annotation:
       all_flagger: &hprc_annotation

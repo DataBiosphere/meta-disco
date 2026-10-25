@@ -127,7 +127,9 @@ evidence}` entry — plus the controlled vocabulary:
 - **data_type_enum**: dotted terms with `is_a` to the term before the last dot (#607),
   e.g. `annotations.coverage` under `annotations`; a callset's kind and origin are
   `variant_kind` and `variant_origin`, not `variants` subterms (ADR-0003, #657), and
-  `variants.gvcf` is the one format term left in the tree until a format slot exists
+  `variants.gvcf` is the one format term left in the tree until a format slot exists; a
+  file of no data of its own has its own top-level term, as `sample_map` (#621) and
+  `sample_table`, a PLINK 2 `.psam` (#751), with the other seven dimensions `not_applicable`
 - **variant_kind_enum**: `small` and `structural`, the one dimension whose value is a list
   (`models.MULTIVALUED_FIELDS`, ADR-0003, #654): a claim declares one kind, a string, and
   the record stores the settled value as `["small"]` (`models.stored_value` /
@@ -389,10 +391,10 @@ evidence}` entry — plus the controlled vocabulary:
     and cohort steps; reconcile's external sample maps have no path). It makes no claim, and no output record carries it.
   - **Every producer builds `records.OutputRecord`** (#450) — the pipeline through
     `from_work_item`, the four standalone producers through `from_record`. A per-record
-    field added there reaches all fourteen outputs; one wired into a producer does not.
+    field added there reaches all fifteen outputs; one wired into a producer does not.
     That is why the per-producer sweeps for the catalog identity (#433), and formerly
     for the `published` block (#424, deleted by #513), are gone: `test_output_shape`
-    pins the record's key set across all fourteen instead.
+    pins the record's key set across all fifteen instead.
     Add a new standalone producer to `STANDALONE_PRODUCERS` in `tests/producer_sweep`
     and that test picks it up.
   - **Output records carry no `dataset_id`** (#450). It is an input-contract slot and
@@ -448,8 +450,9 @@ evidence}` entry — plus the controlled vocabulary:
     Inference reads it from the file's own content, a header, a sample map's rows, a nanopore
     FAST5's `sample_id` (`fast5`, #605: found by name in the first 64 KiB, its attribute
     message parsed whole; the same head's `device_type` gives the file's `instrument_model`,
-    #747) or an SGDP workspace tar's `callset.json` (#724; a wanted tar whose head was read
-    but whose `callset.json` gave no names is counted by cause, `unread_samples`) (`FileTypeConfig.samples`, its readers among `code_rules.SAMPLE_RULES`), all of its strings or none, and each producer file holds its lists under
+    #747), an SGDP workspace tar's `callset.json` (#724; a wanted tar whose head was read
+    but whose `callset.json` gave no names is counted by cause, `unread_samples`) or a PLINK 2 `.psam`'s
+    IIDs (`plink`, #751, read whole; its `#FID`/`#IID` header required) (`FileTypeConfig.samples`, its readers among `code_rules.SAMPLE_RULES`), all of its strings or none, and each producer file holds its lists under
     `sample_lists`. A submitter table states it through the slot map, one cell per column
     (`samples` is the one non-dimension in `models.EVIDENCE_FIELDS`, never translated by the
     value map), and `make check-slot-map` refuses a column whose files' names mostly name
@@ -468,7 +471,13 @@ evidence}` entry — plus the controlled vocabulary:
     role declares `passes_samples` in `rules/activities.yaml` (index, checksum, QC report, coverage track,
     cohort merge from its sample map, whose own rows name its samples), as one more source credited
     `samples_inherited_from_parent` (#668, contract 4.9); across any other step the child keeps its own and a
-    disagreeing pair is counted in the report's samples block.
+    disagreeing pair is counted in the report's samples block. **A PLINK fileset's `.pgen`, `.pvar` and `.log`
+    take its `.psam`'s samples** (#751): the psam producer pairs each `.psam` with the files in its folder under
+    its stem (`plink.filesets`, folder required) and writes the pairs under its file's `filesets`
+    (`records.FILESETS_KEY`); reconcile reads them first (`output_utils.run_filesets`) and gives each member the
+    `.psam`'s settled samples as one more source (`SampleReport.pair`, before inheritance), credited
+    `samples_from_fileset_sample_table` with the `.psam`'s `sample_table_key`. No step is crossed: the four are
+    written together, so no `generated_by` is written.
   - **Donors and samples are records keyed by their identifier** (#693, ADR-0002 decision 1 as
     amended): reconcile (`reconcile_entities`) writes `reconciled/donors.ndjson.gz`, a
     `DonorRecord` per donor with `phenotypic_sex`, `genetic_ancestry` and more (`models.DONOR_FIELDS`)
@@ -514,7 +523,7 @@ evidence}` entry — plus the controlled vocabulary:
     of its chain, so the record is keyed by `coriell:HG01504` or `hgdp:HGDP01163` and lists SGDP's own
     `sgdp:S_Spanish-2` under `synonyms`.
     No donor value is copied onto a file record.
-  - **A producer is declared once**, in `producers.PRODUCERS` — the fourteen writers of a
+  - **A producer is declared once**, in `producers.PRODUCERS` — the fifteen writers of a
     run's `*_classifications.json` files. Add one there, never to a second list:
     `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,
     and the three hand-maintained lists they replaced are what let a registered type

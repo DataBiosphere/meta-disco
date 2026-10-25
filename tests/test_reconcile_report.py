@@ -613,10 +613,10 @@ def test_the_samples_section_counts_how_each_dataset_settled(tmp_path, evidence,
     assert "## Samples: whose data each file holds" in md
     header = (
         "| dataset | header named | header unrecognised | header no_sample | header unread | agreed | header_only "
-        "| table_only | activity_only | inherited |"
+        "| table_only | activity_only | fileset_only | inherited |"
     )
     assert header in md
-    assert f"| `{DATASET}` | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 1 | 0 |" in md
+    assert f"| `{DATASET}` | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 1 | 0 |" in md
     assert "None in this run." in md
     assert "`Sample` (1)" in md
     # Every table value no rule recognises, with its table, column and files (contract 5.2).
@@ -634,6 +634,7 @@ def test_the_samples_section_lists_what_passed_and_each_parent_disagreement():
         "name_disagreements": 0,
         "name_disagreement_examples": [],
         "inheritance": {"IndexActivity": {"passed": 2, "parent_none": 1}},
+        "filesets": {"passed": 3, "parent_none": 1},
         "parent_disagreements": {"AlignmentActivity": 1, "VariantCallActivity": 1},
         "parent_disagreement_examples": [
             {"file_name": "a.cram", "activity": "AlignmentActivity", "parent_file": "a.fastq.gz"},
@@ -642,6 +643,9 @@ def test_the_samples_section_lists_what_passed_and_each_parent_disagreement():
     }
     md = "\n".join(rr._samples_section(rr.samples_rows({"samples": {"by_dataset": {DATASET: block}}})))
     assert f"| `{DATASET}` | `IndexActivity` | 2 | 0 | 0 | 0 | 1 |" in md
+    # What each PLINK fileset's sample table gave its members (#751).
+    assert "### PLINK filesets" in md
+    assert f"| `{DATASET}` | 3 | 0 | 0 | 0 | 1 |" in md
     assert "| dataset | activity | pairs | examples |" in md
     assert f"| `{DATASET}` | `AlignmentActivity` | 1 | `a.cram` ← `a.fastq.gz` |" in md
     assert f"| `{DATASET}` | `VariantCallActivity` | 1 | `a.vcf.gz` ← `a.cram` |" in md

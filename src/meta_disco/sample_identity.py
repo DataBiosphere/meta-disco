@@ -454,3 +454,5 @@ TAR_SAMPLES = SampleReader(
     why_unread=attrgetter("samples_unread"),
 )
 EXTERNAL_SAMPLE_MAP_SAMPLES = SampleReader(code_rules.EXTERNAL_SAMPLE_MAP_ROWS, _sample_map_strings)
+# A `.psam`'s IIDs (``plink.parse_psam``, #751), or why they were not read.
+PSAM_SAMPLES = SampleReader(code_rules.PSAM_SAMPLE_IDS, attrgetter("iids"), why_unread=attrgetter("unread"))

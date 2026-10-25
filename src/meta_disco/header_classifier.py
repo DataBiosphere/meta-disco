@@ -42,6 +42,7 @@ from .variant_origins import read_origin
 
 if TYPE_CHECKING:
     from .cohort_steps import ParsedTarHead
+    from .plink import PsamRows
     from .rule_engine import ExtendedClassificationResult, RuleEngine
 
 # Text GFA formats this module can parse. The other graph extensions the
@@ -1239,6 +1240,21 @@ def fast5_instrument(header: Fast5Header) -> tuple[str | None, str]:
     if model is None:
         return None, f"the head's device_type is {_quoted(devices[0])}: not a device this rule recognises"
     return model, f"the head's device_type is {devices[0]!r}"
+
+
+def classify_from_psam(
+    rows: "PsamRows | None",
+    *,
+    name: FileName = FileName.EMPTY,
+    file_size: int | None = None,
+    file_format: str | None = None,
+) -> dict:
+    """Classify a PLINK 2 ``.psam`` from its name alone (``plink_sample_table``, #751).
+
+    ``rows`` are read for its samples (``sample_identity.PSAM_SAMPLES``), not here; ``file_format`` is
+    accepted to match the uniform ``_fetch_and_classify`` call, ``.psam`` standing in for it.
+    """
+    return _classify_by_name(name, ".psam", file_size).to_output_dict()
 
 
 def classify_from_fast5_header(

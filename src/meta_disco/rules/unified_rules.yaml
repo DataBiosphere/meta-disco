@@ -294,11 +294,31 @@ rules:
     tier: 1
     scope: extension
     when:
-      extensions: [".pgen", ".pvar", ".psam"]
+      extensions: [".pgen", ".pvar"]
     then:
       data_modality: genomic
       data_type: genotypes
-    rationale: "PLINK files contain genotype data (genomic)"
+    rationale: "PLINK 2 genotypes (.pgen) and their variants (.pvar) are genotype data (genomic)"
+
+  # A `.psam` is the fileset's sample table: one row per sample, naming it and its
+  # parents, sex and population, and no genotype, read, coordinate or caller (#751).
+  # Its rows are read for the fileset's samples (`psam_sample_ids`), not here.
+  - id: plink_sample_table
+    tier: 1
+    scope: extension
+    when:
+      extensions: [".psam"]
+    then:
+      data_type: sample_table
+      status:
+        data_modality: not_applicable
+        reference_assembly: not_applicable
+        assay_type: not_applicable
+        platform: not_applicable
+        instrument_model: not_applicable
+        variant_kind: not_applicable
+        variant_origin: not_applicable
+    rationale: "PLINK 2 defines a .psam as its sample information file: a table of samples, one row each, holding none of their data"
 
   # ---------------------------------------------------------------------------
   # Illumina BeadChip intensity files

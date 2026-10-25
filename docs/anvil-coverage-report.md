@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-10-24 15:15:07**
+Classification run: **2026-10-24 21:52:15**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,088** files.
@@ -24,12 +24,12 @@ Processed **708,088** files.
 |---|---:|---:|---:|
 | **Data Modality** | 379,527 (53.6%) | 328,561 (46.4%) | 0 (0.0%) |
 | **Data Type** | 685,435 (96.8%) | 22,653 (3.2%) | 0 (0.0%) |
-| **Platform** | 70,125 (9.9%) | 637,963 (90.1%) | 0 (0.0%) |
-| **Reference Assembly** | 292,948 (41.4%) | 415,132 (58.6%) | 8 (0.0%) |
-| **Assay Type** | 28,145 (4.0%) | 679,943 (96.0%) | 0 (0.0%) |
-| **Instrument Model** | 35,596 (5.0%) | 672,492 (95.0%) | 0 (0.0%) |
-| **Variant Kind** | 416,503 (58.8%) | 291,585 (41.2%) | 0 (0.0%) |
-| **Variant Origin** | 416,515 (58.8%) | 291,573 (41.2%) | 0 (0.0%) |
+| **Platform** | 72,979 (10.3%) | 635,109 (89.7%) | 0 (0.0%) |
+| **Reference Assembly** | 295,802 (41.8%) | 412,278 (58.2%) | 8 (0.0%) |
+| **Assay Type** | 30,999 (4.4%) | 677,089 (95.6%) | 0 (0.0%) |
+| **Instrument Model** | 38,450 (5.4%) | 669,638 (94.6%) | 0 (0.0%) |
+| **Variant Kind** | 419,357 (59.2%) | 288,731 (40.8%) | 0 (0.0%) |
+| **Variant Origin** | 419,369 (59.2%) | 288,719 (40.8%) | 0 (0.0%) |
 
 ---
 
@@ -84,9 +84,9 @@ Processed **708,088** files.
 
 | Data Modality | count | % | extensions |
 |---|---:|---:|---|
-| `genomic` | 352,441 | 49.8% | .vcf (201,645)<br>(none) (124,470)<br>.cram (10,555)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.g.vcf (2,504)<br>.bed (1,715)<br>.bam (1,688)<br>.fa (936)<br>.gfa (326)<br>.fasta (24)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
+| `genomic` | 349,587 | 49.4% | .vcf (201,645)<br>(none) (124,470)<br>.cram (10,555)<br>.pvar (2,854)<br>.pgen (2,854)<br>.g.vcf (2,504)<br>.bed (1,715)<br>.bam (1,688)<br>.fa (936)<br>.gfa (326)<br>.fasta (24)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
 | `not_classified` | 328,561 | 46.4% | .tbi (169,531)<br>.txt (42,477)<br>.csi (41,186)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.crai (10,317)<br>(none) (10,071)<br>.bed (9,768)<br>.bam (2,757)<br>.bai (2,742)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.paf (297)<br>.sam (192)<br>.cram (68)<br>.vcf (23)<br>.csv (18)<br>.fasta (14)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.fa (4)<br>.fna (2)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
-| `not_applicable` | 20,968 | 3.0% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.tsv (24) |
+| `not_applicable` | 23,822 | 3.4% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.psam (2,854)<br>.tsv (24) |
 | `transcriptomic` | 5,930 | 0.8% | .bw (2,536)<br>.bam (2,329)<br>.sf (634)<br>.h5ad (350)<br>(none) (64)<br>.bed (12)<br>.csv (3)<br>.txt (2) |
 | `genomic.genotyping` | 160 | 0.0% | .idat (160) |
 | `epigenomic.methylation` | 28 | 0.0% | .bed (28) |
@@ -139,9 +139,10 @@ Processed **708,088** files.
 | `checksum` | 14,233 | 2.0% | .md5 (14,233) |
 | `raw_signal` | 12,522 | 1.8% | .fast5 (12,509)<br>.pod5 (11)<br>(none) (2) |
 | `annotations.coverage` | 9,533 | 1.3% | .bed (6,997)<br>.bw (2,536) |
-| `genotypes` | 8,562 | 1.2% | .pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854) |
+| `genotypes` | 5,708 | 0.8% | .pvar (2,854)<br>.pgen (2,854) |
 | `log` | 3,637 | 0.5% | .log (3,637) |
 | `images` | 3,074 | 0.4% | .png (3,074) |
+| `sample_table` | 2,854 | 0.4% | .psam (2,854) |
 | `annotations` | 1,755 | 0.2% | .bed (1,755) |
 | `assembly` | 960 | 0.1% | .fa (936)<br>.fasta (24) |
 | `quantification` | 634 | 0.1% | .sf (634) |
@@ -158,8 +159,8 @@ Processed **708,088** files.
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 70,125 | 9.9% |
-| **Not classified** | 637,963 | 90.1% |
+| **Classified** | 72,979 | 10.3% |
+| **Not classified** | 635,109 | 89.7% |
 | **Conflict** | 0 | 0.0% |
 
 ### What's not classified?
@@ -175,7 +176,6 @@ Processed **708,088** files.
 | .crai | 10,317 | `No reason recorded` |
 | .bam | 3,512 | `No rule determined a value for platform` |
 | .pvar | 2,854 | `No rule determined a value for platform` |
-| .psam | 2,854 | `No rule determined a value for platform` |
 | .pgen | 2,854 | `No rule determined a value for platform` |
 | .bai | 2,742 | `No reason recorded` |
 | .bw | 2,536 | `No rule determined a value for platform` |
@@ -205,9 +205,9 @@ Processed **708,088** files.
 
 | Platform | count | % | extensions |
 |---|---:|---:|---|
-| `not_classified` | 637,963 | 90.1% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.bed (11,523)<br>.crai (10,317)<br>.bam (3,512)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.h5ad (350)<br>.paf (297)<br>.sam (192)<br>.csv (21)<br>.dict (9)<br>.pbi (7)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
+| `not_classified` | 635,109 | 89.7% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.bed (11,523)<br>.crai (10,317)<br>.bam (3,512)<br>.pvar (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.h5ad (350)<br>.paf (297)<br>.sam (192)<br>.csv (21)<br>.dict (9)<br>.pbi (7)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
 | `ILLUMINA` | 30,949 | 4.4% | .fastq (20,166)<br>.cram (10,623)<br>.idat (160) |
-| `not_applicable` | 22,290 | 3.1% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.fa (940)<br>.gfa (326)<br>.fasta (38)<br>.tsv (24)<br>.xg (8)<br>.gbwt (6)<br>.fna (2)<br>.gbz (2) |
+| `not_applicable` | 25,144 | 3.6% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.psam (2,854)<br>.fa (940)<br>.gfa (326)<br>.fasta (38)<br>.tsv (24)<br>.xg (8)<br>.gbwt (6)<br>.fna (2)<br>.gbz (2) |
 | `ONT` | 13,985 | 2.0% | .fast5 (12,509)<br>.bam (1,328)<br>.fastq (137)<br>.pod5 (11) |
 | `PACBIO` | 2,901 | 0.4% | .bam (1,934)<br>.fastq (967) |
 
@@ -219,8 +219,8 @@ Processed **708,088** files.
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 292,948 | 41.4% |
-| **Not classified** | 415,132 | 58.6% |
+| **Classified** | 295,802 | 41.8% |
+| **Not classified** | 412,278 | 58.2% |
 | **Conflict** | 8 | 0.0% |
 
 ### What's not classified?
@@ -232,7 +232,6 @@ Processed **708,088** files.
 | .txt | 42,479 | `No rule determined a value for reference_assembly` |
 | .csi | 41,186 | `No reason recorded` |
 | .crai | 10,317 | `No reason recorded` |
-| .psam | 2,854 | `No rule determined a value for reference_assembly` |
 | .pgen | 2,853 | `No rule determined a value for reference_assembly` |
 | .bai | 2,742 | `No reason recorded` |
 | .bw | 2,536 | `No rule determined a value for reference_assembly` |
@@ -271,10 +270,10 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 
 | Reference Assembly | count | % | extensions |
 |---|---:|---:|---|
-| `not_classified` | 415,132 | 58.6% | .tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.crai (10,317)<br>.psam (2,854)<br>.pgen (2,853)<br>.bai (2,742)<br>.bw (2,536)<br>.gff3 (1,386)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (456)<br>.h5ad (350)<br>.gfa (314)<br>.paf (296)<br>.sam (192)<br>.bed (36)<br>.vcf (26)<br>.csv (21)<br>.pbi (7)<br>.fasta (3)<br>.bam (2)<br>.chain (1)<br>.dict (1) |
+| `not_classified` | 412,278 | 58.2% | .tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.crai (10,317)<br>.pgen (2,853)<br>.bai (2,742)<br>.bw (2,536)<br>.gff3 (1,386)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (456)<br>.h5ad (350)<br>.gfa (314)<br>.paf (296)<br>.sam (192)<br>.bed (36)<br>.vcf (26)<br>.csv (21)<br>.pbi (7)<br>.fasta (3)<br>.bam (2)<br>.chain (1)<br>.dict (1) |
 | `t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r` | 111,756 | 15.8% | .vcf (108,478)<br>.cram (3,202)<br>.bam (76) |
 | `T2T-CHM13v2.0` | 87,747 | 12.4% | .vcf (83,804)<br>.cram (3,481)<br>.bam (462) |
-| `not_applicable` | 62,913 | 8.9% | .fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,509)<br>.bed (3,922)<br>.log (3,637)<br>.bam (3,113)<br>.png (3,074)<br>.fa (936)<br>.idat (160)<br>.fasta (24)<br>.tsv (24)<br>.pod5 (11) |
+| `not_applicable` | 65,767 | 9.3% | .fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,509)<br>.bed (3,922)<br>.log (3,637)<br>.bam (3,113)<br>.png (3,074)<br>.psam (2,854)<br>.fa (936)<br>.idat (160)<br>.fasta (24)<br>.tsv (24)<br>.pod5 (11) |
 | `GRCh38` | 20,705 | 2.9% | .vcf (9,186)<br>.cram (3,837)<br>.g.vcf (2,504)<br>.bam (2,341)<br>.pvar (1,427)<br>.bed (817)<br>.chain (462)<br>.gff3 (88)<br>.gfa (6)<br>.fasta (3)<br>.dict (3)<br>.min (3)<br>.xg (3)<br>.dist (3)<br>.snarls (3)<br>.gbwt (3)<br>.gg (3)<br>.trans (3)<br>.fna (2)<br>.fa (1)<br>.pgen (1)<br>.sizes (1)<br>.paf (1)<br>.hal (1)<br>.delta (1)<br>.hapl (1)<br>.gbz (1) |
 | `CHM13` | 7,395 | 1.0% | .bed (6,744)<br>.chain (462)<br>.gff3 (90)<br>.vcf (54)<br>.fasta (7)<br>.gfa (6)<br>.dict (4)<br>.fa (3)<br>.gbwt (3)<br>.dist (3)<br>.min (3)<br>.trans (3)<br>.xg (3)<br>.gg (3)<br>.snarls (3)<br>.sizes (1)<br>.hal (1)<br>.hapl (1)<br>.gbz (1) |
 | `GRCh37` | 1,463 | 0.2% | .pvar (1,427)<br>.vcf (34)<br>.bed (2) |
@@ -292,8 +291,8 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 28,145 | 4.0% |
-| **Not classified** | 679,943 | 96.0% |
+| **Classified** | 30,999 | 4.4% |
+| **Not classified** | 677,089 | 95.6% |
 | **Conflict** | 0 | 0.0% |
 
 ### What's not classified?
@@ -312,7 +311,6 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | .crai | 10,317 | `No reason recorded` |
 | .bam | 4,675 | `No rule determined a value for assay_type` |
 | .pvar | 2,854 | `No rule determined a value for assay_type` |
-| .psam | 2,854 | `No rule determined a value for assay_type` |
 | .pgen | 2,854 | `No rule determined a value for assay_type` |
 | .bai | 2,742 | `No reason recorded` |
 | .g.vcf | 2,504 | `No rule determined a value for assay_type` |
@@ -340,8 +338,8 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 
 | Assay Type | count | % | extensions |
 |---|---:|---:|---|
-| `not_classified` | 679,943 | 96.0% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,541)<br>.txt (42,479)<br>.csi (41,186)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.bed (11,511)<br>.cram (10,623)<br>.crai (10,317)<br>.bam (4,675)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.paf (297)<br>.sam (192)<br>.csv (21)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
-| `not_applicable` | 22,290 | 3.1% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.fa (940)<br>.gfa (326)<br>.fasta (38)<br>.tsv (24)<br>.xg (8)<br>.gbwt (6)<br>.fna (2)<br>.gbz (2) |
+| `not_classified` | 677,089 | 95.6% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,541)<br>.txt (42,479)<br>.csi (41,186)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.bed (11,511)<br>.cram (10,623)<br>.crai (10,317)<br>.bam (4,675)<br>.pvar (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.paf (297)<br>.sam (192)<br>.csv (21)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
+| `not_applicable` | 25,144 | 3.6% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.psam (2,854)<br>.fa (940)<br>.gfa (326)<br>.fasta (38)<br>.tsv (24)<br>.xg (8)<br>.gbwt (6)<br>.fna (2)<br>.gbz (2) |
 | `RNA-seq` | 5,281 | 0.7% | .bw (2,536)<br>.bam (2,099)<br>.sf (634)<br>.bed (12) |
 | `sc/snRNA-seq` | 414 | 0.1% | .h5ad (350)<br>(none) (64) |
 | `Genotyping array` | 160 | 0.0% | .idat (160) |
@@ -354,8 +352,8 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 35,596 | 5.0% |
-| **Not classified** | 672,492 | 95.0% |
+| **Classified** | 38,450 | 5.4% |
+| **Not classified** | 669,638 | 94.6% |
 | **Conflict** | 0 | 0.0% |
 
 ### What's not classified?
@@ -373,7 +371,6 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | .crai | 10,317 | `No reason recorded` |
 | .bam | 6,090 | `No rule determined a value for instrument_model` |
 | .pvar | 2,854 | `No rule determined a value for instrument_model` |
-| .psam | 2,854 | `No rule determined a value for instrument_model` |
 | .pgen | 2,854 | `No rule determined a value for instrument_model` |
 | .bai | 2,742 | `No reason recorded` |
 | .bw | 2,536 | `No rule determined a value for instrument_model` |
@@ -405,8 +402,8 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 
 | Instrument Model | count | % | extensions |
 |---|---:|---:|---|
-| `not_classified` | 672,492 | 95.0% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.fastq (21,270)<br>.bed (11,523)<br>.cram (10,555)<br>.crai (10,317)<br>.bam (6,090)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.h5ad (350)<br>.paf (297)<br>.sam (192)<br>.fast5 (115)<br>.csv (21)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
-| `not_applicable` | 22,290 | 3.1% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.fa (940)<br>.gfa (326)<br>.fasta (38)<br>.tsv (24)<br>.xg (8)<br>.gbwt (6)<br>.fna (2)<br>.gbz (2) |
+| `not_classified` | 669,638 | 94.6% | .vcf (201,668)<br>.tbi (169,531)<br>(none) (134,605)<br>.txt (42,479)<br>.csi (41,186)<br>.fastq (21,270)<br>.bed (11,523)<br>.cram (10,555)<br>.crai (10,317)<br>.bam (6,090)<br>.pvar (2,854)<br>.pgen (2,854)<br>.bai (2,742)<br>.bw (2,536)<br>.g.vcf (2,504)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.sf (634)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.h5ad (350)<br>.paf (297)<br>.sam (192)<br>.fast5 (115)<br>.csv (21)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
+| `not_applicable` | 25,144 | 3.6% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.psam (2,854)<br>.fa (940)<br>.gfa (326)<br>.fasta (38)<br>.tsv (24)<br>.xg (8)<br>.gbwt (6)<br>.fna (2)<br>.gbz (2) |
 | `PromethION` | 12,394 | 1.8% | .fast5 (12,394) |
 | `Revio` | 684 | 0.1% | .bam (684) |
 | `Illumina iScan` | 160 | 0.0% | .idat (160) |
@@ -420,8 +417,8 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 416,503 | 58.8% |
-| **Not classified** | 291,585 | 41.2% |
+| **Classified** | 419,357 | 59.2% |
+| **Not classified** | 288,731 | 40.8% |
 | **Conflict** | 0 | 0.0% |
 
 ### What's not classified?
@@ -435,7 +432,6 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | (none) | 10,270 | `No rule determined a value for variant_kind` |
 | .txt | 4,929 | `No rule determined a value for variant_kind` |
 | .pvar | 2,854 | `not a VCF: a PLINK 2 .pvar records no step of its own` |
-| .psam | 2,854 | `No rule determined a value for variant_kind` |
 | .pgen | 2,854 | `No rule determined a value for variant_kind` |
 | .bed | 2,771 | `No rule determined a value for variant_kind` |
 | .bai | 2,742 | `No reason recorded` |
@@ -467,8 +463,8 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | Variant Kind | count | % | extensions |
 |---|---:|---:|---|
 | `small` | 293,230 | 41.4% | .vcf (166,391)<br>(none) (124,335)<br>.g.vcf (2,504) |
-| `not_classified` | 291,585 | 41.2% | .tbi (169,531)<br>.csi (41,186)<br>.vcf (35,124)<br>.crai (10,317)<br>(none) (10,270)<br>.txt (4,929)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bed (2,771)<br>.bai (2,742)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.gfa (326)<br>.paf (297)<br>.sam (192)<br>.csv (18)<br>.dict (9)<br>.xg (8)<br>.pbi (7)<br>.gbwt (6)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.gbz (2)<br>.delta (1) |
-| `not_applicable` | 123,120 | 17.4% | .txt (37,550)<br>.fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,509)<br>.cram (10,623)<br>.bed (8,752)<br>.bam (6,774)<br>.log (3,637)<br>.png (3,074)<br>.bw (2,536)<br>.fa (940)<br>.sf (634)<br>.h5ad (350)<br>.idat (160)<br>.fasta (38)<br>.tsv (24)<br>.pod5 (11)<br>.csv (3)<br>.fna (2) |
+| `not_classified` | 288,731 | 40.8% | .tbi (169,531)<br>.csi (41,186)<br>.vcf (35,124)<br>.crai (10,317)<br>(none) (10,270)<br>.txt (4,929)<br>.pvar (2,854)<br>.pgen (2,854)<br>.bed (2,771)<br>.bai (2,742)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.gfa (326)<br>.paf (297)<br>.sam (192)<br>.csv (18)<br>.dict (9)<br>.xg (8)<br>.pbi (7)<br>.gbwt (6)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.gbz (2)<br>.delta (1) |
+| `not_applicable` | 125,974 | 17.8% | .txt (37,550)<br>.fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,509)<br>.cram (10,623)<br>.bed (8,752)<br>.bam (6,774)<br>.log (3,637)<br>.png (3,074)<br>.psam (2,854)<br>.bw (2,536)<br>.fa (940)<br>.sf (634)<br>.h5ad (350)<br>.idat (160)<br>.fasta (38)<br>.tsv (24)<br>.pod5 (11)<br>.csv (3)<br>.fna (2) |
 | `structural` | 153 | 0.0% | .vcf (153) |
 
 **Note**: Read from the caller that made a VCF: its header's producing step, walked back through steps that keep the kind, or a `##source` naming one tool, looked up in `rules/callers.yaml` (#654); a GenomicsDB workspace's from the caller its own `vcfheader.vcf` names, found the same way (#678). Not applicable to a file whose rule says it holds no variants. An index, a VCF genotyped from a GenomicsDB workspace (whose header names the import but not the caller) and a merge of such VCFs take their parents' kind only at reconcile, which this report does not read.
@@ -479,8 +475,8 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 
 | | count | % |
 |---|---:|---:|
-| **Classified** | 416,515 | 58.8% |
-| **Not classified** | 291,573 | 41.2% |
+| **Classified** | 419,369 | 59.2% |
+| **Not classified** | 288,719 | 40.8% |
 | **Conflict** | 0 | 0.0% |
 
 ### What's not classified?
@@ -494,7 +490,6 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | (none) | 10,270 | `No rule determined a value for variant_origin` |
 | .txt | 4,929 | `No rule determined a value for variant_origin` |
 | .pvar | 2,854 | `not a VCF: a PLINK 2 .pvar records no step of its own` |
-| .psam | 2,854 | `No rule determined a value for variant_origin` |
 | .pgen | 2,854 | `No rule determined a value for variant_origin` |
 | .bed | 2,771 | `No rule determined a value for variant_origin` |
 | .bai | 2,742 | `No reason recorded` |
@@ -526,8 +521,8 @@ Rules at the same tier disagreed and no curator rule has answered it; no value i
 | Variant Origin | count | % | extensions |
 |---|---:|---:|---|
 | `germline` | 293,395 | 41.4% | .vcf (166,556)<br>(none) (124,335)<br>.g.vcf (2,504) |
-| `not_classified` | 291,573 | 41.2% | .tbi (169,531)<br>.csi (41,186)<br>.vcf (35,112)<br>.crai (10,317)<br>(none) (10,270)<br>.txt (4,929)<br>.pvar (2,854)<br>.psam (2,854)<br>.pgen (2,854)<br>.bed (2,771)<br>.bai (2,742)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.gfa (326)<br>.paf (297)<br>.sam (192)<br>.csv (18)<br>.dict (9)<br>.xg (8)<br>.pbi (7)<br>.gbwt (6)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.gbz (2)<br>.delta (1) |
-| `not_applicable` | 123,120 | 17.4% | .txt (37,550)<br>.fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,509)<br>.cram (10,623)<br>.bed (8,752)<br>.bam (6,774)<br>.log (3,637)<br>.png (3,074)<br>.bw (2,536)<br>.fa (940)<br>.sf (634)<br>.h5ad (350)<br>.idat (160)<br>.fasta (38)<br>.tsv (24)<br>.pod5 (11)<br>.csv (3)<br>.fna (2) |
+| `not_classified` | 288,719 | 40.8% | .tbi (169,531)<br>.csi (41,186)<br>.vcf (35,112)<br>.crai (10,317)<br>(none) (10,270)<br>.txt (4,929)<br>.pvar (2,854)<br>.pgen (2,854)<br>.bed (2,771)<br>.bai (2,742)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.gfa (326)<br>.paf (297)<br>.sam (192)<br>.csv (18)<br>.dict (9)<br>.xg (8)<br>.pbi (7)<br>.gbwt (6)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.gbz (2)<br>.delta (1) |
+| `not_applicable` | 125,974 | 17.8% | .txt (37,550)<br>.fastq (21,270)<br>.md5 (14,233)<br>.fast5 (12,509)<br>.cram (10,623)<br>.bed (8,752)<br>.bam (6,774)<br>.log (3,637)<br>.png (3,074)<br>.psam (2,854)<br>.bw (2,536)<br>.fa (940)<br>.sf (634)<br>.h5ad (350)<br>.idat (160)<br>.fasta (38)<br>.tsv (24)<br>.pod5 (11)<br>.csv (3)<br>.fna (2) |
 
 **Note**: Germline or somatic, read from the caller a VCF's header names, or the caller of the calls a GenomicsDB workspace imported, found as for the kind and looked up in `rules/callers.yaml` (#658, #678). A caller with a somatic mode (Sniffles2) gives its origin only where its command line shows the mode was off. Not applicable to a file whose rule says it holds no variants. An index, a VCF genotyped from a workspace, a merge of such VCFs and a filtered callset take their parents' origin only at reconcile, which this report does not read.
 

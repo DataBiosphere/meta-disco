@@ -24,10 +24,13 @@ from .metadata_schema import (
     classification_blocking_reasons,
     validation_failed_classifications,
 )
+from .plink import Filesets
 from .producers import producer_for
 from .provenance import run_provenance
 from .record_keys import record_key
 from .records import (
+    FILESET_OUTCOMES_KEY,
+    FILESETS_KEY,
     REBUILT_LISTS_KEY,
     SAMPLE_LISTS_KEY,
     SAMPLE_OUTCOMES_KEY,
@@ -269,6 +272,9 @@ class ClassifyPipeline:
         # #609), built by ``run`` from the whole input, not this type's share of it — a
         # VCF's parent is a CRAM. None for every other type.
         self._step: Callable | None = None
+        # The filesets a type's files head (``FileTypeConfig.filesets``, #751), found by ``run`` from
+        # the whole input, as the step reader is. None for every other type.
+        self._filesets: Filesets | None = None
 
     def run(self) -> list[dict]:
         """Execute the full pipeline: load -> filter -> parse -> fetch+classify -> write.
@@ -278,10 +284,11 @@ class ClassifyPipeline:
         record whose classifier-relevant fields violate the input contract (#161).
         Everything downstream reads typed attributes, not raw ``dict`` keys.
         """
-        # A type that states a step needs the source's record key, which the input's envelope
-        # names: refused here, before any work, where the envelope names none (an `.ndjson`
-        # input), as the index producer and the catch-all refuse it.
-        key = record_key(load_envelope(self.input_path), self.input_path) if self.config.step is not None else None
+        # A type that states a step, or pairs filesets (#751), needs the source's record key, which
+        # the input's envelope names: refused here, before any work, where the envelope names none
+        # (an `.ndjson` input), as the index producer and the catch-all refuse it.
+        wants_key = self.config.step is not None or self.config.filesets is not None
+        key = record_key(load_envelope(self.input_path), self.input_path) if wants_key else None
         provenance = run_provenance(self.input_path)
         loaded = self._load_input()
         records = self._filter_records(loaded)
@@ -333,6 +340,8 @@ class ClassifyPipeline:
 
         if self.config.step is not None:
             self._step = self.config.step(loaded, key, self.evidence_base)
+        if self.config.filesets is not None:
+            self._filesets = self.config.filesets(loaded, key)
         # The step reader keeps what it needs of the input; the rest need not outlive the load.
         del loaded
 
@@ -705,6 +714,13 @@ class ClassifyPipeline:
         rebuilt_lists = self._step.rebuilt_lists() if isinstance(self._step, RebuildsLists) else None
         if rebuilt_lists:
             print(f"  Lists rebuilt: {len(rebuilt_lists):,}")
+        filesets = None
+        if self._filesets is not None:
+            filesets = self._filesets.entries
+            outcomes = {dataset: dict(counts) for dataset, counts in sorted(self._filesets.counts.items())}
+            details = {**(details or {}), FILESET_OUTCOMES_KEY: outcomes}
+            for dataset, counts in outcomes.items():
+                print(f"  Filesets, {dataset}: {', '.join(f'{k} {v:,}' for k, v in counts.items())}")
         classifications = self._save_final(
             total,
             successful,
@@ -716,6 +732,7 @@ class ClassifyPipeline:
             details=details,
             sample_lists=sample_lists,
             rebuilt_lists=rebuilt_lists,
+            filesets=filesets,
         )
 
         print(f"\nSaved to {self.output_path}")
@@ -735,6 +752,7 @@ class ClassifyPipeline:
         details: dict | None = None,
         sample_lists: list[dict] | None = None,
         rebuilt_lists: list[dict] | None = None,
+        filesets: list[dict] | None = None,
     ) -> list[dict]:
         """Write final JSON output from NDJSON progress file.
 
@@ -742,7 +760,9 @@ class ClassifyPipeline:
         records under ``SAMPLE_LISTS_KEY``: every list a record's ``samples`` points to,
         once. None writes no such key. ``rebuilt_lists``, for a type whose step reader rebuilds
         lists (:class:`RebuildsLists`, #726), is written after them under ``REBUILT_LISTS_KEY``,
-        each list once; None writes no such key.
+        each list once; None writes no such key. ``filesets``, for a type whose files head a PLINK
+        fileset (``FileTypeConfig.filesets``, #751), is written after them under ``FILESETS_KEY``;
+        None writes no such key.
 
         ``unreadable`` is persisted alongside ``from_cache``: an all-not_classified
         record from a failed fetch is otherwise indistinguishable from one whose
@@ -778,6 +798,7 @@ class ClassifyPipeline:
                     "classifications": classifications,
                     **({SAMPLE_LISTS_KEY: sample_lists} if sample_lists is not None else {}),
                     **({REBUILT_LISTS_KEY: rebuilt_lists} if rebuilt_lists is not None else {}),
+                    **({FILESETS_KEY: filesets} if filesets is not None else {}),
                 },
                 f,
                 indent=2,
