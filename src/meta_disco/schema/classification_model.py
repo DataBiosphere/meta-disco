@@ -120,13 +120,9 @@ linkml_meta = LinkMLMeta({'default_prefix': 'anvil',
 
 class DataModalityEnum(str, Enum):
     """
-    The biological signal a file carries: "the biological nature of the information gathered as the result of an Activity, independent of the technology or methods used to produce the information", in the words of AnVIL's Findability Subset (FSS), whose recommended values for its `data_modality` field are the Broad's MODAL ontology (github.com/broadinstitute/modal) term for term (#563). This enum is that tree: each value spells its MODAL term as a dotted path, `is_a` names its parent, and `meaning` is its MODAL id. `title` is MODAL's label with its first letter capitalised ("DNA methylation" for `epigenomic.methylation`, #755). Single-cell versus bulk is not a modality here, since it is a property of the experiment, so `assay_type` records it (`sc/snRNA-seq`, `snRNA-seq`, #533). A record holds one term, the most specific its evidence supports, which may be a parent: nothing emits a `genomic` child yet, so a WGS library is `genomic`. A consumer that filters on a parent walks `is_a`.
+    The biological signal a file carries: "the biological nature of the information gathered as the result of an Activity, independent of the technology or methods used to produce the information", in the words of AnVIL's Findability Subset (FSS), whose recommended values for its `data_modality` field are the Broad's MODAL ontology (github.com/broadinstitute/modal, #563). This enum is that tree less four terms: each value spells its MODAL term as a dotted path, `is_a` names its parent, and `meaning` is its MODAL id. `title` is MODAL's label with its first letter capitalised ("DNA methylation" for `epigenomic.methylation`, #755). MODAL's four children of `genomic` are left out (#756), since each names a method or a product rather than the biological nature of the data, against the definition above: `assembly` (MODAL:0000011) is what a file holds, which `data_type` records (`assembly`); `exome` (MODAL:0000012), `whole genome` (MODAL:0000014) and `genotyping` (MODAL:0000013, defined by EDAM's operation Genotyping) are assays or an analysis, which `assay_type` records (`WES`, `WGS`, `Genotyping array`). docs/anvil-fss-departures.md lists this departure from FSS. Single-cell versus bulk is not a modality here, for the same reason: it is a property of the experiment, so `assay_type` records it (`sc/snRNA-seq`, `snRNA-seq`, #533). A record holds one term, the most specific its evidence supports, which may be a parent: `genomic` has no child here, so a WGS library is `genomic`. A consumer that filters on a parent walks `is_a`.
     """
     Genomic = "genomic"
-    Assembly = "genomic.assembly"
-    Exome = "genomic.exome"
-    Genotyping = "genomic.genotyping"
-    Whole_genome = "genomic.whole_genome"
     Transcriptomic = "transcriptomic"
     Spatial_transcriptomics = "transcriptomic.spatial"
     Transcriptomic_nontargeted = "transcriptomic.nontargeted"
@@ -216,15 +212,15 @@ GRC assemblies are named at the major release: contig lengths are identical acro
     T2T_CHM13v1FULL_STOP0 = "T2T-CHM13v1.0"
     T2T_CHM13v1FULL_STOP1 = "T2T-CHM13v1.1"
     T2T_CHM13v2FULL_STOP0 = "T2T-CHM13v2.0"
-    T2T_CHM13v1FULL_STOP0_with_GRCh38_chrY = "t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r"
+    t2t_chm13FULL_STOP20200921FULL_STOPwithGRCh38chrYFULL_STOPchrEBVFULL_STOPchrYKI270740v1r = "t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r"
     """
     T2T-CHM13v1.0 with GRCh38's chrY grafted on.
     """
-    T2T_CHM13v1FULL_STOP1_with_GRCh38_chrY = "CHM13Y_EBV_v1.1"
+    CHM13Y_EBV_v1FULL_STOP1 = "CHM13Y_EBV_v1.1"
     """
     T2T-CHM13v1.1 with GRCh38's chrY grafted on.
     """
-    T2T_CHM13v1FULL_STOP0_with_HG002_chrY = "t2t-chm13.20200921.HG002chrY.chrEBV"
+    t2t_chm13FULL_STOP20200921FULL_STOPHG002chrYFULL_STOPchrEBV = "t2t-chm13.20200921.HG002chrY.chrEBV"
     """
     T2T-CHM13v1.0 with HG002's chrY grafted on.
     """

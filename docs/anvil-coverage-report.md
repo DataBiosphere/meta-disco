@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-10-25 09:17:51**
+Classification run: **2026-10-25 15:09:50**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,088** files.
@@ -84,11 +84,10 @@ Processed **708,088** files.
 
 | Data Modality | count | % | extensions |
 |---|---:|---:|---|
-| `genomic` | 349,587 | 49.4% | .vcf (201,645)<br>(none) (124,470)<br>.cram (10,555)<br>.pvar (2,854)<br>.pgen (2,854)<br>.g.vcf (2,504)<br>.bed (1,715)<br>.bam (1,688)<br>.fa (936)<br>.gfa (326)<br>.fasta (24)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
+| `genomic` | 349,747 | 49.4% | .vcf (201,645)<br>(none) (124,470)<br>.cram (10,555)<br>.pvar (2,854)<br>.pgen (2,854)<br>.g.vcf (2,504)<br>.bed (1,715)<br>.bam (1,688)<br>.fa (936)<br>.gfa (326)<br>.idat (160)<br>.fasta (24)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
 | `not_classified` | 328,561 | 46.4% | .tbi (169,531)<br>.txt (42,477)<br>.csi (41,186)<br>.fastq (21,270)<br>.fast5 (12,509)<br>.crai (10,317)<br>(none) (10,071)<br>.bed (9,768)<br>.bam (2,757)<br>.bai (2,742)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.fai (477)<br>.gzi (466)<br>.bigwig (462)<br>.sizes (458)<br>.paf (297)<br>.sam (192)<br>.cram (68)<br>.vcf (23)<br>.csv (18)<br>.fasta (14)<br>.pod5 (11)<br>.dict (9)<br>.pbi (7)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.fa (4)<br>.fna (2)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
 | `not_applicable` | 23,822 | 3.4% | .md5 (14,233)<br>.log (3,637)<br>.png (3,074)<br>.psam (2,854)<br>.tsv (24) |
 | `transcriptomic` | 5,930 | 0.8% | .bw (2,536)<br>.bam (2,329)<br>.sf (634)<br>.h5ad (350)<br>(none) (64)<br>.bed (12)<br>.csv (3)<br>.txt (2) |
-| `genomic.genotyping` | 160 | 0.0% | .idat (160) |
 | `epigenomic.methylation` | 28 | 0.0% | .bed (28) |
 
 ---

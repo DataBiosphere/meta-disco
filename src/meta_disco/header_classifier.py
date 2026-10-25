@@ -1109,7 +1109,7 @@ IDAT_CHIPS: dict[tuple[str, int], tuple[str, str, str]] = {
     # The HPRC's Infinium Omni2.5-8 v1.3, all 160 of its corpus IDATs (#603).
     ("1-95um_multi-swath_for_8x2-5M", 2_522_340): (
         "an Illumina genotyping BeadChip",
-        "genomic.genotyping",
+        "genomic",
         "Genotyping array",
     ),
 }

@@ -115,7 +115,8 @@ evidence}` entry — plus the controlled vocabulary:
   and rhesus macaque's `Mmul_10` and marmoset's `mCalJa1.2.pat.X` (#636)
 - **data_modality_enum**: AnVIL FSS's recommended values, the Broad's MODAL tree, as dotted
   paths with `is_a` and MODAL ids (#563): genomic, transcriptomic, epigenomic, imaging,
-  proteomic, metabolomic, microbiome and their children
+  proteomic, metabolomic, microbiome and their children, less `genomic`'s four (#756);
+  `docs/anvil-fss-departures.md` lists where our values depart from FSS
 - **classification_status_enum**: classified, not_applicable, not_classified, conflict
 - **instrument_model_enum**: ENA/SRA's instrument-model strings for the platforms in
   `platform_enum`, with EFO ids as `meaning` where EFO has the same model (#532), and our own
