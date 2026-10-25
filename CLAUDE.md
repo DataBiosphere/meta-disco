@@ -151,6 +151,11 @@ evidence}` entry — plus the controlled vocabulary:
 
 `status` is required on every dimension; `value` is null unless status is `classified`.
 
+Every value of the enums `schema_vocab.VOCABULARY_ENUMS` names carries a `title`, the words a
+reader is shown (#755), read through `schema_vocab.value_label`; the value stays the key every
+filter, rule and join uses. `gen-pydantic` names a generated enum's members after the titles, so
+code names a member by its value (`DataModalityEnum("genomic")`), never by its Python name.
+
 ## Design Principles
 
 - **Accuracy over efficiency**: Always prefer reading actual file content (headers, indices, range requests) over guessing from filenames. If there is an exact method to determine a classification — even if it requires downloading headers or running compute — use it.

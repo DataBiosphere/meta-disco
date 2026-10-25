@@ -187,6 +187,17 @@ def value_meaning(field: str, value: str) -> str | None:
     return _term_spec(field, value).get("meaning")
 
 
+def value_label(field: str, value: str) -> str:
+    """The words a reader is shown for a term, its ``title`` (``DNA methylation`` for ``epigenomic.methylation``, #755).
+
+    The value stays the key every filter, rule and join uses; the title is for display
+    only. Returns the value itself where the term records no title. Raises the same
+    errors as :func:`value_ancestors` for a value outside the vocabulary, an
+    unrecognized field or a missing enum.
+    """
+    return _term_spec(field, value).get("title", value)
+
+
 def most_specific(field: str, values: Iterable[str]) -> str | None:
     """The one of ``values`` that every other is, or sits below in the ``is_a`` hierarchy; None if they do not nest.
 
