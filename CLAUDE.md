@@ -151,6 +151,11 @@ evidence}` entry — plus the controlled vocabulary:
 
 `status` is required on every dimension; `value` is null unless status is `classified`.
 
+Every value of the enums `schema_vocab.VOCABULARY_ENUMS` names carries a `title`, its display
+label (#755, `schema_vocab.value_label`). `gen-pydantic` names a generated enum's members after the
+titles, by linkml's design (linkml#1810; NMDC's model has `mSOLIDUSz = "mass_charge_ratio"`), so a
+reworded title renames a member: name one by its value (`DataModalityEnum("genomic")`).
+
 ## Design Principles
 
 - **Accuracy over efficiency**: Always prefer reading actual file content (headers, indices, range requests) over guessing from filenames. If there is an exact method to determine a classification — even if it requires downloading headers or running compute — use it.

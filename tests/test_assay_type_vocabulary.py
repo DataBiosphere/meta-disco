@@ -49,7 +49,7 @@ def test_a_single_nucleus_term_nests_with_the_generic_single_cell_term():
     assert schema_vocab.most_specific("assay_type", {"snRNA-seq", "snATAC-seq"}) is None
 
 
-@pytest.mark.parametrize("read", [schema_vocab.value_ancestors, schema_vocab.value_meaning])
+@pytest.mark.parametrize("read", [schema_vocab.value_ancestors, schema_vocab.value_meaning, schema_vocab.value_label])
 def test_an_unknown_dimension_or_term_is_a_value_error(read):
     with pytest.raises(ValueError):
         read("assay_types", "snRNA-seq")

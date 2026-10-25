@@ -1852,8 +1852,8 @@ enums:
       (FSS), whose recommended values for its `data_modality` field are the Broad's
       MODAL ontology (github.com/broadinstitute/modal) term for term (#563). This enum
       is that tree: each value spells its MODAL term as a dotted path, `is_a` names its
-      parent, and `meaning` is its MODAL id. The dotted value stands in for FSS's
-      wording ("DNA methylation" for `epigenomic.methylation`) until labels are added.
+      parent, and `meaning` is its MODAL id. `title` is MODAL's label with its first letter
+      capitalised ("DNA methylation" for `epigenomic.methylation`, #755).
       Single-cell versus bulk is not a modality here, since it is a property of the
       experiment, so `assay_type` records it (`sc/snRNA-seq`, `snRNA-seq`, #533). A record
       holds one term, the most specific its evidence supports, which may be a parent:
@@ -1861,81 +1861,109 @@ enums:
       filters on a parent walks `is_a`.
     permissible_values:
       genomic:
+        title: Genomic
         meaning: MODAL:0000010
       "genomic.assembly":
+        title: Assembly
         is_a: genomic
         meaning: MODAL:0000011
       "genomic.exome":
+        title: Exome
         is_a: genomic
         meaning: MODAL:0000012
       "genomic.genotyping":
+        title: Genotyping
         is_a: genomic
         meaning: MODAL:0000013
       "genomic.whole_genome":
+        title: Whole genome
         is_a: genomic
         meaning: MODAL:0000014
       transcriptomic:
+        title: Transcriptomic
         meaning: MODAL:0000026
       "transcriptomic.spatial":
+        title: Spatial transcriptomics
         is_a: transcriptomic
         meaning: MODAL:0000027
       "transcriptomic.nontargeted":
+        title: Transcriptomic nontargeted
         is_a: transcriptomic
         meaning: MODAL:0000028
       "transcriptomic.targeted":
+        title: Transcriptomic targeted
         is_a: transcriptomic
         meaning: MODAL:0000029
       epigenomic:
+        title: Epigenomic
         meaning: MODAL:0000002
       "epigenomic.3d_contact_maps":
+        title: 3D contact maps
         is_a: epigenomic
         meaning: MODAL:0000003
       "epigenomic.dna_binding":
+        title: DNA binding
         is_a: epigenomic
         meaning: MODAL:0000004
       "epigenomic.dna_binding.histone_modification":
+        title: Histone modification location
         is_a: epigenomic.dna_binding
         meaning: MODAL:0000005
       "epigenomic.dna_binding.transcription_factor":
+        title: Transcription factor location
         is_a: epigenomic.dna_binding
         meaning: MODAL:0000006
       "epigenomic.chromatin_accessibility":
+        title: DNA chromatin accessibility
         is_a: epigenomic
         meaning: MODAL:0000007
       "epigenomic.methylation":
+        title: DNA methylation
         is_a: epigenomic
         meaning: MODAL:0000008
       "epigenomic.rna_binding":
+        title: RNA binding
         is_a: epigenomic
         meaning: MODAL:0000009
       imaging:
+        title: Imaging
         meaning: MODAL:0000015
       "imaging.electrophysiology":
+        title: Electrophysiology
         is_a: imaging
         meaning: MODAL:0000016
       "imaging.medical_imaging":
+        title: Medical imaging
         is_a: imaging
         meaning: MODAL:0000017
       "imaging.medical_imaging.ct_scan":
+        title: CT scan
         is_a: imaging.medical_imaging
         meaning: MODAL:0000018
       "imaging.medical_imaging.electrocardiogram":
+        title: Electrocardiogram
         is_a: imaging.medical_imaging
         meaning: MODAL:0000019
       "imaging.medical_imaging.mri":
+        title: MRI
         is_a: imaging.medical_imaging
         meaning: MODAL:0000020
       "imaging.medical_imaging.x_ray":
+        title: X ray
         is_a: imaging.medical_imaging
         meaning: MODAL:0000021
       "imaging.microscopy":
+        title: Microscopy
         is_a: imaging
         meaning: MODAL:0000022
       metabolomic:
+        title: Metabolomic
         meaning: MODAL:0000023
       microbiome:
+        title: Microbiome
         meaning: MODAL:0000024
       proteomic:
+        title: Proteomic
         meaning: MODAL:0000025
 
   data_type_enum:
@@ -1951,21 +1979,30 @@ enums:
     permissible_values:
       # --- biological class ---
       alignments:
+        title: Alignments
       reads:
+        title: Reads
       sequence:
+        title: Sequence
       assembly:
+        title: Assembly
       "assembly.reference":   # a published reference genome (e.g. GRCh38/CHM13); de-novo stays `assembly`
+        title: Reference genome
         is_a: assembly
       pangenome:              # a sequence graph (GFA/rGFA/GBZ/vg/GBWT/xg); linear sequence is FASTA (`sequence`/`assembly`)
+        title: Pangenome graph
       "pangenome.reference":  # a graph used as an alignment reference (e.g. HPRC minigraph-cactus)
+        title: Reference pangenome graph
         is_a: pangenome
       variants:
+        title: Variant calls
         description: >-
           Variant calls, with nothing narrower stated in this tree. The unnarrowed parent,
           not "unknown": the file is known to hold variants. What kind they are is
           `variant_kind`'s to say, from the caller that made the file (#654).
         meaning: EDAM:data_3498
       "variants.gvcf":
+        title: gVCF
         is_a: variants
         description: >-
           One sample's calls, with a reference-confidence record covering every other
@@ -1976,10 +2013,15 @@ enums:
           the one format term in this tree, kept until a format slot exists (#657). Its
           calls' origin is `variant_origin`'s. Assigned by the content rule `vcf_gvcf`.
       genotypes:
+        title: Genotypes
       expression_matrix:      # a features × samples abundance matrix
+        title: Expression matrix
       quantification:         # one sample's per-feature abundance table (e.g. Salmon quant.sf); not a features × samples matrix (cf. expression_matrix)
+        title: Quantification
       annotations:
+        title: Annotations
       "annotations.coverage":
+        title: Coverage
         is_a: annotations
         description: >-
           Read depth along the genome, measured from an alignment: per base or
@@ -1987,25 +2029,36 @@ enums:
           STAR `Signal.Unique.strand+.bw`). No `meaning`: EDAM has no data term
           for coverage or read depth, only the process (operation_3230).
       peaks:
+        title: Peaks
       raw_signal:
+        title: Raw signal
       array_signal:
+        title: Array signal
       images:
+        title: Images
       # --- descriptive class ---
       index:
+        title: Index
       checksum:
+        title: Checksum
       qc_report:
+        title: QC report
         description: >-
           A quality-control report about another file, such as samtools stats,
           a mosdepth summary or distribution, or bcftools stats.
         meaning: EDAM:data_3914
       log:
+        title: Log
       interval_set:
+        title: Interval set
       sample_map:
+        title: Sample map
         description: >-
           A list naming the files processed together, one per sample: a GATK sample-name
           map, each row a sample name and its gVCF's path (#621). No `meaning`: EDAM has no
           data term for it.
       sample_table:
+        title: Sample table
         description: >-
           A table of the samples a set of files holds, one row per sample: a PLINK 2 `.psam`
           (#751). No `meaning`.
@@ -2034,31 +2087,42 @@ enums:
       patch releases, and `CHM13` spans the T2T releases.
     permissible_values:
       GRCh37:
+        title: GRCh37
       GRCh38:
+        title: GRCh38
       CHM13:
+        title: CHM13
         description: Any CHM13 release, or CHM13 whose release cannot be told.
       T2T-CHM13v1.0:
+        title: T2T-CHM13v1.0
         is_a: CHM13
         meaning: insdc.gca:GCA_009914755.2
       T2T-CHM13v1.1:
+        title: T2T-CHM13v1.1
         is_a: CHM13
         meaning: insdc.gca:GCA_009914755.3
       T2T-CHM13v2.0:
+        title: T2T-CHM13v2.0
         is_a: CHM13
         meaning: insdc.gca:GCA_009914755.4
       t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r:
+        title: T2T-CHM13v1.0 with GRCh38 chrY
         is_a: T2T-CHM13v1.0
         description: T2T-CHM13v1.0 with GRCh38's chrY grafted on.
       CHM13Y_EBV_v1.1:
+        title: T2T-CHM13v1.1 with GRCh38 chrY
         is_a: T2T-CHM13v1.1
         description: T2T-CHM13v1.1 with GRCh38's chrY grafted on.
       t2t-chm13.20200921.HG002chrY.chrEBV:
+        title: T2T-CHM13v1.0 with HG002 chrY
         is_a: T2T-CHM13v1.0
         description: T2T-CHM13v1.0 with HG002's chrY grafted on.
       Mmul_10:
+        title: Mmul_10 (rhesus macaque)
         description: Rhesus macaque (Macaca mulatta). Its RefSeq pair is GCF_003339765.1, which adds only chrM.
         meaning: insdc.gca:GCA_003339765.3
       mCalJa1.2.pat.X:
+        title: mCalJa1.2.pat.X (marmoset)
         description: Common marmoset (Callithrix jacchus). Its RefSeq pair is GCF_011100555.1, which drops only chrM.
         meaning: insdc.gca:GCA_011100555.2
       # GRCm39:  # mouse — pending issue #15
@@ -2102,60 +2166,80 @@ enums:
       specific its evidence supports; a consumer that filters on a parent walks `is_a`.
     permissible_values:
       WGS:
+        title: Whole genome sequencing
         description: >-
           EFO's whole genome shotgun sequencing: EFO has no term labelled whole genome
           sequencing, and OBI's whole genome sequencing assay is not among its imports.
         meaning: EFO:0003744
       WES:
+        title: Whole exome sequencing
         meaning: EFO:0005396
       "RNA-seq":
+        title: RNA-seq
         meaning: EFO:0008896
       "sc/snRNA-seq":
+        title: Single-cell or single-nucleus RNA-seq
         description: >-
           Single-cell or single-nucleus RNA-seq, EFO's parent of both: the term for a
           file whose evidence says single-cell but not which.
         is_a: "RNA-seq"
         meaning: EFO:0920118
       "snRNA-seq":
+        title: Single-nucleus RNA-seq
         is_a: "sc/snRNA-seq"
         meaning: EFO:0009809
       "SHARE-seq":
+        title: SHARE-seq
         description: Joint chromatin accessibility and RNA from the same nuclei.
         is_a: "sc/snRNA-seq"
         meaning: EFO:0022962
       "ATAC-seq":
+        title: ATAC-seq
         meaning: EFO:0007045
       "sc/snATAC-seq":
+        title: Single-cell or single-nucleus ATAC-seq
         is_a: "ATAC-seq"
         meaning: EFO:0920117
       "snATAC-seq":
+        title: Single-nucleus ATAC-seq
         description: >-
           Single-nucleus ATAC-seq. Our own term: EFO's children of sc/snATAC-seq are
           single-cell only, so no EFO term is as narrow, and it records none.
         is_a: "sc/snATAC-seq"
       "ChIP-seq":
+        title: ChIP-seq
         meaning: EFO:0002692
       "Bisulfite-seq":
+        title: Bisulfite sequencing
         meaning: EFO:0003753
       "Methylation array":
+        title: Methylation array
         meaning: EFO:0002759
       "Genotyping array":
+        title: Genotyping array
         description: >-
           EFO's genotyping by array: polymorphisms in DNA read on an array (an Illumina
           genotyping BeadChip, #603). None of EFO's parents of it (genotyping, DNA assay,
           assay by array) is a value here, so it names no `is_a`.
         meaning: EFO:0002767
       Histology:
+        title: Histology
         meaning: OBI:0600020
 
   platform_enum:
     permissible_values:
       ILLUMINA:
+        title: Illumina
       PACBIO:
+        title: PacBio
       ONT:
+        title: Oxford Nanopore
       MGI:
+        title: MGI
       ELEMENT:
+        title: Element Biosciences
       ULTIMA:
+        title: Ultima Genomics
 
   instrument_model_enum:
     description: >-
@@ -2172,93 +2256,141 @@ enums:
     permissible_values:
       # --- Illumina (SRA platform ILLUMINA) ---
       "HiSeq X Five":
+        title: HiSeq X Five
       "HiSeq X Ten":
+        title: HiSeq X Ten
       "Illumina Genome Analyzer":
+        title: Illumina Genome Analyzer
         meaning: EFO:0004200
       "Illumina Genome Analyzer II":
+        title: Illumina Genome Analyzer II
         meaning: EFO:0004201
       "Illumina Genome Analyzer IIx":
+        title: Illumina Genome Analyzer IIx
         meaning: EFO:0004202
       "Illumina HiScanSQ":
+        title: Illumina HiScanSQ
       "Illumina HiSeq 1000":
+        title: Illumina HiSeq 1000
         meaning: EFO:0004204
       "Illumina HiSeq 1500":
+        title: Illumina HiSeq 1500
         meaning: EFO:0011027
       "Illumina HiSeq 2000":
+        title: Illumina HiSeq 2000
         meaning: EFO:0004203
       "Illumina HiSeq 2500":
+        title: Illumina HiSeq 2500
         meaning: EFO:0008565
       "Illumina HiSeq 3000":
+        title: Illumina HiSeq 3000
         meaning: EFO:0008564
       "Illumina HiSeq 4000":
+        title: Illumina HiSeq 4000
         meaning: EFO:0008563
       "Illumina HiSeq X":
+        title: Illumina HiSeq X
         meaning: EFO:0008567
       "Illumina iSeq 100":
+        title: Illumina iSeq 100
         meaning: EFO:0008635
       "Illumina MiSeq":
+        title: Illumina MiSeq
         meaning: EFO:0004205
       "Illumina MiniSeq":
+        title: Illumina MiniSeq
         meaning: EFO:0008636
       "Illumina NovaSeq X":
+        title: Illumina NovaSeq X
         meaning: EFO:0022840
       "Illumina NovaSeq X Plus":
+        title: Illumina NovaSeq X Plus
         meaning: EFO:0022841
       "Illumina NovaSeq 6000":
+        title: Illumina NovaSeq 6000
         meaning: EFO:0008637
       "NextSeq 500":
+        title: NextSeq 500
         meaning: EFO:0009173
       "NextSeq 550":
+        title: NextSeq 550
         meaning: EFO:0008566
       "NextSeq 1000":
+        title: NextSeq 1000
         meaning: EFO:0010962
       "NextSeq 2000":
+        title: NextSeq 2000
         meaning: EFO:0010963
       # --- Illumina array scanners (no SRA string; our own terms, #603) ---
       "Illumina iScan":
+        title: Illumina iScan
         description: >-
           Illumina's iScan System, the scanner that reads Infinium BeadChips into IDAT
           files. No ontology term names it (an OLS search finds none in EFO or OBI), so it
           records no meaning.
       # --- PacBio (SRA platform PACBIO_SMRT) ---
       "Onso":
+        title: Onso
         meaning: EFO:0920007
       "PacBio RS":
+        title: PacBio RS
       "PacBio RS II":
+        title: PacBio RS II
         meaning: EFO:0008631
       "Revio":
+        title: Revio
         meaning: EFO:0920006
       "Sequel":
+        title: Sequel
         meaning: EFO:0008630
       "Sequel II":
+        title: Sequel II
         meaning: EFO:0700015
       "Sequel IIe":
+        title: Sequel IIe
       "Vega":
+        title: Vega
       # --- Oxford Nanopore (SRA platform OXFORD_NANOPORE) ---
       "MinION":
+        title: MinION
         meaning: EFO:0008632
       "GridION":
+        title: GridION
       "PromethION":
+        title: PromethION
         meaning: EFO:0008634
       # --- MGI (SRA platforms BGISEQ and DNBSEQ) ---
       "BGISEQ-50":
+        title: BGISEQ-50
       "BGISEQ-500":
+        title: BGISEQ-500
       "MGISEQ-2000RS":
+        title: MGISEQ-2000RS
       "DNBSEQ-T7":
+        title: DNBSEQ-T7
         meaning: EFO:0920057
       "DNBSEQ-G400":
+        title: DNBSEQ-G400
       "DNBSEQ-G800":
+        title: DNBSEQ-G800
       "DNBSEQ-G50":
+        title: DNBSEQ-G50
       "DNBSEQ-G400 FAST":
+        title: DNBSEQ-G400 FAST
       "DNBSEQ-T10x4RS":
+        title: DNBSEQ-T10x4RS
       # --- Element (SRA platforms ELEMENT and AVITI) ---
       "Element AVITI":
+        title: Element AVITI
         meaning: EFO:0920008
       "AVITI 24":
+        title: AVITI 24
       # --- Ultima (SRA platform ULTIMA) ---
       "UG 100":
+        title: UG 100
         meaning: EFO:0920005
       "UG 200":
+        title: UG 200
 
   variant_kind_enum:
     description: >-
@@ -2267,6 +2399,7 @@ enums:
       subtype, so each term records that operation as its `meaning` where EDAM has one.
     permissible_values:
       small:
+        title: Small variants
         description: >-
           Single-nucleotide variants and short insertions and deletions, as a small-variant
           caller (GATK HaplotypeCaller, DeepVariant) calls them. EDAM splits this between
@@ -2274,6 +2407,7 @@ enums:
           calling (operation_3227), whose own definition also takes in structural variants;
           no one EDAM term is exactly this, so none is recorded.
       structural:
+        title: Structural variants
         description: >-
           Structural variants (deletions, insertions, duplications, inversions, breakends,
           typically 50 bp or more), as a structural-variant caller (Sniffles, SVIM) calls
@@ -2286,12 +2420,14 @@ enums:
       Sequence Ontology's two children of variant_origin (SO:0001762).
     permissible_values:
       germline:
+        title: Germline
         description: >-
           Variants present from the embryo on, in every cell, as a germline caller (GATK
           HaplotypeCaller and joint genotyping, DeepVariant, Sniffles in its default mode)
           calls them.
         meaning: SO:0001778
       somatic:
+        title: Somatic
         description: >-
           Variants arisen after the embryo split, in some cells only, as a somatic caller
           (GATK Mutect2) calls them against a matched normal.
@@ -2305,8 +2441,10 @@ enums:
       `meaning`s. A value no source writes is not listed; one is added when a source does.
     permissible_values:
       Female:
+        title: Female
         meaning: PATO:0000383
       Male:
+        title: Male
         meaning: PATO:0000384
 
   organism_type_enum:
@@ -2317,9 +2455,11 @@ enums:
       is not listed.
     permissible_values:
       Human:
+        title: Human
         meaning: NCBITaxon:9606
         description: Homo sapiens
       Mouse:
+        title: Mouse
         meaning: NCBITaxon:10090
         description: Mus musculus
 
@@ -2331,9 +2471,12 @@ enums:
       Latin`, are narrower), so no value has a `meaning`. A value no source writes is not
       listed.
     permissible_values:
-      Black or African American: {}
-      Hispanic or Latino: {}
-      White: {}
+      Black or African American:
+        title: Black or African American
+      Hispanic or Latino:
+        title: Hispanic or Latino
+      White:
+        title: White
 
   biosample_type_enum:
     description: >-
@@ -2342,7 +2485,8 @@ enums:
       translation row reads is not listed: AnVIL's `Blood` is on three Coriell samples, whose
       record is the cell line (#706), and its `Tissue, Unknown` on IGVF's pools (#705).
     permissible_values:
-      Tissue: {}
+      Tissue:
+        title: Tissue
 
   genetic_ancestry_enum:
     description: >-
@@ -2350,127 +2494,163 @@ enums:
       The values are 1000 Genomes' population codes, as its tables and the datasets built
       on it write them, each under its superpopulation by `is_a` as HANCESTRO places it;
       `meaning` is the HANCESTRO term and `description` its label (HANCESTRO 2025-10-14).
+      `title` is that label without "(1KGP)" ("British in England and Scotland"), for a
+      superpopulation without its code and "reference superpopulation" too ("African"),
+      and for `GWD` without " - Mandinka (GGVP)", the Gambian Genome Variation Project's
+      part of its label (#755). `AMR`'s is 1000 Genomes' own name, "Admixed American", where
+      HANCESTRO's "American" would read as a nationality.
       A record holds the most specific term its evidence supports (`GBR` beside `EUR` is
       `GBR`), as the assay tree does; a consumer that filters on a superpopulation walks
       `is_a`. Other populations (SGDP's, #559; HPRC_R2's `ASL`, which HANCESTRO has no term
       for) are not values yet, and their names wait in the review queue.
     permissible_values:
       AFR:
+        title: African
         description: African (AFR) reference superpopulation (1KGP)
         meaning: HANCESTRO:2000
       AMR:
+        title: Admixed American
         description: American (AMR) reference superpopulation (1KGP)
         meaning: HANCESTRO:2001
       EAS:
+        title: East Asian
         description: East Asian (EAS) reference superpopulation (1KGP)
         meaning: HANCESTRO:2002
       EUR:
+        title: European
         description: European (EUR) reference superpopulation (1KGP)
         meaning: HANCESTRO:2003
       SAS:
+        title: South Asian
         description: South Asian (SAS) reference superpopulation (1KGP)
         meaning: HANCESTRO:2004
       ACB:
+        title: African Caribbean in Barbados
         description: "African Caribbean in Barbados (1KGP)"
         is_a: AFR
         meaning: HANCESTRO:0660
       ASW:
+        title: African Ancestry in Southwest US
         description: "African Ancestry in Southwest US (1KGP)"
         is_a: AFR
         meaning: HANCESTRO:0659
       BEB:
+        title: Bengali in Bangladesh
         description: "Bengali in Bangladesh (1KGP)"
         is_a: SAS
         meaning: HANCESTRO:0802
       CDX:
+        title: Chinese Dai in Xishuangbanna, China
         description: "Chinese Dai in Xishuangbanna, China (1KGP)"
         is_a: EAS
         meaning: HANCESTRO:0752
       CEU:
+        title: Utah residents (CEPH) with Northern and Western European ancestry
         description: "Utah residents (CEPH) with Northern and Western European ancestry (1KGP)"
         is_a: EUR
         meaning: HANCESTRO:0766
       CHB:
+        title: Han Chinese in Beijing, China
         description: "Han Chinese in Beijing, China (1KGP)"
         is_a: EAS
         meaning: HANCESTRO:0753
       CHS:
+        title: Han Chinese South
         description: "Han Chinese South (1KGP)"
         is_a: EAS
         meaning: HANCESTRO:0756
       CLM:
+        title: Colombian in Medellin, Colombia
         description: "Colombian in Medellin, Colombia (1KGP)"
         is_a: AMR
         meaning: HANCESTRO:0684
       ESN:
+        title: Esan in Nigeria
         description: "Esan in Nigeria (1KGP)"
         is_a: AFR
         meaning: HANCESTRO:0661
       FIN:
+        title: Finnish in Finland
         description: "Finnish in Finland (1KGP)"
         is_a: EUR
         meaning: HANCESTRO:0767
       GBR:
+        title: British in England and Scotland
         description: "British in England and Scotland (1KGP)"
         is_a: EUR
         meaning: HANCESTRO:0765
       GIH:
+        title: Gujarati Indians in Houston, TX
         description: "Gujarati Indians in Houston, TX (1KGP)"
         is_a: SAS
         meaning: HANCESTRO:0803
       GWD:
+        title: Gambian in Western Division, The Gambia
         description: "Gambian in Western Division, The Gambia - Mandinka (GGVP). HANCESTRO's term for 1000 Genomes' GWD is the Gambian Genome Variation Project's, whose samples 1000 Genomes sequenced; its synonym is `GWD` and its parent the AFR superpopulation"
         is_a: AFR
         meaning: HANCESTRO:0664
       IBS:
+        title: Iberian populations in Spain
         description: "Iberian populations in Spain (1KGP)"
         is_a: EUR
         meaning: HANCESTRO:0768
       ITU:
+        title: Indian Telugu in the UK
         description: "Indian Telugu in the UK (1KGP)"
         is_a: SAS
         meaning: HANCESTRO:0806
       JPT:
+        title: Japanese in Tokyo, Japan
         description: "Japanese in Tokyo, Japan (1KGP)"
         is_a: EAS
         meaning: HANCESTRO:0754
       KHV:
+        title: Kinh in Ho Chi Minh City, Vietnam
         description: "Kinh in Ho Chi Minh City, Vietnam (1KGP)"
         is_a: EAS
         meaning: HANCESTRO:0755
       LWK:
+        title: Luhya in Webuye, Kenya
         description: "Luhya in Webuye, Kenya (1KGP)"
         is_a: AFR
         meaning: HANCESTRO:0666
       MSL:
+        title: Mende in Sierra Leone
         description: "Mende in Sierra Leone (1KGP)"
         is_a: AFR
         meaning: HANCESTRO:0667
       MXL:
+        title: Mexican Ancestry in Los Angeles, California
         description: "Mexican Ancestry in Los Angeles, California (1KGP)"
         is_a: AMR
         meaning: HANCESTRO:0685
       PEL:
+        title: Peruvian in Lima, Peru
         description: "Peruvian in Lima, Peru (1KGP)"
         is_a: AMR
         meaning: HANCESTRO:0686
       PJL:
+        title: Punjabi in Lahore, Pakistan
         description: "Punjabi in Lahore, Pakistan (1KGP)"
         is_a: SAS
         meaning: HANCESTRO:0804
       PUR:
+        title: Puerto Rican in Puerto Rico
         description: "Puerto Rican in Puerto Rico (1KGP)"
         is_a: AMR
         meaning: HANCESTRO:0687
       STU:
+        title: Sri Lankan Tamil in the UK
         description: "Sri Lankan Tamil in the UK (1KGP)"
         is_a: SAS
         meaning: HANCESTRO:0805
       TSI:
+        title: Toscani in Italy
         description: "Toscani in Italy (1KGP)"
         is_a: EUR
         meaning: HANCESTRO:0769
       YRI:
+        title: Yoruba in Ibadan, Nigeria
         description: "Yoruba in Ibadan, Nigeria (1KGP)"
         is_a: AFR
         meaning: HANCESTRO:0668

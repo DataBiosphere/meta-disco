@@ -187,6 +187,14 @@ def value_meaning(field: str, value: str) -> str | None:
     return _term_spec(field, value).get("meaning")
 
 
+def value_label(field: str, value: str) -> str:
+    """A term's display ``title`` (``DNA methylation`` for ``epigenomic.methylation``, #755), else the value.
+
+    Raises as :func:`value_meaning` does.
+    """
+    return _term_spec(field, value).get("title") or value
+
+
 def most_specific(field: str, values: Iterable[str]) -> str | None:
     """The one of ``values`` that every other is, or sits below in the ``is_a`` hierarchy; None if they do not nest.
 
