@@ -424,7 +424,7 @@ class TarEvidence(CachedEvidence):
 
 @dataclass(frozen=True, kw_only=True)
 class WholeTextEvidence(CachedEvidence):
-    """Cached text of a file read whole, to its end: a GATK sample-name map (#621), a PLINK 2 ``.psam`` (#751).
+    """Cached text of a file read whole, to its end: a GATK sample-name map (#621), a PLINK 2 ``.psam`` (#751), a bcftools stats report (#683).
 
     Empty text is a valid hit (an empty file), which each type's parse reads as giving nothing.
     """

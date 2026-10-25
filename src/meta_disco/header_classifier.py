@@ -42,7 +42,6 @@ from .variant_origins import read_origin
 
 if TYPE_CHECKING:
     from .cohort_steps import ParsedTarHead
-    from .plink import PsamRows
     from .rule_engine import ExtendedClassificationResult, RuleEngine
 
 # Text GFA formats this module can parse. The other graph extensions the
@@ -1242,19 +1241,23 @@ def fast5_instrument(header: Fast5Header) -> tuple[str | None, str]:
     return model, f"the head's device_type is {devices[0]!r}"
 
 
-def classify_from_psam(
-    rows: "PsamRows | None",
+def classify_from_name(
+    content: object,
     *,
+    stand_in: str,
     name: FileName = FileName.EMPTY,
     file_size: int | None = None,
     file_format: str | None = None,
 ) -> dict:
-    """Classify a PLINK 2 ``.psam`` from its name alone (``plink_sample_table``, #751).
+    """Classify a file from its name alone, for a type whose content is read for more than its dimensions.
 
-    ``rows`` are read for its samples (``sample_identity.PSAM_SAMPLES``), not here; ``file_format`` is
-    accepted to match the uniform ``_fetch_and_classify`` call, ``.psam`` standing in for it.
+    A PLINK 2 ``.psam`` (``plink_sample_table``, #751) is read for its samples, and a bcftools stats
+    report (``text_stats``, #683) for its step and samples, not here. ``stand_in`` is the extension the
+    rule engine reads where there is no name, bound per type: for ``.psam`` its extension rule still
+    fires, while a report's ``text_stats`` rule needs the name and fires on none. ``content`` and
+    ``file_format`` are accepted to match the uniform ``_fetch_and_classify`` call.
     """
-    return _classify_by_name(name, ".psam", file_size).to_output_dict()
+    return _classify_by_name(name, stand_in, file_size).to_output_dict()
 
 
 def classify_from_fast5_header(

@@ -38,6 +38,7 @@ JOINT_GENOTYPING = "JointGenotypingActivity"
 MERGE = "MergeActivity"
 COHORT_MERGE = "CohortMergeActivity"
 COHORT_DEFINITION = "CohortDefinitionActivity"
+QUALITY_CONTROL = "QualityControlActivity"
 
 
 _UniqueKeyLoader = unique_key_loader("activities file")

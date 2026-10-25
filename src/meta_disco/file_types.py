@@ -1,7 +1,7 @@
 """File type configurations for the classification pipeline.
 
 Each config defines extensions, fetcher, classifier, and summary printer for one file
-type. They are used by ClassifyPipeline and classify_headers.py, and are the eleven header
+type. They are used by ClassifyPipeline and classify_headers.py, and are the twelve header
 entries in the producer registry (``producers``).
 
 ``FileTypeConfig`` is declared here rather than in ``pipeline`` so that ``pipeline`` can
@@ -13,6 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
 
+from .bcftools_stats import REPORT_SUFFIXES, STATS_REPORT_SAMPLES, StatsReportSteps, parse_stats_report
 from .cohort_steps import SAMPLE_MAP_SUFFIX, SampleMapSteps, TarSteps, parse_sample_map, parse_tar_head
 from .fetchers import (
     fetch_bam_header,
@@ -24,6 +25,7 @@ from .fetchers import (
     fetch_idat_header,
     fetch_psam,
     fetch_sample_map,
+    fetch_stats_report,
     fetch_tar_headers,
     fetch_vcf_header,
     require_samtools,
@@ -38,7 +40,7 @@ from .header_classifier import (
     classify_from_gfa_segment_tags,
     classify_from_header,
     classify_from_idat_header,
-    classify_from_psam,
+    classify_from_name,
     classify_from_tar_head,
     classify_from_vcf_header,
     classify_sample_map,
@@ -249,10 +251,24 @@ PSAM_CONFIG = FileTypeConfig(
     name="psam",
     extensions=(".psam",),
     fetcher=fetch_psam,
-    classifier=classify_from_psam,
+    classifier=partial(classify_from_name, stand_in=".psam"),
     parser=parse_psam,
     samples=PSAM_SAMPLES,
     filesets=filesets,
+    answers_from_name=True,
+)
+
+# bcftools stats reports (#683): the rule engine gives the dimensions from the name (`text_stats`); the
+# report is read whole for the VCF its `ID` line names, a `QualityControlActivity` step across which
+# reconcile carries what its `reported_on` role passes, and, run per sample, the samples its `PSC` lines name.
+BCFTOOLS_STATS_CONFIG = FileTypeConfig(
+    name="bcftools_stats",
+    extensions=REPORT_SUFFIXES,
+    fetcher=fetch_stats_report,
+    classifier=partial(classify_from_name, stand_in=".txt"),
+    parser=parse_stats_report,
+    step=StatsReportSteps.for_run,
+    samples=STATS_REPORT_SAMPLES,
     answers_from_name=True,
 )
 
@@ -268,4 +284,5 @@ FILE_TYPE_REGISTRY = {
     "idat": IDAT_CONFIG,
     "fast5": FAST5_CONFIG,
     "psam": PSAM_CONFIG,
+    "bcftools_stats": BCFTOOLS_STATS_CONFIG,
 }

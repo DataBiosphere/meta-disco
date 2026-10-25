@@ -226,8 +226,12 @@ def test_a_file_that_is_no_sample_map_gives_no_step():
 # --- the two producers -----------------------------------------------------------------------
 
 
-def _run(tmp_path, config, payloads: dict, entries: list[tuple[str, str]]) -> tuple[dict, dict]:
-    """Run ``config`` over ``entries`` (file name, file id), its fetcher stubbed by md5; the rows by file id and the details."""
+def run_producer(
+    tmp_path, config, payloads: dict, entries: list[tuple[str, str]], folder: str | None = None
+) -> tuple[dict, dict]:
+    """Run ``config`` over ``entries`` (file name, file id), its fetcher stubbed by md5; the rows by file id and the details.
+
+    With ``folder``, every record is stored in it (``file_path``)."""
     inputs = []
     for n, (name, file_id) in enumerate(entries):
         inputs.append(
@@ -239,6 +243,7 @@ def _run(tmp_path, config, payloads: dict, entries: list[tuple[str, str]]) -> tu
                 "file_md5sum": f"{n:032x}",
                 "file_size": 1,
                 "file_format": "." + name.rsplit(".", 1)[1],
+                **({"file_path": f"{folder}/{name}"} if folder is not None else {}),
             }
         )
     by_md5 = {f"{n:032x}": payloads[name] for n, (name, _) in enumerate(entries) if name in payloads}
@@ -259,7 +264,7 @@ def _run(tmp_path, config, payloads: dict, entries: list[tuple[str, str]]) -> tu
 
 
 def test_the_sample_map_producer_writes_the_cohort_and_classifies_from_the_name(tmp_path):
-    rows, details = _run(
+    rows, details = run_producer(
         tmp_path,
         SAMPLE_MAP_CONFIG,
         {MAP: MAP_TEXT, "chr2_sample_map.tsv": "not\ta list\n"},
@@ -291,7 +296,7 @@ def test_the_sample_map_producer_writes_the_cohort_and_classifies_from_the_name(
 
 def test_the_tar_producer_writes_the_workspace_step(tmp_path):
     members = ["./chr1.100000001_100100000/vcfheader.vcf", "./chr1.100000001_100100000/callset.json"]
-    rows, details = _run(
+    rows, details = run_producer(
         tmp_path,
         TAR_CONFIG,
         {TAR: TarHead(members, header_text(IMPORT)), "chr1.1_100000.tar": TarHead(members, None)},
@@ -453,7 +458,7 @@ def test_the_edge_rules_are_declared_with_the_others():
 # --- the folder settling a shared name (#717) --------------------------------------------------
 
 
-def _in_folders(*entries) -> list[dict]:
+def in_folders(*entries) -> list[dict]:
     """(file name, folder) records of dataset D, keyed f0, f1, …, each stored in its folder."""
     return [
         {"file_id": f"f{n}", "file_name": name, "dataset_id": "D", "file_path": f"{folder}/{name}"}
@@ -462,7 +467,7 @@ def _in_folders(*entries) -> list[dict]:
 
 
 def test_a_tar_takes_the_sample_map_of_that_name_in_its_own_folder():
-    reader = cs.TarSteps.for_run(_in_folders((MAP, "SGDP_CHM13v2"), (MAP, "SGDP_GRCh38")), KEY, EVIDENCE)
+    reader = cs.TarSteps.for_run(in_folders((MAP, "SGDP_CHM13v2"), (MAP, "SGDP_GRCh38")), KEY, EVIDENCE)
     step, outcome = reader(tar_head(IMPORT), TAR, "D", "SGDP_GRCh38")
     assert outcome == cs.STEPPED and step is not None
     assert [i["parent_key"] for i in step["inputs"]] == ["f1"]
@@ -471,7 +476,7 @@ def test_a_tar_takes_the_sample_map_of_that_name_in_its_own_folder():
 
 def test_a_sample_map_takes_each_member_of_that_name_in_its_own_folder():
     gvcfs = ("HG00096.chr1.hc.vcf.gz", "HG00097.chr1.hc.vcf.gz")
-    reader = cs.SampleMapSteps.for_run(_in_folders(*((g, f) for f in ("a", "b") for g in gvcfs)), KEY, EVIDENCE)
+    reader = cs.SampleMapSteps.for_run(in_folders(*((g, f) for f in ("a", "b") for g in gvcfs)), KEY, EVIDENCE)
     step, outcome = reader(cs.parse_sample_map(MAP_TEXT), MAP, "D", "b")
     assert outcome == cs.STEPPED and step is not None
     assert [i["parent_key"] for i in step["inputs"]] == ["f2", "f3"]

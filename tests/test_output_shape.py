@@ -36,11 +36,11 @@ value; the golden would silently record the unrefined result.
 This guards output *shape*; it is not a substitute for the content-driven
 classification tests in ``tests/test_evals.py``.
 
-**Two committed fixtures, one regen command.** The golden covers the eleven producers
+**Two committed fixtures, one regen command.** The golden covers the twelve producers
 ``ClassifyPipeline`` writes; ``standalone_output.json`` covers the four standalone ones
 (#465), which have no golden and so reached no schema validation at all. Both are read
 across the component boundary by ``schema/tests/test_output_validation.py``, whose gate
-is what makes them cover all fifteen — ``test_the_schema_gate_covers_every_producer``
+is what makes them cover all sixteen — ``test_the_schema_gate_covers_every_producer``
 pins that union against ``producers.PRODUCERS``. Regenerate with::
 
     python -m tests.test_output_shape   # writes both fixtures under tests/fixtures/golden/
@@ -230,6 +230,18 @@ GOLDEN_INPUTS = {
     ],
 }
 GOLDEN_INPUTS["sample_map"] = [SAMPLE_MAP_RECORD, GOLDEN_INPUTS["vcf"][0]]
+# A per-sample bcftools stats report on the golden's `sample.vcf.gz`, which sits in its snapshot, so its
+# `reported_on` input resolves and its `PSC` line gives its `samples` (#683).
+GOLDEN_INPUTS["bcftools_stats"] = [
+    _golden_record(
+        "af",
+        file_name="sample.per_sample.stats.txt",
+        file_size=67516,
+        file_format=".txt",
+        entry_id="g-bcftools-stats-1",
+    ),
+    GOLDEN_INPUTS["vcf"][0],
+]
 
 # The index producer's inputs. Both its record paths reach the schema gate: a matched
 # index carries an `IndexActivity` edge, a declined one none. `sample.flnc.bam` is the
@@ -299,6 +311,16 @@ STUB_PAYLOADS = {
     "fast5": Fast5Header(sample_ids=["HG02723"], device_types=["promethion"]),
     # psam returns the table's text: one sample, so the golden carries its `samples` (#751).
     "psam": "#IID\tPAT\tMAT\tSEX\tSuperPop\tPopulation\nHG01879\t0\t0\t1\tAFR\tACB\n",
+    # bcftools_stats returns the report's text: one input, the golden's `sample.vcf.gz`, and one sample, the
+    # VCF's own, so the golden carries a `QualityControlActivity` step and `samples` (#683).
+    "bcftools_stats": (
+        "# This file was produced by bcftools stats (1.9+htslib-1.9) and can be plotted using plot-vcfstats.\n"
+        "# The command line was:\tbcftools stats  -v --samples-file /w/EUR.txt /w/call-subset/sample.vcf.gz\n"
+        "#\n"
+        "ID\t0\t/w/call-subset/sample.vcf.gz\n"
+        "IDD\t0\t-1\t3\n"
+        "PSC\t0\tNA12878\t10\t5\t5\t2\t1\t0\t30.0\t0\t0\t0\t0\n"
+    ),
 }
 # Every evidence entry has a reason, and is either a synthetic resolution marker
 # (carries `marker`) or something a producer made — the two are mutually exclusive
@@ -541,7 +563,7 @@ def test_standalone_output_matches_fixture(standalone_output):
 
 
 def test_the_schema_gate_covers_every_producer():
-    """The gate's input is these two fixtures; together they must be all fifteen.
+    """The gate's input is these two fixtures; together they must be all sixteen.
 
     Read off the committed files rather than off the builders above, because the files
     are what `schema/tests/test_output_validation.py` actually validates — a fixture
@@ -661,9 +683,9 @@ def test_output_values_in_vocabulary(output):
 
 @pytest.mark.parametrize("producer,name,fmt", STANDALONE_PRODUCERS)
 def test_a_standalone_producer_emits_the_record_keys(tmp_path, producer, name, fmt):
-    """All fifteen output files carry one record shape (#450).
+    """All sixteen output files carry one record shape (#450).
 
-    The golden fixture covers the eleven the pipeline writes; this covers the four that
+    The golden fixture covers the twelve the pipeline writes; this covers the four that
     used to assemble dicts by hand and so could each carry a different set. That is what
     the catalog identity (#433) needed a sweep for, and what building `OutputRecord`
     makes structural instead.
@@ -700,7 +722,7 @@ def test_the_index_producer_emits_the_metadata_keys(tmp_path):
 
 
 def test_the_pipeline_emits_the_metadata_keys(output):
-    """The eleven header types, off the golden run, so all fifteen are covered."""
+    """The twelve header types, off the golden run, so all sixteen are covered."""
     for ftype, payload in output.items():
         assert list(payload["metadata"]) == METADATA_KEYS, ftype
 
@@ -807,7 +829,7 @@ if __name__ == "__main__":
 
 
 def test_every_rule_id_in_the_output_is_declared(output, standalone_output):
-    """Every ``rule_id`` the golden output of the fifteen producers carries is declared (#572).
+    """Every ``rule_id`` the golden output of the sixteen producers carries is declared (#572).
 
     Declared means a YAML rule, or a rule or marker in ``code_rules``. This is the output
     half of the check that ``test_code_rules`` makes on the source: it catches an id

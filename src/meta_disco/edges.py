@@ -1,11 +1,12 @@
 """Derivation edges inference states, and the name index their parents resolve in (ADR-0002, #356).
 
-Five producers write one. Two work out the parent's name from the child's own: the index
+Six producers write one. Two work out the parent's name from the child's own: the index
 producer (``IndexActivity``; its candidates are its own, ``get_parent_candidates``) and the
 catch-all, for a checksum file (``ChecksumActivity``). The VCF producer reads it from a
 command line in the child's header (``producer_steps``, #609); the tar and sample-map
 producers from a GenomicsDB workspace's ``vcfheader.vcf`` and a sample map's rows
-(``cohort_steps``, #621). Each looks the name up in the child's dataset; the name index,
+(``cohort_steps``, #621); the bcftools stats producer from a report's ``ID`` line
+(``bcftools_stats``, #683). Each looks the name up in the child's dataset; the name index,
 that lookup and the edge it yields are built here.
 
 **An edge is written only where the parent resolves**: exactly one file of the child's

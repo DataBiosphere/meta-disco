@@ -391,10 +391,10 @@ evidence}` entry — plus the controlled vocabulary:
     and cohort steps; reconcile's external sample maps have no path). It makes no claim, and no output record carries it.
   - **Every producer builds `records.OutputRecord`** (#450) — the pipeline through
     `from_work_item`, the four standalone producers through `from_record`. A per-record
-    field added there reaches all fifteen outputs; one wired into a producer does not.
+    field added there reaches all sixteen outputs; one wired into a producer does not.
     That is why the per-producer sweeps for the catalog identity (#433), and formerly
     for the `published` block (#424, deleted by #513), are gone: `test_output_shape`
-    pins the record's key set across all fifteen instead.
+    pins the record's key set across all sixteen instead.
     Add a new standalone producer to `STANDALONE_PRODUCERS` in `tests/producer_sweep`
     and that test picks it up.
   - **Output records carry no `dataset_id`** (#450). It is an input-contract slot and
@@ -407,7 +407,7 @@ evidence}` entry — plus the controlled vocabulary:
     activity declares. What each role passes is `rules/activities.yaml`'s to say, read
     through `meta_disco.activities` and trusted by its readers; a term may take its
     declaration from an abstract parent, and no step names an abstract term (#610). Inference
-    states seven of `code_rules.EDGE_RULES`'s eight (the eighth is reconcile's, an external sample map's
+    states eight of `code_rules.EDGE_RULES`'s nine (the ninth is reconcile's, an external sample map's
     members, #710): two from the child's own name through
     `meta_disco.edges`, the index producer's `IndexActivity` and the catch-all's
     `ChecksumActivity` for a `.md5`, two from a VCF's header through
@@ -431,6 +431,11 @@ evidence}` entry — plus the controlled vocabulary:
     holds each list once under `rebuilt_lists` (`records.REBUILT_LISTS_KEY`), and reconcile holds it under
     its address and writes it to `reconciled/rebuilt_lists.ndjson.gz` (its report block, `reconcile_rebuilt`). A rebuilt list
     names no samples.
+    **A bcftools stats report's own `ID` line** (#683) gives the eighth, through `meta_disco.bcftools_stats`
+    (the `bcftools_stats` producer, claiming `.bcftools.stats.txt`, `.per_sample.stats.txt` and
+    `.chm13_afr.stats.txt` by name, each read whole): one input, a VCF by name whose base name one file of the dataset carries
+    (the folder settling several, #717), gives `QualityControlActivity` with it `reported_on`; two or more inputs, or a line 1 that is not bcftools
+    stats', give none. Its dimensions stay the name rule's (`text_stats`, `answers_from_name`).
     Their outcomes per dataset are in each producer's `metadata.details.producer_steps`.
     **A VCF's command lines are read once, on first use, by `VCFHeader.commands`** (#615),
     which gives each line's words and its step, through `validators.command_lines` and its
@@ -451,8 +456,9 @@ evidence}` entry — plus the controlled vocabulary:
     FAST5's `sample_id` (`fast5`, #605: found by name in the first 64 KiB, its attribute
     message parsed whole; the same head's `device_type` gives the file's `instrument_model`,
     #747), an SGDP workspace tar's `callset.json` (#724; a wanted tar whose head was read
-    but whose `callset.json` gave no names is counted by cause, `unread_samples`) or a PLINK 2 `.psam`'s
-    IIDs (`plink`, #751, read whole; its `#FID`/`#IID` header required) (`FileTypeConfig.samples`, its readers among `code_rules.SAMPLE_RULES`), all of its strings or none, and each producer file holds its lists under
+    but whose `callset.json` gave no names is counted by cause, `unread_samples`), a PLINK 2 `.psam`'s
+    IIDs (`plink`, #751, read whole; its `#FID`/`#IID` header required) or a bcftools stats report's `PSC`
+    lines' names, wherever it has them (`bcftools_stats`, #683) (`FileTypeConfig.samples`, its readers among `code_rules.SAMPLE_RULES`), all of its strings or none, and each producer file holds its lists under
     `sample_lists`. A submitter table states it through the slot map, one cell per column
     (`samples` is the one non-dimension in `models.EVIDENCE_FIELDS`, never translated by the
     value map), and `make check-slot-map` refuses a column whose files' names mostly name
@@ -523,7 +529,7 @@ evidence}` entry — plus the controlled vocabulary:
     of its chain, so the record is keyed by `coriell:HG01504` or `hgdp:HGDP01163` and lists SGDP's own
     `sgdp:S_Spanish-2` under `synonyms`.
     No donor value is copied onto a file record.
-  - **A producer is declared once**, in `producers.PRODUCERS` — the fifteen writers of a
+  - **A producer is declared once**, in `producers.PRODUCERS` — the sixteen writers of a
     run's `*_classifications.json` files. Add one there, never to a second list:
     `build_parallel_jobs` and `output_utils.CLASSIFICATION_FILES` are derived from it,
     and the three hand-maintained lists they replaced are what let a registered type
