@@ -969,7 +969,8 @@ classes:
     description: >-
       One source that named a step, an input (ADR-0002 decision 6) or a file's samples
       (#357): sources that agree are each listed. Samples inherited from a parent (#668)
-      name the step crossed and the parent, as an inherited claim does.
+      name the step crossed and the parent, as an inherited claim does; samples a PLINK
+      fileset's sample table gave (#751) name the table.
     slots:
       - source_type
       - rule_id
@@ -978,6 +979,7 @@ classes:
       - activity
       - parent_role
       - parent_keys
+      - sample_table_key
     slot_usage:
       source_type:
         required: true
@@ -990,7 +992,8 @@ classes:
           samples, the identifier rule (`rules/sample_namespaces.yaml`) that read the cell;
           for inherited samples, `code_rules.SAMPLES_INHERITED_FROM_PARENT`'s id; for samples
           the repository's record of the step names (#698),
-          `code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE`'s id.
+          `code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE`'s id; for samples a PLINK fileset's sample
+          table gave (#751), `code_rules.SAMPLES_FROM_FILESET_SAMPLE_TABLE`'s id.
       # On inherited samples only (#668): the step crossed, the role its parent plays in
       # it, and the parents' record keys. Required on a step, not here.
       activity:
@@ -1092,6 +1095,23 @@ classes:
         description: >-
           The list's members, each the one file of the dataset carrying a sample's gVCF. A list is
           rebuilt only where every sample's resolves.
+
+  Fileset:
+    description: >-
+      A PLINK 2 fileset inference paired with its sample table (#751): the `.psam`, and the `.pgen`,
+      `.pvar` and `.log` beside it in its folder under its stem, which one `plink2 --make-pgen`
+      writes together. Written under the psam producer file's `filesets`; reconcile gives each
+      member the `.psam`'s settled samples (`Attribution.sample_table_key`).
+    attributes:
+      sample_table:
+        required: true
+        pattern: "^[^\\r\\n]+\\Z"
+        description: The `.psam`'s record key.
+      members:
+        required: true
+        multivalued: true
+        pattern: "^[^\\r\\n]+\\Z"
+        description: The record key of each member paired, at most one per extension.
 
   SampleList:
     description: >-
@@ -1807,6 +1827,10 @@ slots:
       On an inherited claim (contract 4.9, #571), or an inherited sample attribution (#668):
       the input role of the step whose parents gave the claim or the samples, a role its
       `activity` declares in `rules/activities.yaml`.
+  sample_table_key:
+    description: >-
+      On a sample attribution a PLINK fileset's sample table gave (#751): the record key of the
+      `.psam` whose settled samples the file took, a record of the same run.
   parent_keys:
     description: >-
       On an inherited claim (contract 4.9, #571), or an inherited sample attribution (#668):
@@ -1981,6 +2005,10 @@ enums:
           A list naming the files processed together, one per sample: a GATK sample-name
           map, each row a sample name and its gVCF's path (#621). No `meaning`: EDAM has no
           data term for it.
+      sample_table:
+        description: >-
+          A table of the samples a set of files holds, one row per sample: a PLINK 2 `.psam`
+          (#751). No `meaning`.
 
   reference_assembly_enum:
     description: >-

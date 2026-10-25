@@ -8,6 +8,8 @@ This file is the list. Add an issue here by pull request, once it is checked aga
 
 Each issue names the dataset, what AnVIL holds, what the files themselves or the submitter tables say, how many files it touches, and the change that would fix it. Counts come from meta-disco's reconcile on catalog `anvil15`, run `20261024_005617` (708,088 files), unless an issue says otherwise.
 
+**Sample conflicts.** Every file whose sources name different samples is listed, with each source, in [`sample-conflicts.tsv`](sample-conflicts.tsv), which `make reconcile-report` regenerates from a reconciled run. These are conflicts under investigation: the issues below report the ones checked so far (issues 1, 2 and 10), and a file the list holds that no issue explains is still being checked against its rows and AnVIL's design.
+
 | # | Dataset | Issue | Files |
 | --- | --- | --- | --: |
 | 1 | `ANVIL_HPRC` | Parents' reads generated from the child's biosample | 1,314 |

@@ -154,7 +154,9 @@ EXTENSION_MAP: dict[str, str] = {
     ".md5": "checksum",
     ".pgen": "genotype_plink",
     ".pvar": "genotype_plink",
-    ".psam": "genotype_plink",
+    # A PLINK 2 fileset's sample table holds no genotypes (#751), so it is no `genotype_plink`, and
+    # `edges.PARENT_KIND_BY_CATEGORY` gives it no parent kind.
+    ".psam": "sample_table",
     ".h5ad": "single_cell_matrix",
     ".loom": "single_cell_matrix",
     ".mtx": "single_cell_matrix",

@@ -17,7 +17,7 @@
           "data_modality": {
             "evidence": [
               {
-                "reason": "PLINK files contain genotype data (genomic)",
+                "reason": "PLINK 2 genotypes (.pgen) and their variants (.pvar) are genotype data (genomic)",
                 "rule_id": "plink_genomic",
                 "source_type": "filename_rule",
                 "tier": 1,
@@ -30,7 +30,7 @@
           "data_type": {
             "evidence": [
               {
-                "reason": "PLINK files contain genotype data (genomic)",
+                "reason": "PLINK 2 genotypes (.pgen) and their variants (.pvar) are genotype data (genomic)",
                 "rule_id": "plink_genomic",
                 "source_type": "filename_rule",
                 "tier": 1,

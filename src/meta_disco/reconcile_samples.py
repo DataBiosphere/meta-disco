@@ -1,8 +1,8 @@
 """Which samples each file's data comes from, settled at reconcile (#357).
 
-Four kinds of source name a file's samples: its own content, a submitter table, the
-repository's record of the step that generated it (below), and its parent across a step that
-passes samples (below). Inference reads the file's own content, called its
+Five kinds of source name a file's samples: its own content, a submitter table, the
+repository's record of the step that generated it (below), its PLINK fileset's sample table
+(below), and its parent across a step that passes samples (below). Inference reads the file's own content, called its
 header here (a BAM's ``@RG SM``, a VCF's sample columns, a GATK sample map's rows, a nanopore
 FAST5's ``sample_id``, a GenomicsDB workspace's ``callset.json``, ``sample_identity.SampleReader``), and writes the record's ``samples``, a pointer into its
 producer file's sample lists. A submitter table
@@ -24,6 +24,12 @@ file is counted: a ``conflict`` where two of them name members in one namespace
 (``coriell:NA19770`` against ``coriell:NA19771``), ``incomparable`` where they share none
 (``coriell:NA19770`` against ``sra_sample:SRS006871``, which may be one person, but only a
 crosswalk could say, #361). A wrong sample is worse than none.
+
+**A PLINK fileset's sample table** (#751): inference pairs each ``.psam`` with the ``.pgen``, ``.pvar``
+and ``.log`` written beside it under the same stem (``plink.filesets``), and each of those takes the
+``.psam``'s settled samples as one more source (:meth:`SampleReport.pair`). The ``.psam`` is no parent:
+one ``plink2 --make-pgen`` writes the four together, so no step is crossed. What a ``.psam`` passes is
+decided as a step's parents' is, and counted per dataset.
 
 A file's name is never a source. Where it carries exactly one recognised identifier that
 contradicts the settled members (``sample_identity.name_contradicts``), it is counted as a
@@ -53,7 +59,7 @@ from functools import lru_cache
 
 from . import activities, code_rules
 from .edges import distinct, parent_node
-from .models import SOURCE_DERIVATION_INHERITANCE, ClaimSource
+from .models import SOURCE_CONTENT_READ, SOURCE_DERIVATION_INHERITANCE, ClaimSource
 from .reconcile_inherit import PARENT_CONFLICT, Step, parent_first
 from .reconcile_lineage import CHILD_NOT_IN_RUN, CHILD_SEVERAL_MATCH, LineageJoin
 from .records import identity_from
@@ -76,17 +82,18 @@ AGREED = "agreed"  # two or more kinds of the file's own source named the same s
 HEADER_ONLY = "header_only"
 TABLE_ONLY = "table_only"
 ACTIVITY_ONLY = "activity_only"  # only the repository's record of the step that generated it (#698)
+FILESET_ONLY = "fileset_only"  # only its PLINK fileset's sample table (#751)
 INHERITED = "inherited"  # only the file's parent named them (#668)
 CONFLICT = "conflict"  # two sources named different members in one namespace
 INCOMPARABLE = "incomparable"  # sources named different members, sharing no namespace
 NONE = "none"  # no source named a sample
-OUTCOMES = (AGREED, HEADER_ONLY, TABLE_ONLY, ACTIVITY_ONLY, INHERITED, CONFLICT, INCOMPARABLE)
+OUTCOMES = (AGREED, HEADER_ONLY, TABLE_ONLY, ACTIVITY_ONLY, FILESET_ONLY, INHERITED, CONFLICT, INCOMPARABLE)
 
 # Which kind of source named a file's samples, in the order ``named_by`` lists them.
 # ``header`` is whatever inference read from the file's own content, a sample map's rows included.
-HEADER, TABLE, ACTIVITY, PARENT = "header", "table", "activity", "parent"
-KINDS = (HEADER, TABLE, ACTIVITY, PARENT)
-_ONLY = {HEADER: HEADER_ONLY, TABLE: TABLE_ONLY, ACTIVITY: ACTIVITY_ONLY}
+HEADER, TABLE, ACTIVITY, FILESET, PARENT = "header", "table", "activity", "fileset", "parent"
+KINDS = (HEADER, TABLE, ACTIVITY, FILESET, PARENT)
+_ONLY = {HEADER: HEADER_ONLY, TABLE: TABLE_ONLY, ACTIVITY: ACTIVITY_ONLY, FILESET: FILESET_ONLY}
 
 # What became of the repository's links from a file to its biosamples (#698), per dataset: per file
 # whose record the links name, whether every biosample tied to a sample record; per line, a child no
@@ -95,8 +102,9 @@ TIED = "tied"
 UNTIED = "untied"
 LINK_OUTCOMES = (TIED, UNTIED, CHILD_NOT_IN_RUN, CHILD_SEVERAL_MATCH)
 
-# What a role that passes samples gave a child (#668); the report counts each per dataset and
-# activity. First match wins: different lists, a parent in conflict, lists naming none by design
+# What a role that passes samples gave a child (#668), and what a PLINK fileset's sample table gave
+# each member (#751), the table standing where the parent does; the report counts each per dataset (and
+# activity, for a step). First match wins: different lists, a parent in conflict, lists naming none by design
 # (#726), a parent with none; but for the third, ``reconcile_inherit.settle_parents``' order (mixed,
 # conflict, not_classified). A parent outside the run holds no list, so it counts as one with none.
 PASSED = "passed"
@@ -174,8 +182,9 @@ def settle(named: Iterable[Named]) -> tuple[str, dict | None, frozenset[Identifi
 
     ``samples`` is the record's ``samples`` where the sources agree, else None; ``members``
     are then the settled members, else empty. Agreeing sources are listed header first, then
-    tables, then the activity, then the parent (``KINDS``), each attribution once. The outcome is ``agreed`` where two or more kinds of the
-    file's own source (header, table, activity) named them, the one kind's where one did, and
+    tables, then the activity, then the fileset's sample table, then the parent (``KINDS``), each
+    attribution once. The outcome is ``agreed`` where two or more kinds of source other than the
+    parent (header, table, activity, fileset) named them, the one kind's where one did, and
     ``inherited`` where only its parent did.
     """
     named = list(named)
@@ -243,6 +252,23 @@ def activity_sources(lineage: LineageJoin, samples_by_id: Mapping[tuple[str, str
     return result
 
 
+def tables_of(filesets: Iterable[dict]) -> dict[str, tuple[str, ...]]:
+    """Per member record key, the record keys of the ``.psam`` files inference paired it with (``output_utils.run_filesets``)."""
+    tables: dict[str, tuple[str, ...]] = {}
+    for entry in filesets:
+        for member in entry["members"]:
+            tables[member] = (*tables.get(member, ()), entry["sample_table"])
+    return tables
+
+
+def _fileset_attribution(sample_table: str) -> dict:
+    return {
+        "source_type": SOURCE_CONTENT_READ,
+        "rule_id": code_rules.SAMPLES_FROM_FILESET_SAMPLE_TABLE.id,
+        "sample_table_key": sample_table,
+    }
+
+
 def lists_disagree(child: frozenset[Identifier], parent: frozenset[Identifier]) -> bool:
     """Whether a child's and its parent's sample lists disagree.
 
@@ -287,9 +313,10 @@ class SampleReport:
     sources differ, and each file no source names samples for (#698).
 
     Reconcile reads the run twice. In the first pass :meth:`hold` keeps each file's own
-    settled samples, and a child's own sources where its step passes samples; :meth:`inherit`
-    then settles those children, parents first; in the second pass :meth:`settle` settles and
-    counts each file as it is written.
+    settled samples, and a child's own sources where its step passes samples or a PLINK fileset's
+    sample table pairs it (``tables``, #751); :meth:`pair` then settles those members with the
+    table's samples, and :meth:`inherit` the children, parents first; in the second pass
+    :meth:`settle` settles and counts each file as it is written.
     """
 
     rules: IdentifierRuleSet
@@ -315,6 +342,10 @@ class SampleReport:
     names_none: set[str] = field(default_factory=set)
     # What became of the repository's links from each file to its biosamples (#698).
     activity: ActivityLinks = field(default_factory=ActivityLinks)
+    # Per member of a PLINK fileset, the `.psam` files inference paired it with (:func:`tables_of`, #751).
+    tables: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # Per dataset, what each fileset's sample table gave its members (``PASSING_OUTCOMES``).
+    fileset_outcomes: dict[str, Counter] = field(default_factory=lambda: defaultdict(Counter))
     # Each file whose sources named different samples, with every source (#698), and each file no
     # source named a sample for, in the order settled.
     conflicts: list[dict] = field(default_factory=list)
@@ -323,10 +354,15 @@ class SampleReport:
     _own: dict[str, tuple[list[Named], str]] = field(default_factory=dict, init=False, repr=False)
     # Per child, what its parents passed it, for the second pass.
     _inherited: dict[str, tuple[Named, ...]] = field(default_factory=dict, init=False, repr=False)
+    # Per fileset member, its own sources and dataset until :meth:`pair` reads them; then what its table passed it.
+    _member_own: dict[str, tuple[list[Named], str]] = field(default_factory=dict, init=False, repr=False)
+    _from_table: dict[str, Named] = field(default_factory=dict, init=False, repr=False)
     # The record keys whose sources named different samples (a conflict, or incomparable).
     _conflicted: set[str] = field(default_factory=set, init=False, repr=False)
-    # Per child, the parents in conflict that passed it nothing (``PARENT_CONFLICT``), named on its row if it has none.
+    # Per child, the parents in conflict that passed it nothing (``PARENT_CONFLICT``), named on its row if it has none;
+    # per fileset member, the sample tables in conflict, named apart, since a table is no parent (#751).
     _conflicted_parents: dict[str, list[str]] = field(default_factory=dict, init=False, repr=False)
+    _conflicted_tables: dict[str, list[str]] = field(default_factory=dict, init=False, repr=False)
 
     def _own_sources(
         self, identity: str, record: dict, inference_lists: dict[str, dict], table: list[Named]
@@ -352,15 +388,61 @@ class SampleReport:
     ) -> None:
         """The first pass: hold ``record``'s own settled samples, and its own sources where ``step`` passes samples."""
         named = self._own_sources(identity, record, inference_lists, table)
+        dataset = str(record.get("dataset_title") or "")
         if step is not None and activities.samples_roles(step.activity):
-            self._own[identity] = (named, str(record.get("dataset_title") or ""))
+            self._own[identity] = (named, dataset)
+        if identity in self.tables:
+            self._member_own[identity] = (named, dataset)
         self._hold(identity, *settle(named))
+
+    def _passing(
+        self, child: str, sources: tuple[str, ...], conflicted: dict[str, list[str]]
+    ) -> tuple[str, str | None]:
+        """What ``sources`` (a role's parents, or a member's sample tables) pass ``child``: the outcome
+        (``PASSING_OUTCOMES``, first match wins) and the list's key where it is ``passed``. A source in
+        conflict is kept under ``child`` in ``conflicted``, to name on its row if it has none."""
+        lists = {self.held[p] for p in sources if p in self.held}
+        if len(lists) > 1:
+            return PARENTS_DIFFER, None
+        if any(p in self._conflicted for p in sources):
+            held = conflicted.setdefault(child, [])
+            held.extend(p for p in sources if p in self._conflicted and p not in held)
+            return PARENT_CONFLICT, None
+        if all(p in self.names_none for p in sources):
+            return LIST_NAMES_NONE, None
+        if any(p not in self.held for p in sources):
+            return PARENT_NONE, None
+        (list_key,) = lists
+        return PASSED, list_key
+
+    def pair(self) -> None:
+        """Settle each PLINK fileset member with its sample table's settled samples (#751), before :meth:`inherit`.
+
+        A table passes what its own sources settled, as a step's parents do (:meth:`_passing`): one more
+        source of the member's. A table whose samples came across a step of its own passes none. A member
+        not in the run is skipped.
+        """
+        for member, tables in self.tables.items():
+            own = self._member_own.pop(member, None)
+            if own is None:
+                continue
+            named, dataset = own
+            outcome, list_key = self._passing(member, tables, self._conflicted_tables)
+            self.fileset_outcomes[dataset][outcome] += 1
+            if list_key is None:
+                continue
+            attributions = tuple(_fileset_attribution(t) for t in tables)
+            passed = Named(self.members[list_key], attributions, kind=FILESET, list_id=list_key)
+            self._from_table[member] = passed
+            sources = [*named, passed]
+            if member in self._own:
+                self._own[member] = (sources, dataset)
+            self._hold(member, *settle(sources))
 
     def inherit(self, steps: Mapping[str, Step]) -> None:
         """Settle each child whose step passes samples with its parents' settled samples, parents first.
 
-        A role's parents pass their list where every one holds the same; two holding different
-        lists, a parent in conflict, or a parent holding none, pass nothing. Raises
+        What a role's parents pass is :meth:`_passing`'s to say. Raises
         ``reconcile_inherit.InheritanceCycle`` where the steps form a cycle.
         """
         for key in parent_first(steps):
@@ -374,20 +456,8 @@ class SampleReport:
                 parent_keys = step.parents(role)
                 if not parent_keys:
                     continue
-                lists = {self.held[p] for p in parent_keys if p in self.held}
-                if len(lists) > 1:
-                    outcome = PARENTS_DIFFER
-                elif any(p in self._conflicted for p in parent_keys):
-                    outcome = PARENT_CONFLICT
-                    held = self._conflicted_parents.setdefault(key, [])
-                    held.extend(p for p in parent_keys if p in self._conflicted and p not in held)
-                elif all(p in self.names_none for p in parent_keys):
-                    outcome = LIST_NAMES_NONE
-                elif any(p not in self.held for p in parent_keys):
-                    outcome = PARENT_NONE
-                else:
-                    outcome = PASSED
-                    (list_key,) = lists
+                outcome, list_key = self._passing(key, parent_keys, self._conflicted_parents)
+                if list_key is not None:
                     attribution = _inherited_attribution(step.activity, role, parent_keys)
                     passed.append(Named(self.members[list_key], (attribution,), kind=PARENT, list_id=list_key))
                 self.passing[dataset][step.activity][outcome] += 1
@@ -406,16 +476,20 @@ class SampleReport:
     ) -> dict | None:
         """The reconciled ``samples`` for ``record``, counted; None where no source names them, or sources differ.
 
-        ``identity`` is its record key, under which :meth:`inherit` kept what its parents
-        passed; ``generated_by`` its reconciled step (None where it has none), whose parents in
+        ``identity`` is its record key, under which :meth:`pair` kept what its fileset's sample table
+        passed and :meth:`inherit` what its parents passed; ``generated_by`` its reconciled step (None where it has none), whose parents in
         roles passing no samples are checked against the settled samples (:func:`lists_disagree`).
         A file whose sources differ is kept in :attr:`conflicts` with every source, and one no
         source names samples for in :attr:`without_samples`, with ``data_type``, its reconciled one, and
-        ``parent_conflict``, the record keys of the parents whose conflict passed it nothing, where any did;
+        ``parent_conflict``, the record keys of the parents whose conflict passed it nothing, where any did
+        (``sample_table_conflict`` for a fileset's sample tables, #751);
         each row names the file by ``record_key`` (``identity``) beside the catalog identity, which an
         HPRC record does not carry.
         """
-        named = self._own_sources(identity, record, inference_lists, table) + list(self._inherited.get(identity, ()))
+        named = self._own_sources(identity, record, inference_lists, table)
+        if identity in self._from_table:
+            named.append(self._from_table[identity])
+        named += self._inherited.get(identity, ())
         outcome, samples, members = settle(named)
         dataset = str(record.get("dataset_title") or "")
         file_name = str(record.get("file_name") or "")
@@ -441,6 +515,8 @@ class SampleReport:
             }
             if parents := self._conflicted_parents.get(identity):
                 row["parent_conflict"] = parents  # the conflict rows, by record key, that left it none
+            if tables := self._conflicted_tables.get(identity):
+                row["sample_table_conflict"] = tables
             self.without_samples.append(row)
         if samples is not None:
             key = samples["list_id"]
@@ -506,10 +582,16 @@ class SampleReport:
         (contract 5.2), the most files first. Per activity, ``inheritance`` counts what each role
         passing samples gave a child, and ``parent_disagreements`` the child and parent pairs whose
         lists disagree across a step passing none (#668). ``activity_links`` counts what became of the
-        repository's links from the dataset's files to their biosamples (#698).
+        repository's links from the dataset's files to their biosamples (#698), and ``filesets`` what
+        each PLINK fileset's sample table gave its members (``PASSING_OUTCOMES``, #751).
         """
         datasets = sorted(
-            set(self.outcomes) | set(headers) | set(unrecognised) | set(self.passing) | set(self.activity.counts)
+            set(self.outcomes)
+            | set(headers)
+            | set(unrecognised)
+            | set(self.passing)
+            | set(self.activity.counts)
+            | set(self.fileset_outcomes)
         )
         # Per dataset and outcome (conflict, incomparable), the first few files.
         examples: dict[tuple[str, str], list[str]] = defaultdict(list)
@@ -538,6 +620,7 @@ class SampleReport:
                 "parent_disagreements": dict(sorted(self.parent_disagreements.get(dataset, Counter()).items())),
                 "parent_disagreement_examples": self.parent_examples.get(dataset, []),
                 "activity_links": self.links_to_dict(dataset),
+                "filesets": {o: n for o in PASSING_OUTCOMES if (n := self.fileset_outcomes.get(dataset, Counter())[o])},
             }
         return {"lists": len(self.lists), "by_dataset": by_dataset}
 

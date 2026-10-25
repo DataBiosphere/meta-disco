@@ -133,6 +133,10 @@ UNREAD_SAMPLES_KEY = "unread_samples"
 SAMPLE_LISTS_KEY = "sample_lists"
 # The top-level key of a producer's file holding the lists its records' steps name by address (#726).
 REBUILT_LISTS_KEY = "rebuilt_lists"
+# The top-level key of a producer's file holding each PLINK fileset its sample tables head (#751),
+# and the key under its metadata `details` of what became of the pairing per dataset.
+FILESETS_KEY = "filesets"
+FILESET_OUTCOMES_KEY = "fileset_outcomes"
 
 
 def dataset_of(record: dict) -> Any:
@@ -299,7 +303,7 @@ class OutputRecord:
     their own dicts and emitted wider records, so a run held three record shapes and a
     field wired into the pipeline reached some of the outputs and not others.
     They build this now, through :meth:`from_record`, and
-    ``metadata_fixtures.RECORD_KEYS`` pins all fourteen against it.
+    ``metadata_fixtures.RECORD_KEYS`` pins all fifteen against it.
 
     The index producer adds the one envelope key that is not a record: ``unmatched_files``,
     its diagnostic array for files it took no parent for.

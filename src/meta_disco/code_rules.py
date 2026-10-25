@@ -27,8 +27,8 @@ is what an edge's ``rule_id`` carries, and nothing else lists it.
 A **sample rule** (#357) reads which samples a file's data comes from, so it sets no
 dimension either: out of the file's own content (a header, a GATK sample map's rows, a GenomicsDB
 workspace's ``callset.json``), or, at
-reconcile, out of its parent's settled samples (#668) or the repository's record of the step that
-generated it (#698). It is declared in ``SAMPLE_RULES``; its
+reconcile, out of its parent's settled samples (#668), the repository's record of the step that
+generated it (#698), or its PLINK fileset's ``.psam`` (#751). It is declared in ``SAMPLE_RULES``; its
 id is what a file's ``samples.named_by`` carries for that source.
 
 An **entity rule** (#582) gives a donor's slot an answer, not a file's dimension. It is
@@ -149,8 +149,9 @@ class EdgeRule:
 @dataclass(frozen=True)
 class SampleRule:
     """A rule that reads which samples a file's data comes from (#357): out of the file's own
-    content (a header, a sample map's rows, a workspace's ``callset.json``), or at reconcile its parent's
-    settled samples (#668) or the repository's record of the step that generated it (#698).
+    content (a header, a sample map's rows, a workspace's ``callset.json``, a ``.psam``'s rows), or at
+    reconcile its parent's settled samples (#668), the repository's record of the step that generated it
+    (#698) or its PLINK fileset's ``.psam``'s (#751).
 
     ``reads`` says where; ``rationale`` says why that names the samples. Each string a content
     reader reads becomes a sample only through ``rules/sample_namespaces.yaml``.
@@ -916,6 +917,17 @@ TAR_CALLSET_SAMPLES = SampleRule(
         "Read where nothing else names the tar's samples: SGDP's sample maps are not public (#624)."
     ),
 )
+PSAM_SAMPLE_IDS = SampleRule(
+    id="psam_sample_ids",
+    module=SAMPLE_IDENTITY,
+    source_type=SOURCE_CONTENT_READ,
+    reads="a PLINK 2 .psam read whole: the IID of each row after its #FID or #IID header line",
+    rationale=(
+        "A .psam is a PLINK 2 fileset's sample table, one row per sample whose genotypes its .pgen holds, "
+        "each named by its IID (#751). A table whose every IID is recognised names the file's samples; one "
+        "with an IID no identifier rule recognises names none, and one with no #FID or #IID header is not read."
+    ),
+)
 SAMPLES_INHERITED_FROM_PARENT = SampleRule(
     id="samples_inherited_from_parent",
     module=RECONCILE_SAMPLES,
@@ -952,6 +964,25 @@ SAMPLES_FROM_ACTIVITY_BIOSAMPLE = SampleRule(
     ),
 )
 
+SAMPLES_FROM_FILESET_SAMPLE_TABLE = SampleRule(
+    id="samples_from_fileset_sample_table",
+    module=RECONCILE_SAMPLES,
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "at reconcile, the settled samples of the PLINK 2 .psam inference paired the file with "
+        "(plink.filesets): the .psam in the file's own folder whose stem is the file's, for a .pgen, .pvar or .log; "
+        "what it passes is decided as a step's parents' is"
+    ),
+    rationale=(
+        "One plink2 --make-pgen writes a fileset's .pgen, .pvar, .psam and .log under one prefix, in one folder, "
+        "and the .psam's rows are the samples whose genotypes the .pgen holds and whose variants the .pvar "
+        "lists; the .log records the run that wrote them (#751). The samples are the .psam's rows, read from "
+        "its content, and the folder and stem say whose they are. The .psam is no parent: the four files are "
+        "written together, so no step is crossed. A .psam with none, or in conflict, passes nothing; the "
+        "file's own sources and the .psam's settle as any two sources do."
+    ),
+)
+
 EXTERNAL_SAMPLE_MAP_ROWS = SampleRule(
     id="external_sample_map_rows",
     module=SAMPLE_IDENTITY,
@@ -973,8 +1004,10 @@ SAMPLE_RULES = (
     SAMPLE_MAP_ROWS,
     FAST5_TRACKING_SAMPLE,
     TAR_CALLSET_SAMPLES,
+    PSAM_SAMPLE_IDS,
     SAMPLES_INHERITED_FROM_PARENT,
     SAMPLES_FROM_ACTIVITY_BIOSAMPLE,
+    SAMPLES_FROM_FILESET_SAMPLE_TABLE,
     EXTERNAL_SAMPLE_MAP_ROWS,
 )
 

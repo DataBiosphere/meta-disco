@@ -4,8 +4,9 @@
 Uses rules from the bundled unified_rules.yaml (package data of meta_disco.rules) for:
 - .pod5 -> genomic.raw_signal (ONT raw signal data); a .fast5 is the fast5 type's, which
   reads its sample from its head (#605)
-- .psam, .pgen -> genomic.genotypes (PLINK2 genotype data); a .pvar is the VCF
-  producer's, which reads its reference from its VCF-style header (#561)
+- .pgen -> genomic.genotypes (PLINK2 genotype data); a .pvar is the VCF
+  producer's, which reads its reference from its VCF-style header (#561), and a .psam
+  the psam type's, which reads its samples (#751)
 """
 
 import argparse

@@ -36,11 +36,11 @@ value; the golden would silently record the unrefined result.
 This guards output *shape*; it is not a substitute for the content-driven
 classification tests in ``tests/test_evals.py``.
 
-**Two committed fixtures, one regen command.** The golden covers the ten producers
+**Two committed fixtures, one regen command.** The golden covers the eleven producers
 ``ClassifyPipeline`` writes; ``standalone_output.json`` covers the four standalone ones
 (#465), which have no golden and so reached no schema validation at all. Both are read
 across the component boundary by ``schema/tests/test_output_validation.py``, whose gate
-is what makes them cover all fourteen — ``test_the_schema_gate_covers_every_producer``
+is what makes them cover all fifteen — ``test_the_schema_gate_covers_every_producer``
 pins that union against ``producers.PRODUCERS``. Regenerate with::
 
     python -m tests.test_output_shape   # writes both fixtures under tests/fixtures/golden/
@@ -208,6 +208,26 @@ GOLDEN_INPUTS = {
             entry_id="g-fast5-1",
         ),
     ],
+    # A PLINK fileset's sample table and its `.pgen` beside it in one folder, so the producer file
+    # carries the pair under `filesets` (#751); only the `.psam` is this type's to classify.
+    "psam": [
+        _golden_record(
+            "ad",
+            file_name="ACB.1.psam",
+            file_size=1300,
+            file_format=".psam",
+            entry_id="g-psam-1",
+            file_path="plink/ACB.1.psam",
+        ),
+        _golden_record(
+            "ae",
+            file_name="ACB.1.pgen",
+            file_size=90000,
+            file_format=".pgen",
+            entry_id="g-pgen-1",
+            file_path="plink/ACB.1.pgen",
+        ),
+    ],
 }
 GOLDEN_INPUTS["sample_map"] = [SAMPLE_MAP_RECORD, GOLDEN_INPUTS["vcf"][0]]
 
@@ -277,6 +297,8 @@ STUB_PAYLOADS = {
     # fast5 returns a Fast5Header: one run's sample_id, so the golden carries its `samples` (#605), and its
     # device_type, so it carries the instrument model the content rule gives (#747).
     "fast5": Fast5Header(sample_ids=["HG02723"], device_types=["promethion"]),
+    # psam returns the table's text: one sample, so the golden carries its `samples` (#751).
+    "psam": "#IID\tPAT\tMAT\tSEX\tSuperPop\tPopulation\nHG01879\t0\t0\t1\tAFR\tACB\n",
 }
 # Every evidence entry has a reason, and is either a synthetic resolution marker
 # (carries `marker`) or something a producer made — the two are mutually exclusive
@@ -519,7 +541,7 @@ def test_standalone_output_matches_fixture(standalone_output):
 
 
 def test_the_schema_gate_covers_every_producer():
-    """The gate's input is these two fixtures; together they must be all fourteen.
+    """The gate's input is these two fixtures; together they must be all fifteen.
 
     Read off the committed files rather than off the builders above, because the files
     are what `schema/tests/test_output_validation.py` actually validates — a fixture
@@ -639,9 +661,9 @@ def test_output_values_in_vocabulary(output):
 
 @pytest.mark.parametrize("producer,name,fmt", STANDALONE_PRODUCERS)
 def test_a_standalone_producer_emits_the_record_keys(tmp_path, producer, name, fmt):
-    """All fourteen output files carry one record shape (#450).
+    """All fifteen output files carry one record shape (#450).
 
-    The golden fixture covers the ten the pipeline writes; this covers the four that
+    The golden fixture covers the eleven the pipeline writes; this covers the four that
     used to assemble dicts by hand and so could each carry a different set. That is what
     the catalog identity (#433) needed a sweep for, and what building `OutputRecord`
     makes structural instead.
@@ -678,7 +700,7 @@ def test_the_index_producer_emits_the_metadata_keys(tmp_path):
 
 
 def test_the_pipeline_emits_the_metadata_keys(output):
-    """The ten header types, off the golden run, so all fourteen are covered."""
+    """The eleven header types, off the golden run, so all fifteen are covered."""
     for ftype, payload in output.items():
         assert list(payload["metadata"]) == METADATA_KEYS, ftype
 
@@ -785,7 +807,7 @@ if __name__ == "__main__":
 
 
 def test_every_rule_id_in_the_output_is_declared(output, standalone_output):
-    """Every ``rule_id`` the golden output of the fourteen producers carries is declared (#572).
+    """Every ``rule_id`` the golden output of the fifteen producers carries is declared (#572).
 
     Declared means a YAML rule, or a rule or marker in ``code_rules``. This is the output
     half of the check that ``test_code_rules`` makes on the source: it catches an id

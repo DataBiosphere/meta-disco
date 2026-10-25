@@ -490,7 +490,8 @@ def samples_rows(report: dict) -> list[dict] | None:
     its table, column and files; the files whose name names another sample; and the first few
     examples of each. Since #668, also per activity what each role passing samples gave a child
     (``inheritance``) and the child and parent pairs whose lists disagree across a step passing
-    none (``parent_disagreements``, with examples); empty in a report written before it.
+    none (``parent_disagreements``, with examples); empty in a report written before it. Since #751,
+    what each PLINK fileset's sample table gave its members (``filesets``); None before it.
     """
     samples = report.get(SAMPLES_FIELD)
     if samples is None:
@@ -512,6 +513,8 @@ def samples_rows(report: dict) -> list[dict] | None:
             "parent_disagreement_examples": block.get("parent_disagreement_examples") or [],
             # None in a report written before #698, which read no activity link.
             "activity_links": block.get("activity_links"),
+            # None in a report written before #751, which paired no PLINK fileset.
+            "filesets": block.get("filesets"),
         }
         for dataset, block in sorted(samples["by_dataset"].items())
     ]
@@ -1238,9 +1241,11 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
         "The repository's record of the step that generated a file names them too: AnVIL's `anvil_activity` "
         "(or `anvil_sequencingactivity`) rows generating the file, whose `used_biosample_id` ties to one of our sample records through the AnVIL "
         "ids listed on it (#698), labelled *activity*. "
-        "Settled: *agreed*, two or more of header, table and activity named the same samples; *header_only* / "
-        "*table_only* / *activity_only*: only the header, only tables (one or several, agreeing), or only the "
-        "activity did; *inherited*: only the file's parent did, across "
+        "A PLINK 2 fileset's `.pgen`, `.pvar` and `.log` take the samples of the `.psam` written beside them under "
+        "the same stem, labelled *fileset* (#751). "
+        "Settled: *agreed*, two or more of header, table, activity and fileset named the same samples; *header_only* / "
+        "*table_only* / *activity_only* / *fileset_only*: only the header, only tables (one or several, agreeing), only "
+        "the activity, or only the fileset's sample table did; *inherited*: only the file's parent did, across "
         "a step that passes samples (an index, checksum, QC report, coverage track or cohort merge, #668), and a "
         "parent agreeing with the file's own sources is listed beside them without changing its column; "
         "*conflict*: they named different samples in one namespace; *incomparable*: different samples in "
@@ -1388,6 +1393,28 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
         lines.append("None in this run.")
     else:
         lines.append("This run's report predates the activity links (#698): run `make reconcile` again.")
+    paired = [r for r in rows if r["filesets"]]
+    lines += [
+        "",
+        "### PLINK filesets",
+        "",
+        "Per `.pgen`, `.pvar` or `.log` inference paired with the `.psam` beside it in its folder under its stem "
+        "(#751), the `.psam` standing where a parent does above: *passed*: its settled samples are one more source "
+        "of the file's; *parents_differ*: two `.psam` files paired the file and named different lists; "
+        "*parent_conflict*: the `.psam`'s own sources named different samples; *parent_none*: no source named the "
+        "`.psam`'s samples (an IID no identifier rule recognises, or a table not read); *list_names_none* does "
+        "not arise for a `.psam`. Nothing passes in the last four.",
+        "",
+    ]
+    if paired:
+        lines += md_table(
+            ["dataset", *PASSING_OUTCOMES],
+            [[md_code(shown(r["dataset"])), *(_n(r["filesets"].get(o, 0)) for o in PASSING_OUTCOMES)] for r in paired],
+        )
+    elif any(r["filesets"] is not None for r in rows):
+        lines.append("None in this run.")
+    else:
+        lines.append("This run's report predates PLINK filesets (#751): run `make reconcile` again.")
     examples = [
         r for r in rows if r["conflict_examples"] or r["incomparable_examples"] or r["name_disagreement_examples"]
     ]
@@ -1487,6 +1514,8 @@ def _inheritance_section(rows: list[dict] | None) -> list[str]:
 
 
 # The conflicts TSV's columns (#698): one row per file and source attribution, for sending to the repository.
+# ``from_records`` names the records a source took its samples from: the parents' keys of an inherited
+# source (#668), or the sample table's of a PLINK fileset's (#751); blank for any other.
 CONFLICT_COLUMNS = (
     "dataset",
     "record_key",
@@ -1499,6 +1528,7 @@ CONFLICT_COLUMNS = (
     "column",
     "rule_id",
     "activity_id",
+    "from_records",
     "samples",
 )
 
@@ -1527,10 +1557,18 @@ def conflict_tsv(conflicts) -> str:
                         where.get("column"),
                         attribution["rule_id"],
                         attribution.get("activity_id"),
+                        _from_records(attribution),
                         samples,
                     )
                 )
     return out.getvalue()
+
+
+def _from_records(attribution: dict) -> str | None:
+    """The records an attribution's samples came from, comma-separated (``CONFLICT_COLUMNS``' ``from_records``); None for none."""
+    if table := attribution.get("sample_table_key"):
+        return table
+    return ",".join(attribution["parent_keys"]) if attribution.get("parent_keys") else None
 
 
 def render_html(data: dict, template: str) -> str:

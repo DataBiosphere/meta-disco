@@ -270,6 +270,7 @@ def test_the_conflicts_tsv_has_a_line_per_file_source_and_attribution(tmp_path, 
         "column": "used_biosample_id",
         "rule_id": code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE.id,
         "activity_id": "a1",
+        "from_records": "",
         "samples": "coriell:HG01106",
     }
 
@@ -411,6 +412,10 @@ def test_a_conflict_with_its_parents_samples_lists_the_parent_as_a_source(tmp_pa
         (ACTIVITY, "HG00097"),
         ("parent", "HG00096"),
     ]
+    # The TSV names the parent its samples came from, and no record for the activity's line.
+    _, *lines = conflict_tsv([conflict]).splitlines()
+    rows = [dict(zip(CONFLICT_COLUMNS, line.split("\t"), strict=True)) for line in lines]
+    assert [(row["source_kind"], row["from_records"]) for row in rows] == [(ACTIVITY, ""), ("parent", "file-1")]
 
 
 def test_a_file_with_no_samples_carries_its_reconciled_data_type(tmp_path, run, evidence, table):

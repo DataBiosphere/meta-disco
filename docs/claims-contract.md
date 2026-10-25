@@ -38,7 +38,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     values, rather than authored value by value. Reconcile settles it with a header's samples, the
     repository's own record of the step that generated the file (an `anvil_activity` or
     `anvil_sequencingactivity` line whose parent is a biosample, tied to a sample record through its
-    `repository_ids`, #698), and a
+    `repository_ids`, #698), a PLINK fileset's sample table (the `.psam` written beside a `.pgen`, `.pvar`
+    or `.log` under its stem, which inference pairs by folder, #751), and a
     parent's across a step that passes them (4.9, #668), as a file's step is settled (ADR-0002 decision 6),
     not by 4.x's resolution, and only a reader that asks for it is
     given its lines (`source_evidence.iter_evidence`).

@@ -1,7 +1,7 @@
 """File type configurations for the classification pipeline.
 
 Each config defines extensions, fetcher, classifier, and summary printer for one file
-type. They are used by ClassifyPipeline and classify_headers.py, and are the ten header
+type. They are used by ClassifyPipeline and classify_headers.py, and are the eleven header
 entries in the producer registry (``producers``).
 
 ``FileTypeConfig`` is declared here rather than in ``pipeline`` so that ``pipeline`` can
@@ -22,6 +22,7 @@ from .fetchers import (
     fetch_fastq_reads,
     fetch_gfa_segment_tags,
     fetch_idat_header,
+    fetch_psam,
     fetch_sample_map,
     fetch_tar_headers,
     fetch_vcf_header,
@@ -37,14 +38,24 @@ from .header_classifier import (
     classify_from_gfa_segment_tags,
     classify_from_header,
     classify_from_idat_header,
+    classify_from_psam,
     classify_from_tar_head,
     classify_from_vcf_header,
     classify_sample_map,
     tar_head_is_conclusive,
     workspace_header_member,
 )
+from .plink import filesets, parse_psam
 from .producer_steps import HeaderSteps
-from .sample_identity import BAM_SAMPLES, FAST5_SAMPLES, SAMPLE_MAP_SAMPLES, TAR_SAMPLES, VCF_SAMPLES, SampleReader
+from .sample_identity import (
+    BAM_SAMPLES,
+    FAST5_SAMPLES,
+    PSAM_SAMPLES,
+    SAMPLE_MAP_SAMPLES,
+    TAR_SAMPLES,
+    VCF_SAMPLES,
+    SampleReader,
+)
 from .summaries import print_bam_summary, print_fastq_summary, print_vcf_summary
 from .validators.header_extractors import parse_vcf_head
 
@@ -90,6 +101,11 @@ class FileTypeConfig:
     # The samples a file's own content names (#357; a header, a sample map's rows, #668, a tar's ``callset.json``, #724),
     # read from the parse (or the payload, for a type without a ``parser``). None means the type reads no samples.
     samples: SampleReader | None = None
+    # The fileset each of this type's files is the sample table of (#751), found from every loaded
+    # record: called once per run with them and the source's record key, it returns a
+    # ``plink.Filesets``, written in the producer file under ``records.FILESETS_KEY`` for reconcile
+    # to give each member the table's samples. None means the type heads no fileset.
+    filesets: Callable | None = None
     # The dimensions come from the name, the content read only to add to them (a FAST5's samples,
     # #605, and its instrument, #747): a failed read keeps the classifier's answers from the name,
     # rather than none, the classifier given None for the content.
@@ -226,6 +242,20 @@ FAST5_CONFIG = FileTypeConfig(
     answers_from_name=True,
 )
 
+# PLINK 2 sample tables (#751): the rule engine gives the dimensions from the extension
+# (`plink_sample_table`); the file is read whole for its rows' IIDs, the samples of the fileset it
+# heads, and each `.psam` is paired with its fileset's other files for reconcile.
+PSAM_CONFIG = FileTypeConfig(
+    name="psam",
+    extensions=(".psam",),
+    fetcher=fetch_psam,
+    classifier=classify_from_psam,
+    parser=parse_psam,
+    samples=PSAM_SAMPLES,
+    filesets=filesets,
+    answers_from_name=True,
+)
+
 FILE_TYPE_REGISTRY = {
     "bam": BAM_CONFIG,
     "vcf": VCF_CONFIG,
@@ -237,4 +267,5 @@ FILE_TYPE_REGISTRY = {
     "sample_map": SAMPLE_MAP_CONFIG,
     "idat": IDAT_CONFIG,
     "fast5": FAST5_CONFIG,
+    "psam": PSAM_CONFIG,
 }

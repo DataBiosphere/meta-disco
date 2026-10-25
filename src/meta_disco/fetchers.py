@@ -58,13 +58,13 @@ from .evidence import (
     GfaEvidence,
     IdatEvidence,
     IdatHeader,
-    SampleMapEvidence,
     SegmentTag,
     TarEvidence,
     TarHead,
     VcfEvidence,
     VcfHead,
     VcfRecord,
+    WholeTextEvidence,
 )
 
 S3_MIRROR_URL = "https://anvilproject.s3.amazonaws.com/file"
@@ -1435,8 +1435,30 @@ def _read_kept(
 
 
 # =============================================================================
-# SAMPLE MAP FETCHER (#621)
+# WHOLE-TEXT FETCHERS: SAMPLE MAP (#621), PLINK .psam (#751)
 # =============================================================================
+
+
+def _fetch_whole_text(
+    what: str, evidence_dir: Path, md5sum: str, file_name: str, is_gzipped: bool, use_cache: bool, url: str | None
+) -> str:
+    """A file's whole text, to its end, cached as ``WholeTextEvidence``; ``FetchError`` where it is larger than
+    ``MAX_DECOMPRESSED`` bytes (``what`` names the file in the message)."""
+    payload = _load_cached(WholeTextEvidence, evidence_dir, md5sum, use_cache)
+    if payload is not None:
+        return payload
+
+    # One byte past the cap, so a file of exactly ``MAX_DECOMPRESSED`` bytes is read to its end
+    # and seen whole, and only a longer one stops short.
+    stream, raw = _open_stream(md5sum, url=url, is_gzipped=is_gzipped, compressed_cap=MAX_DECOMPRESSED + 2)
+    text, truncated = _read_head_text(stream, raw, cap=MAX_DECOMPRESSED + 1)
+    if truncated:
+        raise FetchError(f"{what} larger than {MAX_DECOMPRESSED} bytes; not read whole")
+
+    _save_head_evidence(
+        WholeTextEvidence, evidence_dir, md5sum=md5sum, file_name=file_name, raw=raw, url=url, text=text
+    )
+    return text
 
 
 @wrap_as_fetch_error("sample map")
@@ -1455,21 +1477,26 @@ def fetch_sample_map(
     Raises ``FetchError`` when the read fails or stops at ``MAX_DECOMPRESSED`` bytes before
     the end: a list read in part names part of a cohort.
     """
-    payload = _load_cached(SampleMapEvidence, evidence_dir, md5sum, use_cache)
-    if payload is not None:
-        return payload
+    return _fetch_whole_text("sample map", evidence_dir, md5sum, file_name, is_gzipped, use_cache, url)
 
-    # One byte past the cap, so a map of exactly ``MAX_DECOMPRESSED`` bytes is read to its end
-    # and seen whole, and only a longer one stops short.
-    stream, raw = _open_stream(md5sum, url=url, is_gzipped=is_gzipped, compressed_cap=MAX_DECOMPRESSED + 2)
-    text, truncated = _read_head_text(stream, raw, cap=MAX_DECOMPRESSED + 1)
-    if truncated:
-        raise FetchError(f"sample map larger than {MAX_DECOMPRESSED} bytes; not read whole")
 
-    _save_head_evidence(
-        SampleMapEvidence, evidence_dir, md5sum=md5sum, file_name=file_name, raw=raw, url=url, text=text
-    )
-    return text
+@wrap_as_fetch_error("PLINK .psam")
+def fetch_psam(
+    evidence_dir: Path,
+    md5sum: str,
+    file_name: str = "",
+    is_gzipped: bool = False,
+    use_cache: bool = True,
+    url: str | None = None,
+    **kwargs,
+) -> str:
+    """Read a PLINK 2 ``.psam`` whole: its text, to the file's end.
+
+    If url is provided, fetches from that URL directly. Otherwise uses the AnVIL S3 mirror.
+    Raises ``FetchError`` when the read fails or stops at ``MAX_DECOMPRESSED`` bytes before
+    the end: a sample table read in part names part of a fileset's samples.
+    """
+    return _fetch_whole_text("PLINK .psam", evidence_dir, md5sum, file_name, is_gzipped, use_cache, url)
 
 
 # =============================================================================

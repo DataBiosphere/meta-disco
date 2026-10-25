@@ -8,8 +8,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from .producers import classification_files
-from .records import REBUILT_LISTS_KEY, SAMPLE_LISTS_KEY
+from pydantic import ValidationError
+
+from .producers import classification_files, fileset_files
+from .records import FILESETS_KEY, REBUILT_LISTS_KEY, SAMPLE_LISTS_KEY
+from .schema.classification_model import Fileset
 
 # Every file a Phase 1/2/3 producer writes, derived from the producer registry so it
 # cannot drift from what a run actually produces (#449). The coverage and validation
@@ -188,6 +191,34 @@ def iter_run_file_contents(run_dir: Path):
             _lists_in(path, data, SAMPLE_LISTS_KEY, "list_id"),
             _lists_in(path, data, REBUILT_LISTS_KEY, "ref"),
         )
+
+
+def run_filesets(run_dir: Path) -> list[dict]:
+    """The PLINK filesets the run's producer files hold under ``FILESETS_KEY`` (#751), each ``{sample_table, members}``.
+
+    Read from the producers that write them (``producers.fileset_files``) alone, so reconcile has them
+    before its first pass over the records. Empty for a run with no such file. Raises ``ValueError``
+    on a file whose ``filesets`` is not a list of entries each naming a sample table and its members
+    by record key.
+    """
+    entries: list[dict] = []
+    for fname in fileset_files():
+        path = run_dir / fname
+        if not path.exists():
+            continue
+        found = _lists_in(path, json.loads(path.read_text()), FILESETS_KEY, "sample_table")
+        for entry in found:
+            try:
+                # The schema's shape, and at least one member: inference writes no entry without one.
+                valid = bool(Fileset.model_validate(entry).members)
+            except ValidationError:
+                valid = False
+            if not valid:
+                raise ValueError(
+                    f"{path}: a {FILESETS_KEY} entry does not name its members by record key; it is damaged"
+                )
+        entries.extend(found)
+    return entries
 
 
 def _lists_in(path: Path, data: object, key: str, field: str) -> list[dict]:

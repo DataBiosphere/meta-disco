@@ -195,6 +195,10 @@ class DataTypeEnum(str, Enum):
     """
     A list naming the files processed together, one per sample: a GATK sample-name map, each row a sample name and its gVCF's path (#621). No `meaning`: EDAM has no data term for it.
     """
+    sample_table = "sample_table"
+    """
+    A table of the samples a set of files holds, one row per sample: a PLINK 2 `.psam` (#751). No `meaning`.
+    """
 
 
 class ReferenceAssemblyEnum(str, Enum):
@@ -1959,7 +1963,7 @@ class ActivityInput(ConfiguredBaseModel):
 
 class Attribution(ConfiguredBaseModel):
     """
-    One source that named a step, an input (ADR-0002 decision 6) or a file's samples (#357): sources that agree are each listed. Samples inherited from a parent (#668) name the step crossed and the parent, as an inherited claim does.
+    One source that named a step, an input (ADR-0002 decision 6) or a file's samples (#357): sources that agree are each listed. Samples inherited from a parent (#668) name the step crossed and the parent, as an inherited claim does; samples a PLINK fileset's sample table gave (#751) name the table.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
          'slot_usage': {'activity': {'name': 'activity', 'required': False},
@@ -1979,18 +1983,22 @@ class Attribution(ConfiguredBaseModel):
                                                    "id; for samples the repository's "
                                                    'record of the step names (#698), '
                                                    "`code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE`'s "
+                                                   "id; for samples a PLINK fileset's "
+                                                   'sample table gave (#751), '
+                                                   "`code_rules.SAMPLES_FROM_FILESET_SAMPLE_TABLE`'s "
                                                    'id.',
                                     'name': 'rule_id',
                                     'required': True},
                         'source_type': {'name': 'source_type', 'required': True}}})
 
     source_type: SourceTypeEnum = Field(default=..., description="""Kind of source that produced this claim (provenance, #90; populated on every claim by #392) — see `source_type_enum` for the kinds. Absent on a synthetic marker and on the note left by a failed fetch or input contract, neither of which is a claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
-    rule_id: str = Field(default=..., description="""The rule or translation row that turned what the source says into this step, input or sample list: for inference's, a `code_rules.EDGE_RULES` id for a step or input and a `code_rules.SAMPLE_RULES` id for samples; for a submitter table's samples, the identifier rule (`rules/sample_namespaces.yaml`) that read the cell; for inherited samples, `code_rules.SAMPLES_INHERITED_FROM_PARENT`'s id; for samples the repository's record of the step names (#698), `code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE`'s id.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
+    rule_id: str = Field(default=..., description="""The rule or translation row that turned what the source says into this step, input or sample list: for inference's, a `code_rules.EDGE_RULES` id for a step or input and a `code_rules.SAMPLE_RULES` id for samples; for a submitter table's samples, the identifier rule (`rules/sample_namespaces.yaml`) that read the cell; for inherited samples, `code_rules.SAMPLES_INHERITED_FROM_PARENT`'s id; for samples the repository's record of the step names (#698), `code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE`'s id; for samples a PLINK fileset's sample table gave (#751), `code_rules.SAMPLES_FROM_FILESET_SAMPLE_TABLE`'s id.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
     activity_id: Optional[str] = Field(default=None, description="""The source's own id for the step (`anvil_activity.activity_id`, or `anvil_sequencingactivity.sequencingactivity_id`), where it gives one.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow', 'Attribution']} })
     source: Optional[ClaimSource] = Field(default=None, description="""The external source that produced this claim, for a claim that is not from one of our rules. Absent on a rule or content claim, which carries `rule_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
     activity: Optional[ActivityTypeEnum] = Field(default=None, description="""The kind of step that made the file (`activity_type_enum`); what passes from each input role is declared per term in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'GeneratedBy', 'Attribution']} })
     parent_role: Optional[str] = Field(default=None, description="""On an inherited claim (contract 4.9, #571), or an inherited sample attribution (#668): the input role of the step whose parents gave the claim or the samples, a role its `activity` declares in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
     parent_keys: Optional[list[str]] = Field(default=None, description="""On an inherited claim (contract 4.9, #571), or an inherited sample attribution (#668): the record keys of the parents, in that role, whose settled answers or samples gave it — each one's record in the same run, or, for a list held outside AnVIL for the dataset (#710), its address, its line in the reconciled `external_lists.ndjson.gz`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
+    sample_table_key: Optional[str] = Field(default=None, description="""On a sample attribution a PLINK fileset's sample table gave (#751): the record key of the `.psam` whose settled samples the file took, a record of the same run.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Attribution']} })
 
 
 class SampleReference(ConfiguredBaseModel):
@@ -2152,6 +2160,42 @@ class RebuiltList(ConfiguredBaseModel):
         return v
 
 
+class Fileset(ConfiguredBaseModel):
+    """
+    A PLINK 2 fileset inference paired with its sample table (#751): the `.psam`, and the `.pgen`, `.pvar` and `.log` beside it in its folder under its stem, which one `plink2 --make-pgen` writes together. Written under the psam producer file's `filesets`; reconcile gives each member the `.psam`'s settled samples (`Attribution.sample_table_key`).
+    """
+    linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
+
+    sample_table: str = Field(default=..., description="""The `.psam`'s record key.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Fileset']} })
+    members: list[str] = Field(default=..., description="""The record key of each member paired, at most one per extension.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Fileset', 'SampleList']} })
+
+    @field_validator('sample_table')
+    def pattern_sample_table(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid sample_table format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid sample_table format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+    @field_validator('members')
+    def pattern_members(cls, v):
+        pattern=re.compile(r"^[^\r\n]+\Z")
+        if isinstance(v, list):
+            for element in v:
+                if isinstance(element, str) and not pattern.match(element):
+                    err_msg = f"Invalid members format: {element}"
+                    raise ValueError(err_msg)
+        elif isinstance(v, str) and not pattern.match(v):
+            err_msg = f"Invalid members format: {v}"
+            raise ValueError(err_msg)
+        return v
+
+
 class SampleList(ConfiguredBaseModel):
     """
     One distinct set of samples files point to (#357): written once in each producer file that points to it, so two producer files may each hold the same list, and once across the whole run in the reconciled `sample_lists.ndjson.gz`.
@@ -2159,7 +2203,7 @@ class SampleList(ConfiguredBaseModel):
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
     list_id: str = Field(default=..., description="""A digest of the sorted members; `SampleReference.list_id` points here.""", json_schema_extra = { "linkml_meta": {'domain_of': ['SampleReference', 'SampleList']} })
-    members: list[EntityIdentifier] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['SampleList']} })
+    members: list[EntityIdentifier] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['Fileset', 'SampleList']} })
 
     @field_validator('list_id')
     def pattern_list_id(cls, v):
@@ -2664,6 +2708,7 @@ Attribution.model_rebuild()
 SampleReference.model_rebuild()
 ExternalList.model_rebuild()
 RebuiltList.model_rebuild()
+Fileset.model_rebuild()
 SampleList.model_rebuild()
 EntityIdentifier.model_rebuild()
 IdentifierRules.model_rebuild()
