@@ -1,6 +1,7 @@
 # ADR-0003: One slot per axis — facets, not combined terms
 
 - **Status:** Accepted (2026-10-10, with #654's PR #661); proposed 2026-10-09, when the storage and user model were decided by Dave
+- **Amended by:** [#756](https://github.com/DataBiosphere/meta-disco/issues/756) (2026-10-25): MODAL's four children of `genomic` are dropped, so `data_modality` is MODAL less those four, not MODAL as published (decision 4)
 - **Decision record for:** [#654](https://github.com/DataBiosphere/meta-disco/issues/654) (variant kind), [#658](https://github.com/DataBiosphere/meta-disco/issues/658) (variant origin), and the vocabularies it touches
 - **Related:** #630, #651, #652, #607 (gVCF), #657 (subterms retired), #580 (activity vocabulary), #563 (MODAL), #533 (EFO), #655 (sample count)
 
@@ -22,7 +23,7 @@ The same shape is already in other vocabularies (read from the enums, 2026-10-09
 | | representation | `variants.germline.gvcf` |
 | | role | `assembly.reference`, `pangenome.reference`; next would be variant resources (dbSNP, ClinVar, known-indels, about 220 VCFs) |
 | `activity_type` (ours) | the data or scope acted on | `MergeActivity` / `CohortMergeActivity`; `VariantProcessingActivity` / `VariantFilterActivity` |
-| `data_modality` (MODAL, adopted) | assay scope; resolution | `genomic.exome`, `genomic.whole_genome`; `transcriptomic.spatial`, `.targeted` |
+| `data_modality` (MODAL, adopted) | assay scope; resolution | `genomic.exome`, `genomic.whole_genome` (dropped by #756); `transcriptomic.spatial`, `.targeted` |
 | `assay_type` (EFO, adopted) | resolution × molecule | `RNA-seq`, `sc/snRNA-seq`, `snRNA-seq`; the same for ATAC; `SHARE-seq` |
 
 ### How ontologies avoid the explosion (from memory unless marked)
@@ -63,6 +64,9 @@ through the *format*; it does not subtype the data.
    per-variant class is ever stored; record the term as `meaning`, or bind the slot with a dynamic enum.
 4. **Adopted vocabularies stay as published** (MODAL for `data_modality`, EFO for `assay_type`): we
    do not facet them ourselves, and we note where they overlap our facets (`genomic.exome` and `WES`).
+   *Amended by #756:* MODAL's four children of `genomic`, the example above among them, are dropped
+   rather than kept as overlaps; `docs/anvil-fss-departures.md` gives the reason and lists each
+   place our values depart from AnVIL's FSS.
 5. **Our own vocabularies are faceted** when a new axis appears, rather than gaining combined terms.
 
 ### First application: variants (#654)

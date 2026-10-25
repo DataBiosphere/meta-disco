@@ -1206,11 +1206,11 @@
                 "rule_id": "idat_chip_type",
                 "source_type": "content_read",
                 "tier": 4,
-                "value": "genomic.genotyping"
+                "value": "genomic"
               }
             ],
             "status": "classified",
-            "value": "genomic.genotyping"
+            "value": "genomic"
           },
           "data_type": {
             "evidence": [

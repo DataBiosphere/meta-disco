@@ -10,7 +10,8 @@ dropped, re-parented or given another term's id without a test failing.
 from meta_disco import schema_vocab
 
 # Each value and the MODAL term it spells (github.com/broadinstitute/modal,
-# DataModality.ttl). MODAL's root, "data modality" (0000001), is the enum itself.
+# DataModality.ttl). MODAL's root, "data modality" (0000001), is the enum itself; MODAL's
+# 0000011-0000014 are left out (#756, docs/anvil-fss-departures.md).
 MODAL_IDS = {
     "epigenomic": "0000002",
     "epigenomic.3d_contact_maps": "0000003",  # 3D contact maps
@@ -21,10 +22,6 @@ MODAL_IDS = {
     "epigenomic.methylation": "0000008",  # DNA methylation
     "epigenomic.rna_binding": "0000009",  # RNA binding
     "genomic": "0000010",
-    "genomic.assembly": "0000011",
-    "genomic.exome": "0000012",
-    "genomic.genotyping": "0000013",
-    "genomic.whole_genome": "0000014",
     "imaging": "0000015",
     "imaging.electrophysiology": "0000016",
     "imaging.medical_imaging": "0000017",

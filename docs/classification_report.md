@@ -22,7 +22,7 @@ The classifier populates eight metadata fields:
 #### data_modality
 
 The biological signal domain—**what was measured** (independent of protocol/file format). The main
-terms are below; the full vocabulary, AnVIL's FSS / MODAL tree, is in section 1.1.
+terms are below; the full vocabulary, AnVIL's FSS / MODAL tree less four terms, is in section 1.1.
 
 ```
 data_modality
@@ -309,13 +309,14 @@ These files are excluded from classification as they are primarily:
 ### 1.1 Data Modality Hierarchy
 
 `data_modality` takes AnVIL's recommended vocabulary: the Findability Subset's list, which is the
-Broad's [MODAL ontology](https://github.com/broadinstitute/modal) term for term (#563). Each term is a
-dotted path with its MODAL id in the schema. Single-cell versus bulk is an assay fact, not a modality:
+Broad's [MODAL ontology](https://github.com/broadinstitute/modal) (#563), less MODAL's four children of
+`genomic` (#756, [departures from FSS](anvil-fss-departures.md)). Each term is a dotted path with its
+MODAL id in the schema. Single-cell versus bulk is an assay fact, not a modality:
 `assay_type` records it (`sc/snRNA-seq`, `snRNA-seq`, #533).
 
 ```
 data_modality
-├── genomic               .assembly · .exome · .genotyping · .whole_genome
+├── genomic
 ├── transcriptomic        .nontargeted · .targeted · .spatial
 ├── epigenomic            .methylation · .chromatin_accessibility · .3d_contact_maps · .rna_binding
 │                         .dna_binding (.histone_modification · .transcription_factor)
@@ -357,7 +358,7 @@ The rules emit `genomic`, `transcriptomic`, `epigenomic.methylation` and `imagin
                                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                   Tier 2: Filename Pattern Rules                    │
-│  RNA/rnaseq → transcriptomic, WGS → genomic.whole_genome, etc.      │
+│  RNA/rnaseq → transcriptomic, WGS → genomic, etc.                   │
 └─────────────────────────────────────────────────────────────────────┘
                                 │
                                 ▼
@@ -576,6 +577,9 @@ When files are downloaded from public archives, accessions are extracted:
 ## 5. Results Analysis
 
 ### 5.1 BAM/CRAM Classification Results
+
+These counts predate the MODAL vocabulary (#563); `genomic.whole_genome` and `genomic.exome` are no
+longer values (#756).
 
 **Total files classified: 18,662**
 

@@ -1605,16 +1605,16 @@
                 "rule_id": "idat_chip_type",
                 "source_type": "content_read",
                 "tier": 4,
-                "value": "genomic.genotyping"
+                "value": "genomic"
               }
             ],
             "inferred": {
               "status": "classified",
-              "value": "genomic.genotyping"
+              "value": "genomic"
             },
             "status": "classified",
             "use": "meta_disco",
-            "value": "genomic.genotyping"
+            "value": "genomic"
           },
           "data_type": {
             "credited_to": "filled_by_inference",
