@@ -1,11 +1,16 @@
 """A bcftools stats report's step to the VCF it reports on, and its samples, read from its own text (#683)."""
 
+import dataclasses
+
 import pytest
 
 from meta_disco import bcftools_stats as bs
 from meta_disco import code_rules
-from meta_disco.file_types import BCFTOOLS_STATS_CONFIG
+from meta_disco.fetchers import FetchError
+from meta_disco.file_name import FileName
+from meta_disco.file_types import BCFTOOLS_STATS_CONFIG, PSAM_CONFIG
 from meta_disco.models import SOURCE_CONTENT_READ
+from meta_disco.pipeline import _fetch_and_classify
 from meta_disco.producers import producer_of
 from tests.test_cohort_steps import in_folders, run_producer
 from tests.test_producer_steps import EVIDENCE, KEY
@@ -14,15 +19,28 @@ VCF = "1kgp.chr15.recalibrated.snp_indel.pass.singleton.KHV_singleton.variants.v
 CROMWELL = "/cromwell_root/fc-5/f7/filter_ac_variants/9d/call-bgzip_bcftools_index/"
 
 
+# The definition lines bcftools stats 1.9 writes above its `ID`, `IDD` and `PSC` lines, copied from a T2T report.
+ID_DEFINITION = "# ID\t[2]id\t[3]tab-separated file names\n"
+IDD_DEFINITION = "# IDD\t[2]id\t[3]length (deletions negative)\t[4]count\n"
+PSC_DEFINITION = (
+    "# PSC\t[2]id\t[3]sample\t[4]nRefHom\t[5]nNonRefHom\t[6]nHets\t[7]nTransitions\t[8]nTransversions"
+    "\t[9]nIndels\t[10]average depth\t[11]nSingletons\t[12]nHapRef\t[13]nHapAlt\t[14]nMissing\n"
+)
+
+
 def report_text(*inputs: str, options: str = "", psc: tuple[str, ...] = ()) -> str:
-    """A report as bcftools stats 1.9 writes one: its two header lines, an ``ID`` line per input, a histogram line, ``PSC`` lines."""
+    """A report shaped as bcftools stats 1.9 writes one, cut to the lines read: its two header lines, the
+    ``ID`` definition and an ``ID`` line per input, a histogram line, the ``PSC`` definition and ``PSC`` lines."""
     return "".join(
         [
             "# This file was produced by bcftools stats (1.9+htslib-1.9) and can be plotted using plot-vcfstats.\n",
             f"# The command line was:\tbcftools stats  {options}{' '.join(inputs)}\n",
             "#\n",
+            ID_DEFINITION,
             *(f"ID\t{n}\t{path}\n" for n, path in enumerate(inputs)),
+            IDD_DEFINITION,
             "IDD\t0\t-60\t1023\n",
+            PSC_DEFINITION,
             *(
                 f"PSC\t0\t{sample}\t5176388\t74864\t159228\t155086\t74882\t52028\t29.9\t3681\t0\t0\t32550\n"
                 for sample in psc
@@ -162,3 +180,37 @@ def test_the_producer_writes_the_step_and_samples_and_classifies_from_the_name(t
     assert rows["r2"]["samples"] is None and rows["r3"]["samples"] is None
     assert details["producer_steps"] == {"T": {bs.STEPPED: 2, bs.NOT_A_REPORT: 1}}
     assert details["sample_outcomes"] == {"T": {"named": 1}}
+
+
+def test_a_bcftools_stats_line_not_first_is_no_report():
+    assert bs.parse_stats_report("chr\tstart\n" + report_text(CROMWELL + VCF)) is None
+
+
+def test_a_report_that_cannot_be_read_keeps_what_its_name_says(tmp_path):
+    """A failed read keeps the name rule's answers (`answers_from_name`), as the catch-all gave them."""
+
+    def unreadable(*args, **kwargs):
+        raise FetchError("connection reset")
+
+    name = "KHV.variants.bcftools.stats.txt"
+    classifications, unread, payload = _fetch_and_classify(
+        dataclasses.replace(BCFTOOLS_STATS_CONFIG, fetcher=unreadable),
+        tmp_path,
+        "0" * 32,
+        file_name=name,
+        name=FileName.parse(name),
+        file_size=1,
+        file_format=".txt",
+        is_gzipped=False,
+        use_cache=False,
+    )
+    assert unread and payload is None
+    assert classifications["data_type"]["value"] == "qc_report"
+    assert classifications["variant_kind"]["status"] == "not_applicable"
+
+
+def test_each_name_only_type_binds_its_own_stand_in():
+    """With no name, the engine reads the bound stand-in: a `.psam`'s extension rule still fires; a report's
+    `text_stats` rule needs the name, so `.txt` alone gives it no data_type."""
+    assert PSAM_CONFIG.classifier(None)["data_type"]["value"] == "sample_table"
+    assert BCFTOOLS_STATS_CONFIG.classifier(None)["data_type"]["status"] == "not_classified"

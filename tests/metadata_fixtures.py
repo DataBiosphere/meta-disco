@@ -65,12 +65,12 @@ RECORD_KEYS = {
     # `entry_id` does not, and `drs_uri` is the handle a resolver dereferences.
     "file_id",
     "drs_uri",
-    # The step that made the file (#450, #356, #580): written by the index producer and
-    # the catch-all (for a checksum file) where a parent resolves, null elsewhere; emitted
+    # The step that made the file (#450, #356, #580): written by each producer that states one
+    # (`edges`' module docstring lists them) where a parent resolves, null elsewhere; emitted
     # rather than omitted so the envelope keeps one shape across all sixteen files.
     "generated_by",
-    # The samples the file's data comes from (#357): written by the BAM and VCF producers
-    # where the header names them, null elsewhere, emitted for the same reason.
+    # The samples the file's data comes from (#357): written by each type that reads them
+    # (`FileTypeConfig.samples`) where its content names them, null elsewhere, emitted for the same reason.
     "samples",
 }
 

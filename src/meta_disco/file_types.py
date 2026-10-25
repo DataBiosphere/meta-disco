@@ -260,7 +260,7 @@ PSAM_CONFIG = FileTypeConfig(
 
 # bcftools stats reports (#683): the rule engine gives the dimensions from the name (`text_stats`); the
 # report is read whole for the VCF its `ID` line names, a `QualityControlActivity` step across which
-# reconcile carries what its `reported_on` role passes, and, run per sample, the samples its `PSC` lines name.
+# reconcile carries what its `reported_on` role passes, and the samples its `PSC` lines name, where it has any.
 BCFTOOLS_STATS_CONFIG = FileTypeConfig(
     name="bcftools_stats",
     extensions=REPORT_SUFFIXES,

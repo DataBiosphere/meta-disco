@@ -517,7 +517,7 @@ def header_samples(metadata: dict[str, dict]) -> dict[str, dict]:
 
 
 def content_step_counts(metadata: dict[str, dict]) -> dict[str, dict[str, dict[str, int]]]:
-    """Per producer and dataset, the outcomes of the producer's step reader (#609, #621).
+    """Per producer and dataset, the outcomes of the producer's step reader (#609, #621, #683).
 
     Read from each classification file's ``metadata.details.producer_steps`` (``metadata``
     as :func:`run_metadata` gives it), which a

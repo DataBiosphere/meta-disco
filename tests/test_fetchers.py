@@ -14,6 +14,7 @@ Two layers:
 import gzip
 import io
 import json
+import re
 import subprocess
 import tarfile
 
@@ -21,7 +22,7 @@ import pytest
 import requests
 
 import meta_disco.fetchers as fetchers
-from meta_disco.evidence import TarEvidence, TarHead, VcfEvidence, VcfHead, get_evidence_path
+from meta_disco.evidence import TarEvidence, TarHead, VcfEvidence, VcfHead, WholeTextEvidence, get_evidence_path
 from meta_disco.fetchers import (
     FetchError,
     RangeNotSatisfiable,
@@ -40,7 +41,9 @@ from meta_disco.fetchers import (
     fetch_fasta_headers,
     fetch_fastq_reads,
     fetch_gfa_segment_tags,
+    fetch_psam,
     fetch_sample_map,
+    fetch_stats_report,
     fetch_tar_headers,
     fetch_vcf_header,
     require_samtools,
@@ -1008,6 +1011,40 @@ def test_a_sample_map_past_the_cap_is_refused_not_read_in_part(monkeypatch, evid
     monkeypatch.setattr(fetchers, "MAX_DECOMPRESSED", 64)
     with pytest.raises(FetchError, match="not read whole"):
         fetch_sample_map(evidence_dir, MD5, use_cache=False)
+
+
+# The fetchers ``fetchers._whole_text_fetcher`` makes, and the label each names a failure by (#683).
+WHOLE_TEXT_FETCHERS = [
+    (fetch_sample_map, "sample map"),
+    (fetch_psam, "PLINK .psam"),
+    (fetch_stats_report, "bcftools stats report"),
+]
+
+
+@pytest.mark.parametrize(("fetch", "label"), WHOLE_TEXT_FETCHERS)
+def test_a_whole_text_fetcher_caches_the_text_under_the_file_name_and_rereads_only_when_told(
+    monkeypatch, evidence_dir, fetch, label
+):
+    _install(monkeypatch, b"first\n")
+    assert fetch(evidence_dir, MD5, file_name="x.txt") == "first\n"
+    assert WholeTextEvidence.load(evidence_dir, MD5).file_name == "x.txt"
+    _install(monkeypatch, b"second\n")
+    assert fetch(evidence_dir, MD5, file_name="x.txt") == "first\n"
+    assert fetch(evidence_dir, MD5, file_name="x.txt", use_cache=False) == "second\n"
+
+
+@pytest.mark.parametrize(("fetch", "label"), WHOLE_TEXT_FETCHERS)
+def test_a_whole_text_fetcher_reads_the_url_and_names_a_failure_by_its_file(monkeypatch, evidence_dir, fetch, label):
+    asked = {}
+
+    def broken(md5sum, *, url, is_gzipped, compressed_cap):
+        asked.update(url=url, is_gzipped=is_gzipped)
+        raise ValueError("bad bytes")
+
+    monkeypatch.setattr(fetchers, "_open_stream", broken)
+    with pytest.raises(FetchError, match=f"^{re.escape(label)}: ValueError: bad bytes"):
+        fetch(evidence_dir, MD5, is_gzipped=True, url="https://example.org/x")
+    assert asked == {"url": "https://example.org/x", "is_gzipped": True}
 
 
 def _reset(*_args, **_kwargs):

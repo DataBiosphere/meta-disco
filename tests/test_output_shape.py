@@ -317,8 +317,10 @@ STUB_PAYLOADS = {
         "# This file was produced by bcftools stats (1.9+htslib-1.9) and can be plotted using plot-vcfstats.\n"
         "# The command line was:\tbcftools stats  -v --samples-file /w/EUR.txt /w/call-subset/sample.vcf.gz\n"
         "#\n"
+        "# ID\t[2]id\t[3]tab-separated file names\n"
         "ID\t0\t/w/call-subset/sample.vcf.gz\n"
         "IDD\t0\t-1\t3\n"
+        "# PSC\t[2]id\t[3]sample\t[4]nRefHom\t[5]nNonRefHom\t[6]nHets\n"
         "PSC\t0\tNA12878\t10\t5\t5\t2\t1\t0\t30.0\t0\t0\t0\t0\n"
     ),
 }
