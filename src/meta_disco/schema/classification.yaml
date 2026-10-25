@@ -1858,8 +1858,8 @@ enums:
       a product rather than the biological nature of the data, against the definition
       above: `assembly` (MODAL:0000011) is what a file holds, which `data_type`
       records (`assembly`); `exome` (MODAL:0000012), `whole genome` (MODAL:0000014) and
-      `genotyping` (MODAL:0000013) are assays, which `assay_type` records (`WES`, `WGS`,
-      `Genotyping array`). docs/anvil-fss-departures.md lists this departure from FSS.
+      `genotyping` (MODAL:0000013, defined by EDAM's operation Genotyping) are assays or an
+      analysis, which `assay_type` records (`WES`, `WGS`, `Genotyping array`). docs/anvil-fss-departures.md lists this departure from FSS.
       Single-cell versus bulk is not a modality here, for the same reason: it is a
       property of the experiment, so `assay_type` records it (`sc/snRNA-seq`, `snRNA-seq`,
       #533). A record holds one term, the most specific its evidence supports, which may
@@ -2096,15 +2096,15 @@ enums:
         is_a: CHM13
         meaning: insdc.gca:GCA_009914755.4
       t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r:
-        title: T2T-CHM13v1.0 with GRCh38 chrY
+        title: t2t-chm13.20200921.withGRCh38chrY.chrEBV.chrYKI270740v1r
         is_a: T2T-CHM13v1.0
         description: T2T-CHM13v1.0 with GRCh38's chrY grafted on.
       CHM13Y_EBV_v1.1:
-        title: T2T-CHM13v1.1 with GRCh38 chrY
+        title: CHM13Y_EBV_v1.1
         is_a: T2T-CHM13v1.1
         description: T2T-CHM13v1.1 with GRCh38's chrY grafted on.
       t2t-chm13.20200921.HG002chrY.chrEBV:
-        title: T2T-CHM13v1.0 with HG002 chrY
+        title: t2t-chm13.20200921.HG002chrY.chrEBV
         is_a: T2T-CHM13v1.0
         description: T2T-CHM13v1.0 with HG002's chrY grafted on.
       Mmul_10:
