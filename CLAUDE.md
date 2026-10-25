@@ -151,10 +151,10 @@ evidence}` entry — plus the controlled vocabulary:
 
 `status` is required on every dimension; `value` is null unless status is `classified`.
 
-Every value of the enums `schema_vocab.VOCABULARY_ENUMS` names carries a `title`, the words a
-reader is shown (#755), read through `schema_vocab.value_label`; the value stays the key every
-filter, rule and join uses. `gen-pydantic` names a generated enum's members after the titles, so
-code names a member by its value (`DataModalityEnum("genomic")`), never by its Python name.
+Every value of the enums `schema_vocab.VOCABULARY_ENUMS` names carries a `title`, its display
+label (#755, `schema_vocab.value_label`). `gen-pydantic` names a generated enum's members after the
+titles, by linkml's design (linkml#1810; NMDC's model has `mSOLIDUSz = "mass_charge_ratio"`), so a
+reworded title renames a member: name one by its value (`DataModalityEnum("genomic")`).
 
 ## Design Principles
 

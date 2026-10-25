@@ -1852,8 +1852,8 @@ enums:
       (FSS), whose recommended values for its `data_modality` field are the Broad's
       MODAL ontology (github.com/broadinstitute/modal) term for term (#563). This enum
       is that tree: each value spells its MODAL term as a dotted path, `is_a` names its
-      parent, and `meaning` is its MODAL id. `title` is FSS's wording, MODAL's label with
-      its first letter capitalised ("DNA methylation" for `epigenomic.methylation`, #755).
+      parent, and `meaning` is its MODAL id. `title` is MODAL's label with its first letter
+      capitalised ("DNA methylation" for `epigenomic.methylation`, #755).
       Single-cell versus bulk is not a modality here, since it is a property of the
       experiment, so `assay_type` records it (`sc/snRNA-seq`, `snRNA-seq`, #533). A record
       holds one term, the most specific its evidence supports, which may be a parent:
