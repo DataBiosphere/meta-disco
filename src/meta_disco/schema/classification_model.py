@@ -426,13 +426,13 @@ class BiosampleTypeEnum(str, Enum):
 
 class GeneticAncestryEnum(str, Enum):
     """
-    A donor's genetic ancestry (#693), as AnVIL's data model suggests: HANCESTRO terms. The values are 1000 Genomes' population codes, as its tables and the datasets built on it write them, each under its superpopulation by `is_a` as HANCESTRO places it; `meaning` is the HANCESTRO term and `description` its label (HANCESTRO 2025-10-14). `title` is that label without the code or "(1KGP)" ("British in England and Scotland", "African"), and for `GWD` without " - Mandinka (GGVP)", the Gambian Genome Variation Project's part of its label (#755). A record holds the most specific term its evidence supports (`GBR` beside `EUR` is `GBR`), as the assay tree does; a consumer that filters on a superpopulation walks `is_a`. Other populations (SGDP's, #559; HPRC_R2's `ASL`, which HANCESTRO has no term for) are not values yet, and their names wait in the review queue.
+    A donor's genetic ancestry (#693), as AnVIL's data model suggests: HANCESTRO terms. The values are 1000 Genomes' population codes, as its tables and the datasets built on it write them, each under its superpopulation by `is_a` as HANCESTRO places it; `meaning` is the HANCESTRO term and `description` its label (HANCESTRO 2025-10-14). `title` is that label without "(1KGP)" ("British in England and Scotland"), for a superpopulation without its code and "reference superpopulation" too ("African"), and for `GWD` without " - Mandinka (GGVP)", the Gambian Genome Variation Project's part of its label (#755). `AMR`'s is 1000 Genomes' own name, "Admixed American", where HANCESTRO's "American" would read as a nationality. A record holds the most specific term its evidence supports (`GBR` beside `EUR` is `GBR`), as the assay tree does; a consumer that filters on a superpopulation walks `is_a`. Other populations (SGDP's, #559; HPRC_R2's `ASL`, which HANCESTRO has no term for) are not values yet, and their names wait in the review queue.
     """
     African = "AFR"
     """
     African (AFR) reference superpopulation (1KGP)
     """
-    American = "AMR"
+    Admixed_American = "AMR"
     """
     American (AMR) reference superpopulation (1KGP)
     """
