@@ -119,6 +119,8 @@ def test_a_name_three_vcfs_carry_is_settled_by_the_reports_folder():
         (None, bs.NOT_A_REPORT),
         (bs.parse_stats_report(report_text()), bs.NO_INPUT),
         (bs.parse_stats_report(report_text(CROMWELL + VCF, "/w/other.vcf.gz")), bs.SEVERAL_INPUTS),
+        # One ID row naming two files, as bcftools' `# ID` definition allows.
+        (bs.parse_stats_report(report_text(f"{CROMWELL}{VCF}\t/w/other.vcf.gz")), bs.SEVERAL_INPUTS),
         (bs.parse_stats_report(report_text("/w/sample.cram")), bs.INPUT_NOT_A_VCF),
         (bs.parse_stats_report(report_text("/w/x.Homo_sapiens_assembly38.liftover.vcf.gz")), bs.PARENT_NOT_FOUND),
     ],

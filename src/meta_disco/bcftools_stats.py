@@ -54,7 +54,7 @@ def parse_stats_report(text: str) -> StatsReport | None:
     """The report ``text`` is, or None where its line 1 is not bcftools stats'.
 
     An ``ID`` or ``PSC`` line is one whose first tab-separated field is exactly that (``IDD``, the
-    indel-length histogram, is no ``ID`` line).
+    indel-length histogram, is no ``ID`` line). ``inputs`` holds every file name of every ``ID`` line.
     """
     lines = text.splitlines()
     if not lines or not lines[0].startswith(FIRST_LINE):
@@ -62,8 +62,10 @@ def parse_stats_report(text: str) -> StatsReport | None:
     inputs, samples = [], []
     for line in lines:
         fields = line.split("\t")
-        if fields[0] == "ID" and len(fields) >= 3:
-            inputs.append(fields[2])
+        if fields[0] == "ID":
+            # An ID row lists tab-separated file names (bcftools' own `# ID` definition line): keep them all,
+            # so a row naming two files is two inputs.
+            inputs.extend(fields[2:])
         elif fields[0] == "PSC" and len(fields) >= 3:
             samples.append(fields[2])
     return StatsReport(tuple(inputs), tuple(samples) or None)
