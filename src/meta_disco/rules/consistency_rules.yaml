@@ -37,9 +37,11 @@ rules:
     require: {assay_type: {under: RNA-seq}}
 
   - id: assay_for_genomic
-    description: A genomic file's assay, if classified, must be WGS or WES.
+    description: >-
+      A genomic file's assay, if classified, must be WGS, WES or Genotyping array, the
+      vocabulary's DNA assays; a genotyping array's modality is `genomic` (#756).
     when: {data_modality: "genomic"}
-    require: {assay_type: {value_in: ["WGS", "WES"]}}
+    require: {assay_type: {value_in: ["WGS", "WES", "Genotyping array"]}}
 
   - id: assay_for_chromatin_accessibility
     description: >-

@@ -52,7 +52,7 @@ FSS binds `phenotypic_sex` to `female`, `male`, `intersex` and `prefer not to sa
 
 ## 5. reference\_assembly: one NCBI assembly name per file
 
-FSS's `reference_assembly` is a multivalued string that "may be defined by" the GRC, with no list of values. meta-disco stores one value per file, an assembly as NCBI names it, from a tree whose parents span releases (`CHM13` above `T2T-CHM13v2.0`, #473).
+FSS's `reference_assembly` is a multivalued string that "may be defined by" the GRC, with no list of values. meta-disco stores one value per file, from a tree whose parents span releases (`CHM13` above `T2T-CHM13v2.0`, #473): an assembly as NCBI names it, or, for a reference that grafts another genome's chrY onto a CHM13 release, which NCBI does not name, the basename of the reference FASTA that files declare (`CHM13Y_EBV_v1.1`).
 
 ## 6. Fields FSS does not have
 
