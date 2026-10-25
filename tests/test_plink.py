@@ -4,6 +4,7 @@ import pytest
 
 from meta_disco import code_rules, edges
 from meta_disco.plink import (
+    HASH_ROW,
     MEMBERS,
     NO_HEADER,
     NO_PATH,
@@ -30,7 +31,7 @@ PRIMED = "#IID\tPAT\tMAT\tSEX\tSuperPop\tPopulation\nHG01879\t0\t0\t1\tAFR\tACB\
     [
         pytest.param(PRIMED, ("HG01879", "NA19700"), id="PRIMED's header, IID first"),
         pytest.param("#FID\tIID\tSEX\nfam1\tHG01879\t1\n", ("HG01879",), id="FID first, IID second"),
-        pytest.param("##comment\n#IID SEX\nHG01879 1\n\n", ("HG01879",), id="## lines and blank lines skipped"),
+        pytest.param("##comment\n#IID SEX\nHG01879 1\n\n", ("HG01879",), id="## lines before the header skipped"),
         pytest.param("#IID\tSEX\n", (), id="a header and no row"),
     ],
 )
@@ -45,6 +46,8 @@ def test_a_psam_gives_each_rows_iid(text, iids):
         pytest.param("#FID\tSEX\nfam1\t1\n", NO_HEADER, id="a header naming no IID"),
         pytest.param("", NO_HEADER, id="empty"),
         pytest.param("#FID\tIID\nfam1\n", SHORT_ROW, id="a row too short to hold its IID"),
+        pytest.param("#IID SEX\nHG01879 1\n##unexpected 2\n", HASH_ROW, id="a ## line after the header"),
+        pytest.param("#IID SEX\nHG01879 1\n#IID SEX\n", HASH_ROW, id="a second header"),
     ],
 )
 def test_a_psam_not_read_gives_no_iids_and_says_why(text, why):

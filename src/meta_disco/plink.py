@@ -21,6 +21,7 @@ MEMBER_EXTENSIONS = (".pgen", ".pvar", ".log")
 # Why a `.psam`'s rows were not read (``PsamRows.unread``).
 NO_HEADER = "no #FID or #IID header line"
 SHORT_ROW = "a row with no IID column"
+HASH_ROW = "a # line after the header"
 
 # What became of a `.psam`'s fileset, per dataset (:class:`Filesets`.counts).
 SAMPLE_TABLES = "sample_tables"  # `.psam` files paired with at least one member
@@ -41,14 +42,14 @@ class PsamRows:
 def parse_psam(text: str) -> PsamRows:
     """The IIDs a PLINK 2 ``.psam``'s rows give.
 
-    Lines starting ``##`` are skipped wherever they are (PLINK 2 skips them before the header). The
-    header is the first other line, and must start ``#FID`` or ``#IID`` and name an ``IID`` column;
-    each later non-blank line is a sample, its IID in that column. Columns are split on whitespace. A file
-    with no such header (a headerless ``.psam``, read by PLINK as ``.fam`` columns) or a row too
-    short to hold an IID gives none, with why.
+    Lines starting ``##`` before the header are skipped, as PLINK 2 skips them. The header is the first
+    other line, and must start ``#FID`` or ``#IID`` and name an ``IID`` column; each later non-blank line
+    is a sample, its IID in that column. Columns are split on whitespace. A file with no such header (a
+    headerless ``.psam``, read by PLINK as ``.fam`` columns), a row too short to hold an IID, or a line
+    starting ``#`` after the header gives none, with why: a table read in part names part of its samples.
     """
-    lines = (line for line in text.splitlines() if line.strip() and not line.startswith("##"))
-    header = next(lines, "").split()
+    lines = (line for line in text.splitlines() if line.strip())
+    header = next((line for line in lines if not line.startswith("##")), "").split()
     if not header or header[0] not in ("#FID", "#IID"):
         return PsamRows(None, NO_HEADER)
     names = [header[0][1:], *header[1:]]
@@ -57,6 +58,8 @@ def parse_psam(text: str) -> PsamRows:
     column = names.index("IID")
     iids = []
     for line in lines:
+        if line.startswith("#"):
+            return PsamRows(None, HASH_ROW)
         fields = line.split()
         if len(fields) <= column:
             return PsamRows(None, SHORT_ROW)
