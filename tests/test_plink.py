@@ -44,6 +44,8 @@ def test_a_psam_gives_each_rows_iid(text, iids):
     [
         pytest.param("HG01879\tHG01879\t0\t0\t1\t-9\n", NO_HEADER, id="headerless, as .fam columns"),
         pytest.param("#FID\tSEX\nfam1\t1\n", NO_HEADER, id="a header naming no IID"),
+        pytest.param("#SEX\tIID\n1\tHG01879\n", NO_HEADER, id="an IID column under a header not starting #FID or #IID"),
+        pytest.param("IID\tSEX\nHG01879\t1\n", NO_HEADER, id="a header line without its #"),
         pytest.param("", NO_HEADER, id="empty"),
         pytest.param("#FID\tIID\nfam1\n", SHORT_ROW, id="a row too short to hold its IID"),
         pytest.param("#IID SEX\nHG01879 1\n##unexpected 2\n", HASH_ROW, id="a ## line after the header"),
@@ -153,3 +155,8 @@ def test_a_member_whose_key_is_not_usable_is_refused():
 def test_a_sample_table_named_as_a_parent_has_no_parent_kind():
     """A `.psam` holds no genotypes, so a step naming it would not call it `genotypes`, as it does a `.pgen`."""
     assert (edges.parent_kind_of("ACB.1.psam"), edges.parent_kind_of("ACB.1.pgen")) == (None, "genotypes")
+
+
+def test_a_psam_whose_key_is_not_usable_is_refused_even_unpaired():
+    with pytest.raises(ValueError, match="pair a PLINK fileset"):
+        filesets([{**file("psam", None, name="A.psam"), "file_id": ""}], KEY)

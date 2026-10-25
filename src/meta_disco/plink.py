@@ -42,7 +42,7 @@ class PsamRows:
 def parse_psam(text: str) -> PsamRows:
     """The IIDs a PLINK 2 ``.psam``'s rows give.
 
-    Lines starting ``##`` before the header are skipped, as PLINK 2 skips them. The header is the first
+    Lines starting ``##`` before the header are skipped. The header is the first
     other line, and must start ``#FID`` or ``#IID`` and name an ``IID`` column; each later non-blank line
     is a sample, its IID in that column. Columns are split on whitespace. A file with no such header (a
     headerless ``.psam``, read by PLINK as ``.fam`` columns), a row too short to hold an IID, or a line
@@ -81,8 +81,10 @@ def filesets(records: Sequence[dict], key: RecordKey) -> Filesets:
     A member is a file of the ``.psam``'s dataset in its folder (``records.folder_of``) named its stem
     with one of :data:`MEMBER_EXTENSIONS`, up to case. The folder is required, unlike ``edges.matches``:
     PRIMED reuses ``AFR.19`` in four folders. A ``.psam`` with no path or no member, and a member name
-    two files in the folder carry, pair nothing and are counted. Entries are ``{"sample_table", "members"}`` by record
-    key, in key order. Raises ``ValueError`` (``record_keys.input_key_value``) on an unusable key.
+    two files in the folder carry, pair nothing and are counted. Only bare names pair: a ``.psam.gz`` or
+    ``.pvar.zst`` does not (the corpus has none). Entries are ``{"sample_table", "members"}`` by record key,
+    in key order. Raises ``ValueError`` (``record_keys.input_key_value``) on a ``.psam``'s or member's
+    unusable key.
     """
     purpose = "pair a PLINK fileset's files with its sample table"
     index = edges.parent_index(records, key, lambda n: n.lower().endswith(MEMBER_EXTENSIONS), purpose)
@@ -91,6 +93,7 @@ def filesets(records: Sequence[dict], key: RecordKey) -> Filesets:
         name = table.get("file_name")
         if not isinstance(name, str) or not name.lower().endswith(SAMPLE_TABLE_EXTENSION):
             continue
+        sample_table = input_key_value(table, key, purpose)
         dataset = dataset_of(table)
         # Counted by title, as a producer counts its outcomes ("" for a record with none).
         title = str(table.get("dataset_title") or "")
@@ -109,7 +112,7 @@ def filesets(records: Sequence[dict], key: RecordKey) -> Filesets:
         if members:
             result.counts[title][SAMPLE_TABLES] += 1
             result.counts[title][MEMBERS] += len(members)
-            result.entries.append({"sample_table": input_key_value(table, key, purpose), "members": members})
+            result.entries.append({"sample_table": sample_table, "members": members})
         else:
             result.counts[title][UNPAIRED] += 1
     result.entries.sort(key=lambda e: e["sample_table"])

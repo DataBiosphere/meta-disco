@@ -617,3 +617,55 @@ def test_a_damaged_filesets_block_is_refused(run):
     )
     with pytest.raises(ValueError, match="does not name its members"):
         run_filesets(run)
+
+
+@pytest.mark.parametrize(
+    ("held", "conflicted", "outcome"),
+    [
+        pytest.param({"a": "l1", "b": "l2"}, {"b"}, PARENTS_DIFFER, id="different lists before a conflict"),
+        pytest.param({"a": "l1"}, set(), PARENT_NONE, id="one holding a list, one holding none"),
+        pytest.param({"a": "l1", "b": "l1"}, set(), PASSED, id="two holding one list"),
+    ],
+)
+def test_what_two_sources_pass_first_match_wins(held, conflicted, outcome):
+    report = SampleReport(identifier_rules())
+    report.members.update({"l1": frozenset({coriell("HG00096")}), "l2": frozenset({coriell("HG00097")})})
+    report.held.update(held)
+    report._conflicted.update(conflicted)
+    assert report._passing("c", ("a", "b"), report._conflicted_parents)[0] == outcome
+
+
+def test_two_tables_naming_one_list_both_pass_and_are_both_cited():
+    report = SampleReport(identifier_rules(), tables={"m": ("a", "b")})
+    report.members["l"] = frozenset({coriell("HG00096")})
+    report.held.update({"a": "l", "b": "l"})
+    report._member_own["m"] = ([], DATASET)
+    report.pair()
+    assert [a["sample_table_key"] for a in report._from_table["m"].named_by] == ["a", "b"]
+    assert report.held["m"] == "l"
+
+
+def test_a_member_whose_step_passes_other_samples_keeps_its_tables_source_through_inheritance():
+    """The table's source joins the member's own, so a parent naming another sample makes the member a conflict."""
+    report = SampleReport(identifier_rules(), tables={"m": ("t",)})
+    report.members.update({"l1": frozenset({coriell("HG00096")}), "l2": frozenset({coriell("HG00097")})})
+    report.held.update({"t": "l1", "p": "l2"})
+    own: list[Named] = []
+    report._own["m"] = report._member_own["m"] = (own, DATASET)
+    report.pair()
+    report.inherit({"m": Step("IndexActivity", (("indexed", "p"),))})
+    assert "m" not in report.held and "m" in report._conflicted
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        pytest.param({"sample_table": "a", "members": "x"}, id="members not a list"),
+        pytest.param({"sample_table": "a\nb", "members": ["x"]}, id="a key holding a newline"),
+    ],
+)
+def test_a_filesets_entry_off_the_schema_is_refused(run, entry):
+    run.mkdir(parents=True)
+    (run / "psam_classifications.json").write_text(json.dumps({"classifications": [], FILESETS_KEY: [entry]}))
+    with pytest.raises(ValueError, match="does not name its members"):
+        run_filesets(run)

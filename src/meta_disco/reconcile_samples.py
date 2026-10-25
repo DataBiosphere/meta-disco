@@ -386,7 +386,7 @@ class SampleReport:
     def hold(
         self, identity: str, record: dict, inference_lists: dict[str, dict], table: list[Named], step: Step | None
     ) -> None:
-        """The first pass: hold ``record``'s own settled samples, and its own sources where ``step`` passes samples."""
+        """The first pass: hold ``record``'s own settled samples, and its sources where ``step`` or a table passes it some."""
         named = self._own_sources(identity, record, inference_lists, table)
         dataset = str(record.get("dataset_title") or "")
         if step is not None and activities.samples_roles(step.activity):

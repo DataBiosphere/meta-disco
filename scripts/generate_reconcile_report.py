@@ -1402,7 +1402,7 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
         "(#751), the `.psam` standing where a parent does above: *passed*: its settled samples are one more source "
         "of the file's; *parents_differ*: two `.psam` files paired the file and named different lists; "
         "*parent_conflict*: the `.psam`'s own sources named different samples; *parent_none*: no source named the "
-        "`.psam`'s samples (an IID no identifier rule recognises, or a table not read); *list_names_none* does "
+        "`.psam`'s samples (an IID no identifier rule recognises, a table not read, or a `.psam` not in the run); *list_names_none* does "
         "not arise for a `.psam`. Nothing passes in the last four.",
         "",
     ]
