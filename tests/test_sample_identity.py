@@ -349,6 +349,7 @@ def test_a_vcf_without_sample_columns_names_none(text, columns):
         pytest.param(
             "#CHROM\tPOS\tX\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tA\tB", id="FORMAT after a fixed column misnamed"
         ),
+        pytest.param("#CHROMX\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tA\tB", id="a first column not #CHROM"),
     ],
 )
 def test_a_malformed_chrom_line_is_unread_not_sampleless(line):

@@ -450,8 +450,8 @@ def why_gvcf(header: VCFHeader, file_name: str) -> str | None:
     with no variant, which a gVCF has and a VCF filtered to its variant sites does not. The header's ``##ALT=<ID=NON_REF>`` and
     ``##GVCFBlock`` lines, and a GVCF-mode line of an earlier step, are not read: joint-called
     VCFs and ``.pvar`` files carry them over from their gVCFs. Nor is the ``#CHROM`` line: a
-    file this rule names a gVCF but whose ``#CHROM`` line has no sample columns is claimed
-    sites-only too, and its data_type is a ``conflict``, left until such a file is seen (none on
+    file this rule names a gVCF whose ``#CHROM`` line is a VCF's with no sample columns is
+    claimed sites-only too (:func:`data_type_by_columns`), and its data_type is a ``conflict``, left until such a file is seen (none on
     the 2026-10-26 run). None for an empty
     ``file_name`` (a header-only call), which no step's output can be checked against, and
     for a header whose records were not read.

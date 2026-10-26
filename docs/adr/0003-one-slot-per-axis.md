@@ -215,9 +215,10 @@ is shown as "Not determined".
   On the 2026-10-25 run, every one-column VCF had `<NON_REF>` in all of its records read or in
   none, and no multi-column VCF had either allele.
 - **A sites-only gVCF would be a conflict** (#762). The gVCF rule does not read the `#CHROM`
-  line, so a VCF whose header ends in a HaplotypeCaller GVCF step and whose records carry
-  `<NON_REF>`, but whose `#CHROM` line has no sample columns, gets both the gVCF claim and the
-  sites-only claim, and its `data_type` is `conflict`. None was on the 2026-10-26 run; it is left
+  line, so a VCF it names a gVCF (made by HaplotypeCaller in GVCF or BP_RESOLUTION mode, every
+  record read carrying `<NON_REF>`, one at least alone) whose `#CHROM` line is a VCF's with no
+  sample columns gets both the gVCF claim and the sites-only claim, and its `data_type` is
+  `conflict`. None was on the 2026-10-26 run; it is left
   to be settled when one is seen.
 
 ## Consequences

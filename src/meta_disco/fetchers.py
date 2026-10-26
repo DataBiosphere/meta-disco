@@ -17,8 +17,9 @@ stream to a small matcher that stops as soon as it has what it needs. That singl
   (:class:`_VcfMatcher`, :class:`_FastqMatcher`, :class:`_FastaMatcher`) for the text types,
   and :func:`_walk_tar_members` for tar.
 
-Decompression-bomb defense falls out of the design: the line readers stop at
-``MAX_DECOMPRESSED`` decompressed bytes (:func:`_iter_lines` discards each line as it scans;
+Decompression-bomb defense falls out of the design: the line readers stop at the decompressed
+cap their ``_CappedRead`` is given, ``MAX_DECOMPRESSED`` bytes (``BED_MAX_DECOMPRESSED`` for a
+BED) (:func:`_iter_lines` discards each line as it scans;
 :func:`_read_head_text` holds at most that capped head), while the tar walk streams member
 bodies past without materializing them, bounded on the network side by ``TAR_COMPRESSED_CAP``
 compressed bytes — so a pathological ``.gz`` yields a truncated head, never an unbounded buffer.

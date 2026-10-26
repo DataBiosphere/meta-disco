@@ -1364,6 +1364,17 @@ class TestGvcf:
         # Its one sample column gives no single-sample claim beside it: its records carry <NON_REF> (#655).
         assert code_rules.VCF_SAMPLE_COLUMN_COUNT.id not in val(result, "matched_rules")
 
+    @pytest.mark.parametrize("mode", ["GVCF", "BP_RESOLUTION"])
+    def test_a_gvcf_with_no_sample_column_is_a_conflict(self, mode):
+        """The gVCF rule does not read the #CHROM line, so a sites-only one is claimed both ways (#762)."""
+        text = header_text(*self.GVCF_LINES, self.T2T_HC.replace("GVCF", mode))
+        result = classify_from_vcf_header(
+            vcf_head(text, self.GVCF_ALTS), name=FileName.parse("HG00096.chr10.hc.vcf.gz")
+        )
+        assert result["data_type"]["status"] == "conflict"
+        rules = {e.get("rule_id") for e in field_evidence(result, "data_type")}
+        assert {code_rules.VCF_GVCF.id, code_rules.VCF_SAMPLE_COLUMN_COUNT.id} <= rules
+
     @pytest.mark.parametrize(
         ("lines", "file_name", "alts", "data_type"),
         [
@@ -1536,6 +1547,14 @@ class TestSampleColumnCount:
             assert self.count_claims(result)[0]["reason"].endswith(
                 "2 sample columns after FORMAT (HG00096, HG00097); no records read, and the read reached its end"
             )
+
+    def test_records_read_to_the_end_give_no_no_records_basis(self):
+        """The basis follows the records, not the read's reaching the end (#762)."""
+        text = header_text() + "\tFORMAT\tHG00096\tHG00097"
+        header = parse_vcf_head(VcfHead(text, ["chr1\t1\t.\tA\tC\t.\tPASS\t."], True))
+        result = classify_from_vcf_header(header, name=FileName.parse("HG00096.calls.vcf.gz"))
+        [claim] = self.count_claims(result)
+        assert claim["value"] == "variants.multi_sample" and "no records read" not in claim["reason"]
 
     @pytest.mark.parametrize("file_name", ["all_phase3_ns.pvar", "chr1.pvar.gz", "ALL.PVAR"])
     def test_a_pvar_keeps_its_plink_data_type(self, file_name):
