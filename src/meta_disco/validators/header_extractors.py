@@ -84,11 +84,13 @@ class VCFHeader:
     # Each record the read head held (``VcfHead.record_lines``, #630); None where the records
     # were not read, as for a header given as text.
     records: tuple[VcfRecord, ...] | None = None
-    # The sample columns of the ``#CHROM`` line, after ``FORMAT``, in column order (#357):
-    # empty for a sites-only file (no ``FORMAT`` column, a PLINK ``.pvar`` included), None
-    # where the text holds no ``#CHROM`` line, or one with columns after ``INFO`` that are
-    # neither ``FORMAT`` and samples nor a ``.pvar``'s ``CM`` (#655).
+    # The sample columns of the ``#CHROM`` line, after ``FORMAT``, in column order (#357), as
+    # :func:`chrom_line_samples` reads them from the last ``#CHROM`` line; None where the text
+    # holds none.
     sample_columns: tuple[str, ...] | None = None
+    # Whether that line starts with the VCF's eight fixed columns, which a PLINK ``.pvar``'s
+    # need not have (#655).
+    fixed_columns: bool = False
     # :attr:`contigs`' cache, filled by that property from `contig_lines` on first read: not an argument,
     # not compared. `parse_vcf_header` sets `contig_lines` before anything reads `contigs`.
     _parsed_contigs: list[VcfStructuredMeta] | None = field(default=None, init=False, repr=False, compare=False)
@@ -274,6 +276,28 @@ _VCF_SIMPLE_LINE_RE = re.compile(r"^##(\w+)=(.*)$")
 # key=value or key="value with spaces"
 _VCF_FIELD_RE = re.compile(r'(\w+)=("[^"]*"|[^,]*)')
 _CONTIG_PREFIX = "##contig=<"
+# The #CHROM line's columns: the VCF's eight fixed ones (VCF 4.3, section 1.5), and a PLINK 2
+# .pvar's five required ones and four optional ones.
+VCF_FIXED_COLUMNS = ("#CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO")
+PVAR_REQUIRED_COLUMNS = VCF_FIXED_COLUMNS[:5]
+PVAR_OPTIONAL_COLUMNS = ("QUAL", "FILTER", "INFO", "CM")
+
+
+def chrom_line_samples(columns: tuple[str, ...]) -> tuple[str, ...] | None:
+    """The sample columns a ``#CHROM`` line's tab-separated ``columns`` hold, or None for a malformed line (#655).
+
+    Those after ``FORMAT`` where the eight fixed columns and ``FORMAT`` lead; none for the
+    fixed columns alone or a PLINK 2 ``.pvar``'s columns (its five required ones, then any of
+    its optional ones, each once). None for any other line, and for one with an empty column.
+    """
+    if "" in columns:
+        return None
+    if columns[:9] == (*VCF_FIXED_COLUMNS, "FORMAT"):
+        return columns[9:]
+    rest = columns[5:]
+    if columns[:5] == PVAR_REQUIRED_COLUMNS and len(set(rest)) == len(rest) and set(rest) <= set(PVAR_OPTIONAL_COLUMNS):
+        return ()
+    return None
 
 
 def parse_vcf_header_line(line: str) -> VcfHeaderLine | None:
@@ -332,11 +356,9 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
     for line in header_text.splitlines():
         if not line.startswith("##"):
             if line.startswith("#CHROM"):
-                columns = line.split("\t")
-                if len(columns) <= 8 or columns[8:] == ["CM"]:
-                    header.sample_columns = ()
-                elif columns[8] == "FORMAT":
-                    header.sample_columns = tuple(columns[9:])
+                columns = tuple(line.split("\t"))
+                header.sample_columns = chrom_line_samples(columns)
+                header.fixed_columns = columns[:8] == VCF_FIXED_COLUMNS
             continue
         # A structured ##contig line, kept as text for `contigs` (#678); any other is parsed below.
         if line.startswith(_CONTIG_PREFIX) and line.endswith(">"):

@@ -2008,16 +2008,17 @@ enums:
         is_a: variants
         description: >-
           A VCF with two or more sample columns after `FORMAT` on its `#CHROM` line and no
-          `<NON_REF>` or `<*>` among its records' ALT alleles, so not a combined gVCF: most
-          are joint calls of a cohort, and some are not, as HPRC's `.pair.vcf.gz` (one
+          `<NON_REF>` or `<*>` among the ALT alleles of the first records read, which a combined
+          gVCF's have; a file with no records read is not checked. Most are joint calls of a cohort, and some are not, as HPRC's `.pair.vcf.gz` (one
           person's two haplotypes) and the pangenome VCFs. The count is of columns, not
           people. Assigned by the content rule `vcf_sample_column_count` (#655).
       "variants.single_sample":
         title: Single-sample VCF
         is_a: variants
         description: >-
-          A VCF with one sample column after `FORMAT` and no `<NON_REF>` or `<*>` among its
-          records' ALT alleles: one sample's variant sites, not a gVCF. Assigned by the content rule
+          A VCF with one sample column after `FORMAT`, at least one record read, and no
+          `<NON_REF>` or `<*>` among the ALT alleles of the first records read: one sample's
+          variant sites, not a gVCF. Assigned by the content rule
           `vcf_sample_column_count` (#655).
       "variants.sites_only":
         title: Sites-only VCF

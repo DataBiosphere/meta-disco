@@ -204,8 +204,10 @@ is shown as "Not determined".
 - **A gVCF also has one sample column**, and two content rules at one tier that disagree resolve to a
   conflict. The single-sample rule does not read the gVCF rule's answer (rule independence). It makes
   its own reading: no record read with `<NON_REF>` or `<*>` (the specification's spelling, which
-  DeepVariant's and bcftools' gVCFs use) among its ALT alleles, for any number of sample columns,
-  so a combined gVCF is not named multi-sample either. On the 2026-10-25 run, every one-column VCF
+  DeepVariant's and bcftools' gVCFs use) among the ALT alleles of the first records the head
+  read, for any number of sample columns, so a combined gVCF whose records were read is not named
+  multi-sample either. A multi-sample file with no records read is not checked: the 455 on the
+  2026-10-25 run are T2T region shards that hold no records, which a gVCF always has. On the 2026-10-25 run, every one-column VCF
   had `<NON_REF>` in all of its records read or in none, and no multi-column VCF had either allele.
 
 ## Consequences

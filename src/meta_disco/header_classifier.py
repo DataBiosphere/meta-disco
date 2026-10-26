@@ -481,9 +481,10 @@ def data_type_by_columns(header: VCFHeader, file_name: str) -> tuple[str, str] |
     """The data_type a VCF's sample columns give, with the claim's reason; None where they give none.
 
     The columns are those after ``FORMAT`` on the ``#CHROM`` line (``VCFHeader.sample_columns``):
-    none gives sites-only. One or more give single- or multi-sample only where no record the head
-    read has ``<NON_REF>`` or ``<*>`` among its ALT alleles, which a gVCF's records have; one also
-    needs a record read, since a one-sample file is so often a gVCF. None for a ``.pvar`` by its
+    none gives sites-only where the line has the VCF's eight fixed columns. One or more give
+    single- or multi-sample only where no record the head read has ``<NON_REF>`` or ``<*>`` among
+    its ALT alleles, which a gVCF's records have; one also needs a record read, since a one-sample
+    file is so often a gVCF. None for a ``.pvar`` by its
     name, a PLINK file whose data_type is its extension rule's, and for a header with no ``#CHROM``
     line.
     """
@@ -493,6 +494,8 @@ def data_type_by_columns(header: VCFHeader, file_name: str) -> tuple[str, str] |
     if columns is None:
         return None
     if not columns:
+        if not header.fixed_columns:
+            return None
         return SITES_ONLY_DATA_TYPE, "its #CHROM line has no sample columns: sites with no genotypes"
     records = header.records or ()
     if any(GVCF_ALLELES.intersection(record.alts) for record in records):

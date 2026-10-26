@@ -273,7 +273,7 @@ VCF_SAMPLE_COLUMN_COUNT = CodeRule(
     basis=BASIS_CONTENT,
     source_type=SOURCE_CONTENT_READ,
     reads=(
-        "VCF header: the sample columns after FORMAT on the #CHROM line; for one column, the ALT "
+        "VCF header: the #CHROM line's fixed columns and the sample columns after FORMAT; for one or more, the ALT "
         "column of the first records the head read. Not a PLINK 2 .pvar, by its name"
     ),
     sets=("data_type",),

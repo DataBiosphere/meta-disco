@@ -1525,12 +1525,25 @@ class TestSampleColumnCount:
         result = self.classify("\tFORMAT\tHG00096\tHG00097", alts=alts)
         assert val(result, "data_type") == "variants.multi_sample"
 
-    @pytest.mark.parametrize("file_name", ["all_phase3_ns.pvar", "chr1.pvar.gz"])
+    @pytest.mark.parametrize("file_name", ["all_phase3_ns.pvar", "chr1.pvar.gz", "ALL.PVAR"])
     def test_a_pvar_keeps_its_plink_data_type(self, file_name):
         """A `.pvar` has no sample columns, and is no sites-only VCF: its data_type is the PLINK rule's."""
         result = self.classify("", file_name=file_name)
         assert self.count_claims(result) == []
         assert val(result, "data_type") == "genotypes"
+
+    @pytest.mark.parametrize(
+        "alts", [None, (), ("<NON_REF>", "C,<NON_REF>"), ("<*>",)], ids=["not read", "none", "<NON_REF>", "<*>"]
+    )
+    def test_no_sample_columns_is_sites_only_whatever_the_records(self, alts):
+        """No sample column holds no genotypes, so no gVCF's records: the records are not read for it."""
+        assert val(self.classify("", alts=alts), "data_type") == "variants.sites_only"
+
+    def test_a_vcf_with_a_pvars_chrom_line_is_not_sites_only(self):
+        """Five columns are a `.pvar`'s, not a VCF's eight fixed ones: a VCF named so makes no claim."""
+        text = "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT"
+        result = classify_from_vcf_header(vcf_head(text, ("A",)), name=FileName.parse("HG002.vcf.gz"))
+        assert self.count_claims(result) == []
 
     def test_a_malformed_chrom_line_is_not_sites_only(self):
         """Columns after INFO with no FORMAT before them: the line is not read, and no claim made."""

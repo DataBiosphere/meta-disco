@@ -52,7 +52,7 @@ file_format (extension)
 
 A gVCF is `variants.gvcf` when the step that made it, read from its header, is a GATK HaplotypeCaller in GVCF or BP_RESOLUTION mode, and its first records all carry `<NON_REF>`, at least one alone (`vcf_gvcf`, #607). The name is not read: T2T's gVCFs are named `HG00096.chr10.hc.vcf.gz`. Neither are the `##ALT=<ID=NON_REF>` and `##GVCFBlock` lines, which joint-called VCFs and PLINK `.pvar` files carry over from their gVCFs.
 
-Any other VCF is named by the sample columns after `FORMAT` on its `#CHROM` line (`vcf_sample_column_count`, #655): none is `variants.sites_only` (T2T's dbSNP files, 1000G's sites-only `.annotated.vcf.gz`); two or more is `variants.multi_sample`, which counts columns, not people (HPRC's `.pair.vcf.gz` holds one person's two haplotypes); one is `variants.single_sample`. Both only where no record the head read has `<NON_REF>` or `<*>` among its ALT alleles, as a gVCF's do, one sample's or a combined one's (GATK's and DeepVariant's or bcftools' spelling); one sample column also needs a record read. A PLINK `.pvar`, read for its `##contig` lines, keeps its `genotypes`. Whether a multi-sample VCF is a joint call is not read (#760).
+Any other VCF is named by the sample columns after `FORMAT` on its `#CHROM` line (`vcf_sample_column_count`, #655): none is `variants.sites_only` (T2T's dbSNP, GWAS catalog, ClinVar and GATK resource-bundle files, and T2T's and 1000G's CCDG sites-only `.annotated.vcf.gz`); two or more is `variants.multi_sample`, which counts columns, not people (HPRC's `.pair.vcf.gz` holds one person's two haplotypes); one is `variants.single_sample`. Both only where no record the head read has `<NON_REF>` or `<*>` among its ALT alleles, as a gVCF's do, one sample's or a combined one's (GATK's and DeepVariant's or bcftools' spelling); one sample column also needs a record read. A PLINK `.pvar`, read for its `##contig` lines, keeps its `genotypes`. Whether a multi-sample VCF is a joint call is not read (#760).
 
 A callset's kind and origin are not `data_type` terms: they are `variant_kind` and `variant_origin`, read from the caller (ADR-0003). The `variants.germline`, `.somatic`, `.structural` and `.cnv` subterms, and the `##source` and record rules that wrote them, were retired in #657.
 
@@ -67,7 +67,7 @@ A callset's kind and origin are not `data_type` terms: they are `variant_kind` a
 - `GRCh38/CHM13` ← ##reference line, ##contig assembly= tag, contig lengths (definitive), filename
 - `GRCh37` ← contig lengths (definitive), filename — its header-pattern rules fired on nothing and were removed (#430)
 
-**Coverage**: Good for reference, and for what the file holds (#655): on the 2026-10-25 run every VCF whose head was read got one of the four narrower terms. No modality diversity (always genomic). No platform/assay info.
+**Coverage**: Good for reference, and for what the file holds (#655): replaying the rules over the heads cached by the 2026-10-25 run, every VCF whose head was read, `.pvar` files aside, got one of the four narrower terms. No modality diversity (always genomic). No platform/assay info.
 
 ---
 
