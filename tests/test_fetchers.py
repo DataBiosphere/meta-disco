@@ -568,6 +568,7 @@ def test_fetch_vcf_returns_header_and_record_lines_and_caches(monkeypatch, evide
     assert head == VcfHead(
         "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS",
         ["chr1\t1\t.\tA\t<NON_REF>\t.\t.\tEND=411\tGT", "chr1\t412\t.\tG\tC,<NON_REF>\t84.8\t.\tDP=3\tGT"],
+        True,
     )
 
     cached = VcfEvidence.load(evidence_dir, MD5)
@@ -576,6 +577,38 @@ def test_fetch_vcf_returns_header_and_record_lines_and_caches(monkeypatch, evide
     # a second call hits the cache and never re-fetches
     monkeypatch.setattr(fetchers, "_fetch_range", lambda *a, **k: pytest.fail("re-fetched a cached VCF"))
     assert fetch_vcf_header(evidence_dir, MD5, is_gzipped=True, use_cache=True) == head
+
+
+HEADER_ONLY = b"##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS1\tS2\n"
+
+
+def test_a_vcf_read_to_its_end_says_so_and_caches_it(monkeypatch, evidence_dir):
+    """An empty region shard holds no records, and the read reached its end (#655)."""
+    _install(monkeypatch, gzip.compress(HEADER_ONLY))
+    head = fetch_vcf_header(evidence_dir, MD5, is_gzipped=True, use_cache=False)
+    assert (head.record_lines, head.read_to_end) == ([], True)
+    cached = VcfEvidence.load(evidence_dir, MD5)
+    assert cached is not None and cached.read_to_end is True
+
+
+def test_a_vcf_read_cut_off_before_its_first_record_says_so(monkeypatch, evidence_dir):
+    """At the compressed cap the read stops partway through the first record, which is not read (#655)."""
+    body = HEADER_ONLY + b"chr1\t1\t.\tA\tC\t.\t.\t.\tGT\t" + b"0/1:" * 64
+    monkeypatch.setattr(fetchers, "VCF_COMPRESSED_CAP", len(HEADER_ONLY) + 20)
+    _install(monkeypatch, body)
+    head = fetch_vcf_header(evidence_dir, MD5, is_gzipped=False, use_cache=False)
+    assert (head.record_lines, head.read_to_end) == ([], False)
+    cached = VcfEvidence.load(evidence_dir, MD5)
+    assert cached is not None and cached.read_to_end is False
+
+
+def test_a_cached_vcf_head_with_no_records_and_no_end_flag_is_read_again(monkeypatch, evidence_dir):
+    """An entry from before #655 holding no records cannot say whether its read reached the end."""
+    VcfEvidence(md5sum=MD5, file_name="x.vcf.gz", header_text=HEADER_ONLY.decode().strip()).save(evidence_dir)
+    entry = json.loads(get_evidence_path(evidence_dir, MD5).read_text())
+    assert VcfEvidence.READ_TO_END_KEY not in entry
+    _install(monkeypatch, gzip.compress(HEADER_ONLY))
+    assert fetch_vcf_header(evidence_dir, MD5, is_gzipped=True, use_cache=True).read_to_end is True
 
 
 def test_a_vcf_entry_still_carries_the_keys_code_before_630_reads(monkeypatch, evidence_dir):

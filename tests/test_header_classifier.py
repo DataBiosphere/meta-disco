@@ -1519,11 +1519,18 @@ class TestSampleColumnCount:
         assert self.count_claims(result) == []
         assert val(result, "data_type") == "variants"
 
-    @pytest.mark.parametrize("alts", [(), None], ids=["no record", "records not read"])
-    def test_several_columns_with_no_record_read_are_multi_sample(self, alts):
-        """An empty region shard of a joint callset holds no records; it is still multi-sample."""
-        result = self.classify("\tFORMAT\tHG00096\tHG00097", alts=alts)
-        assert val(result, "data_type") == "variants.multi_sample"
+    @pytest.mark.parametrize(
+        ("read_to_end", "data_type"),
+        [(True, "variants.multi_sample"), (False, "variants"), (None, "variants")],
+        ids=["read to its end", "cut off", "not known"],
+    )
+    def test_several_columns_with_no_record_need_the_read_to_reach_the_end(self, read_to_end, data_type):
+        """An empty region shard read to its end holds no records, and is multi-sample; a read cut off
+        before the first record may have missed a combined gVCF's (#655)."""
+        text = header_text() + "\tFORMAT\tHG00096\tHG00097"
+        header = parse_vcf_head(VcfHead(text, [], read_to_end))
+        result = classify_from_vcf_header(header, name=FileName.parse("chrY.1_100000.genotyped.vcf.gz"))
+        assert val(result, "data_type") == data_type
 
     @pytest.mark.parametrize("file_name", ["all_phase3_ns.pvar", "chr1.pvar.gz", "ALL.PVAR"])
     def test_a_pvar_keeps_its_plink_data_type(self, file_name):
@@ -1539,10 +1546,11 @@ class TestSampleColumnCount:
         """No sample column holds no genotypes, so no gVCF's records: the records are not read for it."""
         assert val(self.classify("", alts=alts), "data_type") == "variants.sites_only"
 
-    def test_a_vcf_with_a_pvars_chrom_line_is_not_sites_only(self):
-        """Five columns are a `.pvar`'s, not a VCF's eight fixed ones: a VCF named so makes no claim."""
-        text = "##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT"
-        result = classify_from_vcf_header(vcf_head(text, ("A",)), name=FileName.parse("HG002.vcf.gz"))
+    @pytest.mark.parametrize("line", ["#CHROM\tPOS\tID\tREF\tALT", "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tCM"])
+    def test_a_vcf_with_a_pvars_chrom_line_is_not_sites_only(self, line):
+        """A `.pvar`'s columns are not a VCF's line: a VCF named so makes no claim."""
+        text = f"##fileformat=VCFv4.2\n{line}"
+        result = classify_from_vcf_header(vcf_head(text, ("A",)), name=FileName.parse("calls.vcf.gz"))
         assert self.count_claims(result) == []
 
     def test_a_malformed_chrom_line_is_not_sites_only(self):

@@ -206,9 +206,11 @@ is shown as "Not determined".
   its own reading: no record read with `<NON_REF>` or `<*>` (the specification's spelling, which
   DeepVariant's and bcftools' gVCFs use) among the ALT alleles of the first records the head
   read, for any number of sample columns, so a combined gVCF whose records were read is not named
-  multi-sample either. A multi-sample file with no records read is not checked: the 455 on the
-  2026-10-25 run are T2T region shards that hold no records, which a gVCF always has. On the 2026-10-25 run, every one-column VCF
-  had `<NON_REF>` in all of its records read or in none, and no multi-column VCF had either allele.
+  multi-sample either. A multi-sample file with no records read is named only where the read
+  reached the end of the file, so it holds none rather than a first record the read cut off: the
+  455 on the 2026-10-25 run are T2T region shards that hold no records, each read whole, and a gVCF
+  always has records. On the 2026-10-25 run, every one-column VCF had `<NON_REF>` in all of its
+  records read or in none, and no multi-column VCF had either allele.
 
 ## Consequences
 

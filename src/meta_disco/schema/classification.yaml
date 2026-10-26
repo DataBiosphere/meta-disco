@@ -2009,7 +2009,7 @@ enums:
         description: >-
           A VCF with two or more sample columns after `FORMAT` on its `#CHROM` line and no
           `<NON_REF>` or `<*>` among the ALT alleles of the first records read, which a combined
-          gVCF's have; a file with no records read is not checked. Most are joint calls of a cohort, and some are not, as HPRC's `.pair.vcf.gz` (one
+          gVCF's have; with no records read, only a file read to its end, which holds none. Most are joint calls of a cohort, and some are not, as HPRC's `.pair.vcf.gz` (one
           person's two haplotypes) and the pangenome VCFs. The count is of columns, not
           people. Assigned by the content rule `vcf_sample_column_count` (#655).
       "variants.single_sample":

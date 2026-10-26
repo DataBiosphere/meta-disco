@@ -481,10 +481,12 @@ def data_type_by_columns(header: VCFHeader, file_name: str) -> tuple[str, str] |
     """The data_type a VCF's sample columns give, with the claim's reason; None where they give none.
 
     The columns are those after ``FORMAT`` on the ``#CHROM`` line (``VCFHeader.sample_columns``):
-    none gives sites-only where the line has the VCF's eight fixed columns. One or more give
+    none gives sites-only where the line is a VCF's (``VCFHeader.vcf_columns``), not a ``.pvar``'s. One or more give
     single- or multi-sample only where no record the head read has ``<NON_REF>`` or ``<*>`` among
-    its ALT alleles, which a gVCF's records have; one also needs a record read, since a one-sample
-    file is so often a gVCF. None for a ``.pvar`` by its
+    its ALT alleles, which a gVCF's records have. One also needs a record read, since a one-sample
+    file is so often a gVCF; two or more with no record read need the read to have reached the
+    end of the file (``VCFHeader.read_to_end``), so the file holds none rather than a record the
+    read cut off. None for a ``.pvar`` by its
     name, a PLINK file whose data_type is its extension rule's, and for a header with no ``#CHROM``
     line.
     """
@@ -494,7 +496,7 @@ def data_type_by_columns(header: VCFHeader, file_name: str) -> tuple[str, str] |
     if columns is None:
         return None
     if not columns:
-        if not header.fixed_columns:
+        if not header.vcf_columns:
             return None
         return SITES_ONLY_DATA_TYPE, "its #CHROM line has no sample columns: sites with no genotypes"
     records = header.records or ()
@@ -508,6 +510,8 @@ def data_type_by_columns(header: VCFHeader, file_name: str) -> tuple[str, str] |
             f"its #CHROM line has 1 sample column after FORMAT ({columns[0]}), and none of its first "
             f"{len(records)} records has {NON_REF} or {ANY_ALLELE} among its ALT alleles",
         )
+    if not records and header.read_to_end is not True:
+        return None
     shown = ", ".join(columns[:2]) + (", ..." if len(columns) > 2 else "")
     return MULTI_SAMPLE_DATA_TYPE, f"its #CHROM line has {len(columns)} sample columns after FORMAT ({shown})"
 

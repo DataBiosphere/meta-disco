@@ -299,12 +299,18 @@ class VcfEvidence(_TextEvidence):
     no ``record_lines``, or one holding a line of fewer than eight columns, is a miss here, so
     the head is read again; :meth:`from_json_header` reads the header text whatever the entry
     holds. The key was added in place rather than in a versioned cache (#639).
+
+    ``read_to_end`` is whether the read reached the end of the file (``_CappedRead.complete``,
+    #655), None where not recorded. An entry holding no records that does not record it is a
+    miss too, so only such a head is read again: with records read, nothing reads it.
     """
 
     RECORD_LINES_KEY: ClassVar[str] = "record_lines"
+    READ_TO_END_KEY: ClassVar[str] = "read_to_end"
 
     record_lines: list[str] = field(default_factory=list)
     max_positions: dict | None = None
+    read_to_end: bool | None = None
 
     def to_json(self) -> dict:
         data = super().to_json()
@@ -313,6 +319,8 @@ class VcfEvidence(_TextEvidence):
         # Written for code from before #630 reading the same cache (#607); never read back.
         data["record_alts"] = [record.alt for record in records_of(self.record_lines)]
         data[self.RECORD_LINES_KEY] = self.record_lines
+        if self.read_to_end is not None:
+            data[self.READ_TO_END_KEY] = self.read_to_end
         return data
 
     @classmethod
@@ -325,11 +333,14 @@ class VcfEvidence(_TextEvidence):
             isinstance(lines, list) and all(isinstance(line, str) and VcfRecord.is_record_line(line) for line in lines)
         ):
             return None
+        read_to_end = data.get(cls.READ_TO_END_KEY) if isinstance(data, dict) else None
+        if not lines and not isinstance(read_to_end, bool):
+            return None
         base = super().from_json(data)
         if base is None:
             return None
         assert isinstance(data, dict)  # base returned non-None ⇒ data parsed as a dict
-        return replace(base, max_positions=data.get("max_positions"), record_lines=lines)
+        return replace(base, max_positions=data.get("max_positions"), record_lines=lines, read_to_end=read_to_end)
 
     @classmethod
     def from_json_header(cls, data: object) -> Any:
@@ -344,10 +355,11 @@ class VcfEvidence(_TextEvidence):
 
 @dataclass(frozen=True)
 class VcfHead:
-    """What the VCF fetcher returns: the header text, and the fixed columns of each record the head read held (#630)."""
+    """What the VCF fetcher returns: the header text, the fixed columns of each record the head read held (#630), and whether the read reached the end of the file (#655; None where not known)."""
 
     header_text: str
     record_lines: list[str]
+    read_to_end: bool | None = None
 
 
 @dataclass(frozen=True, kw_only=True)

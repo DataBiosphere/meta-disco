@@ -273,8 +273,9 @@ VCF_SAMPLE_COLUMN_COUNT = CodeRule(
     basis=BASIS_CONTENT,
     source_type=SOURCE_CONTENT_READ,
     reads=(
-        "VCF header: the #CHROM line's fixed columns and the sample columns after FORMAT; for one or more, the ALT "
-        "column of the first records the head read. Not a PLINK 2 .pvar, by its name"
+        "VCF header: whether the #CHROM line is a VCF's, and the sample columns after FORMAT; for one or more, the ALT "
+        "column of the first records the head read, and with none read, whether the read reached the end of "
+        "the file. Not a PLINK 2 .pvar, by its name"
     ),
     sets=("data_type",),
     rationale=(
@@ -286,7 +287,8 @@ VCF_SAMPLE_COLUMN_COUNT = CodeRule(
         "DeepVariant and bcftools write (VCF 4.3, section 5.5), whether it holds one sample or, "
         "combined (CombineGVCFs), several; a file whose records carry either is left to the content "
         "that says what it is. A file with one column and no records read gets no claim, since so "
-        "many one-sample files are gVCFs. The count is of columns, not people: HPRC's "
+        "many one-sample files are gVCFs; one with more gets a claim only where the read reached the "
+        "end of the file, so the file holds no record rather than one the read cut off. The count is of columns, not people: HPRC's "
         ".pair.vcf.gz files hold one person's two haplotypes in two columns. A .pvar is read through "
         "the VCF reader for its ##contig lines (#561) but is a PLINK file, whose data_type is the "
         "PLINK extension rule's."

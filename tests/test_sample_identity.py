@@ -355,17 +355,18 @@ def test_a_chrom_line_not_split_by_tabs_is_unread():
 
 
 @pytest.mark.parametrize(
-    ("line", "fixed"),
+    ("line", "vcf"),
     [
         ("#CHROM\tPOS\tID\tREF\tALT", False),
-        ("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tCM", True),
+        ("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tCM", False),
+        (CHROM, True),
         (f"{CHROM}\tFORMAT", True),
     ],
-    ids=["a pvar's five", "a pvar's nine", "FORMAT and no sample"],
+    ids=["a pvar's five", "a pvar's nine, CM after INFO", "the fixed eight", "FORMAT and no sample"],
 )
-def test_a_line_with_no_sample_column_names_none(line, fixed):
+def test_a_line_with_no_sample_column_names_none(line, vcf):
     header = parse_vcf_header(f"##fileformat=VCFv4.2\n{line}\n")
-    assert (header.sample_columns, header.fixed_columns) == ((), fixed)
+    assert (header.sample_columns, header.vcf_columns) == ((), vcf)
     assert VCF_SAMPLES.read(header, None).outcome == NO_SAMPLE
 
 

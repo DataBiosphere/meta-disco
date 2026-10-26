@@ -84,13 +84,16 @@ class VCFHeader:
     # Each record the read head held (``VcfHead.record_lines``, #630); None where the records
     # were not read, as for a header given as text.
     records: tuple[VcfRecord, ...] | None = None
+    # Whether that read reached the end of the file (``VcfHead.read_to_end``, #655); None where
+    # not known, as for a header given as text.
+    read_to_end: bool | None = None
     # The sample columns of the ``#CHROM`` line, after ``FORMAT``, in column order (#357), as
     # :func:`chrom_line_samples` reads them from the last ``#CHROM`` line; None where the text
     # holds none.
     sample_columns: tuple[str, ...] | None = None
-    # Whether that line starts with the VCF's eight fixed columns, which a PLINK ``.pvar``'s
-    # need not have (#655).
-    fixed_columns: bool = False
+    # Whether that line is a VCF's: the eight fixed columns, then nothing or ``FORMAT`` and the
+    # samples, which a PLINK ``.pvar``'s need not be (#655).
+    vcf_columns: bool = False
     # :attr:`contigs`' cache, filled by that property from `contig_lines` on first read: not an argument,
     # not compared. `parse_vcf_header` sets `contig_lines` before anything reads `contigs`.
     _parsed_contigs: list[VcfStructuredMeta] | None = field(default=None, init=False, repr=False, compare=False)
@@ -358,7 +361,7 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
             if line.startswith("#CHROM"):
                 columns = tuple(line.split("\t"))
                 header.sample_columns = chrom_line_samples(columns)
-                header.fixed_columns = columns[:8] == VCF_FIXED_COLUMNS
+                header.vcf_columns = columns[:8] == VCF_FIXED_COLUMNS and columns[8:9] in ((), ("FORMAT",))
             continue
         # A structured ##contig line, kept as text for `contigs` (#678); any other is parsed below.
         if line.startswith(_CONTIG_PREFIX) and line.endswith(">"):
@@ -413,6 +416,7 @@ def parse_vcf_head(head: VcfHead) -> VCFHeader:
     """A VCF fetcher's head parsed: its header text by :func:`parse_vcf_header`, with its records."""
     header = parse_vcf_header(head.header_text)
     header.records = records_of(head.record_lines)
+    header.read_to_end = head.read_to_end
     return header
 
 
