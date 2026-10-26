@@ -127,8 +127,10 @@ evidence}` entry — plus the controlled vocabulary:
   array assays (`Methylation array`, `Genotyping array`) are EFO terms with no parent among the values
 - **data_type_enum**: dotted terms with `is_a` to the term before the last dot (#607),
   e.g. `annotations.coverage` under `annotations`; a callset's kind and origin are
-  `variant_kind` and `variant_origin`, not `variants` subterms (ADR-0003, #657), and
-  `variants.gvcf` is the one format term left in the tree until a format slot exists; a
+  `variant_kind` and `variant_origin`, not `variants` subterms (ADR-0003, #657); a variant
+  file is named by what it holds (#655): `variants.gvcf`, `.multi_sample`, `.single_sample`
+  and `.sites_only` (from a VCF's sample columns, `vcf_sample_column_count`) and `.genomicsdb`
+  (a workspace tar), one data-type facet rather than a format and a sample count; a
   file of no data of its own has its own top-level term, as `sample_map` (#621) and
   `sample_table`, a PLINK 2 `.psam` (#751), with the other seven dimensions `not_applicable`
 - **variant_kind_enum**: `small` and `structural`, the one dimension whose value is a list

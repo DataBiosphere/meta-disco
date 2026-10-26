@@ -1,6 +1,6 @@
 # AnVIL Classification Coverage Report
 
-Classification run: **2026-10-25 15:09:50**
+Classification run: **2026-10-25 22:49:06**
 
 Source: **708,088** files across **12** open-access datasets on [explore.anvilproject.org](https://explore.anvilproject.org/).
 Processed **708,088** files.
@@ -130,8 +130,9 @@ Processed **708,088** files.
 |---|---:|---:|---|
 | `index` | 224,726 | 31.7% | .tbi (169,531)<br>.csi (41,186)<br>.crai (10,317)<br>.bai (2,742)<br>.fai (477)<br>.gzi (466)<br>.pbi (7) |
 | `variants.gvcf` | 168,825 | 23.8% | .vcf (166,321)<br>.g.vcf (2,504) |
-| `variants` | 159,659 | 22.5% | (none) (124,335)<br>.vcf (35,324) |
+| `variants.genomicsdb` | 124,335 | 17.6% | (none) (124,335) |
 | `qc_report` | 37,548 | 5.3% | .txt (37,548) |
+| `variants.multi_sample` | 34,703 | 4.9% | .vcf (34,703) |
 | `reads` | 24,383 | 3.4% | .fastq (21,270)<br>.bam (3,113) |
 | `not_classified` | 22,653 | 3.2% | (none) (10,069)<br>.txt (4,929)<br>.bed (2,771)<br>.gff3 (1,565)<br>.chain (926)<br>.tsv (899)<br>.bigwig (462)<br>.sizes (458)<br>.paf (297)<br>.sam (192)<br>.vcf (23)<br>.csv (18)<br>.dict (9)<br>.dist (6)<br>.min (6)<br>.trans (6)<br>.snarls (6)<br>.gg (6)<br>.hal (2)<br>.hapl (2)<br>.delta (1) |
 | `alignments` | 14,284 | 2.0% | .cram (10,623)<br>.bam (3,661) |
@@ -147,6 +148,8 @@ Processed **708,088** files.
 | `quantification` | 634 | 0.1% | .sf (634) |
 | `pangenome` | 449 | 0.1% | .gfa (314)<br>(none) (135) |
 | `expression_matrix` | 419 | 0.1% | .h5ad (350)<br>(none) (64)<br>.csv (3)<br>.txt (2) |
+| `variants.single_sample` | 340 | 0.0% | .vcf (340) |
+| `variants.sites_only` | 281 | 0.0% | .vcf (281) |
 | `array_signal` | 160 | 0.0% | .idat (160) |
 | `pangenome.reference` | 28 | 0.0% | .gfa (12)<br>.xg (8)<br>.gbwt (6)<br>.gbz (2) |
 | `sample_map` | 24 | 0.0% | .tsv (24) |

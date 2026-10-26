@@ -337,6 +337,39 @@ def test_a_vcf_without_sample_columns_names_none(text, columns):
     assert VCF_SAMPLES.read(header, None).outcome == NO_SAMPLE
 
 
+@pytest.mark.parametrize(
+    "columns",
+    ["\tformat\tHG00096", "\tHG00096\tHG00097", "\tCM\tHG00096", "\tHG00096\tCM", "\tFORMAT\tHG00096\t", "\tCM\tCM"],
+    ids=["lower-case format", "no FORMAT", "CM then a column", "CM after a column", "a trailing tab", "CM twice"],
+)
+def test_columns_after_info_with_no_format_are_unread_not_sampleless(columns):
+    """A malformed #CHROM line is not a sites-only file's (#655)."""
+    header = parse_vcf_header(f"##fileformat=VCFv4.2\n{CHROM}{columns}\n")
+    assert header.sample_columns is None
+    assert VCF_SAMPLES.read(header, None).outcome == UNREAD
+
+
+def test_a_chrom_line_not_split_by_tabs_is_unread():
+    header = parse_vcf_header("##fileformat=VCFv4.2\n#CHROM POS ID REF ALT QUAL FILTER INFO FORMAT HG002 HG003\n")
+    assert header.sample_columns is None
+
+
+@pytest.mark.parametrize(
+    ("line", "vcf"),
+    [
+        ("#CHROM\tPOS\tID\tREF\tALT", False),
+        ("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tCM", False),
+        (CHROM, True),
+        (f"{CHROM}\tFORMAT", True),
+    ],
+    ids=["a pvar's five", "a pvar's nine, CM after INFO", "the fixed eight", "FORMAT and no sample"],
+)
+def test_a_line_with_no_sample_column_names_none(line, vcf):
+    header = parse_vcf_header(f"##fileformat=VCFv4.2\n{line}\n")
+    assert (header.sample_columns, header.vcf_columns) == ((), vcf)
+    assert VCF_SAMPLES.read(header, None).outcome == NO_SAMPLE
+
+
 def test_a_vcf_head_that_ends_before_its_chrom_line_is_unread_not_sampleless():
     header = parse_vcf_header("##fileformat=VCFv4.2\n##contig=<ID=chr1,length=1>\n")
     assert header.sample_columns is None

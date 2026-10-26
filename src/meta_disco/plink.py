@@ -11,12 +11,19 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 
 from . import edges
+from .file_name import FileName
 from .record_keys import RecordKey, input_key_value
 from .records import dataset_of, folder_of
 
 SAMPLE_TABLE_EXTENSION = ".psam"
 # The other files one `--make-pgen` writes beside its `.psam`.
 MEMBER_EXTENSIONS = (".pgen", ".pvar", ".log")
+
+
+def is_pvar(file_name: str) -> bool:
+    """Whether ``file_name`` is a PLINK 2 ``.pvar``, which the VCF reader reads for its ``##`` header (#561)."""
+    return FileName.parse(file_name).extension == ".pvar"
+
 
 # Why a `.psam`'s rows were not read (``PsamRows.unread``).
 NO_HEADER = "no #FID or #IID header line"

@@ -253,7 +253,10 @@ class TestVcfE2E:
         assert result is not None
         assert_output_format(result)
         assert get_val(result, "data_modality") == "genomic"
-        assert (get_val(result, "data_type"), get_val(result, "variant_kind")) == ("variants", "structural")
+        assert (get_val(result, "data_type"), get_val(result, "variant_kind")) == (
+            "variants.single_sample",
+            "structural",
+        )
 
     def test_vcf_no_stale_evidence(self):
         """VCF reference_assembly should not have stale not_classified evidence."""

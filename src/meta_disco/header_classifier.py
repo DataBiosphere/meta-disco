@@ -27,6 +27,7 @@ from .models import (
     all_not_classified,
     build_field_entry,
 )
+from .plink import is_pvar
 from .producer_steps import producing_step
 from .schema_vocab import most_specific
 from .validators.header_extractors import VCFHeader, parse_vcf_header
@@ -360,6 +361,10 @@ def classify_from_vcf_header(
     if gvcf_reason is not None:
         _add_content_data_type(result, code_rules.VCF_GVCF.id, GVCF_DATA_TYPE, gvcf_reason)
 
+    by_columns = data_type_by_columns(parsed, name.raw)
+    if by_columns is not None:
+        _add_content_data_type(result, code_rules.VCF_SAMPLE_COLUMN_COUNT.id, *by_columns)
+
     kind, origin = _read_caller(parsed, name.raw)
     _add_variant_kind(
         result,
@@ -429,6 +434,10 @@ def _add_variant_origin(result, reading: Reading, step_rule: str, source_rule: s
 GVCF_DATA_TYPE = "variants.gvcf"
 GVCF_MODES = frozenset({"GVCF", "BP_RESOLUTION"})
 NON_REF = "<NON_REF>"
+# The VCF specification's symbol for the same unspecified allele, which DeepVariant's and bcftools'
+# gVCFs write in its place (#655).
+ANY_ALLELE = "<*>"
+GVCF_ALLELES = frozenset({NON_REF, ANY_ALLELE})
 
 
 def why_gvcf(header: VCFHeader, file_name: str) -> str | None:
@@ -459,6 +468,52 @@ def why_gvcf(header: VCFHeader, file_name: str) -> str | None:
         f"its first {len(header.records)} records has {NON_REF} among its ALT alleles, and "
         f"{non_variant} of them are sites with no variant ({NON_REF} alone)"
     )
+
+
+# The variant files' data_type terms besides a gVCF's (#655).
+SITES_ONLY_DATA_TYPE = "variants.sites_only"
+SINGLE_SAMPLE_DATA_TYPE = "variants.single_sample"
+MULTI_SAMPLE_DATA_TYPE = "variants.multi_sample"
+GENOMICSDB_DATA_TYPE = "variants.genomicsdb"
+
+
+def data_type_by_columns(header: VCFHeader, file_name: str) -> tuple[str, str] | None:
+    """The data_type a VCF's sample columns give, with the claim's reason; None where they give none.
+
+    The columns are those after ``FORMAT`` on the ``#CHROM`` line (``VCFHeader.sample_columns``):
+    none gives sites-only where the line is a VCF's (``VCFHeader.vcf_columns``), not a ``.pvar``'s. One or more give
+    single- or multi-sample only where no record the head read has ``<NON_REF>`` or ``<*>`` among
+    its ALT alleles, which a gVCF's records have. One also needs a record read, since a one-sample
+    file is so often a gVCF; two or more with no record read need the read to have reached the
+    end of the file (``VCFHeader.read_to_end``), so the file holds none rather than a record the
+    read cut off. None for a ``.pvar`` by its
+    name, a PLINK file whose data_type is its extension rule's, and for a header with no ``#CHROM``
+    line.
+    """
+    if is_pvar(file_name):
+        return None
+    columns = header.sample_columns
+    if columns is None:
+        return None
+    if not columns:
+        if not header.vcf_columns:
+            return None
+        return SITES_ONLY_DATA_TYPE, "its #CHROM line has no sample columns: sites with no genotypes"
+    records = header.records or ()
+    if any(GVCF_ALLELES.intersection(record.alts) for record in records):
+        return None
+    if len(columns) == 1:
+        if not records:
+            return None
+        return (
+            SINGLE_SAMPLE_DATA_TYPE,
+            f"its #CHROM line has 1 sample column after FORMAT ({columns[0]}), and none of its first "
+            f"{len(records)} records has {NON_REF} or {ANY_ALLELE} among its ALT alleles",
+        )
+    if not records and header.read_to_end is not True:
+        return None
+    shown = ", ".join(columns[:2]) + (", ..." if len(columns) > 2 else "")
+    return MULTI_SAMPLE_DATA_TYPE, f"its #CHROM line has {len(columns)} sample columns after FORMAT ({shown})"
 
 
 def classify_from_fastq_header(
@@ -843,7 +898,7 @@ def _classify_tar_members(
     1. **GenomicsDB variant store** — a GATK variant database (built on TileDB),
        recognized by its variant-specific member-name signature (schema files or
        VCF-attribute TileDB arrays — see :func:`_is_genomicsdb_variant_store`), not a
-       file extension. → ``genomic`` / ``variants``. This is the 124K T2T case.
+       file extension. → ``genomic`` / ``variants.genomicsdb`` (#655). This is the 124K T2T case.
     2. **Generic** — the dominant recognized inner *extension*, resolved through the
        rule engine (so the format knowledge is not duplicated here), whose
        ``data_modality``, ``data_type`` and ``assay_type`` the archive takes: a tar of
@@ -888,13 +943,25 @@ def _classify_tar_members(
                     value=value,
                 )
 
+    def _claim_workspace(reason: str, **values: str) -> None:
+        # Each value claimed under the workspace's own rule (#655); its source is _claim_content's.
+        for fld, value in values.items():
+            result.add_claim(
+                fld,
+                rule_id=code_rules.TAR_GENOMICSDB_WORKSPACE.id,
+                tier=CONTENT_TIER,
+                source_type=SOURCE_CONTENT_READ,
+                reason=reason,
+                value=value,
+            )
+
     # (1) GenomicsDB variant store — a member-name layout signature, caught even when
     # the `.vcf` member / schema files are pushed past the head in the larger stores.
     if is_workspace:
-        _claim_content(
-            "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)",
+        _claim_workspace(
+            "GenomicsDB workspace (VCF-attribute TileDB arrays / schema files)",
             data_modality="genomic",
-            data_type="variants",
+            data_type=GENOMICSDB_DATA_TYPE,
         )
         return result
 

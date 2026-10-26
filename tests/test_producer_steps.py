@@ -207,6 +207,7 @@ def test_a_pvar_never_takes_a_step_from_the_vcf_it_was_converted_from():
     HaplotypeCaller line naming no output must not become the `.pvar`'s step (#561)."""
     assert ps.producing_step(header(HC), "HG00096.chr11.hc.vcf.gz")[1] == ps.OUTPUT_NOT_THIS_FILE
     assert ps.producing_step(header(HC), "HG00096.chr11.pvar") == (None, ps.NOT_A_VCF)
+    assert ps.producing_step(header(HC), "HG00096.chr11.pvar.gz") == (None, ps.NOT_A_VCF)
 
 
 def test_a_bgz_compares_as_its_vcf():

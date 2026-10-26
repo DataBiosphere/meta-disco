@@ -545,8 +545,9 @@ The caller a VCF's header names gives its `variant_kind` and `variant_origin`, l
 `rules/callers.yaml` (ADR-0003, #654, #658); it no longer narrows `data_type`. The
 `##source` rules for HaplotypeCaller, Sniffles and SVIM, and the two record rules of #630,
 wrote `variants.germline` and `variants.structural` and were retired with those terms
-(#657). A VCF's `data_type`, where classified, is `variants`, or `variants.gvcf` where the content rule
-`vcf_gvcf` reads a gVCF (#607). The somatic and CNV caller rules fired on nothing across
+(#657). A VCF's `data_type`, where classified, is `variants.gvcf` where the content rule `vcf_gvcf` reads
+a gVCF (#607), otherwise what its sample columns give (`vcf_sample_column_count`, #655):
+`variants.sites_only`, `.single_sample` or `.multi_sample`, or `variants` where they give none. The somatic and CNV caller rules fired on nothing across
 204,149 VCFs and were removed (#430).
 
 ### 4.3 FASTQ Read Name Rules

@@ -452,16 +452,18 @@ class _CappedRead:
             yield chunk
 
 
-def _iter_lines(stream, raw: "_RawRangeReader", *, cap: int):
+def _iter_lines(stream, raw: "_RawRangeReader", *, cap: int, reader: "_CappedRead | None" = None):
     """Yield decoded lines from a decompressed stream, reading at most ``cap`` bytes.
 
     Bytes are split on ``b"\\n"`` and each line is decoded whole, so a multi-byte character
     is never cut across a read boundary. A trailing line with no terminating newline is
     yielded only when the whole object was read; if the read stopped at either cap or on a
     cut-short gzip stream, that final partial line is dropped — the byte window may have
-    split a record in half. (Same truncation rule as :func:`parse_gfa_segment_tags`.)
+    split a record in half. (Same truncation rule as :func:`parse_gfa_segment_tags`.) A caller
+    that needs to know whether the whole object was read passes its own ``reader`` and reads its
+    ``complete`` after.
     """
-    reader = _CappedRead(stream, raw, cap)
+    reader = reader if reader is not None else _CappedRead(stream, raw, cap)
     remainder = bytearray()  # unterminated tail; extended in place so a newline-sparse read stays O(n)
     for chunk in reader:
         remainder += chunk
@@ -603,9 +605,9 @@ class _BedMatcher:
         )
 
 
-def _scan_lines(stream, raw: "_RawRangeReader", *, cap: int, matcher):
-    """Feed decoded lines to ``matcher`` until it reports it is satisfied (or ``cap`` is hit)."""
-    for line in _iter_lines(stream, raw, cap=cap):
+def _scan_lines(stream, raw: "_RawRangeReader", *, cap: int, matcher, reader: "_CappedRead | None" = None):
+    """Feed decoded lines to ``matcher`` until it reports it is satisfied (or ``cap`` is hit); ``reader`` as for :func:`_iter_lines`."""
+    for line in _iter_lines(stream, raw, cap=cap, reader=reader):
         if matcher.feed(line):
             break
     return matcher
@@ -911,7 +913,8 @@ def fetch_vcf_header(
     limit (:func:`record_lines_of`, #630). Raises ``FetchError`` naming the cause when the range
     read fails or no header is found, so the record is kept as a ``not_classified`` row instead
     of vanishing (#155). A cached entry with no ``record_lines`` key (one written before #630,
-    or by code from before it reading the same cache) is a miss, and is read again.
+    or by code from before it reading the same cache) is a miss, and is read again, as is one
+    holding no records that does not record whether its read reached the end of the file (#655).
 
     The head is decompressed on the fly (BGZF-aware: ``gzip.GzipFile`` reads past the first
     member), so a ``##source`` caller tag beyond the first BGZF block is seen — the accuracy
@@ -919,10 +922,11 @@ def fetch_vcf_header(
     """
     cached = VcfEvidence.load(evidence_dir, md5sum) if use_cache else None
     if cached is not None:
-        return VcfHead(cached.header_text, cached.record_lines)
+        return VcfHead(cached.header_text, cached.record_lines, cached.read_to_end)
 
     stream, raw = _open_stream(md5sum, url=url, is_gzipped=is_gzipped, compressed_cap=VCF_COMPRESSED_CAP)
-    matcher = _scan_lines(stream, raw, cap=MAX_DECOMPRESSED, matcher=_VcfMatcher())
+    reader = _CappedRead(stream, raw, MAX_DECOMPRESSED)
+    matcher = _scan_lines(stream, raw, cap=MAX_DECOMPRESSED, matcher=_VcfMatcher(), reader=reader)
 
     if matcher.header_lines:
         header_text = "\n".join(matcher.header_lines)
@@ -938,8 +942,9 @@ def fetch_vcf_header(
             header_text=header_text,
             max_positions=max_positions,
             record_lines=record_lines,
+            read_to_end=reader.complete,
         )
-        return VcfHead(header_text, record_lines)
+        return VcfHead(header_text, record_lines, reader.complete)
 
     raise FetchError("no VCF header lines (no run of '#' lines starting the read head)")
 

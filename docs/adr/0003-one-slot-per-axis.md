@@ -1,9 +1,9 @@
 # ADR-0003: One slot per axis — facets, not combined terms
 
 - **Status:** Accepted (2026-10-10, with #654's PR #661); proposed 2026-10-09, when the storage and user model were decided by Dave
-- **Amended by:** [#756](https://github.com/DataBiosphere/meta-disco/issues/756) (2026-10-25): MODAL's four children of `genomic` are dropped, so `data_modality` is MODAL less those four, not MODAL as published (decision 4)
+- **Amended by:** [#756](https://github.com/DataBiosphere/meta-disco/issues/756) (2026-10-25): MODAL's four children of `genomic` are dropped, so `data_modality` is MODAL less those four, not MODAL as published (decision 4); [#655](https://github.com/DataBiosphere/meta-disco/issues/655) (2026-10-25): variant files are named in `data_type` by what they hold, not by a format slot and a sample-count slot ("How #655 names variant files")
 - **Decision record for:** [#654](https://github.com/DataBiosphere/meta-disco/issues/654) (variant kind), [#658](https://github.com/DataBiosphere/meta-disco/issues/658) (variant origin), and the vocabularies it touches
-- **Related:** #630, #651, #652, #607 (gVCF), #657 (subterms retired), #580 (activity vocabulary), #563 (MODAL), #533 (EFO), #655 (sample count)
+- **Related:** #630, #651, #652, #607 (gVCF), #657 (subterms retired), #580 (activity vocabulary), #563 (MODAL), #533 (EFO), #655 (variant files named), #760 (joint-called)
 
 ## Context
 
@@ -104,7 +104,7 @@ describing it, and only combinations present in the data get a row:
 | concept | filter |
 |---|---|
 | Germline small-variant calls | kind ∋ small, origin = germline |
-| gVCFs for joint calling | format = gVCF |
+| gVCFs for joint calling | data type = gVCF (#655) |
 | Structural variant calls | kind ∋ structural |
 | Callsets mixing small variants and SVs | kind ∋ small and kind ∋ structural |
 | Variants, kind not determined | data type = variants, kind not classified |
@@ -116,9 +116,8 @@ is shown as "Not determined".
 
 - **Role:** `.reference` leaves `data_type` for a role slot, which the variant resources also need.
 - **Activities:** the operation and the data it acts on as separate facets, as EDAM keeps them.
-- **Sample count** (#655): how many samples a file holds (0 for a sites-only VCF, 1 for a single-sample
-  VCF or gVCF, more for a project VCF) is an axis of its own by this ADR's test, since format and sample
-  count combine freely. It leans towards a count read from the VCF's `#CHROM` line rather than a term.
+- **Sample count** (#655): proposed here as an axis of its own, since format and sample count combine
+  freely. #655 decided against it: see "How #655 names variant files".
 
 ### How #654 builds it (decided 2026-10-09)
 
@@ -183,11 +182,41 @@ is shown as "Not determined".
   No slot holds a file's format read from its content (`file_format` is the source's extension),
   so it stays here until one does.
 
+### How #655 names variant files (decided 2026-10-25)
+
+- **Users see one data-type facet of named values, not a format and a sample count to combine.** Dave:
+  "user doesn't care about this schema, we shouldn't make them care about it." The portals surveyed in
+  #655 (GDC, ICGC ARGO, UK Biobank, All of Us) each give one "what is this file" facet of named things,
+  with the variant kind as a facet beside it. None asks users to filter on a sample count or on a format
+  read from the content.
+- **So `data_type` names five things under `variants`,** each read from content: `variants.gvcf` (gVCF,
+  as before), `variants.multi_sample`, `variants.single_sample` and `variants.sites_only` (from the
+  sample columns after `FORMAT` on the `#CHROM` line, `vcf_sample_column_count`), and
+  `variants.genomicsdb` (a GenomicsDB workspace tar, `tar_genomicsdb_workspace`). Kind and origin stay
+  in `variant_kind` and `variant_origin`. This departs from decision 1: format and sample count can
+  combine, as in a combined gVCF, which gets neither name. No corpus file has both: every gVCF #655
+  measured holds one sample.
+- **`variants.gvcf` stays.** It no longer waits for a format slot.
+- **The names say what the file holds, not how it was made.** "Multi-sample", not "joint-called":
+  HPRC's `.pair.vcf.gz` holds one person's two haplotypes in two columns, and the pangenome VCFs are
+  not joint calls either. Whether a multi-sample VCF is a joint call is #760's question. "Sites-only",
+  not "reference resource": 1000G's 25 are a callset's sites-only files.
+- **A gVCF also has one sample column**, and two content rules at one tier that disagree resolve to a
+  conflict. The single-sample rule does not read the gVCF rule's answer (rule independence). It makes
+  its own reading: no record read with `<NON_REF>` or `<*>` (the specification's spelling, which
+  DeepVariant's and bcftools' gVCFs use) among the ALT alleles of the first records the head
+  read, for any number of sample columns, so a combined gVCF whose records were read is not named
+  multi-sample either. A multi-sample file with no records read is named only where the read
+  reached the end of the file, so it holds none rather than a first record the read cut off: the
+  455 on the 2026-10-25 run are T2T region shards that hold no records, each read whole, and a gVCF
+  always has records. On the 2026-10-25 run, every one-column VCF had `<NON_REF>` in all of its
+  records read or in none, and no multi-column VCF had either allele.
+
 ## Consequences
 
 - The `variants.*` terms other than `variants` retire from `data_type`; their files carry the same
   information in `variant_kind`, `variant_origin` and the format. #657 retired the kind and origin
-  terms; `variants.gvcf` waits for a format slot.
+  terms; `variants.gvcf` stays, beside the four terms #655 adds.
 - Each new slot is a new dimension: the schema, the 13 producers' output shape, reconcile, the reports
   and the explorer's data dictionary all change. That cost is paid once per axis, not once per
   combination.

@@ -304,7 +304,7 @@ def test_the_tar_producer_writes_the_workspace_step(tmp_path):
     )
     assert rows["t1"]["generated_by"]["inputs"][0]["parent_key"] == "m1"
     assert rows["t2"]["generated_by"] is None
-    assert rows["t1"]["classifications"]["data_type"]["value"] == "variants"
+    assert rows["t1"]["classifications"]["data_type"]["value"] == "variants.genomicsdb"
     # No tar here is one whose callset.json is read (#724): the sample reader counts none.
     assert details == {
         "producer_steps": {"T": {cs.STEPPED: 1, cs.NO_VCF_HEADER: 1}},

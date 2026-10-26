@@ -47,6 +47,7 @@ class TestRoundTrip:
             max_positions={"1": 1000, "2": 2000},
             raw_bytes_fetched=4096,
             source_url="https://example/x.vcf.gz",
+            read_to_end=True,
         )
         ev.save(tmp_path)
         loaded = VcfEvidence.load(tmp_path, "b" * 32)
@@ -56,11 +57,20 @@ class TestRoundTrip:
         assert loaded.max_positions == {"1": 1000, "2": 2000}
         assert loaded.raw_bytes_fetched == 4096
         assert loaded.source_url == "https://example/x.vcf.gz"
+        assert loaded.read_to_end is True
 
     def test_vcf_without_max_positions_omits_the_key(self, tmp_path):
-        VcfEvidence(md5sum="c" * 32, file_name="x.vcf", header_text="#CHROM").save(tmp_path)
+        VcfEvidence(md5sum="c" * 32, file_name="x.vcf", header_text="#CHROM", read_to_end=False).save(tmp_path)
         assert "max_positions" not in get_evidence_path(tmp_path, "c" * 32).read_text()
         assert VcfEvidence.load(tmp_path, "c" * 32).max_positions is None
+
+    def test_a_vcf_entry_with_no_records_needs_its_end_flag_and_one_with_records_does_not(self, tmp_path):
+        """Only a record-less entry is read again for want of ``read_to_end`` (#655)."""
+        rec = "chr1\t1\t.\tA\tC\t.\t.\t."
+        base = {"md5sum": "f" * 32, "file_name": "x.vcf.gz", "header_text": "#CHROM"}
+        assert VcfEvidence.from_json({**base, "record_lines": []}) is None
+        assert VcfEvidence.from_json({**base, "record_lines": [], "read_to_end": True}).read_to_end is True
+        assert VcfEvidence.from_json({**base, "record_lines": [rec]}).read_to_end is None
 
     def test_a_vcf_entry_without_record_lines_is_a_miss_but_still_gives_its_header(self, tmp_path):
         """A reader of the header text alone (``generate_reference_builds``) keeps an entry from before #630."""
