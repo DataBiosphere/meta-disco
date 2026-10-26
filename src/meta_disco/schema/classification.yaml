@@ -1999,9 +1999,39 @@ enums:
           position: one record per position, or a block (`END=`) per run of positions,
           each with a `<NON_REF>` ALT. It is the input to joint calling (#607). No
           `meaning`: EDAM names gVCF a format (format_4018), beside VCF, and has no data
-          term for it. Under ADR-0003 the format is the file's, not its data type's; it is
-          the one format term in this tree, kept until a format slot exists (#657). Its
-          calls' origin is `variant_origin`'s. Assigned by the content rule `vcf_gvcf`.
+          term for it. Users see it as one of the variant files' named values beside the
+          multi-sample, single-sample and sites-only VCF and the GenomicsDB workspace
+          (ADR-0003 as amended by #655). Its calls' origin is `variant_origin`'s. Assigned
+          by the content rule `vcf_gvcf`.
+      "variants.multi_sample":
+        title: Multi-sample VCF
+        is_a: variants
+        description: >-
+          A VCF with two or more sample columns after `FORMAT` on its `#CHROM` line: most
+          are joint calls of a cohort, and some are not, as HPRC's `.pair.vcf.gz` (one
+          person's two haplotypes) and the pangenome VCFs. The count is of columns, not
+          people. Assigned by the content rule `vcf_sample_column_count` (#655).
+      "variants.single_sample":
+        title: Single-sample VCF
+        is_a: variants
+        description: >-
+          A VCF with one sample column after `FORMAT` and no `<NON_REF>` among its records'
+          ALT alleles: one sample's variant sites, not a gVCF. Assigned by the content rule
+          `vcf_sample_column_count` (#655).
+      "variants.sites_only":
+        title: Sites-only VCF
+        is_a: variants
+        description: >-
+          A VCF with no sample columns: variant sites and their annotations, no genotypes, as a
+          dbSNP release or a callset's sites-only file. Assigned by the content rule
+          `vcf_sample_column_count` (#655).
+      "variants.genomicsdb":
+        title: GenomicsDB workspace
+        is_a: variants
+        description: >-
+          A GATK GenomicsDB workspace (TileDB arrays) holding the calls of the gVCFs it
+          imported, the input to joint genotyping. Assigned by the content rule
+          `tar_genomicsdb_workspace` (#655).
       genotypes:
         title: Genotypes
       expression_matrix:      # a features × samples abundance matrix

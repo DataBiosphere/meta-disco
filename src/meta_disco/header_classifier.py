@@ -360,6 +360,10 @@ def classify_from_vcf_header(
     if gvcf_reason is not None:
         _add_content_data_type(result, code_rules.VCF_GVCF.id, GVCF_DATA_TYPE, gvcf_reason)
 
+    by_columns = data_type_by_columns(parsed, name.raw)
+    if by_columns is not None:
+        _add_content_data_type(result, code_rules.VCF_SAMPLE_COLUMN_COUNT.id, *by_columns)
+
     kind, origin = _read_caller(parsed, name.raw)
     _add_variant_kind(
         result,
@@ -459,6 +463,43 @@ def why_gvcf(header: VCFHeader, file_name: str) -> str | None:
         f"its first {len(header.records)} records has {NON_REF} among its ALT alleles, and "
         f"{non_variant} of them are sites with no variant ({NON_REF} alone)"
     )
+
+
+# The data_type a VCF's sample columns give (#655): none, a sites-only file; two or more, a
+# multi-sample one; one, a single-sample one where its records carry no <NON_REF>. A GenomicsDB
+# workspace tar's is the tar reader's.
+SITES_ONLY_DATA_TYPE = "variants.sites_only"
+SINGLE_SAMPLE_DATA_TYPE = "variants.single_sample"
+MULTI_SAMPLE_DATA_TYPE = "variants.multi_sample"
+GENOMICSDB_DATA_TYPE = "variants.genomicsdb"
+
+
+def data_type_by_columns(header: VCFHeader, file_name: str) -> tuple[str, str] | None:
+    """The data_type a VCF's sample columns give, with the claim's reason; None where they give none.
+
+    The columns are those after ``FORMAT`` on the ``#CHROM`` line (``VCFHeader.sample_columns``):
+    none gives sites-only, two or more multi-sample. One gives single-sample only where the head's
+    records were read, at least one, and none has ``<NON_REF>`` among its ALT alleles, which a
+    gVCF's records have. None for a ``.pvar`` by its name, a PLINK file whose data_type is its
+    extension rule's, for a header with no ``#CHROM`` line, and for one column with no records read.
+    """
+    if file_name.lower().endswith(".pvar"):
+        return None
+    columns = header.sample_columns
+    if columns is None:
+        return None
+    if not columns:
+        return SITES_ONLY_DATA_TYPE, "its #CHROM line has no sample columns: sites with no genotypes"
+    if len(columns) == 1:
+        if not header.records or any(NON_REF in record.alts for record in header.records):
+            return None
+        return (
+            SINGLE_SAMPLE_DATA_TYPE,
+            f"its #CHROM line has 1 sample column after FORMAT ({columns[0]}), and none of its first "
+            f"{len(header.records)} records has {NON_REF} among its ALT alleles",
+        )
+    shown = ", ".join(columns[:2]) + (", ..." if len(columns) > 2 else "")
+    return MULTI_SAMPLE_DATA_TYPE, f"its #CHROM line has {len(columns)} sample columns after FORMAT ({shown})"
 
 
 def classify_from_fastq_header(
@@ -843,7 +884,7 @@ def _classify_tar_members(
     1. **GenomicsDB variant store** — a GATK variant database (built on TileDB),
        recognized by its variant-specific member-name signature (schema files or
        VCF-attribute TileDB arrays — see :func:`_is_genomicsdb_variant_store`), not a
-       file extension. → ``genomic`` / ``variants``. This is the 124K T2T case.
+       file extension. → ``genomic`` / ``variants.genomicsdb`` (#655). This is the 124K T2T case.
     2. **Generic** — the dominant recognized inner *extension*, resolved through the
        rule engine (so the format knowledge is not duplicated here), whose
        ``data_modality``, ``data_type`` and ``assay_type`` the archive takes: a tar of
@@ -891,10 +932,22 @@ def _classify_tar_members(
     # (1) GenomicsDB variant store — a member-name layout signature, caught even when
     # the `.vcf` member / schema files are pushed past the head in the larger stores.
     if is_workspace:
-        _claim_content(
-            "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)",
-            data_modality="genomic",
-            data_type="variants",
+        reason = "GenomicsDB workspace (VCF-attribute TileDB arrays / schema files)"
+        result.add_claim(
+            "data_modality",
+            rule_id=code_rules.TAR_GENOMICSDB_WORKSPACE.id,
+            tier=CONTENT_TIER,
+            source_type=SOURCE_CONTENT_READ,
+            reason=reason,
+            value="genomic",
+        )
+        result.add_claim(
+            "data_type",
+            rule_id=code_rules.TAR_GENOMICSDB_WORKSPACE.id,
+            tier=CONTENT_TIER,
+            source_type=SOURCE_CONTENT_READ,
+            reason=reason,
+            value=GENOMICSDB_DATA_TYPE,
         )
         return result
 

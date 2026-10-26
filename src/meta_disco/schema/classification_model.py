@@ -165,7 +165,23 @@ class DataTypeEnum(str, Enum):
     """
     gVCF = "variants.gvcf"
     """
-    One sample's calls, with a reference-confidence record covering every other position: one record per position, or a block (`END=`) per run of positions, each with a `<NON_REF>` ALT. It is the input to joint calling (#607). No `meaning`: EDAM names gVCF a format (format_4018), beside VCF, and has no data term for it. Under ADR-0003 the format is the file's, not its data type's; it is the one format term in this tree, kept until a format slot exists (#657). Its calls' origin is `variant_origin`'s. Assigned by the content rule `vcf_gvcf`.
+    One sample's calls, with a reference-confidence record covering every other position: one record per position, or a block (`END=`) per run of positions, each with a `<NON_REF>` ALT. It is the input to joint calling (#607). No `meaning`: EDAM names gVCF a format (format_4018), beside VCF, and has no data term for it. Users see it as one of the variant files' named values beside the multi-sample, single-sample and sites-only VCF and the GenomicsDB workspace (ADR-0003 as amended by #655). Its calls' origin is `variant_origin`'s. Assigned by the content rule `vcf_gvcf`.
+    """
+    Multi_sample_VCF = "variants.multi_sample"
+    """
+    A VCF with two or more sample columns after `FORMAT` on its `#CHROM` line: most are joint calls of a cohort, and some are not, as HPRC's `.pair.vcf.gz` (one person's two haplotypes) and the pangenome VCFs. The count is of columns, not people. Assigned by the content rule `vcf_sample_column_count` (#655).
+    """
+    Single_sample_VCF = "variants.single_sample"
+    """
+    A VCF with one sample column after `FORMAT` and no `<NON_REF>` among its records' ALT alleles: one sample's variant sites, not a gVCF. Assigned by the content rule `vcf_sample_column_count` (#655).
+    """
+    Sites_only_VCF = "variants.sites_only"
+    """
+    A VCF with no sample columns: variant sites and their annotations, no genotypes, as a dbSNP release or a callset's sites-only file. Assigned by the content rule `vcf_sample_column_count` (#655).
+    """
+    GenomicsDB_workspace = "variants.genomicsdb"
+    """
+    A GATK GenomicsDB workspace (TileDB arrays) holding the calls of the gVCFs it imported, the input to joint genotyping. Assigned by the content rule `tar_genomicsdb_workspace` (#655).
     """
     Genotypes = "genotypes"
     Expression_matrix = "expression_matrix"

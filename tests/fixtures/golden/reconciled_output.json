@@ -3118,8 +3118,8 @@
             "credited_to": "filled_by_inference",
             "evidence": [
               {
-                "reason": "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)",
-                "rule_id": "tar_inner_format",
+                "reason": "GenomicsDB workspace (VCF-attribute TileDB arrays / schema files)",
+                "rule_id": "tar_genomicsdb_workspace",
                 "source_type": "content_read",
                 "tier": 4,
                 "value": "genomic"
@@ -3148,20 +3148,20 @@
             "credited_to": "filled_by_inference",
             "evidence": [
               {
-                "reason": "GenomicsDB variant store (VCF-attribute TileDB arrays / schema files)",
-                "rule_id": "tar_inner_format",
+                "reason": "GenomicsDB workspace (VCF-attribute TileDB arrays / schema files)",
+                "rule_id": "tar_genomicsdb_workspace",
                 "source_type": "content_read",
                 "tier": 4,
-                "value": "variants"
+                "value": "variants.genomicsdb"
               }
             ],
             "inferred": {
               "status": "classified",
-              "value": "variants"
+              "value": "variants.genomicsdb"
             },
             "status": "classified",
             "use": "meta_disco",
-            "value": "variants"
+            "value": "variants.genomicsdb"
           },
           "instrument_model": {
             "credited_to": "not_classified",

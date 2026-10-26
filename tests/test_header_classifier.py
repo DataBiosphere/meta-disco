@@ -510,11 +510,11 @@ class TestVcfClassification:
         assert val(result, "reference_assembly") == reference
         assert (val(result, "data_type"), val(result, "data_modality")) == ("genotypes", "genomic")
 
-    def test_an_sv_callers_file_is_variants_and_its_kind_is_variant_kinds(self):
-        """The caller gives a callset's kind, never a narrower data_type (#657)."""
-        text = "##fileformat=VCFv4.2\n##source=Sniffles2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"
+    def test_an_sv_callers_kind_is_variant_kinds_and_its_data_type_is_its_columns(self):
+        """The caller gives a callset's kind, never its data_type (#657), which its sample columns give (#655)."""
+        text = "##fileformat=VCFv4.2\n##source=Sniffles2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tHG002"
         result = classify_from_vcf_header(vcf_head(text, ["<DEL>", "<INS>"]), name=FileName.parse("HG002.sv.vcf.gz"))
-        assert val(result, "data_type") == "variants"
+        assert val(result, "data_type") == "variants.single_sample"
         assert val(result, "variant_kind") == "structural"
 
     def test_empty_header(self):
@@ -1003,7 +1003,7 @@ class TestTarClassifier:
         members = ["./chr22.1_2/vidmap.json", "./chr22.1_2/callset.json", "./chr22.1_2/vcfheader.vcf"]
         result = classify_members(members)
         assert val(result, "data_modality") == "genomic"
-        assert val(result, "data_type") == "variants"
+        assert val(result, "data_type") == "variants.genomicsdb"
 
     def test_genomicsdb_store_from_vcf_field_arrays_only(self):
         """A large store whose schema files are past the head is still caught by its
@@ -1016,7 +1016,7 @@ class TestTarClassifier:
         ]
         result = classify_members(members)
         assert val(result, "data_modality") == "genomic"
-        assert val(result, "data_type") == "variants"
+        assert val(result, "data_type") == "variants.genomicsdb"
 
     def test_genomicsdb_array_name_in_mid_path_is_caught(self):
         """A TileDB array is a directory (`PL.tdb/`), so the variant-array name is a
@@ -1027,7 +1027,7 @@ class TestTarClassifier:
             "chr4.1_2/chr4$1$2/PL.tdb/__fragment/a.tdb",
         ]
         result = classify_members(members)
-        assert val(result, "data_type") == "variants"
+        assert val(result, "data_type") == "variants.genomicsdb"
 
     def test_bare_tiledb_is_not_called_variants(self):
         """Honesty: a `.tdb` is a *generic* TileDB array — a head of only generic TileDB
@@ -1341,7 +1341,7 @@ class TestGvcf:
     @staticmethod
     def classify(*lines: str, file_name: str, alts: tuple[str, ...] | None = GVCF_ALTS) -> dict:
         """Classify a header of ``lines`` whose head read held records of ``alts`` (None: not read)."""
-        text = header_text(*lines)
+        text = header_text(*lines) + "\tFORMAT\tHG00096"  # one sample column, as a gVCF has
         header = parse_vcf_header(text) if alts is None else vcf_head(text, alts)
         return classify_from_vcf_header(header, name=FileName.parse(file_name))
 
@@ -1361,6 +1361,8 @@ class TestGvcf:
         assert val(result, "data_type") == "variants.gvcf"
         claims = [e for e in field_evidence(result, "data_type") if e.get("rule_id") == code_rules.VCF_GVCF.id]
         assert [(e["tier"], e["source_type"]) for e in claims] == [(CONTENT_TIER, SOURCE_CONTENT_READ)]
+        # Its one sample column gives no single-sample claim beside it: its records carry <NON_REF> (#655).
+        assert code_rules.VCF_SAMPLE_COLUMN_COUNT.id not in val(result, "matched_rules")
 
     @pytest.mark.parametrize(
         ("lines", "file_name", "alts", "data_type"),
@@ -1445,3 +1447,78 @@ class TestGvcf:
         mutect = gatk4("Mutect2", "-ERC GVCF -I tumor.cram -O tumor.chr1.vcf")
         result = self.classify(*self.GVCF_LINES, mutect, file_name="tumor.chr1.vcf.gz")
         assert code_rules.VCF_GVCF.id not in (val(result, "matched_rules") or [])
+
+
+class TestSampleColumnCount:
+    """A VCF's sample columns after FORMAT give its data_type (#655): none, sites-only; two or
+    more, multi-sample; one, single-sample where no record read carries <NON_REF>."""
+
+    FIXED = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"
+
+    @classmethod
+    def classify(cls, columns: str, file_name: str = "HG002.calls.vcf.gz", alts=("A", "C,T")) -> dict:
+        """Classify a header whose #CHROM line ends in ``columns``, its head's records of ``alts`` (None: not read)."""
+        text = f"##fileformat=VCFv4.2\n{cls.FIXED}{columns}"
+        header = parse_vcf_header(text) if alts is None else vcf_head(text, alts)
+        return classify_from_vcf_header(header, name=FileName.parse(file_name))
+
+    @staticmethod
+    def count_claims(result: dict) -> list[dict]:
+        return [
+            e for e in field_evidence(result, "data_type") if e.get("rule_id") == code_rules.VCF_SAMPLE_COLUMN_COUNT.id
+        ]
+
+    @pytest.mark.parametrize(
+        ("columns", "data_type", "reason"),
+        [
+            pytest.param("", "variants.sites_only", "no sample columns", id="no FORMAT column"),
+            pytest.param("\tFORMAT", "variants.sites_only", "no sample columns", id="FORMAT and no sample"),
+            pytest.param(
+                "\tFORMAT\tHG002_hap1\tHG002_hap2",
+                "variants.multi_sample",
+                "2 sample columns after FORMAT (HG002_hap1, HG002_hap2)",
+                id="two",
+            ),
+            pytest.param(
+                "\tFORMAT\tHG00096\tHG00097\tHG00099",
+                "variants.multi_sample",
+                "3 sample columns after FORMAT (HG00096, HG00097, ...)",
+                id="three",
+            ),
+            pytest.param(
+                "\tFORMAT\tHG002",
+                "variants.single_sample",
+                "1 sample column after FORMAT (HG002), and none of its first 2 records",
+                id="one",
+            ),
+        ],
+    )
+    def test_the_columns_give_the_data_type(self, columns, data_type, reason):
+        result = self.classify(columns)
+        assert val(result, "data_type") == data_type
+        [claim] = self.count_claims(result)
+        assert (claim["tier"], claim["source_type"]) == (CONTENT_TIER, SOURCE_CONTENT_READ)
+        assert reason in claim["reason"]
+
+    @pytest.mark.parametrize(
+        "alts",
+        [
+            pytest.param(("A", "C,<NON_REF>"), id="a record with <NON_REF>"),
+            pytest.param((), id="no record"),
+            pytest.param(None, id="records not read"),
+        ],
+    )
+    def test_one_column_gives_nothing_unless_its_records_read_carry_no_non_ref(self, alts):
+        result = self.classify("\tFORMAT\tHG002", alts=alts)
+        assert self.count_claims(result) == []
+        assert val(result, "data_type") == "variants"
+
+    def test_a_pvar_keeps_its_plink_data_type(self):
+        """A `.pvar` has no sample columns, and is no sites-only VCF: its data_type is the PLINK rule's."""
+        result = self.classify("", file_name="all_phase3_ns.pvar")
+        assert self.count_claims(result) == []
+        assert val(result, "data_type") == "genotypes"
+
+    def test_a_header_with_no_chrom_line_gives_nothing(self):
+        result = classify_from_vcf_header(vcf_head("##fileformat=VCFv4.2", ("A",)), name=FileName.parse("x.vcf.gz"))
+        assert self.count_claims(result) == []

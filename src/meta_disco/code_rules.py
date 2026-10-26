@@ -267,6 +267,30 @@ _CALLER_KINDS = (
     "cannot settle it: a mixed callset shows a structural variant in its first records only by "
     "chance (#630). "
 )
+VCF_SAMPLE_COLUMN_COUNT = CodeRule(
+    id="vcf_sample_column_count",
+    module=HEADER_CLASSIFIER,
+    basis=BASIS_CONTENT,
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "VCF header: the sample columns after FORMAT on the #CHROM line; for one column, the ALT "
+        "column of the first records the head read. Not a PLINK 2 .pvar, by its name"
+    ),
+    sets=("data_type",),
+    rationale=(
+        "The VCF specification gives each sample whose genotypes a file holds a column after FORMAT, "
+        "and a file with no FORMAT column holds no genotypes (VCF 4.3, section 1.5, the header line). "
+        "None is sites-only; two or more is multi-sample (#655). One is single-sample only where no "
+        "record read has <NON_REF> among its ALT alleles: a gVCF also holds one sample, and its "
+        "records carry <NON_REF> (GATK, 'GVCF - Genomic Variant Call Format'), so a one-column file "
+        "whose records carry it is left to the content that says what it is. On the 2026-10-25 run "
+        "every one-column VCF had <NON_REF> in all of its records read or in none. A file with one "
+        "column and no records read gets no claim. The count is of columns, not people: HPRC's "
+        ".pair.vcf.gz files hold one person's two haplotypes in two columns. A .pvar is read through "
+        "the VCF reader for its ##contig lines (#561) but is a PLINK file, whose data_type is the "
+        "PLINK extension rule's."
+    ),
+)
 VCF_STEP_CALLER_KIND = CodeRule(
     id="vcf_step_caller_kind",
     module=HEADER_CLASSIFIER,
@@ -521,10 +545,25 @@ TAR_INNER_FORMAT = CodeRule(
     reads="tar archive head: its member names",
     sets=("data_modality", "data_type", "assay_type"),
     rationale=(
-        "A container has no format of its own (#245), so it takes its contents'. A "
-        "GenomicsDB member layout is a variant store (genomic, variants); otherwise the "
-        "archive takes what the rules resolve for its dominant recognized member "
-        "extension."
+        "A container has no format of its own (#245), so it takes its contents': what the rules "
+        "resolve for its dominant recognized member extension. A GenomicsDB workspace is "
+        "tar_genomicsdb_workspace's."
+    ),
+)
+TAR_GENOMICSDB_WORKSPACE = CodeRule(
+    id="tar_genomicsdb_workspace",
+    module=HEADER_CLASSIFIER,
+    basis=BASIS_CONTENT,
+    source_type=SOURCE_CONTENT_READ,
+    reads=(
+        "tar archive head: its member names, for a GenomicsDB workspace's layout (VCF-attribute "
+        "TileDB arrays or its schema files)"
+    ),
+    sets=("data_modality", "data_type"),
+    rationale=(
+        "GATK's GenomicsDBImport writes a workspace of TileDB arrays holding the calls of the gVCFs "
+        "it imported, with its own schema files beside them (GATK, 'GenomicsDBImport'), so the "
+        "layout names a store of variant calls: genomic, variants.genomicsdb (#655)."
     ),
 )
 SAMPLE_MAP_CONTENT = CodeRule(
@@ -631,6 +670,7 @@ CODE_RULES = (
     CONTIG_LENGTH_DETECTION,
     VCF_CONTIG_LENGTH,
     VCF_GVCF,
+    VCF_SAMPLE_COLUMN_COUNT,
     VCF_STEP_CALLER_KIND,
     VCF_SOURCE_CALLER_KIND,
     VCF_MERGE_SMALL_CALLERS,
@@ -651,6 +691,7 @@ CODE_RULES = (
     FASTA_MANY_CONTIGS,
     RGFA_STABLE_RANK_REFERENCE,
     TAR_INNER_FORMAT,
+    TAR_GENOMICSDB_WORKSPACE,
     SAMPLE_MAP_CONTENT,
     IDAT_CHIP_TYPE,
     IDAT_SCANNER,
