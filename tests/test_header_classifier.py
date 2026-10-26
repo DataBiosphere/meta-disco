@@ -1497,7 +1497,7 @@ class TestSampleColumnCount:
         [claim] = self.count_claims(result)
         assert (claim["tier"], claim["source_type"]) == (CONTENT_TIER, SOURCE_CONTENT_READ)
         assert reason in claim["reason"]
-        assert "no records" not in claim["reason"]
+        assert "no records read" not in claim["reason"]
 
     @pytest.mark.parametrize(
         "alts",
@@ -1534,7 +1534,7 @@ class TestSampleColumnCount:
         assert val(result, "data_type") == data_type
         if read_to_end:
             assert self.count_claims(result)[0]["reason"].endswith(
-                "2 sample columns after FORMAT (HG00096, HG00097); no records, read to its end"
+                "2 sample columns after FORMAT (HG00096, HG00097); no records read, and the read reached its end"
             )
 
     @pytest.mark.parametrize("file_name", ["all_phase3_ns.pvar", "chr1.pvar.gz", "ALL.PVAR"])

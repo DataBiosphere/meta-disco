@@ -217,8 +217,8 @@ is shown as "Not determined".
 - **A sites-only gVCF would be a conflict** (#762). The gVCF rule does not read the `#CHROM`
   line, so a VCF whose header ends in a HaplotypeCaller GVCF step and whose records carry
   `<NON_REF>`, but whose `#CHROM` line has no sample columns, gets both the gVCF claim and the
-  sites-only claim, and its `data_type` is `conflict`. No corpus file is one; it is left to be
-  settled when one is seen.
+  sites-only claim, and its `data_type` is `conflict`. None was on the 2026-10-26 run; it is left
+  to be settled when one is seen.
 
 ## Consequences
 

@@ -601,7 +601,10 @@ def test_a_vcf_read_cut_off_before_its_first_record_says_so(monkeypatch, evidenc
     assert (head.record_lines, head.read_to_end) == ([], False)
     cached = VcfEvidence.load(evidence_dir, MD5)
     assert cached is not None and cached.read_to_end is False
+    calls: list = []
+    _install(monkeypatch, body, calls)
     assert fetch_vcf_header(evidence_dir, MD5, is_gzipped=False, use_cache=True).read_to_end is False
+    assert calls == []  # the cached entry answered
 
 
 def test_a_cached_vcf_head_with_no_records_and_no_end_flag_is_read_again(monkeypatch, evidence_dir):

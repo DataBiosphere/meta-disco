@@ -450,8 +450,9 @@ def why_gvcf(header: VCFHeader, file_name: str) -> str | None:
     with no variant, which a gVCF has and a VCF filtered to its variant sites does not. The header's ``##ALT=<ID=NON_REF>`` and
     ``##GVCFBlock`` lines, and a GVCF-mode line of an earlier step, are not read: joint-called
     VCFs and ``.pvar`` files carry them over from their gVCFs. Nor is the ``#CHROM`` line: a
-    sites-only file the rest describes would be claimed sites-only too, and so be a
-    ``conflict``, left until such a file is seen (no corpus file is one). None for an empty
+    file this rule names a gVCF but whose ``#CHROM`` line has no sample columns is claimed
+    sites-only too, and its data_type is a ``conflict``, left until such a file is seen (none on
+    the 2026-10-26 run). None for an empty
     ``file_name`` (a header-only call), which no step's output can be checked against, and
     for a header whose records were not read.
     """
@@ -515,7 +516,7 @@ def data_type_by_columns(header: VCFHeader, file_name: str) -> tuple[str, str] |
     if not records and header.read_to_end is not True:
         return None
     shown = ", ".join(columns[:2]) + (", ..." if len(columns) > 2 else "")
-    basis = "" if records else "; no records, read to its end"
+    basis = "" if records else "; no records read, and the read reached its end"
     return MULTI_SAMPLE_DATA_TYPE, f"its #CHROM line has {len(columns)} sample columns after FORMAT ({shown}){basis}"
 
 

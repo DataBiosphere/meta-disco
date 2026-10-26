@@ -453,7 +453,7 @@ class _CappedRead:
 
 
 def _iter_lines(reader: _CappedRead):
-    """Yield decoded lines from ``reader``'s chunks, so reading at most its ``cap`` bytes.
+    """Yield decoded lines from ``reader``'s chunks, at most the cap ``reader`` was built with.
 
     Bytes are split on ``b"\\n"`` and each line is decoded whole, so a multi-byte character
     is never cut across a read boundary. A trailing line with no terminating newline is
