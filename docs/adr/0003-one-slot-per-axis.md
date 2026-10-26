@@ -194,7 +194,8 @@ is shown as "Not determined".
   sample columns after `FORMAT` on the `#CHROM` line, `vcf_sample_column_count`), and
   `variants.genomicsdb` (a GenomicsDB workspace tar, `tar_genomicsdb_workspace`). Kind and origin stay
   in `variant_kind` and `variant_origin`. This departs from decision 1: format and sample count can
-  combine, as in a multi-sample gVCF. No corpus file has both: every gVCF #655 measured holds one sample.
+  combine, as in a combined gVCF, which gets neither name. No corpus file has both: every gVCF #655
+  measured holds one sample.
 - **`variants.gvcf` stays.** It no longer waits for a format slot.
 - **The names say what the file holds, not how it was made.** "Multi-sample", not "joint-called":
   HPRC's `.pair.vcf.gz` holds one person's two haplotypes in two columns, and the pangenome VCFs are
@@ -202,8 +203,10 @@ is shown as "Not determined".
   not "reference resource": 1000G's 25 are a callset's sites-only files.
 - **A gVCF also has one sample column**, and two content rules at one tier that disagree resolve to a
   conflict. The single-sample rule does not read the gVCF rule's answer (rule independence). It makes
-  its own reading: one column, and no record read with `<NON_REF>` among its ALT alleles. On the
-  2026-10-25 run, every one-column VCF had `<NON_REF>` in all of its records read or in none.
+  its own reading: no record read with `<NON_REF>` or `<*>` (the specification's spelling, which
+  DeepVariant's and bcftools' gVCFs use) among its ALT alleles, for any number of sample columns,
+  so a combined gVCF is not named multi-sample either. On the 2026-10-25 run, every one-column VCF
+  had `<NON_REF>` in all of its records read or in none, and no multi-column VCF had either allele.
 
 ## Consequences
 

@@ -1453,12 +1453,10 @@ class TestSampleColumnCount:
     """A VCF's sample columns after FORMAT give its data_type (#655): none, sites-only; two or
     more, multi-sample; one, single-sample where no record read carries <NON_REF>."""
 
-    FIXED = "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO"
-
-    @classmethod
-    def classify(cls, columns: str, file_name: str = "HG002.calls.vcf.gz", alts=("A", "C,T")) -> dict:
+    @staticmethod
+    def classify(columns: str, file_name: str = "HG002.calls.vcf.gz", alts=("A", "C,T")) -> dict:
         """Classify a header whose #CHROM line ends in ``columns``, its head's records of ``alts`` (None: not read)."""
-        text = f"##fileformat=VCFv4.2\n{cls.FIXED}{columns}"
+        text = header_text() + columns
         header = parse_vcf_header(text) if alts is None else vcf_head(text, alts)
         return classify_from_vcf_header(header, name=FileName.parse(file_name))
 
@@ -1488,7 +1486,7 @@ class TestSampleColumnCount:
             pytest.param(
                 "\tFORMAT\tHG002",
                 "variants.single_sample",
-                "1 sample column after FORMAT (HG002), and none of its first 2 records",
+                "1 sample column after FORMAT (HG002), and none of its first 2 records has <NON_REF> or <*>",
                 id="one",
             ),
         ],
@@ -1504,6 +1502,7 @@ class TestSampleColumnCount:
         "alts",
         [
             pytest.param(("A", "C,<NON_REF>"), id="a record with <NON_REF>"),
+            pytest.param(("<*>", "T,<*>"), id="records with <*>, as a DeepVariant gVCF's"),
             pytest.param((), id="no record"),
             pytest.param(None, id="records not read"),
         ],
@@ -1513,11 +1512,30 @@ class TestSampleColumnCount:
         assert self.count_claims(result) == []
         assert val(result, "data_type") == "variants"
 
-    def test_a_pvar_keeps_its_plink_data_type(self):
+    @pytest.mark.parametrize("alts", [("C,<NON_REF>", "<NON_REF>"), ("<*>", "T,<*>")], ids=["<NON_REF>", "<*>"])
+    def test_a_combined_gvcf_is_not_multi_sample(self, alts):
+        """CombineGVCFs' output holds several samples' gVCF records: no VCF term names it."""
+        result = self.classify("\tFORMAT\tHG00096\tHG00097", alts=alts)
+        assert self.count_claims(result) == []
+        assert val(result, "data_type") == "variants"
+
+    @pytest.mark.parametrize("alts", [(), None], ids=["no record", "records not read"])
+    def test_several_columns_with_no_record_read_are_multi_sample(self, alts):
+        """An empty region shard of a joint callset holds no records; it is still multi-sample."""
+        result = self.classify("\tFORMAT\tHG00096\tHG00097", alts=alts)
+        assert val(result, "data_type") == "variants.multi_sample"
+
+    @pytest.mark.parametrize("file_name", ["all_phase3_ns.pvar", "chr1.pvar.gz"])
+    def test_a_pvar_keeps_its_plink_data_type(self, file_name):
         """A `.pvar` has no sample columns, and is no sites-only VCF: its data_type is the PLINK rule's."""
-        result = self.classify("", file_name="all_phase3_ns.pvar")
+        result = self.classify("", file_name=file_name)
         assert self.count_claims(result) == []
         assert val(result, "data_type") == "genotypes"
+
+    def test_a_malformed_chrom_line_is_not_sites_only(self):
+        """Columns after INFO with no FORMAT before them: the line is not read, and no claim made."""
+        result = self.classify("\tformat\tHG00096\tHG00097")
+        assert self.count_claims(result) == []
 
     def test_a_header_with_no_chrom_line_gives_nothing(self):
         result = classify_from_vcf_header(vcf_head("##fileformat=VCFv4.2", ("A",)), name=FileName.parse("x.vcf.gz"))

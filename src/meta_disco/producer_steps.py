@@ -52,6 +52,7 @@ from pathlib import Path, PurePosixPath
 from . import code_rules, edges
 from .code_rules import EdgeRule
 from .fetchers import FetchError, fetch_bam_header
+from .plink import is_pvar
 from .record_keys import RecordKey
 from .validators.command_lines import BCFTOOLS, GATK, GATK3, Step
 from .validators.header_extractors import VCFHeader
@@ -70,6 +71,7 @@ PARENT_UNREADABLE = "parent_unreadable"
 # A PLINK 2 `.pvar` keeps the `##` command lines of the VCF it was converted from and adds
 # none of its own, so its header never names the step that made it (#561).
 NOT_A_VCF = "not_a_vcf"
+
 OUTCOMES = (
     STEPPED,
     NO_COMMAND_LINE,
@@ -141,7 +143,7 @@ def producing_step(header: VCFHeader, file_name: str) -> tuple[Step | None, str]
     :data:`NOT_A_VCF`, :data:`NO_COMMAND_LINE`, :data:`UNKNOWN_TOOL`, :data:`NO_SINGLE_END` or
     :data:`OUTPUT_NOT_THIS_FILE`.
     """
-    if file_name.lower().endswith(".pvar"):
+    if is_pvar(file_name):
         return None, NOT_A_VCF
     steps = steps_of(header)
     if steps is None:

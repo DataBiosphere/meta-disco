@@ -169,11 +169,11 @@ class DataTypeEnum(str, Enum):
     """
     Multi_sample_VCF = "variants.multi_sample"
     """
-    A VCF with two or more sample columns after `FORMAT` on its `#CHROM` line: most are joint calls of a cohort, and some are not, as HPRC's `.pair.vcf.gz` (one person's two haplotypes) and the pangenome VCFs. The count is of columns, not people. Assigned by the content rule `vcf_sample_column_count` (#655).
+    A VCF with two or more sample columns after `FORMAT` on its `#CHROM` line and no `<NON_REF>` or `<*>` among its records' ALT alleles, so not a combined gVCF: most are joint calls of a cohort, and some are not, as HPRC's `.pair.vcf.gz` (one person's two haplotypes) and the pangenome VCFs. The count is of columns, not people. Assigned by the content rule `vcf_sample_column_count` (#655).
     """
     Single_sample_VCF = "variants.single_sample"
     """
-    A VCF with one sample column after `FORMAT` and no `<NON_REF>` among its records' ALT alleles: one sample's variant sites, not a gVCF. Assigned by the content rule `vcf_sample_column_count` (#655).
+    A VCF with one sample column after `FORMAT` and no `<NON_REF>` or `<*>` among its records' ALT alleles: one sample's variant sites, not a gVCF. Assigned by the content rule `vcf_sample_column_count` (#655).
     """
     Sites_only_VCF = "variants.sites_only"
     """

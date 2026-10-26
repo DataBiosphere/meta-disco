@@ -86,7 +86,8 @@ class VCFHeader:
     records: tuple[VcfRecord, ...] | None = None
     # The sample columns of the ``#CHROM`` line, after ``FORMAT``, in column order (#357):
     # empty for a sites-only file (no ``FORMAT`` column, a PLINK ``.pvar`` included), None
-    # where the text holds no ``#CHROM`` line.
+    # where the text holds no ``#CHROM`` line, or one with columns after ``INFO`` that are
+    # neither ``FORMAT`` and samples nor a ``.pvar``'s ``CM`` (#655).
     sample_columns: tuple[str, ...] | None = None
     # :attr:`contigs`' cache, filled by that property from `contig_lines` on first read: not an argument,
     # not compared. `parse_vcf_header` sets `contig_lines` before anything reads `contigs`.
@@ -332,7 +333,10 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
         if not line.startswith("##"):
             if line.startswith("#CHROM"):
                 columns = line.split("\t")
-                header.sample_columns = tuple(columns[9:]) if len(columns) > 8 and columns[8] == "FORMAT" else ()
+                if len(columns) <= 8 or columns[8:] == ["CM"]:
+                    header.sample_columns = ()
+                elif columns[8] == "FORMAT":
+                    header.sample_columns = tuple(columns[9:])
             continue
         # A structured ##contig line, kept as text for `contigs` (#678); any other is parsed below.
         if line.startswith(_CONTIG_PREFIX) and line.endswith(">"):
