@@ -1497,6 +1497,7 @@ class TestSampleColumnCount:
         [claim] = self.count_claims(result)
         assert (claim["tier"], claim["source_type"]) == (CONTENT_TIER, SOURCE_CONTENT_READ)
         assert reason in claim["reason"]
+        assert "no records" not in claim["reason"]
 
     @pytest.mark.parametrize(
         "alts",
@@ -1531,6 +1532,10 @@ class TestSampleColumnCount:
         header = parse_vcf_head(VcfHead(text, [], read_to_end))
         result = classify_from_vcf_header(header, name=FileName.parse("chrY.1_100000.genotyped.vcf.gz"))
         assert val(result, "data_type") == data_type
+        if read_to_end:
+            assert self.count_claims(result)[0]["reason"].endswith(
+                "2 sample columns after FORMAT (HG00096, HG00097); no records, read to its end"
+            )
 
     @pytest.mark.parametrize("file_name", ["all_phase3_ns.pvar", "chr1.pvar.gz", "ALL.PVAR"])
     def test_a_pvar_keeps_its_plink_data_type(self, file_name):

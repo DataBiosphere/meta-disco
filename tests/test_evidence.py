@@ -72,6 +72,11 @@ class TestRoundTrip:
         assert VcfEvidence.from_json({**base, "record_lines": [], "read_to_end": True}).read_to_end is True
         assert VcfEvidence.from_json({**base, "record_lines": [rec]}).read_to_end is None
 
+    @pytest.mark.parametrize("record_lines", [[], ["chr1\t1\t.\tA\tC\t.\t.\t."]], ids=["no records", "a record"])
+    def test_a_vcf_entry_whose_end_flag_is_not_a_bool_is_a_miss(self, record_lines):
+        base = {"md5sum": "f" * 32, "file_name": "x.vcf.gz", "header_text": "#CHROM", "record_lines": record_lines}
+        assert VcfEvidence.from_json({**base, "read_to_end": "false"}) is None
+
     def test_a_vcf_entry_without_record_lines_is_a_miss_but_still_gives_its_header(self, tmp_path):
         """A reader of the header text alone (``generate_reference_builds``) keeps an entry from before #630."""
         old = {"md5sum": "e" * 32, "file_name": "x.vcf.gz", "header_text": "##fileformat=VCFv4.2", "record_alts": []}

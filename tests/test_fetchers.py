@@ -27,6 +27,7 @@ from meta_disco.fetchers import (
     FetchError,
     RangeNotSatisfiable,
     _BedMatcher,
+    _CappedRead,
     _FastaMatcher,
     _FastqMatcher,
     _iter_lines,
@@ -348,13 +349,13 @@ def test_raw_reader_416_after_bytes_is_eof(monkeypatch):
 def test_iter_lines_plain_stream(monkeypatch):
     _install(monkeypatch, b"aaa\nbbb\nccc")  # no trailing newline
     stream, raw = _open_stream(MD5, url=None, is_gzipped=False, compressed_cap=1 << 20)
-    assert list(_iter_lines(stream, raw, cap=1 << 20)) == ["aaa", "bbb", "ccc"]
+    assert list(_iter_lines(_CappedRead(stream, raw, 1 << 20))) == ["aaa", "bbb", "ccc"]
 
 
 def test_iter_lines_decodes_gzip(monkeypatch):
     _install(monkeypatch, gzip.compress(b"##head\n#CHROM\n"))
     stream, raw = _open_stream(MD5, url=None, is_gzipped=True, compressed_cap=1 << 20)
-    assert list(_iter_lines(stream, raw, cap=1 << 20)) == ["##head", "#CHROM"]
+    assert list(_iter_lines(_CappedRead(stream, raw, 1 << 20))) == ["##head", "#CHROM"]
 
 
 def test_iter_lines_decodes_concatenated_gzip_members(monkeypatch):
@@ -362,14 +363,14 @@ def test_iter_lines_decodes_concatenated_gzip_members(monkeypatch):
     # first, unlike a fixed first-member decode.
     _install(monkeypatch, gzip.compress(b"a\n") + gzip.compress(b"b\nc"))
     stream, raw = _open_stream(MD5, url=None, is_gzipped=True, compressed_cap=1 << 20)
-    assert list(_iter_lines(stream, raw, cap=1 << 20)) == ["a", "b", "c"]
+    assert list(_iter_lines(_CappedRead(stream, raw, 1 << 20))) == ["a", "b", "c"]
 
 
 def test_iter_lines_drops_partial_trailing_line_when_decompressed_cap_hit(monkeypatch):
     _install(monkeypatch, b"aaa\nbbbbb")
     stream, raw = _open_stream(MD5, url=None, is_gzipped=False, compressed_cap=1 << 20)
     # the decompressed cap cuts inside "bbbbb": that partial record is dropped, "aaa" kept.
-    assert list(_iter_lines(stream, raw, cap=5)) == ["aaa"]
+    assert list(_iter_lines(_CappedRead(stream, raw, 5))) == ["aaa"]
 
 
 def test_compressed_cap_truncation_is_visible(monkeypatch):
@@ -383,7 +384,7 @@ def test_compressed_cap_truncation_is_visible(monkeypatch):
     assert text == "aaa\nbbb\ncc"
 
     stream, raw = _open_stream(MD5, url=None, is_gzipped=False, compressed_cap=10)
-    assert list(_iter_lines(stream, raw, cap=1 << 20)) == ["aaa", "bbb"]  # partial "cc" dropped
+    assert list(_iter_lines(_CappedRead(stream, raw, 1 << 20))) == ["aaa", "bbb"]  # partial "cc" dropped
 
 
 def test_open_stream_only_gzips_when_magic_present(monkeypatch, evidence_dir):
@@ -517,7 +518,7 @@ def test_walk_tar_non_tar_head_is_empty(monkeypatch):
 def test_scan_lines_stops_early_on_matcher(monkeypatch):
     _install(monkeypatch, b"\n".join(b"line%d" % i for i in range(1000)))
     stream, raw = _open_stream(MD5, url=None, is_gzipped=False, compressed_cap=1 << 20)
-    m = _scan_lines(stream, raw, cap=1 << 20, matcher=_FastqMatcher(num_reads=1))
+    m = _scan_lines(_CappedRead(stream, raw, 1 << 20), _FastqMatcher(num_reads=1))
     # no "@" lines → matcher never satisfied → it read the whole (capped) head cleanly
     assert m.read_names == []
 
@@ -600,6 +601,7 @@ def test_a_vcf_read_cut_off_before_its_first_record_says_so(monkeypatch, evidenc
     assert (head.record_lines, head.read_to_end) == ([], False)
     cached = VcfEvidence.load(evidence_dir, MD5)
     assert cached is not None and cached.read_to_end is False
+    assert fetch_vcf_header(evidence_dir, MD5, is_gzipped=False, use_cache=True).read_to_end is False
 
 
 def test_a_cached_vcf_head_with_no_records_and_no_end_flag_is_read_again(monkeypatch, evidence_dir):

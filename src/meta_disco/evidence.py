@@ -302,7 +302,8 @@ class VcfEvidence(_TextEvidence):
 
     ``read_to_end`` is whether the read reached the end of the file (``_CappedRead.complete``,
     #655), None where not recorded. An entry holding no records that does not record it is a
-    miss too, so only such a head is read again: with records read, nothing reads it.
+    miss too, so only such a head is read again: with records read, nothing reads it. An entry
+    recording anything other than a bool there is a miss, whatever its records.
     """
 
     RECORD_LINES_KEY: ClassVar[str] = "record_lines"
@@ -334,7 +335,7 @@ class VcfEvidence(_TextEvidence):
         ):
             return None
         read_to_end = data.get(cls.READ_TO_END_KEY) if isinstance(data, dict) else None
-        if not lines and not isinstance(read_to_end, bool):
+        if not isinstance(read_to_end, bool) and (read_to_end is not None or not lines):
             return None
         base = super().from_json(data)
         if base is None:

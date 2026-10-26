@@ -338,13 +338,34 @@ def test_a_vcf_without_sample_columns_names_none(text, columns):
 
 
 @pytest.mark.parametrize(
-    "columns",
-    ["\tformat\tHG00096", "\tHG00096\tHG00097", "\tCM\tHG00096", "\tHG00096\tCM", "\tFORMAT\tHG00096\t", "\tCM\tCM"],
-    ids=["lower-case format", "no FORMAT", "CM then a column", "CM after a column", "a trailing tab", "CM twice"],
+    "line",
+    [
+        *(
+            CHROM + columns
+            for columns in (
+                "\tformat\tHG00096",
+                "\tHG00096\tHG00097",
+                "\tCM\tHG00096",
+                "\tHG00096\tCM",
+                "\tFORMAT\tHG00096\t",
+                "\tCM\tCM",
+            )
+        ),
+        "#CHROM\tPOS\tX\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tA\tB",
+    ],
+    ids=[
+        "lower-case format",
+        "no FORMAT",
+        "CM then a column",
+        "CM after a column",
+        "a trailing tab",
+        "CM twice",
+        "FORMAT after a fixed column misnamed",
+    ],
 )
-def test_columns_after_info_with_no_format_are_unread_not_sampleless(columns):
+def test_a_malformed_chrom_line_is_unread_not_sampleless(line):
     """A malformed #CHROM line is not a sites-only file's (#655)."""
-    header = parse_vcf_header(f"##fileformat=VCFv4.2\n{CHROM}{columns}\n")
+    header = parse_vcf_header(f"##fileformat=VCFv4.2\n{line}\n")
     assert header.sample_columns is None
     assert VCF_SAMPLES.read(header, None).outcome == UNREAD
 
