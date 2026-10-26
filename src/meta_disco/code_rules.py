@@ -258,7 +258,10 @@ VCF_GVCF = CodeRule(
         "--include-non-variant-sites (GATK forum, "
         "https://gatk.broadinstitute.org/hc/en-us/community/posts/360056352871). The "
         "##ALT=<ID=NON_REF> and ##GVCFBlock header lines, and an earlier step's -ERC GVCF line, carry "
-        "over into the joint-called VCFs and PLINK .pvar files made from gVCFs, so none of them is read."
+        "over into the joint-called VCFs and PLINK .pvar files made from gVCFs, so none of them is read. "
+        "Nor is the #CHROM line: a file all of the above says is a gVCF, whose #CHROM line is a VCF's "
+        "with no sample columns, would be claimed sites-only too (vcf_sample_column_count), and its data_type a conflict; none "
+        "was on the 2026-10-26 run, so it is left until one is seen (#762)."
     ),
 )
 _CALLER_KINDS = (

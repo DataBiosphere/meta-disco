@@ -338,13 +338,23 @@ def test_a_vcf_without_sample_columns_names_none(text, columns):
 
 
 @pytest.mark.parametrize(
-    "columns",
-    ["\tformat\tHG00096", "\tHG00096\tHG00097", "\tCM\tHG00096", "\tHG00096\tCM", "\tFORMAT\tHG00096\t", "\tCM\tCM"],
-    ids=["lower-case format", "no FORMAT", "CM then a column", "CM after a column", "a trailing tab", "CM twice"],
+    "line",
+    [
+        pytest.param(f"{CHROM}\tformat\tHG00096", id="lower-case format"),
+        pytest.param(f"{CHROM}\tHG00096\tHG00097", id="no FORMAT"),
+        pytest.param(f"{CHROM}\tCM\tHG00096", id="CM then a column"),
+        pytest.param(f"{CHROM}\tHG00096\tCM", id="CM after a column"),
+        pytest.param(f"{CHROM}\tFORMAT\tHG00096\t", id="a trailing tab"),
+        pytest.param(f"{CHROM}\tCM\tCM", id="CM twice"),
+        pytest.param(
+            "#CHROM\tPOS\tX\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tA\tB", id="FORMAT after a fixed column misnamed"
+        ),
+        pytest.param("#CHROMX\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tA\tB", id="a first column not #CHROM"),
+    ],
 )
-def test_columns_after_info_with_no_format_are_unread_not_sampleless(columns):
+def test_a_malformed_chrom_line_is_unread_not_sampleless(line):
     """A malformed #CHROM line is not a sites-only file's (#655)."""
-    header = parse_vcf_header(f"##fileformat=VCFv4.2\n{CHROM}{columns}\n")
+    header = parse_vcf_header(f"##fileformat=VCFv4.2\n{line}\n")
     assert header.sample_columns is None
     assert VCF_SAMPLES.read(header, None).outcome == UNREAD
 

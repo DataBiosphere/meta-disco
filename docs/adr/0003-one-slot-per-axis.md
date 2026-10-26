@@ -207,10 +207,19 @@ is shown as "Not determined".
   DeepVariant's and bcftools' gVCFs use) among the ALT alleles of the first records the head
   read, for any number of sample columns, so a combined gVCF whose records were read is not named
   multi-sample either. A multi-sample file with no records read is named only where the read
-  reached the end of the file, so it holds none rather than a first record the read cut off: the
-  455 on the 2026-10-25 run are T2T region shards that hold no records, each read whole, and a gVCF
-  always has records. On the 2026-10-25 run, every one-column VCF had `<NON_REF>` in all of its
-  records read or in none, and no multi-column VCF had either allele.
+  reached the end of the file, so it holds none rather than a first record the read cut off, and a
+  gVCF always has records. The 455 such files on the 2026-10-25 run hold no records, each read
+  whole: 439 are T2T region shards (`chrN.S_E.genotyped.vcf.gz`) and 16 are empty 1kgp subset or
+  liftover VCFs, such as
+  `1kgp.chr3.recalibrated.snp_indel.pass.variants.chm13_v1.0_uncoveredByGRCh38WinnowmapAlignments.chm13.protein_coding.sorted.merged.vcf.gz`.
+  On the 2026-10-25 run, every one-column VCF had `<NON_REF>` in all of its records read or in
+  none, and no multi-column VCF had either allele.
+- **A sites-only gVCF would be a conflict** (#762). The gVCF rule does not read the `#CHROM`
+  line, so a VCF it names a gVCF (made by HaplotypeCaller in GVCF or BP_RESOLUTION mode, every
+  record read carrying `<NON_REF>`, one at least alone) whose `#CHROM` line is a VCF's with no
+  sample columns gets both the gVCF claim and the sites-only claim, and its `data_type` is
+  `conflict`. None was on the 2026-10-26 run; it is left
+  to be settled when one is seen.
 
 ## Consequences
 

@@ -25,6 +25,10 @@ class TestGetEvidencePath:
         assert p == tmp_path / "ab" / f"{'ab' + 'c' * 30}.json"
 
 
+VCF_ENTRY = {"md5sum": "f" * 32, "file_name": "x.vcf.gz", "header_text": "#CHROM"}
+VCF_RECORD = "chr1\t1\t.\tA\tC\t.\t.\t."
+
+
 class TestRoundTrip:
     def test_bam_round_trips_and_omits_bytes(self, tmp_path):
         ev = BamEvidence(md5sum="a" * 32, file_name="x.bam", header_text="@HD\tVN:1.6\n@SQ\tSN:chr1")
@@ -64,13 +68,17 @@ class TestRoundTrip:
         assert "max_positions" not in get_evidence_path(tmp_path, "c" * 32).read_text()
         assert VcfEvidence.load(tmp_path, "c" * 32).max_positions is None
 
-    def test_a_vcf_entry_with_no_records_needs_its_end_flag_and_one_with_records_does_not(self, tmp_path):
+    def test_a_vcf_entry_with_no_records_needs_its_end_flag_and_one_with_records_does_not(self):
         """Only a record-less entry is read again for want of ``read_to_end`` (#655)."""
-        rec = "chr1\t1\t.\tA\tC\t.\t.\t."
-        base = {"md5sum": "f" * 32, "file_name": "x.vcf.gz", "header_text": "#CHROM"}
-        assert VcfEvidence.from_json({**base, "record_lines": []}) is None
-        assert VcfEvidence.from_json({**base, "record_lines": [], "read_to_end": True}).read_to_end is True
-        assert VcfEvidence.from_json({**base, "record_lines": [rec]}).read_to_end is None
+        assert VcfEvidence.from_json({**VCF_ENTRY, "record_lines": []}) is None
+        assert VcfEvidence.from_json({**VCF_ENTRY, "record_lines": [], "read_to_end": True}).read_to_end is True
+        assert VcfEvidence.from_json({**VCF_ENTRY, "record_lines": [VCF_RECORD]}).read_to_end is None
+
+    @pytest.mark.parametrize("with_record", [False, True], ids=["no records", "a record"])
+    @pytest.mark.parametrize("read_to_end", ["false", 0, 1, []], ids=["a string", "0", "1", "a list"])
+    def test_a_vcf_entry_whose_end_flag_is_not_a_bool_is_a_miss(self, with_record, read_to_end):
+        lines = [VCF_RECORD] if with_record else []
+        assert VcfEvidence.from_json({**VCF_ENTRY, "record_lines": lines, "read_to_end": read_to_end}) is None
 
     def test_a_vcf_entry_without_record_lines_is_a_miss_but_still_gives_its_header(self, tmp_path):
         """A reader of the header text alone (``generate_reference_builds``) keeps an entry from before #630."""

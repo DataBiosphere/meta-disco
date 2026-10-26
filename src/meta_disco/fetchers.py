@@ -17,8 +17,9 @@ stream to a small matcher that stops as soon as it has what it needs. That singl
   (:class:`_VcfMatcher`, :class:`_FastqMatcher`, :class:`_FastaMatcher`) for the text types,
   and :func:`_walk_tar_members` for tar.
 
-Decompression-bomb defense falls out of the design: the line readers stop at
-``MAX_DECOMPRESSED`` decompressed bytes (:func:`_iter_lines` discards each line as it scans;
+Decompression-bomb defense falls out of the design: the line readers stop at the decompressed
+cap their ``_CappedRead`` is given, ``MAX_DECOMPRESSED`` bytes (``BED_MAX_DECOMPRESSED`` for a
+BED) (:func:`_iter_lines` discards each line as it scans;
 :func:`_read_head_text` holds at most that capped head), while the tar walk streams member
 bodies past without materializing them, bounded on the network side by ``TAR_COMPRESSED_CAP``
 compressed bytes — so a pathological ``.gz`` yields a truncated head, never an unbounded buffer.
@@ -452,18 +453,16 @@ class _CappedRead:
             yield chunk
 
 
-def _iter_lines(stream, raw: "_RawRangeReader", *, cap: int, reader: "_CappedRead | None" = None):
-    """Yield decoded lines from a decompressed stream, reading at most ``cap`` bytes.
+def _iter_lines(reader: _CappedRead):
+    """Yield decoded lines from ``reader``'s chunks, at most the cap ``reader`` was built with.
 
     Bytes are split on ``b"\\n"`` and each line is decoded whole, so a multi-byte character
     is never cut across a read boundary. A trailing line with no terminating newline is
     yielded only when the whole object was read; if the read stopped at either cap or on a
     cut-short gzip stream, that final partial line is dropped — the byte window may have
     split a record in half. (Same truncation rule as :func:`parse_gfa_segment_tags`.) A caller
-    that needs to know whether the whole object was read passes its own ``reader`` and reads its
-    ``complete`` after.
+    that needs to know whether the whole object was read reads ``reader.complete`` after.
     """
-    reader = reader if reader is not None else _CappedRead(stream, raw, cap)
     remainder = bytearray()  # unterminated tail; extended in place so a newline-sparse read stays O(n)
     for chunk in reader:
         remainder += chunk
@@ -605,9 +604,9 @@ class _BedMatcher:
         )
 
 
-def _scan_lines(stream, raw: "_RawRangeReader", *, cap: int, matcher, reader: "_CappedRead | None" = None):
-    """Feed decoded lines to ``matcher`` until it reports it is satisfied (or ``cap`` is hit); ``reader`` as for :func:`_iter_lines`."""
-    for line in _iter_lines(stream, raw, cap=cap, reader=reader):
+def _scan_lines(reader: _CappedRead, matcher):
+    """Feed ``reader``'s decoded lines (:func:`_iter_lines`) to ``matcher`` until it reports it is satisfied, or the read ends."""
+    for line in _iter_lines(reader):
         if matcher.feed(line):
             break
     return matcher
@@ -926,7 +925,7 @@ def fetch_vcf_header(
 
     stream, raw = _open_stream(md5sum, url=url, is_gzipped=is_gzipped, compressed_cap=VCF_COMPRESSED_CAP)
     reader = _CappedRead(stream, raw, MAX_DECOMPRESSED)
-    matcher = _scan_lines(stream, raw, cap=MAX_DECOMPRESSED, matcher=_VcfMatcher(), reader=reader)
+    matcher = _scan_lines(reader, _VcfMatcher())
 
     if matcher.header_lines:
         header_text = "\n".join(matcher.header_lines)
@@ -988,7 +987,7 @@ def fetch_fastq_reads(
         return payload
 
     stream, raw = _open_stream(md5sum, url=url, is_gzipped=is_gzipped, compressed_cap=HEAD_COMPRESSED_CAP)
-    matcher = _scan_lines(stream, raw, cap=MAX_DECOMPRESSED, matcher=_FastqMatcher(num_reads=num_reads))
+    matcher = _scan_lines(_CappedRead(stream, raw, MAX_DECOMPRESSED), _FastqMatcher(num_reads=num_reads))
 
     if matcher.read_names:
         _save_head_evidence(
@@ -1033,7 +1032,7 @@ def fetch_fasta_headers(
         return payload
 
     stream, raw = _open_stream(md5sum, url=url, is_gzipped=is_gzipped, compressed_cap=HEAD_COMPRESSED_CAP)
-    matcher = _scan_lines(stream, raw, cap=MAX_DECOMPRESSED, matcher=_FastaMatcher())
+    matcher = _scan_lines(_CappedRead(stream, raw, MAX_DECOMPRESSED), _FastaMatcher())
 
     _save_head_evidence(
         FastaEvidence,
@@ -1189,7 +1188,7 @@ def fetch_bed_signals(
         return payload
 
     stream, raw = _open_stream(md5sum, url=url, is_gzipped=is_gzipped, compressed_cap=BED_COMPRESSED_CAP)
-    signals = _scan_lines(stream, raw, cap=BED_MAX_DECOMPRESSED, matcher=_BedMatcher()).result()
+    signals = _scan_lines(_CappedRead(stream, raw, BED_MAX_DECOMPRESSED), _BedMatcher()).result()
 
     _save_head_evidence(
         BedEvidence, evidence_dir, md5sum=md5sum, file_name=file_name, raw=raw, url=url, signals=signals
