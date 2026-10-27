@@ -1017,9 +1017,9 @@ SAMPLES_INHERITED_FROM_PARENT = SampleRule(
         "passes samples (rules/activities.yaml's passes_samples)"
     ),
     rationale=(
-        "An index, checksum, QC report or coverage track describes exactly the file it was made from, "
-        "and a cohort's merge exactly the samples its list names, so the file holds that parent's "
-        "samples (#668). A parent with none, or parents naming different lists, pass nothing; the "
+        "An index, checksum, QC report, coverage track or genome annotation (#682) describes exactly the "
+        "file it was made from, and a cohort's merge exactly the samples its list names, so the file holds "
+        "that parent's samples (#668). A parent with none, or parents naming different lists, pass nothing; the "
         "file's own sources and the parent's settle as any two sources do."
     ),
 )

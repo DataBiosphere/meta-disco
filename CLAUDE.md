@@ -485,7 +485,7 @@ reworded title renames a member: name one by its value (`DataModalityEnum("genom
     and `unreached_entities.ndjson.gz` (samples and donors a dataset's entity evidence names that no
     file of it reaches). A derived file takes its parent's samples across a step whose
     role declares `passes_samples` in `rules/activities.yaml` (index, checksum, QC report, coverage track,
-    cohort merge from its sample map, whose own rows name its samples), as one more source credited
+    genome annotation (#682), cohort merge from its sample map, whose own rows name its samples), as one more source credited
     `samples_inherited_from_parent` (#668, contract 4.9); across any other step the child keeps its own and a
     disagreeing pair is counted in the report's samples block. **A PLINK fileset's `.pgen`, `.pvar` and `.log`
     take its `.psam`'s samples** (#751): the psam producer pairs each `.psam` with the files in its folder under

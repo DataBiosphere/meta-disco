@@ -12,7 +12,7 @@ FSS binds a field to its values in one of two ways, and the entries depend on wh
 | --- | --- | --- | --- |
 | 1 | `data_modality` | MODAL's four children of `genomic` left out | MODAL and FSS: drop or deprecate them |
 | 2 | `data_modality` | One value per file, spelled as a dotted path | None |
-| 3 | `activity_type` | Ten activity types of our own beside FSS's eleven | FSS: whether to adopt them |
+| 3 | `activity_type` | Twelve activity types of our own beside FSS's eleven | FSS: whether to adopt them |
 | 4 | `phenotypic_sex`, `biosample_type` | AnVIL's published spellings, not FSS's | AnVIL: publish FSS's values |
 | 5 | `reference_assembly` | One NCBI assembly name per file | None |
 | 6 | Six of ours | Fields FSS does not have | None |
@@ -41,9 +41,9 @@ Their biology is `genomic`, so meta-disco gives these files `genomic` and record
 
 FSS's `data_modality` is multivalued, and its values are MODAL's labels (`DNA methylation`, `whole genome`). meta-disco stores one value per file, the most specific its evidence supports, spelled as the term's path in MODAL's tree (`epigenomic.methylation`). Each value carries its MODAL id as `meaning` (`MODAL:0000008`), and FSS's spelling is that term's MODAL label (`DNA methylation`); `title` is the label with its first letter capitalised (`Genomic` for FSS's `genomic`), so it matches FSS's spelling only where capitalising leaves the label unchanged (`DNA methylation`, `3D contact maps`).
 
-## 3. activity\_type: ten activity types of our own
+## 3. activity\_type: twelve activity types of our own
 
-meta-disco's `activity_type` holds FSS's eleven `ActivityTypes` as FSS spells them, plus ten of its own, each under the term it narrows: `AssemblyActivity`, `CohortDefinitionActivity`, `CohortMergeActivity`, `CoverageActivity`, `JointGenotypingActivity`, `LiftoverActivity`, `MergeActivity`, `QualityControlActivity`, `VariantFilterActivity` and `VariantProcessingActivity` (ADR-0002, #580). They exist because what crosses a step from a file's parents depends on the kind of step, and FSS's `AnalysisActivity` is too broad to say what passes (`rules/activities.yaml`).
+meta-disco's `activity_type` holds FSS's eleven `ActivityTypes` as FSS spells them, plus twelve of its own, each under the term it narrows: `AssemblyActivity`, `AssemblyAlignmentActivity`, `CohortDefinitionActivity`, `CohortMergeActivity`, `CoverageActivity`, `GenomeAnnotationActivity`, `JointGenotypingActivity`, `LiftoverActivity`, `MergeActivity`, `QualityControlActivity`, `VariantFilterActivity` and `VariantProcessingActivity` (ADR-0002, #580). They exist because what crosses a step from a file's parents depends on the kind of step, and FSS's `AnalysisActivity` is too broad to say what passes (`rules/activities.yaml`).
 
 **Ask.** For FSS: whether any belong in `ActivityTypes`.
 

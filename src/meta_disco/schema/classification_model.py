@@ -692,7 +692,7 @@ class CreditedToEnum(str, Enum):
 
 class ActivityTypeEnum(str, Enum):
     """
-    The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its released LinkML schema spells them, plus ten of our own, each under the term it narrows. `meaning` is TerraCore's class, else EDAM's operation for the same step; a near EDAM operation is a close mapping. What each passes is in `rules/activities.yaml`.
+    The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its released LinkML schema spells them, plus twelve of our own, each under the term it narrows. `meaning` is TerraCore's class, else EDAM's operation for the same step; a near EDAM operation is a close mapping. What each passes is in `rules/activities.yaml`.
     """
     Activity = "Activity"
     """
@@ -708,6 +708,10 @@ class ActivityTypeEnum(str, Enum):
     Sequencing a sample into reads. TerraCore names the same class `SequencingActivity`.
     """
     AlignmentActivity = "AlignmentActivity"
+    AssemblyAlignmentActivity = "AssemblyAlignmentActivity"
+    """
+    Aligning an assembly's contigs to a reference genome: HPRC_R2's winnowmap BAMs of each assembly on CHM13 and GRCh38 (#682). Our own term, under AlignmentActivity, whose input is reads; EDAM's Genome alignment is the same step.
+    """
     VariantCallActivity = "VariantCallActivity"
     """
     Calling variants or genotypes from alignments; a joint genotyping of gVCFs is JointGenotypingActivity. EDAM's Variant calling is a close step.
@@ -737,6 +741,10 @@ class ActivityTypeEnum(str, Enum):
     CoverageActivity = "CoverageActivity"
     """
     The read coverage of one alignment file at each position, as a signal track: ENCORE's per-strand STAR signal bigWigs (#595). Our own term, under FSS's AnalysisActivity; it is not a report on the file, so not QualityControlActivity. EDAM's Read depth analysis analyses depth rather than writing it, so it is close.
+    """
+    GenomeAnnotationActivity = "GenomeAnnotationActivity"
+    """
+    Finding features in a genome sequence and writing them in its coordinates: HPRC_R2's RepeatMasker, centromeric satellite, segmental duplication and liftoff gene annotations of each assembly (#682). Our own term, under FSS's AnalysisActivity; EDAM's Genome annotation is the same step.
     """
     LiftoverActivity = "LiftoverActivity"
     """
@@ -2690,7 +2698,7 @@ class InputRole(ActivityEnd):
     many: bool = Field(default=..., description="""Whether an output has several inputs in this role.""", json_schema_extra = { "linkml_meta": {'domain_of': ['InputRole']} })
     passes: Optional[list[PassedDimensionEnum]] = Field(default=None, description="""What the output takes from an input in this role. Absent: nothing.""", json_schema_extra = { "linkml_meta": {'domain_of': ['InputRole']} })
     read_through: Optional[str] = Field(default=None, description="""A role of the parent's own step whose inputs this role takes its values from, in place of the parent's own (#621): a sample map passes nothing itself, and a GenomicsDB workspace's `input_list` takes what the map's `member`s settle to. Absent: the parents' own answers.""", json_schema_extra = { "linkml_meta": {'domain_of': ['InputRole']} })
-    passes_samples: Optional[bool] = Field(default=None, description="""Whether the output takes its parent's settled `samples` (#668): an index, checksum, QC report or coverage track describes exactly its parent's samples, and a cohort's merge exactly its list's. Taken from the parent itself, never read through it. Absent: no samples pass.""", json_schema_extra = { "linkml_meta": {'domain_of': ['InputRole']} })
+    passes_samples: Optional[bool] = Field(default=None, description="""Whether the output takes its parent's settled `samples` (#668): an index, checksum, QC report, coverage track or genome annotation (#682) describes exactly its parent's samples, and a cohort's merge exactly its list's. Taken from the parent itself, never read through it. Absent: no samples pass.""", json_schema_extra = { "linkml_meta": {'domain_of': ['InputRole']} })
     form: list[ActivityFormEnum] = Field(default=..., json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityEnd']} })
     kind: Optional[list[DataTypeEnum]] = Field(default=None, description="""The `data_type` terms a file here may carry, dotted children included. Absent: any kind.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ActivityEnd']} })
 
