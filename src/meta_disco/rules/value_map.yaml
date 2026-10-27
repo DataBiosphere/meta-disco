@@ -268,13 +268,14 @@ rows:
     reason: >-
       Hi-C, EFO:0007693 (#399). It measures chromatin contacts, which MODAL's `3D contact
       maps` names (#563); the modality is the information measured, not the use HPRC puts it
-      to (scaffolding). `hic` is the table-name span of the same data.
+      to (scaffolding). `hic` is the table- or column-name span of the same data.
     seeded_from: ["anvil/anvil15/ANVIL_HPRC/20260920T175642Z", "anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
   - id: "assay_type.isoseq"
     match: {slot: assay_type, value: "isoseq"}
     declares: {assay_type: Iso-Seq, data_modality: transcriptomic}
     reason: >-
-      HPRC_R2's `kinnex` table: PacBio's Kinnex full-length RNA kit, an Iso-Seq library.
+      HPRC_R2's `kinnex` table, whose `design_description` reads "PacBio HiFi iso-seq
+      sequencing of cDNA kinnex libraries".
       `Iso-Seq` is OBI's isoform sequencing, OBI:0002575 (#399; the term's description says
       why); RNA sequencing measures the transcriptome.
     seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
@@ -314,8 +315,9 @@ rows:
     declares: {assay_type: Strand-seq, data_modality: genomic}
     reason: >-
       The `strandseq` column of ANVIL_HPRC's `sample` table, its name the span: Strand-seq,
-      EFO:0008952 (#399). It measures the DNA sequence and its structure, which template
-      strands phase into haplotypes and inversions, and MODAL's `genomic` names that.
+      EFO:0008952 (#399). It reads which template strand each fragment came from, phasing
+      haplotypes and finding inversions: the genome's sequence and structure, which MODAL's
+      `genomic` names.
     seeded_from: ["anvil/anvil15/ANVIL_HPRC/20261027T015110Z"]
   - id: "assay_type.wgs"
     match: {slot: assay_type, value: "WGS"}

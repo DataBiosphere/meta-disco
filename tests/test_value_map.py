@@ -246,10 +246,10 @@ def test_ac6_two_rows_with_different_keys_declaring_one_slot_load(tmp_path):
         tmp_path,
         """
 rows:
-  - id: assay_type.hi_c
-    match: {slot: assay_type, value: Hi-C}
+  - id: assay_type.wgs
+    match: {slot: assay_type, value: WGS}
     declares: {data_modality: genomic}
-    reason: chromatin conformation of genomic DNA
+    reason: a WGS library is genomic DNA
   - id: data_modality.genomic
     match: {slot: data_modality, value: GENOMIC}
     declares: {data_modality: genomic}
@@ -481,13 +481,13 @@ def test_ac17_a_row_declaring_another_slot_claims_that_slot_only(tmp_path):
         tmp_path,
         """
 rows:
-  - id: assay_type.hi_c
-    match: {slot: assay_type, value: Hi-C}
+  - id: assay_type.wgs
+    match: {slot: assay_type, value: WGS}
     declares: {data_modality: genomic}
-    reason: chromatin conformation of genomic DNA
+    reason: a WGS library is genomic DNA
 """,
     )
-    claims = claims_from(entry("assay_type", "Hi-C"), SOURCE_REPOSITORY_METADATA, table)
+    claims = claims_from(entry("assay_type", "WGS"), SOURCE_REPOSITORY_METADATA, table)
     assert [(slot, claim["value"]) for slot, claim in claims] == [("data_modality", "genomic")]
 
 

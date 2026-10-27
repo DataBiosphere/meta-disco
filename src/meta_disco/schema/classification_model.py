@@ -271,7 +271,7 @@ class ReferenceNameSourceEnum(str, Enum):
 
 class AssayTypeEnum(str, Enum):
     """
-    The experimental method that produced a file's data, in terms borrowed from EFO (#533), which CELLxGENE requires for assays. `meaning` is the EFO term a value names, recorded and never followed at run time; `Histology`'s is OBI's `histological assay` as EFO imports it, and `Iso-Seq`'s is an OBI term EFO does not import, where EFO has none (#399). The values form an `is_a` tree of EFO's terms, each under its nearest EFO ancestor among the values (`Iso-Seq` under its nearest OBI ancestor's counterpart, `RNA-seq`); `is_a` names one parent, so where EFO gives a term two, the one outside the vocabulary is left out (`snRNA-seq`'s `transcription profiling by high throughput sequencing`). The loss that matters is `SHARE-seq`'s: EFO places it under single-cell RNA sequencing and scATAC-seq, so it sits under `sc/snRNA-seq`, the first's parent here, and a filter on the `ATAC-seq` subtree does not reach it (#567). Where EFO has no term as narrow as a source, the value is our own, carries no `meaning`, and sits under the EFO term it narrows: EFO has single-cell ATAC-seq terms but none for single-nucleus, so `snATAC-seq` sits under `sc/snATAC-seq`. A record holds one term, the most specific its evidence supports; a consumer that filters on a parent walks `is_a`.
+    The experimental method that produced a file's data, in terms borrowed from EFO (#533), which CELLxGENE requires for assays. `meaning` is the EFO term a value names, recorded and never followed at run time; `Histology`'s is OBI's `histological assay` as EFO imports it, and `Iso-Seq`'s is an OBI term EFO does not import, more specific than EFO's nearest (#399). The values form an `is_a` tree of EFO's terms, each under its nearest EFO ancestor among the values (`Iso-Seq` under its nearest OBI ancestor's counterpart, `RNA-seq`); `is_a` names one parent, so where EFO gives a term two, the one outside the vocabulary is left out (`snRNA-seq`'s `transcription profiling by high throughput sequencing`). The loss that matters is `SHARE-seq`'s: EFO places it under single-cell RNA sequencing and scATAC-seq, so it sits under `sc/snRNA-seq`, the first's parent here, and a filter on the `ATAC-seq` subtree does not reach it (#567). Where EFO has no term as narrow as a source, the value is our own, carries no `meaning`, and sits under the EFO term it narrows: EFO has single-cell ATAC-seq terms but none for single-nucleus, so `snATAC-seq` sits under `sc/snATAC-seq`. A record holds one term, the most specific its evidence supports; a consumer that filters on a parent walks `is_a`.
     """
     Whole_genome_sequencing = "WGS"
     """
@@ -290,7 +290,7 @@ class AssayTypeEnum(str, Enum):
     """
     Isoform_sequencing = "Iso-Seq"
     """
-    OBI's isoform sequencing: RNA sequencing of a cDNA library enriched for full-length reads spanning entire transcript isoforms, as PacBio's Iso-Seq and Kinnex kits make (#399). EFO has no long-read RNA term (a request to add one, EBISPOT/efo#2842, is open as of 2026-10-26); OBI's is the one term in EFO or OBI whose definition fits, and it names the method, not a vendor's kit. Direct RNA sequencing, which makes no cDNA, is OBI's separate `direct RNA sequencing assay` and is not this term. OBI places it under its RNA-seq assay, whose counterpart here is EFO's `RNA-seq`, so it sits there. ENCODE names the same data `long read RNA-seq` under a placeholder of its own (`NTR:0000445`); an ontology id is kept here instead.
+    OBI's isoform sequencing: RNA sequencing of a cDNA library enriched for full-length reads spanning entire transcript isoforms, as PacBio's Iso-Seq and Kinnex kits make (#399). EFO's nearest term is FL-cDNA (EFO:0003755), any sequencing of full-length cDNA, which also names SRA's library strategy for Sanger-era cDNA libraries; it sits under EFO's RNA assay, not its RNA-seq. OBI's term names this method, not a vendor's kit, and sits under OBI's RNA-seq assay, whose counterpart here is EFO's `RNA-seq`, so it sits there. EFO has no long-read RNA term (a request to add one, EBISPOT/efo#2842, is open as of 2026-10-26). Direct RNA sequencing, which makes no cDNA, is OBI's separate `direct RNA sequencing assay` and is not this term. ENCODE names the same data `long read RNA-seq` under a placeholder of its own (`NTR:0000445`); an ontology id is kept here instead.
     """
     ATAC_seq = "ATAC-seq"
     Single_cell_or_single_nucleus_ATAC_seq = "sc/snATAC-seq"
@@ -307,11 +307,11 @@ class AssayTypeEnum(str, Enum):
     """
     Hi_C = "Hi-C"
     """
-    EFO's Hi-C: chromatin's 3D contacts read by proximity ligation and sequencing (#399). Its EFO parents (ligation-mediated chromosome conformation capture, chromosome conformation capture) are not values here, so it names no `is_a`.
+    EFO's Hi-C: chromatin's 3D contacts read by proximity ligation and sequencing (#399). Its EFO parents (ligation-mediated chromosome conformation capture assay, assay by sequencer) are not values here, so it names no `is_a`.
     """
     Strand_seq = "Strand-seq"
     """
-    EFO's Strand-seq: single-cell sequencing of the template strands of DNA, used to phase haplotypes and find inversions (#399). None of its EFO parents (DNA assay, assay by molecule) is a value here, so it names no `is_a`.
+    EFO's Strand-seq: single-cell sequencing of the template strands of DNA, used to phase haplotypes and find inversions (#399). Its EFO parent, DNA assay, is not a value here, so it names no `is_a`.
     """
     Histology = "Histology"
 

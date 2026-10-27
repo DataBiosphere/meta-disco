@@ -39,7 +39,9 @@ rules:
   - id: assay_for_genomic
     description: >-
       A genomic file's assay, if classified, must be WGS, WES, Strand-seq (#399) or
-      Genotyping array; a genotyping array's modality is `genomic` (#756). The assays of DNA's epigenome
+      Genotyping array; a genotyping array's modality is `genomic` (#756). Strand-seq cannot
+      reach it yet: the linter reads inference output, and only a translation row declares
+      it. The assays of DNA's epigenome
       (Bisulfite-seq, ChIP-seq, ATAC-seq and the rest) have rules of their own below.
     when: {data_modality: "genomic"}
     require: {assay_type: {value_in: ["WGS", "WES", "Strand-seq", "Genotyping array"]}}
