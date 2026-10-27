@@ -314,7 +314,8 @@ rows:
     declares: {assay_type: Strand-seq, data_modality: genomic}
     reason: >-
       The `strandseq` column of ANVIL_HPRC's `sample` table, its name the span: Strand-seq,
-      EFO:0008952 (#399). Its reads are DNA sequence, which MODAL's `genomic` names.
+      EFO:0008952 (#399). It measures the DNA sequence and its structure, which template
+      strands phase into haplotypes and inversions, and MODAL's `genomic` names that.
     seeded_from: ["anvil/anvil15/ANVIL_HPRC/20261027T015110Z"]
   - id: "assay_type.wgs"
     match: {slot: assay_type, value: "WGS"}

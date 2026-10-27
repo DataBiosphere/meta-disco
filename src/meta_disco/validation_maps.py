@@ -16,13 +16,12 @@ HPRC_LIBRARY_SOURCE_MAP = {
     "TRANSCRIPTOMIC": "transcriptomic",
 }
 
-# `Hi-C` and `ISO-seq` have no assay_type_enum term yet (#399), so validate_against_hprc can never
-# score them a match; they stay here as HPRC's spelling of what the catalog says.
+# HPRC's libraryStrategy as assay_type_enum terms; `Hi-C` and `Iso-Seq` are terms since #399.
 HPRC_LIBRARY_STRATEGY_MAP = {
     "WGS": "WGS",
     "Hi-C": "Hi-C",
-    "isoseq": "ISO-seq",
-    "Iso-Seq": "ISO-seq",
+    "isoseq": "Iso-Seq",
+    "Iso-Seq": "Iso-Seq",
 }
 
 HPRC_REF_COORDINATES_MAP = {

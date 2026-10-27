@@ -2177,7 +2177,8 @@ enums:
       names, recorded and never followed at run time; `Histology`'s is OBI's
       `histological assay` as EFO imports it, and `Iso-Seq`'s is an OBI term EFO does not
       import, where EFO has none (#399). The values form an `is_a` tree of EFO's
-      terms, each under its nearest EFO ancestor among the values; `is_a` names one
+      terms, each under its nearest EFO ancestor among the values (`Iso-Seq` under its
+      nearest OBI ancestor's counterpart, `RNA-seq`); `is_a` names one
       parent, so where EFO gives a term two, the one outside the vocabulary is left
       out (`snRNA-seq`'s `transcription profiling by high throughput sequencing`). The
       loss that matters is `SHARE-seq`'s: EFO places it under single-cell RNA
@@ -2219,15 +2220,15 @@ enums:
       "Iso-Seq":
         title: Isoform sequencing
         description: >-
-          OBI's isoform sequencing: RNA sequencing of a cDNA library enriched for full-length
-          reads spanning entire transcript isoforms, as PacBio's Iso-Seq and Kinnex kits make
-          (#399). EFO has no long-read RNA term (a request to add one, EBISPOT/efo#2842, is
-          open as of 2026-10-26); OBI's is the one ontology term whose definition fits, and it
-          names the method, not a vendor's kit. Direct RNA sequencing, which makes no cDNA, is
-          OBI's separate `direct RNA sequencing assay` and is not this term. OBI places it
-          under its RNA-seq assay, so it sits under `RNA-seq`. ENCODE names the same data
-          `long read RNA-seq` under a placeholder of its own (`NTR:0000445`); an ontology id
-          is kept here instead.
+          OBI's isoform sequencing: RNA sequencing of a cDNA library enriched for full-length reads
+          spanning entire transcript isoforms, as PacBio's Iso-Seq and Kinnex kits make (#399). EFO
+          has no long-read RNA term (a request to add one, EBISPOT/efo#2842, is open as of
+          2026-10-26); OBI's is the one term in EFO or OBI whose definition fits, and it names the
+          method, not a vendor's kit. Direct RNA sequencing, which makes no cDNA, is OBI's separate
+          `direct RNA sequencing assay` and is not this term. OBI places it under its RNA-seq assay,
+          whose counterpart here is EFO's `RNA-seq`, so it sits there. ENCODE names the same data
+          `long read RNA-seq` under a placeholder of its own (`NTR:0000445`); an ontology id is kept
+          here instead.
         is_a: "RNA-seq"
         meaning: OBI:0002575
       "ATAC-seq":

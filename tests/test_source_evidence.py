@@ -235,11 +235,11 @@ class TestRoundTrip:
             "GENOMIC",  # differs from our `genomic` only by case
             " Revio ",  # a cell the source padded
             "",  # an empty cell: 63 of them in AnVIL_HPRC_R2.library_selection
-            # A decision #399 owes, not a file this can refuse. Until #421 the module
+            # A vocabulary gap, not a file this can refuse. Until #421 the module
             # refused a *mapped* value outside the dimension's vocabulary, which is why
             # an importer had to reach for a `no_vocabulary_term` state to say this; a
             # row says nothing about its raw value, so the question survives intact.
-            "Hi-C",
+            "CenSat",
         ],
     )
     def test_the_raw_value_is_what_the_source_wrote(self, tmp_path, raw):
