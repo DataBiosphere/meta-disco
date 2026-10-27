@@ -167,11 +167,11 @@ Every rule meta-disco uses to describe a file, such as "a .bam file holds alignm
 | `biosample_type.tissue` | The term itself, as AnVIL's `anvil_biosample.biosample_type` writes it. | general |  | 1,518 | 1,518 | 1,518 | `(sample records)` 1,518 | published_value 1,518 |
 | `biosample_type.unknown` | AnVIL's `Unknown` names no type: reviewed, and no claim. On anvil15 it is every filled HPRC_R2 biosample's (230 of 234; 4 are null) and 135 of IGVF's. | general |  | 0 | 0 | 0 |  |  |
 | `assay_type.hi_c` | Hi-C, EFO:0007693 (#399). It measures chromatin contacts, which MODAL's `3D contact maps` names (#563); the modality is the information measured, not the use HPRC puts it to (scaffolding). `hic` is the table-name span of the same data. | general |  | 3,770 | 13,544 | 3,770 | `AnVIL_HPRC_R2` 3,002; `ANVIL_HPRC` 768 | repository_metadata 13,544 |
-| `assay_type.isoseq` | HPRC_R2's `kinnex` table: PacBio's Kinnex full-length RNA kit, an Iso-Seq library. `Iso-Seq` is OBI's isoform sequencing (OBI:0002575), since EFO has no long-read RNA term (#399, the term's description says why); RNA sequencing measures the transcriptome. | general |  | 230 | 460 | 230 | `AnVIL_HPRC_R2` 230 | repository_metadata 460 |
+| `assay_type.isoseq` | HPRC_R2's `kinnex` table: PacBio's Kinnex full-length RNA kit, an Iso-Seq library. `Iso-Seq` is OBI's isoform sequencing, OBI:0002575 (#399; the term's description says why); RNA sequencing measures the transcriptome. | general |  | 230 | 460 | 230 | `AnVIL_HPRC_R2` 230 | repository_metadata 460 |
 | `assay_type.single_nucleus_atac_seq` | IGVF's `file.assay_titles`. Single-nucleus ATAC-seq: our own term, under EFO's sc/snATAC-seq, which has no single-nucleus child (#533). ATAC-seq measures open chromatin. In AnVIL_IGVF_Mouse_R1 the value is on the reads (FASTQ) and seqspec files of the ATAC half of a SHARE-seq experiment. | general |  | 10 | 20 | 10 | `AnVIL_IGVF_Mouse_R1` 10 | repository_metadata 20 |
 | `assay_type.single_nucleus_atac_seq+single_nucleus_rna_sequencing_assay` | IGVF's `file.assay_titles`. Both assays of one SHARE-seq experiment: IGVF's analysis sets that carry the pair (IGVFDS5339UKYM, IGVFDS5530HYKI) give `preferred_assay_titles: ["SHARE-seq"]`, EFO:0022962. Nothing is declared for data_modality. The value is the analysis set's label, on every file of the set, and each file holds one half: the count matrices and kallisto outputs are RNA, the fragment files ATAC. Any one modality would be wrong for some of them, and the vocabulary holds one per file, so each file's own evidence decides. Scoped to this dataset: the two titles alone do not name the protocol, since another joint assay (10x Multiome for one) could carry the same pair, so elsewhere the value selects no row and is queued. | source anvil, dataset AnVIL_IGVF_Mouse_R1 |  | 12 | 12 | 10 | `AnVIL_IGVF_Mouse_R1` 12 | repository_metadata 12 |
 | `assay_type.single_nucleus_rna_sequencing_assay` | IGVF's `file.assay_titles`. Single-nucleus RNA sequencing, EFO:0009809 (#533); RNA-seq measures the transcriptome. | general |  | 6,733 | 13,466 | 6,733 | `AnVIL_IGVF_Mouse_R1` 6,733 | repository_metadata 13,466 |
-| `assay_type.strandseq` | The `strandseq` column of ANVIL_HPRC's `sample` table, its name the span: Strand-seq, EFO:0008952 (#399). It sequences DNA's template strands to phase haplotypes and find inversions: the DNA sequence and its structure, which MODAL's `genomic` names. | general |  | 1,728 | 3,456 | 1,728 | `ANVIL_HPRC` 1,728 | repository_metadata 3,456 |
+| `assay_type.strandseq` | The `strandseq` column of ANVIL_HPRC's `sample` table, its name the span: Strand-seq, EFO:0008952 (#399). Its reads are DNA sequence, which MODAL's `genomic` names. | general |  | 1,728 | 3,456 | 1,728 | `ANVIL_HPRC` 1,728 | repository_metadata 3,456 |
 | `assay_type.wgs` | Whole-genome sequencing, spelled as our term; a WGS library is genomic DNA. | general |  | 37,513 | 75,026 | 37,513 | `ANVIL_NIA_CARD_Coriell_Cell_Lines_Open` 12,423; `ANVIL_1000G_high_coverage_2019` 9,603; `ANVIL_T2T` 6,404; and 3 more | repository_metadata 61,102; external_ground_truth 13,924 |
 | `data_modality.genomic_hprc_r2` | The `library_source` column's SRA value. It names the molecule sequenced, not the information measured: SRA files WGS, bisulfite, ATAC, ChIP and Hi-C alike under GENOMIC, because each sequences DNA, so it is no evidence of a MODAL modality (#563). Hi-C arrived under it here (the `hic` table). Scoped to the datasets whose library_source columns carry it: elsewhere the value selects no row, and so enters the review queue rather than being declined unreviewed. Measured on run 20260927_225823: none of the 5,619 files it reached here depended on it alone for data_modality. | source anvil, dataset AnVIL_HPRC_R2 |  | 0 | 0 | 0 |  |  |
 | `data_modality.genomic_1000g_high_coverage` | The `sample` table's `library_source` column, the same SRA value as `data_modality.genomic_hprc_r2`, for the same reason. Measured on run 20260927_225823: none of the 9,603 files it reached depended on it alone for data_modality. | source anvil, dataset ANVIL_1000G_high_coverage_2019 |  | 0 | 0 | 0 |  |  |
@@ -3669,7 +3669,7 @@ Declares:
 Rationale:
 
 ```text
-HPRC_R2's `kinnex` table: PacBio's Kinnex full-length RNA kit, an Iso-Seq library. `Iso-Seq` is OBI's isoform sequencing (OBI:0002575), since EFO has no long-read RNA term (#399, the term's description says why); RNA sequencing measures the transcriptome.
+HPRC_R2's `kinnex` table: PacBio's Kinnex full-length RNA kit, an Iso-Seq library. `Iso-Seq` is OBI's isoform sequencing, OBI:0002575 (#399; the term's description says why); RNA sequencing measures the transcriptome.
 ```
 
 ### `assay_type.single_nucleus_atac_seq`
@@ -3757,7 +3757,7 @@ Declares:
 Rationale:
 
 ```text
-The `strandseq` column of ANVIL_HPRC's `sample` table, its name the span: Strand-seq, EFO:0008952 (#399). It sequences DNA's template strands to phase haplotypes and find inversions: the DNA sequence and its structure, which MODAL's `genomic` names.
+The `strandseq` column of ANVIL_HPRC's `sample` table, its name the span: Strand-seq, EFO:0008952 (#399). Its reads are DNA sequence, which MODAL's `genomic` names.
 ```
 
 ### `assay_type.wgs`

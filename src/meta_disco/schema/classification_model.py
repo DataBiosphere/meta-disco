@@ -290,7 +290,7 @@ class AssayTypeEnum(str, Enum):
     """
     Isoform_sequencing = "Iso-Seq"
     """
-    OBI's isoform sequencing: RNA sequencing of a cDNA library enriched for full-length reads spanning entire transcript isoforms, as PacBio's Iso-Seq and Kinnex kits make (#399). EFO has no long-read RNA term (a request to add one, EBISPOT/efo#2842, is open as of 2026-10-26); OBI's is the one ontology term whose definition fits, and it names the method, not a vendor's kit. Direct RNA sequencing, which makes no cDNA, is OBI's separate `direct RNA sequencing assay` and is not this term. OBI places it under its RNA-seq assay, so it sits under `RNA-seq`. ENCODE names the same data `long read RNA-seq` under a placeholder of its own (`NTR:0000445`); an ontology id is kept here instead, to move to EFO's should EFO import it.
+    OBI's isoform sequencing: RNA sequencing of a cDNA library enriched for full-length reads spanning entire transcript isoforms, as PacBio's Iso-Seq and Kinnex kits make (#399). EFO has no long-read RNA term (a request to add one, EBISPOT/efo#2842, is open as of 2026-10-26); OBI's is the one ontology term whose definition fits, and it names the method, not a vendor's kit. Direct RNA sequencing, which makes no cDNA, is OBI's separate `direct RNA sequencing assay` and is not this term. OBI places it under its RNA-seq assay, so it sits under `RNA-seq`. ENCODE names the same data `long read RNA-seq` under a placeholder of its own (`NTR:0000445`); an ontology id is kept here instead.
     """
     ATAC_seq = "ATAC-seq"
     Single_cell_or_single_nucleus_ATAC_seq = "sc/snATAC-seq"

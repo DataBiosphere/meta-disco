@@ -2,8 +2,7 @@
 
 Each value is an assay term taken from EFO, with its id in ``meaning``, arranged as
 an ``is_a`` tree. ``snATAC-seq`` is our own term: EFO has no single-nucleus ATAC-seq,
-so it carries no ``meaning`` and sits under the EFO term it narrows. ``Iso-Seq`` borrows
-OBI's term, which EFO does not import, where EFO has none (#399). These tests pin
+so it carries no ``meaning`` and sits under the EFO term it narrows. These tests pin
 each value to its id and to its parent, so a term cannot be added, dropped,
 re-parented or given another term's id without a test failing.
 """

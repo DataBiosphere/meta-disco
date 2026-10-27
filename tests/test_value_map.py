@@ -1015,7 +1015,7 @@ SEEDED_IN_BUNDLED_TABLE = [
 
 def test_the_bundled_table_covers_every_hprc_fixture_value(hprc_fixture_root):
     """Every fixture value selects a row of the bundled table, and the ones it leaves queued are exactly the
-    five seeded values — so a deleted or misspelled authored row would surface here as a new queue entry."""
+    seeded values in ``SEEDED_IN_BUNDLED_TABLE`` — so a deleted or misspelled authored row would surface here as a new queue entry."""
     queued = review_queue(hprc_fixture_root, load_value_map(), datasets=HPRC_DATASETS)
     assert all(e.row_id is not None for e in queued), [e.raw_value for e in queued if e.row_id is None]
     assert sorted({e.row_id for e in queued if e.row_id is not None}) == SEEDED_IN_BUNDLED_TABLE

@@ -142,15 +142,10 @@ def test_not_under_flags_every_term_below_the_one_it_names():
     )
 
 
-def test_clean_genomic_wgs_has_no_violations():
-    rec = _rec(data_modality=_c("genomic"), data_type=_c("alignments"), assay_type=_c("WGS"))
-    assert check_record(rec, RULES) == []
-
-
 @pytest.mark.parametrize(
-    ("modality", "assay"), [("genomic", "Strand-seq"), ("transcriptomic", "Iso-Seq")], ids=["Strand-seq", "Iso-Seq"]
+    ("modality", "assay"), [("genomic", "WGS"), ("genomic", "Strand-seq"), ("transcriptomic", "Iso-Seq")]
 )
-def test_the_assays_399_adds_are_consistent_with_their_modality(modality, assay):
+def test_an_assay_with_its_own_modality_has_no_violations(modality, assay):
     rec = _rec(data_modality=_c(modality), data_type=_c("reads"), assay_type=_c(assay))
     assert check_record(rec, RULES) == []
 

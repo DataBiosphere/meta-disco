@@ -275,8 +275,8 @@ rows:
     declares: {assay_type: Iso-Seq, data_modality: transcriptomic}
     reason: >-
       HPRC_R2's `kinnex` table: PacBio's Kinnex full-length RNA kit, an Iso-Seq library.
-      `Iso-Seq` is OBI's isoform sequencing (OBI:0002575), since EFO has no long-read RNA term
-      (#399, the term's description says why); RNA sequencing measures the transcriptome.
+      `Iso-Seq` is OBI's isoform sequencing, OBI:0002575 (#399; the term's description says
+      why); RNA sequencing measures the transcriptome.
     seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
   - id: "assay_type.single_nucleus_atac_seq"
     match: {slot: assay_type, value: ["single-nucleus ATAC-seq"]}
@@ -314,8 +314,7 @@ rows:
     declares: {assay_type: Strand-seq, data_modality: genomic}
     reason: >-
       The `strandseq` column of ANVIL_HPRC's `sample` table, its name the span: Strand-seq,
-      EFO:0008952 (#399). It sequences DNA's template strands to phase haplotypes and find
-      inversions: the DNA sequence and its structure, which MODAL's `genomic` names.
+      EFO:0008952 (#399). Its reads are DNA sequence, which MODAL's `genomic` names.
     seeded_from: ["anvil/anvil15/ANVIL_HPRC/20261027T015110Z"]
   - id: "assay_type.wgs"
     match: {slot: assay_type, value: "WGS"}

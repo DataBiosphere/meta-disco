@@ -2227,7 +2227,7 @@ enums:
           OBI's separate `direct RNA sequencing assay` and is not this term. OBI places it
           under its RNA-seq assay, so it sits under `RNA-seq`. ENCODE names the same data
           `long read RNA-seq` under a placeholder of its own (`NTR:0000445`); an ontology id
-          is kept here instead, to move to EFO's should EFO import it.
+          is kept here instead.
         is_a: "RNA-seq"
         meaning: OBI:0002575
       "ATAC-seq":
