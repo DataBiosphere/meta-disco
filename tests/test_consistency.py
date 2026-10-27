@@ -147,6 +147,14 @@ def test_clean_genomic_wgs_has_no_violations():
     assert check_record(rec, RULES) == []
 
 
+@pytest.mark.parametrize(
+    ("modality", "assay"), [("genomic", "Strand-seq"), ("transcriptomic", "Iso-Seq")], ids=["Strand-seq", "Iso-Seq"]
+)
+def test_the_assays_399_adds_are_consistent_with_their_modality(modality, assay):
+    rec = _rec(data_modality=_c(modality), data_type=_c("reads"), assay_type=_c(assay))
+    assert check_record(rec, RULES) == []
+
+
 def test_genomic_with_unclassified_assay_is_not_flagged():
     # value_in only fires on a classified field — absence is never a contradiction.
     rec = _rec(data_modality=_c("genomic"), assay_type=NC)

@@ -127,7 +127,11 @@ datasets:
       pat_ilmn:
         samples:
           - {cell: paternal_id}
-      strandseq: *anvil_hprc_sample_samples
+      strandseq:
+        samples:
+          - {cell: sample_id}
+        assay_type:
+          - {column_name: strandseq}
   ANVIL_NIA_CARD_Coriell_Cell_Lines_Open:
     sequencing:
       sequencing_id_fileref:

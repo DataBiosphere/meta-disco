@@ -2,7 +2,8 @@
 
 Each value is an assay term taken from EFO, with its id in ``meaning``, arranged as
 an ``is_a`` tree. ``snATAC-seq`` is our own term: EFO has no single-nucleus ATAC-seq,
-so it carries no ``meaning`` and sits under the EFO term it narrows. These tests pin
+so it carries no ``meaning`` and sits under the EFO term it narrows. ``Iso-Seq`` borrows
+OBI's term, which EFO does not import, where EFO has none (#399). These tests pin
 each value to its id and to its parent, so a term cannot be added, dropped,
 re-parented or given another term's id without a test failing.
 """
@@ -19,6 +20,7 @@ TERMS = {
     "sc/snRNA-seq": ("EFO:0920118", "RNA-seq"),
     "snRNA-seq": ("EFO:0009809", "sc/snRNA-seq"),  # single nucleus RNA sequencing
     "SHARE-seq": ("EFO:0022962", "sc/snRNA-seq"),
+    "Iso-Seq": ("OBI:0002575", "RNA-seq"),  # isoform sequencing, an OBI term EFO does not import
     "ATAC-seq": ("EFO:0007045", None),
     "sc/snATAC-seq": ("EFO:0920117", "ATAC-seq"),
     "snATAC-seq": (None, "sc/snATAC-seq"),
@@ -26,6 +28,8 @@ TERMS = {
     "Bisulfite-seq": ("EFO:0003753", None),
     "Methylation array": ("EFO:0002759", None),  # methylation profiling by array
     "Genotyping array": ("EFO:0002767", None),  # genotyping by array
+    "Hi-C": ("EFO:0007693", None),
+    "Strand-seq": ("EFO:0008952", None),
     "Histology": ("OBI:0600020", None),  # histological assay, as EFO imports it
 }
 
