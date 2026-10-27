@@ -322,10 +322,11 @@ def test_no_activity_passes_a_dimension_a_rule_makes_not_applicable_on_its_outpu
     `not_applicable` would conflict (contract 4.6) with any value the activity passed for
     that dimension. #571 had to drop `checksum_file`'s stamps when it made `ChecksumActivity`
     pass all five; #596 restores the stamps and has the activity pass nothing. This pins
-    that the two never meet again, whichever side changes. A role whose inputs every rule
-    giving their kinds stamps `not_applicable` in a dimension passes only `not_applicable`
-    there, which agrees with the stamp: a genome annotation's assembly passes its variant
-    kind and origin (#682).
+    that the two never meet again, whichever side changes. A dimension that every unified rule
+    giving the role's kinds stamps `not_applicable` is exempt: as far as those rules say, the role
+    passes only `not_applicable` there, which agrees with the stamp, so a genome annotation's
+    assembly may pass its variant kind and origin (#682). `_always_not_applicable` states what this
+    does not see.
     """
     clashes = _clashes(activities.declarations())
     assert clashes == [], f"(activity, rule, dimension) that would always conflict: {clashes}"
@@ -355,9 +356,22 @@ def test_the_clash_guard_flags_a_genome_annotation_whose_input_may_carry_a_value
     assert ("GenomeAnnotationActivity", "bed_methylation", "variant_kind") in _clashes(declared)
 
 
-def test_the_clash_guard_matches_a_dotted_kind_s_own_rules():
-    """A kind narrowed to a dotted term (`annotations.coverage`) still finds the rules giving it."""
-    assert {r.id for r in _rules_giving({"annotations.coverage"})} >= {"bed_mosdepth_regions", "star_signal_coverage"}
+def test_the_clash_guard_matches_a_kind_and_the_terms_under_it_only():
+    """`annotations` finds the rules giving `annotations.coverage`; `annotations.coverage` does not find
+    a rule giving `annotations` itself."""
+    under = {r.id for r in _rules_giving({"annotations"})}
+    narrow = {r.id for r in _rules_giving({"annotations.coverage"})}
+    assert {"bed_mosdepth_regions", "star_signal_coverage", "bed_methylation"} <= under
+    assert {"bed_mosdepth_regions", "star_signal_coverage"} <= narrow and "bed_methylation" not in narrow
+
+
+def test_the_clash_guard_exempts_only_what_every_kind_s_rules_stamp():
+    """A dimension one kind's rules stamp and another's do not is not exempt (`fasta_base` stamps a
+    sequence's platform, an assembly's rules do not); a kind no rule gives exempts nothing."""
+    (annotated,) = activities.declarations()["GenomeAnnotationActivity"].inputs
+    exempt = _always_not_applicable(annotated.model_copy(update={"kind": ["assembly", "sequence"]}))
+    assert {"variant_kind", "variant_origin"} <= exempt and "platform" not in exempt
+    assert not _always_not_applicable(annotated.model_copy(update={"kind": ["assembly", "sample_map"]}))
 
 
 def test_the_clash_guard_exempts_nothing_on_a_role_that_reads_through_its_parent():

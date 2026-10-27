@@ -237,3 +237,19 @@ def test_samples_never_pass_across_a_step_that_makes_data_with_its_own_samples()
         "AssemblyActivity",
     ):
         assert not activities.samples_roles(term), term
+
+
+def test_an_alignment_takes_its_reference_assembly_from_its_reference_only():
+    """ADR-0002: an alignment's reference is the one it was aligned to, never its reads' or its query's,
+    so in every alignment term (#682's AssemblyAlignmentActivity among them) only `reference` passes it."""
+    terms = [
+        t
+        for t in activities.declarations()
+        if t == "AlignmentActivity" or "AlignmentActivity" in schema_vocab.activity_ancestors(t)
+    ]
+    assert "AssemblyAlignmentActivity" in terms
+    for term in terms:
+        passing = {
+            i.role for i in activities.declarations()[term].inputs if "reference_assembly" in activities._role_slots(i)
+        }
+        assert passing == {"reference"}, term

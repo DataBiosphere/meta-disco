@@ -68,7 +68,9 @@ activities:
       GRCh38, #682): what the assembly says of its signal, library and sequencer passes, as a
       read alignment's reads' does, and the reference assembly from the reference. It has no
       reads, so it declares its own roles rather than AlignmentActivity's, whose reads are
-      required. An alignment names its own samples, so none pass.
+      required. An alignment names its own samples, so none pass. Where no source names the
+      reference file, the step is flagged for its missing `reference`, as an AlignmentActivity's
+      is, and the alignment's reference assembly is its own, from its @SQ lines.
   - term: VariantCallActivity
     output: {form: [file], kind: [variants, genotypes]}
     inputs:

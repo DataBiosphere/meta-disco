@@ -1251,7 +1251,7 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
         "Settled: *agreed*, two or more of header, table, activity and fileset named the same samples; *header_only* / "
         "*table_only* / *activity_only* / *fileset_only*: only the header, only tables (one or several, agreeing), only "
         "the activity, or only the fileset's sample table did; *inherited*: only the file's parent did, across "
-        "a step that passes samples (an index, checksum, QC report, coverage track or cohort merge, #668), and a "
+        "a step that passes samples (an index, checksum, QC report, coverage track, genome annotation or cohort merge, #668, #682), and a "
         "parent agreeing with the file's own sources is listed beside them without changing its column; "
         "*conflict*: they named different samples in one namespace; *incomparable*: different samples in "
         "no shared namespace, which only a crosswalk could join (#361); *none*: no source named any. A conflict "
