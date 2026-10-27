@@ -419,10 +419,10 @@ def test_evidence_row_needs_no_column(envelope_validator):
     assert not report.results, str([r.message for r in report.results])
 
 
-@pytest.mark.parametrize("raw", ["Revio", "GENOMIC", " Revio ", "", "Hi-C"])
+@pytest.mark.parametrize("raw", ["Revio", "GENOMIC", " Revio ", "", "CenSat"])
 def test_evidence_row_takes_any_raw_value_the_source_wrote(envelope_validator, raw):
     # No pattern and no enum on `raw_value`, deliberately: a source's spellings are
-    # its own, `Hi-C` is a vocabulary gap for #399 rather than a malformed file, and
+    # its own, `CenSat` is a vocabulary gap rather than a malformed file, and
     # an empty cell is something the source published (contract 1.4, 3.7).
     report = envelope_validator.validate(_row(raw_value=raw), target_class="EvidenceRow")
     assert not report.results, f"a raw_value of {raw!r} should validate: " + str([r.message for r in report.results])

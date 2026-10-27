@@ -1426,7 +1426,7 @@ class TestClaimStatesDoNotResolve:
             source_type=SOURCE_EXTERNAL_GROUND_TRUTH,
             source=EXTERNAL_SOURCE,
             state=state,
-            raw_value="Hi-C",
+            raw_value="CenSat",
             rule_id=rule_id,
         )
 

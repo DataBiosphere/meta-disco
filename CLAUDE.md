@@ -122,9 +122,11 @@ evidence}` entry — plus the controlled vocabulary:
   `platform_enum`, with EFO ids as `meaning` where EFO has the same model (#532), and our own
   term for an array scanner, which SRA does not list (`Illumina iScan`, #603)
 - **assay_type_enum**: EFO's assay terms as an `is_a` tree, each term's ontology id as `meaning`
-  (#533): EFO's, except `Histology`'s, which is OBI's `histological assay` as EFO imports it; a
-  term of our own (`snATAC-seq`) has no id and sits under the EFO term it narrows; the two
-  array assays (`Methylation array`, `Genotyping array`) are EFO terms with no parent among the values
+  (#533): EFO's, except `Histology`'s, which is OBI's `histological assay` as EFO imports it, and
+  `Iso-Seq`'s, OBI's `isoform sequencing`, which EFO does not import and is more specific than
+  EFO's `FL-cDNA` (#399); a term of our own (`snATAC-seq`) has no id and sits under the EFO term
+  it narrows; the two array assays (`Methylation array`, `Genotyping array`), `Hi-C` and
+  `Strand-seq` (#399) are EFO terms with no parent among the values
 - **data_type_enum**: dotted terms with `is_a` to the term before the last dot (#607),
   e.g. `annotations.coverage` under `annotations`; a callset's kind and origin are
   `variant_kind` and `variant_origin`, not `variants` subterms (ADR-0003, #657); a variant

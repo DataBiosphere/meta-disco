@@ -143,8 +143,9 @@ NAME_TOKENS: dict[str, tuple[str, str | None]] = {
     "ont": ("platform", "ONT"),
     "nanopore": ("platform", "ONT"),
     "illumina": ("platform", "ILLUMINA"),
-    # assay_type — assay_type_enum has no Hi-C term.
-    "hic": ("assay_type", None),
+    # assay_type
+    "hic": ("assay_type", "Hi-C"),
+    "strandseq": ("assay_type", "Strand-seq"),
     # data_modality
     "methylation": ("data_modality", "epigenomic.methylation"),
     # data_type

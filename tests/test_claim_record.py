@@ -168,7 +168,7 @@ class TestCatalogClaim:
         assert claim["source"]["name"] == "HPRC Data Explorer"
 
     def test_no_vocabulary_term_is_a_decision_not_a_gap(self):
-        # CenSat and Hi-C are concepts our vocabulary has no term for. Mapping them
+        # CenSat is a concept our vocabulary has no term for. Mapping it
         # deliberately to nothing is a recorded decision, distinct from `unmapped`,
         # which means a mapping may still be owed (#391 sub-issue 8).
         claim = make_claim(

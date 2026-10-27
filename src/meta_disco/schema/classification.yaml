@@ -2175,8 +2175,10 @@ enums:
       The experimental method that produced a file's data, in terms borrowed from EFO
       (#533), which CELLxGENE requires for assays. `meaning` is the EFO term a value
       names, recorded and never followed at run time; `Histology`'s is OBI's
-      `histological assay` as EFO imports it. The values form an `is_a` tree of EFO's
-      terms, each under its nearest EFO ancestor among the values; `is_a` names one
+      `histological assay` as EFO imports it, and `Iso-Seq`'s is an OBI term EFO does not
+      import, more specific than EFO's nearest (#399). The values form an `is_a` tree of EFO's
+      terms, each under its nearest EFO ancestor among the values (`Iso-Seq` under its
+      nearest OBI ancestor's counterpart, `RNA-seq`); `is_a` names one
       parent, so where EFO gives a term two, the one outside the vocabulary is left
       out (`snRNA-seq`'s `transcription profiling by high throughput sequencing`). The
       loss that matters is `SHARE-seq`'s: EFO places it under single-cell RNA
@@ -2215,6 +2217,21 @@ enums:
         description: Joint chromatin accessibility and RNA from the same nuclei.
         is_a: "sc/snRNA-seq"
         meaning: EFO:0022962
+      "Iso-Seq":
+        title: Isoform sequencing
+        description: >-
+          OBI's isoform sequencing: RNA sequencing of a cDNA library enriched for full-length reads
+          spanning entire transcript isoforms, as PacBio's Iso-Seq and Kinnex kits make (#399).
+          EFO's nearest term is FL-cDNA (EFO:0003755), any sequencing of full-length cDNA, which
+          also names SRA's library strategy for Sanger-era cDNA libraries; it sits under EFO's RNA
+          assay, not its RNA-seq. OBI's term names this method, not a vendor's kit, and sits under
+          OBI's RNA-seq assay, whose counterpart here is EFO's `RNA-seq`, so it sits there. EFO has
+          no long-read RNA term (a request to add one, EBISPOT/efo#2842, is open as of 2026-10-26).
+          Direct RNA sequencing, which makes no cDNA, is OBI's separate `direct RNA sequencing
+          assay` and is not this term. ENCODE names the same data `long read RNA-seq` under a
+          placeholder of its own (`NTR:0000445`); an ontology id is kept here instead.
+        is_a: "RNA-seq"
+        meaning: OBI:0002575
       "ATAC-seq":
         title: ATAC-seq
         meaning: EFO:0007045
@@ -2244,6 +2261,20 @@ enums:
           genotyping BeadChip, #603). None of EFO's parents of it (genotyping, DNA assay,
           assay by array) is a value here, so it names no `is_a`.
         meaning: EFO:0002767
+      "Hi-C":
+        title: Hi-C
+        description: >-
+          EFO's Hi-C: chromatin's 3D contacts read by proximity ligation and sequencing (#399).
+          Its EFO parents (ligation-mediated chromosome conformation capture assay, assay by
+          sequencer) are not values here, so it names no `is_a`.
+        meaning: EFO:0007693
+      "Strand-seq":
+        title: Strand-seq
+        description: >-
+          EFO's Strand-seq: single-cell sequencing of the template strands of DNA, used to
+          phase haplotypes and find inversions (#399). Its EFO parent, DNA assay, is not a
+          value here, so it names no `is_a`.
+        meaning: EFO:0008952
       Histology:
         title: Histology
         meaning: OBI:0600020
@@ -3041,7 +3072,7 @@ enums:
       no_vocabulary_term:
         description: >-
           The raw value was mapped deliberately to nothing because the vocabulary
-          has no term for it, e.g. `Hi-C`, `CenSat`. A recorded decision, not a
+          has no term for it, e.g. `CenSat`. A recorded decision, not a
           gap in the mapping.
       declined:
         description: >-

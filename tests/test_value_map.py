@@ -187,14 +187,14 @@ def test_ac3_a_seeded_row_for_a_value_with_no_term_loads_clean(tmp_path, recwarn
         tmp_path,
         """
 rows:
-  - id: assay_type.hi_c
-    match: {slot: assay_type, value: Hi-C}
+  - id: assay_type.bionano
+    match: {slot: assay_type, value: Bionano}
 """,
     )
     (row,) = table.rows
     assert not row.authored
     assert row.declares == {}
-    assert "Hi-C" not in dimension_values("assay_type")
+    assert "Bionano" not in dimension_values("assay_type")
     assert len(recwarn) == 0
 
 
@@ -246,10 +246,10 @@ def test_ac6_two_rows_with_different_keys_declaring_one_slot_load(tmp_path):
         tmp_path,
         """
 rows:
-  - id: assay_type.hi_c
-    match: {slot: assay_type, value: Hi-C}
+  - id: assay_type.wgs
+    match: {slot: assay_type, value: WGS}
     declares: {data_modality: genomic}
-    reason: chromatin conformation of genomic DNA
+    reason: a WGS library is genomic DNA
   - id: data_modality.genomic
     match: {slot: data_modality, value: GENOMIC}
     declares: {data_modality: genomic}
@@ -481,13 +481,13 @@ def test_ac17_a_row_declaring_another_slot_claims_that_slot_only(tmp_path):
         tmp_path,
         """
 rows:
-  - id: assay_type.hi_c
-    match: {slot: assay_type, value: Hi-C}
+  - id: assay_type.wgs
+    match: {slot: assay_type, value: WGS}
     declares: {data_modality: genomic}
-    reason: chromatin conformation of genomic DNA
+    reason: a WGS library is genomic DNA
 """,
     )
-    claims = claims_from(entry("assay_type", "Hi-C"), SOURCE_REPOSITORY_METADATA, table)
+    claims = claims_from(entry("assay_type", "WGS"), SOURCE_REPOSITORY_METADATA, table)
     assert [(slot, claim["value"]) for slot, claim in claims] == [("data_modality", "genomic")]
 
 
@@ -1005,7 +1005,6 @@ rows:
 
 
 SEEDED_IN_BUNDLED_TABLE = [
-    "assay_type.isoseq",
     "data_modality.transcriptomic",
     "data_type.alignments",
     "data_type.chains",
@@ -1016,11 +1015,11 @@ SEEDED_IN_BUNDLED_TABLE = [
 
 def test_the_bundled_table_covers_every_hprc_fixture_value(hprc_fixture_root):
     """Every fixture value selects a row of the bundled table, and the ones it leaves queued are exactly the
-    six seeded values — so a deleted or misspelled authored row would surface here as a new queue entry."""
+    seeded values in ``SEEDED_IN_BUNDLED_TABLE`` — so a deleted or misspelled authored row would surface here as a new queue entry."""
     queued = review_queue(hprc_fixture_root, load_value_map(), datasets=HPRC_DATASETS)
     assert all(e.row_id is not None for e in queued), [e.raw_value for e in queued if e.row_id is None]
     assert sorted({e.row_id for e in queued if e.row_id is not None}) == SEEDED_IN_BUNDLED_TABLE
-    assert len(queued) == 8
+    assert len(queued) == 7
 
 
 def test_the_bundled_table_covers_hprc_and_leaves_the_named_values_seeded():

@@ -42,10 +42,10 @@ class TestLibraryStrategyMap:
         assert HPRC_LIBRARY_STRATEGY_MAP["Hi-C"] == "Hi-C"
 
     def test_isoseq_lowercase(self):
-        assert HPRC_LIBRARY_STRATEGY_MAP["isoseq"] == "ISO-seq"
+        assert HPRC_LIBRARY_STRATEGY_MAP["isoseq"] == "Iso-Seq"
 
     def test_isoseq_mixed_case(self):
-        assert HPRC_LIBRARY_STRATEGY_MAP["Iso-Seq"] == "ISO-seq"
+        assert HPRC_LIBRARY_STRATEGY_MAP["Iso-Seq"] == "Iso-Seq"
 
 
 class TestRefCoordinatesMap:
