@@ -198,11 +198,18 @@ def test_read_through_names_each_role_of_a_term_that_reads_through_its_parent():
         assert any(through in {i.role for i in d.inputs} for d in activities.declarations().values())
 
 
-def test_the_variant_kind_passes_across_an_index_a_merge_a_cohort_merge_and_a_joint_genotyping_only():
+def test_the_variant_kind_passes_across_an_index_a_merge_a_cohort_merge_a_joint_genotyping_and_a_genome_annotation_only():
     """A call from alignments creates a kind and a filter can narrow one, so neither passes it (#654); a
-    joint genotyping calls nothing its gVCFs did not hold, so it does (#678)."""
+    joint genotyping calls nothing its gVCFs did not hold, so it does (#678); a genome sequence's
+    annotation is not a callset, so it takes the sequence's `not_applicable` (#682)."""
     passing = {term for term in activities.declarations() if "variant_kind" in activities.passes(term)}
-    assert passing == {activities.INDEXING, activities.MERGE, activities.COHORT_MERGE, activities.JOINT_GENOTYPING}
+    assert passing == {
+        activities.INDEXING,
+        activities.MERGE,
+        activities.COHORT_MERGE,
+        activities.JOINT_GENOTYPING,
+        "GenomeAnnotationActivity",
+    }
     assert "variant_kind" not in activities.passes(activities.VARIANT_CALL)
 
 
@@ -213,13 +220,20 @@ def test_samples_roles_are_the_roles_declaring_passes_samples():
 
 
 def test_samples_pass_across_exactly_the_steps_whose_output_describes_its_parent():
-    """#668: an index, a checksum, a QC report, a coverage track, and a cohort merge from its list."""
+    """#668: an index, a checksum, a QC report, a coverage track, a cohort merge from its list, and a
+    genome sequence's annotation (#682)."""
     passing = {term for term in activities.declarations() if activities.samples_roles(term)}
     expected = {activities.INDEXING, activities.CHECKSUM, activities.COHORT_MERGE, "QualityControlActivity"}
-    assert passing == expected | {"CoverageActivity"}
+    assert passing == expected | {"CoverageActivity", "GenomeAnnotationActivity"}
 
 
 def test_samples_never_pass_across_a_step_that_makes_data_with_its_own_samples():
     """An alignment, a call, a merge or an assembly names its own samples in its header (#668)."""
-    for term in ("AlignmentActivity", activities.VARIANT_CALL, activities.MERGE, "AssemblyActivity"):
+    for term in (
+        "AlignmentActivity",
+        "AssemblyAlignmentActivity",
+        activities.VARIANT_CALL,
+        activities.MERGE,
+        "AssemblyActivity",
+    ):
         assert not activities.samples_roles(term), term

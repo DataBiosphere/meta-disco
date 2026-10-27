@@ -240,7 +240,7 @@ its own.
 *Amended by #580.* A step is named by its **activity**, not by a verb between two files. The
 vocabulary is `activity_type_enum`: AnVIL FSS's `ActivityTypes`, spelled as FSS's released LinkML schema
 spells them (`DataBiosphere/biocore-data-model`, `AnVILDataSubmissionFindabilitySubsetSchema.linkml.yaml`),
-plus ten of our own (`CoverageActivity` added by #595; `VariantProcessingActivity` and `VariantFilterActivity` by #610; `CohortDefinitionActivity` and `CohortMergeActivity` by #621; `JointGenotypingActivity` by #678). FSS's values spreadsheet spells three differently (`VariantCallingActivity`,
+plus twelve of our own (`CoverageActivity` added by #595; `VariantProcessingActivity` and `VariantFilterActivity` by #610; `CohortDefinitionActivity` and `CohortMergeActivity` by #621; `JointGenotypingActivity` by #678; `AssemblyAlignmentActivity` and `GenomeAnnotationActivity` by #682). FSS's values spreadsheet spells three differently (`VariantCallingActivity`,
 `ImagingActivity`, `IndexingActivity`); the schema a submission is validated against wins. A term's `meaning` is the Terra
 Interoperability Model's class where it has one, else EDAM's operation where EDAM defines the same step.
 TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `generated_file_id` are PROV's
@@ -253,12 +253,14 @@ TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `gener
 | `ChecksumActivity` | checksum ← checked file | filename convention, `anvil_activity` `Checksum` | `checksum_of` |
 | `QualityControlActivity` (ours, under `AnalysisActivity`) | QC report ← the file it reports on | submitter same-row (T2T `samtools_stats`, `mosdepth_*` → `cram`), a bcftools stats report's own `ID` line (T2T report → its VCF, #683) | `summarizes` |
 | `AlignmentActivity` | alignment ← reads | submitter same-row, `@PG`, `anvil_activity` (ENCORE `Alignment: STAR`) | `aligned_from` |
+| `AssemblyAlignmentActivity` (ours, under `AlignmentActivity`; #682) | alignment ← the assembly aligned (`query`) | submitter row keyed by the assembly's id (HPRC_R2 `to_ref_chm13_winnowmap`, `to_ref_grch38_winnowmap` ← `assembly`) | — |
 | `VariantCallActivity` | variants ← alignments | VCF caller command lines, submitter same-row (1000G `cram` → `gvcf`) | `called_from` |
 | `JointGenotypingActivity` (ours, under `VariantCallActivity`; amended by #678) | genotyped callset ← the gVCF store it genotypes (`genotyped_from`) | submitter same-row (T2T `interval`: region VCF ← GenomicsDB tar, #610) | — |
 | `MergeActivity` (ours) | merged file ← shards | VCF headers (T2T chromosome VCF ← region VCFs, its `bcftools concat` line, #610), `anvil_activity` (ENCORE `Merger: multiple FASTQ files`, #595) | `merged_from` |
 | `CohortMergeActivity` (ours, under `MergeActivity`; #621) | merged file ← the cohort's list naming its inputs (`input_list`) | a GenomicsDB workspace's `vcfheader.vcf` (T2T tar ← its chromosome's sample map, its `GenomicsDBImport` line) | — |
 | `CohortDefinitionActivity` (ours; #621) | list ← each file it lists (`member`) | a GATK sample-name map's own rows (T2T `chrN_sample_map.tsv` ← its gVCFs) | — |
 | `CoverageActivity` (ours, under `AnalysisActivity`; #595) | coverage track ← the alignment it covers | `anvil_activity` (ENCORE `Track: bedGraphToBigWig`) | — |
+| `GenomeAnnotationActivity` (ours, under `AnalysisActivity`; #682) | annotation ← the genome sequence it annotates (`annotated`) | submitter row keyed by the assembly's id (HPRC_R2 `censat`, `repeat_masker_bed`, `segdups`, `liftoff_genes` and four more ← `assembly`) | — |
 | `VariantFilterActivity` (ours, under the abstract `VariantProcessingActivity`; #610) | filtered callset ← the callset it filtered | submitter same-row (T2T `chromosome`: raw → recalibrated → PASS on CHM13; recalibrated → PASS on GRCh38, whose raw callset the table does not hold) | — |
 | `LiftoverActivity` (ours, under `AnalysisActivity`) | lifted file ← the file it was lifted from | a source naming the parent (schema changes, `source_assembly`) | `lifted_over_from` |
 | `AssemblyActivity` (ours) | assembly ← reads | HPRC assembly sample sheets, where the output resolves to a held assembly (Open) | `assembled_from` |
@@ -456,8 +458,9 @@ authority, and this table is its reading when #580 wrote it, amended where a row
 
 | activity | `data_modality` | `assay_type` | `platform` | `instrument_model` | `reference_assembly` |
 |---|---|---|---|---|---|
-| `IndexActivity`, `QualityControlActivity`, `CoverageActivity` (amended by #595), `MergeActivity`, `VariantCallActivity`, `JointGenotypingActivity` (#678, which also passes `variant_kind` and `variant_origin`), `VariantFilterActivity` (#610, from its parent `VariantProcessingActivity`) | yes | yes | yes | yes | yes |
+| `IndexActivity`, `QualityControlActivity`, `CoverageActivity` (amended by #595), `MergeActivity`, `VariantCallActivity`, `JointGenotypingActivity` (#678, which also passes `variant_kind` and `variant_origin`), `VariantFilterActivity` (#610, from its parent `VariantProcessingActivity`), `GenomeAnnotationActivity` (#682, which also passes `variant_kind` and `variant_origin`) | yes | yes | yes | yes | yes |
 | `AlignmentActivity` | yes, from `reads` | yes, from `reads` | yes, from `reads` | yes, from `reads` | from its `reference` input only, not from the reads |
+| `AssemblyAlignmentActivity` (#682) | yes, from `query` | yes, from `query` | yes, from `query` | yes, from `query` | from its `reference` input only, not from the assembly |
 | `LiftoverActivity` | yes | yes | yes | yes | **no** — liftover changes it |
 | `AssemblyActivity` | yes | yes | yes | yes | **no** — an assembly is its own reference |
 | `ExpressionActivity` (amended by #595) | yes | yes | yes | yes | **no** — quantified against a transcriptome |
@@ -468,7 +471,7 @@ authority, and this table is its reading when #580 wrote it, amended where a row
 
 *Amended by #668.* **Sample identity passes too**, beside the dimensions, along the steps whose output
 describes exactly its parent: `IndexActivity`, `ChecksumActivity`, `QualityControlActivity`,
-`CoverageActivity`, and `CohortMergeActivity` from the list itself (a GATK sample map names its samples in
+`CoverageActivity`, `GenomeAnnotationActivity` (#682), and `CohortMergeActivity` from the list itself (a GATK sample map names its samples in
 its own first column), each role declaring `passes_samples` in `rules/activities.yaml`. A
 `HG02078.chr6.hc.vcf.gz.tbi` takes its VCF's `[HG02078]`, and a T2T GenomicsDB tar its map's 3,202
 samples (1,599 for chrY's map). A checksum passes no dimension (#596) but does pass samples: a hash names

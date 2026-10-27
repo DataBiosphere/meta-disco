@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from meta_disco import activities, code_rules, models
+from meta_disco import activities, code_rules, models, schema_vocab
 from meta_disco.models import CLASSIFICATION_FIELDS, SOURCE_TYPES
 from meta_disco.rule_loader import get_unified_rules
 
@@ -273,6 +273,47 @@ def test_the_inheritance_rule_declares_what_reconcile_writes():
     }
 
 
+def _rules_giving(kinds):
+    """The unified rules whose ``data_type`` is one of ``kinds`` or a term under one (``annotations.coverage`` under ``annotations``)."""
+    return [
+        rule
+        for rule in get_unified_rules().rules
+        if (data_type := str(rule.then.get("data_type") or ""))
+        and not kinds.isdisjoint({data_type, *schema_vocab.value_ancestors("data_type", data_type)})
+    ]
+
+
+def _stamped(rule):
+    return {slot for slot, status in rule.then_status.items() if status == models.NOT_APPLICABLE}
+
+
+def _always_not_applicable(role):
+    """The dimensions every unified rule giving one of the role's kinds stamps ``not_applicable`` (#682).
+
+    Empty where the role names no kind, a kind no rule gives, or reads through its parent (``read_through``),
+    whose values are the parent's members', not the parent's. Only the YAML rules are read, and the role's
+    kinds are trusted, though ``edges.misfits`` flags a parent outside them rather than refusing it.
+    """
+    if role.read_through is not None:
+        return set()
+    per_kind = [_rules_giving({str(kind)}) for kind in role.kind or ()]
+    if not per_kind or not all(per_kind):
+        return set()
+    return set.intersection(*(_stamped(rule) for rules in per_kind for rule in rules))
+
+
+def _clashes(declared):
+    """``(activity, rule, dimension)`` where a role passes a dimension that a rule giving the output's kind stamps
+    ``not_applicable``, unless every rule giving the role's own kinds stamps it too."""
+    clashes = []
+    for term, declaration in declared.items():
+        output_rules = _rules_giving({str(k) for k in declaration.output.kind or ()})
+        for role in declaration.inputs:
+            passed = activities._role_slots(role) - _always_not_applicable(role)
+            clashes += [(term, rule.id, slot) for rule in output_rules for slot in sorted(_stamped(rule) & passed)]
+    return sorted(set(clashes))
+
+
 def test_no_activity_passes_a_dimension_a_rule_makes_not_applicable_on_its_output():
     """What a step passes and what the output's own rule stamps must not meet (#596).
 
@@ -281,22 +322,48 @@ def test_no_activity_passes_a_dimension_a_rule_makes_not_applicable_on_its_outpu
     `not_applicable` would conflict (contract 4.6) with any value the activity passed for
     that dimension. #571 had to drop `checksum_file`'s stamps when it made `ChecksumActivity`
     pass all five; #596 restores the stamps and has the activity pass nothing. This pins
-    that the two never meet again, whichever side changes.
+    that the two never meet again, whichever side changes. A role whose inputs every rule
+    giving their kinds stamps `not_applicable` in a dimension passes only `not_applicable`
+    there, which agrees with the stamp: a genome annotation's assembly passes its variant
+    kind and origin (#682).
     """
-    from meta_disco.models import NOT_APPLICABLE
-    from meta_disco.rule_loader import get_unified_rules
-
-    clashes = []
-    for term, declaration in activities.declarations().items():
-        passed = set(activities.passes(term))
-        for kind in (str(k) for k in declaration.output.kind or ()):
-            for rule in get_unified_rules().rules:
-                data_type = str(rule.then.get("data_type") or "")
-                if data_type != kind and not data_type.startswith(kind + "."):
-                    continue
-                stamped = {slot for slot, status in rule.then_status.items() if status == NOT_APPLICABLE}
-                clashes += [(term, rule.id, slot) for slot in sorted(stamped & passed)]
+    clashes = _clashes(activities.declarations())
     assert clashes == [], f"(activity, rule, dimension) that would always conflict: {clashes}"
+
+
+def test_the_clash_guard_still_flags_a_role_of_any_kind_passing_what_the_output_s_rule_stamps():
+    """#571's case: a checksum's `checked` role takes any kind, so one passing the variant kind meets
+    `checksum_file`'s stamp, and the #682 exemption does not cover it."""
+    declared = dict(activities.declarations())
+    checksum = declared[activities.CHECKSUM]
+    (checked,) = checksum.inputs
+    declared[activities.CHECKSUM] = activities.Declared(
+        checksum.output, (checked.model_copy(update={"passes": ["variant_kind"]}),)
+    )
+    assert (activities.CHECKSUM, "checksum_file", "variant_kind") in _clashes(declared)
+
+
+def test_the_clash_guard_flags_a_genome_annotation_whose_input_may_carry_a_value():
+    """Were a genome annotation's input any kind, a VCF's variant kind could pass onto a file a rule
+    stamps `not_applicable`, so the guard would flag it (#682)."""
+    declared = dict(activities.declarations())
+    annotation = declared["GenomeAnnotationActivity"]
+    (annotated,) = annotation.inputs
+    declared["GenomeAnnotationActivity"] = activities.Declared(
+        annotation.output, (annotated.model_copy(update={"kind": None}),)
+    )
+    assert ("GenomeAnnotationActivity", "bed_methylation", "variant_kind") in _clashes(declared)
+
+
+def test_the_clash_guard_matches_a_dotted_kind_s_own_rules():
+    """A kind narrowed to a dotted term (`annotations.coverage`) still finds the rules giving it."""
+    assert {r.id for r in _rules_giving({"annotations.coverage"})} >= {"bed_mosdepth_regions", "star_signal_coverage"}
+
+
+def test_the_clash_guard_exempts_nothing_on_a_role_that_reads_through_its_parent():
+    """A cohort merge's list passes its members' values, not its own, so the list's kind exempts nothing."""
+    (input_list,) = activities.declarations()[activities.COHORT_MERGE].inputs
+    assert not _always_not_applicable(input_list.model_copy(update={"kind": ["assembly"]}))
 
 
 TAR_CALLER_RULES = (

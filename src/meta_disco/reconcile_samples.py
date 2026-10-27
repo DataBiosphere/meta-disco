@@ -38,7 +38,7 @@ row's sample.
 
 **A file takes its parent's samples across a step that passes them** (#668): an input role
 ``rules/activities.yaml`` declares ``passes_samples`` (an index's, a checksum's, a QC
-report's, a coverage track's, a cohort merge's list). The parent's settled samples are one
+report's, a coverage track's, a genome annotation's (#682), a cohort merge's list). The parent's settled samples are one
 more source of the child's, settled with its own by the same rule: alone, the file's samples
 are ``inherited``; agreeing, they are listed beside its own; differing, the file has none.
 Parents settle before children (``reconcile_inherit.parent_first``), so a ``.crai.md5``

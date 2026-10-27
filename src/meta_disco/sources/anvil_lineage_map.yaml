@@ -23,6 +23,41 @@ datasets:
     anvil_activity: *fss_activity
   AnVIL_HPRC_R2:
     anvil_activity: *fss_activity
+    # Each derivative table's row is keyed by the assembly it was made from: its `<table>_id`
+    # is the `assembly` table's `assembly_id` (`HG03942_mat_hprc_r2_v1.0.1`), and its file is
+    # in `location` (#682). Annotations in the assembly's own coordinates, then the assembly's
+    # alignments to CHM13 and GRCh38. The chains (#364) and ONT methylation tracks (#558) are
+    # keyed the same way and not mapped.
+    censat:
+      - child: {column: location}
+        parent: {column: censat_id, table: assembly, identifier_column: assembly_id, locator_column: assembly}
+    censat_centromeres:
+      - child: {column: location}
+        parent: {column: censat_centromeres_id, table: assembly, identifier_column: assembly_id, locator_column: assembly}
+    gaps:
+      - child: {column: location}
+        parent: {column: gaps_id, table: assembly, identifier_column: assembly_id, locator_column: assembly}
+    liftoff_genes:
+      - child: {column: location}
+        parent: {column: liftoff_genes_id, table: assembly, identifier_column: assembly_id, locator_column: assembly}
+    repeat_masker_bed:
+      - child: {column: location}
+        parent: {column: repeat_masker_bed_id, table: assembly, identifier_column: assembly_id, locator_column: assembly}
+    repeat_masker_out:
+      - child: {column: location}
+        parent: {column: repeat_masker_out_id, table: assembly, identifier_column: assembly_id, locator_column: assembly}
+    segdups:
+      - child: {column: location}
+        parent: {column: segdups_id, table: assembly, identifier_column: assembly_id, locator_column: assembly}
+    t2t_sequences:
+      - child: {column: location}
+        parent: {column: t2t_sequences_id, table: assembly, identifier_column: assembly_id, locator_column: assembly}
+    to_ref_chm13_winnowmap:
+      - child: {column: location}
+        parent: {column: to_ref_chm13_winnowmap_id, table: assembly, identifier_column: assembly_id, locator_column: assembly}
+    to_ref_grch38_winnowmap:
+      - child: {column: location}
+        parent: {column: to_ref_grch38_winnowmap_id, table: assembly, identifier_column: assembly_id, locator_column: assembly}
   AnVIL_IGVF_Mouse_R1:
     anvil_activity: *fss_activity
     file:

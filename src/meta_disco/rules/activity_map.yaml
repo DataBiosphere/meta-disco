@@ -100,6 +100,31 @@ rows:
     match: {source_type: repository_metadata, table: file, child_column: file_path, parent_column: derived_from, child_data_type: alignments, parent_data_type: reads}
     declares: {activity: AlignmentActivity, role: reads}
     reason: IGVF alignments derived from reads are those reads aligned.
+  - id: activity.hprc_r2_assembly_annotation
+    match:
+      source_type: repository_metadata
+      table: [censat, censat_centromeres, gaps, liftoff_genes, repeat_masker_bed, repeat_masker_out, segdups, t2t_sequences]
+      child_column: location
+      parent_column: [censat_id, censat_centromeres_id, gaps_id, liftoff_genes_id, repeat_masker_bed_id, repeat_masker_out_id, segdups_id, t2t_sequences_id]
+    declares: {activity: GenomeAnnotationActivity, role: annotated}
+    reason: >-
+      Each of these HPRC_R2 tables holds one file per assembly, keyed by its assembly_id, of
+      features found in that assembly and written in its coordinates: centromeric satellites and
+      active centromeres, assembly gaps, liftoff's genes, RepeatMasker's repeats, segmental
+      duplications, and which of its chromosomes are telomere to telomere (#682). The two lists
+      match every combination, not only a table with its own id column: no other pair occurs.
+  - id: activity.hprc_r2_assembly_alignment
+    match:
+      source_type: repository_metadata
+      table: [to_ref_chm13_winnowmap, to_ref_grch38_winnowmap]
+      child_column: location
+      parent_column: [to_ref_chm13_winnowmap_id, to_ref_grch38_winnowmap_id]
+    declares: {activity: AssemblyAlignmentActivity, role: query}
+    reason: >-
+      Each row's BAM is the assembly its id names aligned by winnowmap to CHM13 or GRCh38
+      (`HG03130.CHM13v2.hap2.sorted.bam`), so the assembly is its query; the reference is
+      the BAM's own, from its @SQ lines (#682). The lists match every combination; no other
+      pair occurs.
   - id: activity.track_bedgraphtobigwig
     match: {source_type: repository_activity, table: anvil_activity, raw_activity: 'Track: bedGraphToBigWig', parent_column: used_file_id}
     declares: {activity: CoverageActivity, role: covered}
