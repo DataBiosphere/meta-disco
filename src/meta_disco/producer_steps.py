@@ -77,7 +77,7 @@ NO_ACTIVITY = "no_activity"
 PARENT_NOT_FOUND = "parent_not_found"
 PARENT_AMBIGUOUS = "parent_ambiguous"
 PARENT_UNREADABLE = "parent_unreadable"
-# A view whose named parent's header is not this file's less the view's own lines (#771,
+# A view whose named parent's header, with the view's own lines added, is not this file's (#771,
 # :func:`fits_parent`): another step came between, a later tool rewrote it, or it was cut short.
 PARENT_HEADER_DIFFERS = "parent_header_differs"
 # A PLINK 2 `.pvar` keeps the `##` command lines of the VCF it was converted from and adds
