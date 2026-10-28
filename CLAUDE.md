@@ -430,8 +430,9 @@ reworded title renames a member: name one by its value (`DataModalityEnum("genom
     rows kept by a test on the calls) with it `processed`, by its options, read where the flow names no step
     (no one end, as its views write to stdout, or an unread line) from the header's **last** `##` line when that is a view's (#771: bcftools
     appends its line, GATK and Picard re-sort, so a lifted callset fails it; a step so read has its own rule id,
-    `variant_subset_by_last_line` or `variant_filter_by_last_line`, whose rationale states the assumptions, and is written
-    only where its parent's own header, from the VCF cache, is the file's less one view's own lines, `fits_parent`), and three of T2T's joint-calling
+    `variant_subset_by_last_line` or `variant_filter_by_last_line`, whose rationale states the assumptions; every view step,
+    so read or the one end, is written only where its parent's own header, from the VCF cache, is the file's less that
+    view's own lines, `fits_parent`), and three of T2T's joint-calling
     cohort through `meta_disco.cohort_steps` (#621): a GATK sample-name map's rows giving
     `CohortDefinitionActivity` with every listed gVCF a `member` (the `sample_map` producer),
     and a GenomicsDB workspace tar's own `vcfheader.vcf` giving `CohortMergeActivity` with the

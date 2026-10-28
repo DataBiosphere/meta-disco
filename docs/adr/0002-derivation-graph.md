@@ -404,9 +404,10 @@ rows kept by a test on the calls (`-f`, `--min-ac`) a `VariantFilterActivity`; b
 neither gives no step. A step read from the last line names its own rule (`variant_subset_by_last_line`,
 `variant_filter_by_last_line`), apart from a view that is the one end of the flow (`…_by_header`), so the
 edges that rest on the last line's assumptions can be counted and found; the assumptions are stated in
-`variant_subset_by_last_line`'s rationale. Each such step is checked against the parent's own header, read
-from the VCF cache: the file's header must be the parent's less one view's own lines, with no sample the parent
-lacks (`producer_steps.fits_parent`), so a file of the parent's name that another step came between is refused. A later view run
+`variant_subset_by_last_line`'s rationale. Every view step, read from the last line or the one end of the
+flow, is checked against the parent's own header, read from the VCF cache: the file's header must be the
+parent's less one view's own lines, that view line being the step itself, with no sample the parent lacks
+(`producer_steps.fits_parent`), so a file of the parent's name that another step came between is refused. A later view run
 with `--no-version` writes no line, and is not caught: the file is then linked to its grandparent, in the same
 chain, so what passes is the same.
 
