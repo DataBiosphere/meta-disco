@@ -223,6 +223,12 @@ activities:
     reason: >-
       A filter labels or drops rows and changes nothing about the reads or reference behind
       the rows it keeps, so it passes what its parent declares.
+  - term: VariantSubsetActivity
+    reason: >-
+      A subset keeps some samples' columns or the rows in some regions, each call as it was made,
+      so nothing about the reads, reference or caller behind a kept call changes, and it passes
+      what its parent declares (#771). A sample subset holds fewer samples than its callset, so
+      no samples pass, a region subset's included: each subset's header names its own.
   - term: MergeActivity
     output: {form: [file]}
     inputs:

@@ -7,11 +7,13 @@ listed with its ``somatic_mode``; one that mixes origins is not listed). So ``va
 ``variant_origin`` (:mod:`.variant_origins`) are the caller's, looked up in
 ``rules/callers.yaml``, and the caller is found in the header, in this order:
 
-1. **The producing step**, the end of the header's data flow (``producer_steps.producing_step``).
+1. **The producing step**, the end of the header's data flow or, where that names none, a bcftools
+   ``view`` on the header's last line (``producer_steps.producing_step``, #771). A header with a line
+   whose tool is undeclared names no caller (rule 6), even where its last line is a view.
 2. **Walked back** from it through steps that keep their input's calls (``keeps_calls``), each to the
    step that wrote its input, to the first step that does not. That step is the caller.
-   Where the chain names none — no one producing step (several bcftools ``view`` steps
-   writing to stdout, or a step whose output the file was renamed from), or a kept step
+   Where the chain names none — no producing step (several stdout steps whose last line is not a
+   bcftools view, or a step whose output the file was renamed from), or a kept step
    whose input no step the header records wrote (T2T's
    ``SelectVariants`` reads a callset whose ``GenotypeGVCFs`` line is not in the header) —
    the header's other steps, those that do not keep calls, name it: a merge among them
@@ -36,7 +38,7 @@ from importlib.resources import files
 
 import yaml
 
-from .producer_steps import NO_COMMAND_LINE, NOT_A_VCF, UNKNOWN_TOOL, data_name, producing_step, steps_of
+from .producer_steps import NO_COMMAND_LINE, NOT_A_VCF, data_name, producing_step, steps_of
 from .schema_vocab import dimension_values
 from .slot_map import unique_key_loader
 from .validators.command_lines import Step
@@ -238,9 +240,9 @@ def find_caller(header: VCFHeader, file_name: str) -> Found | FoundMerge | NotFo
         return NotFound(BY_STEP, f"{PVAR}: a PLINK 2 .pvar records no step of its own")
     if outcome == NO_COMMAND_LINE:
         return _from_sources(header, table)
-    if outcome == UNKNOWN_TOOL:
+    steps = steps_of(header)
+    if steps is None:
         return NotFound(BY_STEP, f"{UNREAD_STEP}: {_unread_tools(header)}")
-    steps = steps_of(header) or []
     if step is None:
         caller, how, fallback = _header_caller(steps, table, f"no one step made this file ({outcome})")
     else:

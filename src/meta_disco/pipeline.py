@@ -15,7 +15,7 @@ from threading import Lock
 from typing import Any, NamedTuple, Protocol, TypeGuard, runtime_checkable
 
 from .exclusions import MD5_RE, partition_records, write_excluded
-from .fetchers import FetchError
+from .fetchers import GZIP_SUFFIXES, FetchError
 from .file_name import FileName
 from .file_types import FileTypeConfig
 from .header_classifier import classify_from_name_only, classify_without_content
@@ -91,10 +91,6 @@ def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> 
 # How many of a dataset's unrecognised sample strings a producer's metadata names, the
 # most frequent first (#357): enough to decide which to declare, not every one.
 UNRECOGNISED_EXAMPLES = 20
-
-# The name suffixes of a gzip-compressed file the header readers decompress: a `.bgz` is
-# bgzip's BGZF, as 1000 Genomes phase 3 names its VCFs (#561).
-GZIP_SUFFIXES = (".gz", ".bgz")
 
 
 @runtime_checkable

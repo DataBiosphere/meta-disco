@@ -81,6 +81,8 @@ class VCFHeader:
     # ``other_meta`` because ``match_vcf_header_pattern`` falls back to a prefix
     # scan of that list, and these must not widen what a rule can match (#354).
     unkeyed_meta: list[str] | None = None
+    # The header's last ``##`` line, verbatim, whatever its key (#771); None where there is none.
+    last_meta_line: str | None = None
     # Each record the read head held (``VcfHead.record_lines``, #630); None where the records
     # were not read, as for a header given as text.
     records: tuple[VcfRecord, ...] | None = None
@@ -119,8 +121,9 @@ class VCFHeader:
         order is grouped, not the header's: each list keeps its own lines in header order,
         but every ``unkeyed_meta`` line (one whose key the line parser rejects, such as
         GATK 3's dotted ``##GATKCommandLine.<Tool>``) comes after every ``other_meta``
-        line, however they interleave in the header. Its readers do not
-        depend on the order. Each gives its words and its step (``command_lines.VcfCommand``).
+        line, however they interleave in the header. Its readers do not depend on the order: the
+        one that needs the header's last line finds its command by :attr:`last_meta_line` (#771).
+        Each gives its words and its step (``command_lines.VcfCommand``).
         """
         return vcf_commands((self.other_meta or []) + (self.unkeyed_meta or []))
 
@@ -355,6 +358,7 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
     other_meta = []
     meta_keys = []
     unkeyed_meta = []
+    last_meta_line = None
 
     for line in header_text.splitlines():
         if not line.startswith("##"):
@@ -363,6 +367,7 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
                 header.sample_columns = chrom_line_samples(columns)
                 header.vcf_columns = columns[:8] == VCF_FIXED_COLUMNS and columns[8:9] in ((), ("FORMAT",))
             continue
+        last_meta_line = line
         # A structured ##contig line, kept as text for `contigs` (#678); any other is parsed below.
         if line.startswith(_CONTIG_PREFIX) and line.endswith(">"):
             contig_lines.append(line)
@@ -395,6 +400,7 @@ def parse_vcf_header(header_text: str) -> VCFHeader:
             other_meta.append(line)
 
     header.contig_lines = tuple(contig_lines)
+    header.last_meta_line = last_meta_line
     if info_fields:
         header.info_fields = info_fields
     if format_fields:

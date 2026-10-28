@@ -1,6 +1,6 @@
 # AnVIL data issues to report
 
-Last updated 2026-10-24.
+Last updated 2026-10-27.
 
 These are defects in AnVIL's open-access catalog that meta-disco found and cannot fix on its side. They go to the AnVIL data team at anvil-data@broadinstitute.org. Nothing here has been sent yet.
 
@@ -23,6 +23,7 @@ Each issue names the dataset, what AnVIL holds, what the files themselves or the
 | 9 | `AnVIL_HPRC_R2`, ENCORE | Swapped columns; a misspelled activity type | 230 + 634 rows |
 | 10 | `ANVIL_HPRC` | One HG005 assembly BAM listed under HG00621 too | 1 |
 | 11 | `ANVIL_1000G_PRIMED_data_model` | Phase 3 sequencing datasets say only WGS, with no depth | 4,281 |
+| 12 | `ANVIL_T2T` | Subsets of the joint callsets have no stated parent | 2,908 VCFs |
 
 ## 1. ANVIL\_HPRC: parents' reads generated from the child's biosample
 
@@ -162,6 +163,37 @@ The 63 GRCh37 rows of the submitter's `sequencing_dataset` table each say `seque
 - **Scale:** 63 rows; 4,281 PLINK files (`plink_file_wide`'s `pgen`, `psam` and `pvar`) link to them.
 - **Effect:** meta-disco takes the assay as stated, so these files show whole-genome sequencing alone ([meta-disco #562](https://github.com/DataBiosphere/meta-disco/issues/562)). It is incomplete rather than wrong; low priority.
 - **Suggested fix:** give the phase 3 rows their depth (7.4×), and say the calls also used exome sequencing and arrays, if the data model has a way to.
+
+## 12. ANVIL\_T2T: 2,908 subsets of the joint callsets have no stated parent
+
+T2T cut its two 1000 Genomes joint callsets, its own on CHM13 (`1kgp.chr*`) and NYGC's on GRCh38 (`20201028_CCDG_…`), into subsets with `bcftools view`. No submitter table or AnVIL record says which callset a subset was cut from. Checked in snapshot `ANVIL_T2T_20230714_ANV6_202607080209` on 2026-10-27, run `20261027_095223`.
+
+| Subset, by the `bcftools view` that made it | VCFs |
+| --- | --: |
+| Samples kept (`-S`): populations, super-populations, singletons, unrelated founders | 1,824 |
+| Rows kept by a test on the calls (`--min-ac 1`, `-q 1`) | 888 |
+| Regions kept (`-R`): non-syntenic, uncovered by GRCh38, unique-mapping and protein-coding regions | 172 |
+| NYGC's annotated VCFs, re-written with no option | 24 |
+
+**What the tables hold.** These files are only in `file_inventory` and `anvil_file`. The `chromosome` table links only each chromosome's raw → recalibrated → PASS callsets, and none of the dataset's 119,454 `anvil_activity` rows generates a subset: every one is `Indexing` or `Unknown`.
+
+**What the files say.** Each subset's header ends in the `bcftools view` command that made it, naming its input.
+
+- **Example:** `1kgp.chr1.recalibrated.snp_indel.pass.singleton.CEU_singleton.vcf.gz` ends in `##bcftools_viewCommand=view -S …/resources/1kgp/CEU.txt --force-samples …/1kgp.chr1.recalibrated.snp_indel.pass.singleton.vcf.gz`. That input is itself a subset, `view -S …/singleton.txt` of `1kgp.chr1.recalibrated.snp_indel.pass.vcf.gz`, the PASS callset the `chromosome` table lists.
+- **The inputs check out:** of the 2,572 subsets whose input the dataset holds, every one's header is its input's header with only bcftools' own lines added, and holds only samples its input holds.
+- **The inputs the dataset does not hold (336):**
+  - 240 population VCFs name `….pass.vcf`, uncompressed; the dataset holds only `….pass.vcf.gz`.
+  - 48 `….singleton.af_1.vcf.gz` files name `tmp.3.vcf`, a workflow temporary.
+  - 24 name a `…Homo_sapiens_assembly38.rejected.vcf.gz` liftover VCF, one of the VCFs missing in [issue 7](#7-anvil_t2t-48-liftover-vcf-indexes-whose-vcfs-are-not-in-the-dataset).
+  - The 24 annotated VCFs name a file on NYGC's cluster (`/gpfs/commons/…/CCDG_14151_B01_GRM_WGS_2020-08-05_chr*.recalibrated_variants.annotated.repeats.vcf.gz`).
+
+**Scale.** 2,908 VCFs, and with them each one's `.csi` index and its bcftools stats reports: 4,084 reports describe the 2,572 whose input the dataset holds.
+
+**Effect.** With no stated parent, the catalog gives these files no assay, platform or instrument, although on CHM13 the PASS callsets they come from have all three (WGS, Illumina, NovaSeq 6000). NYGC's GRCh38 callsets state none of the three either, so their subsets would still lack them. meta-disco now takes each subset's parent from its header's last line ([meta-disco #771](https://github.com/DataBiosphere/meta-disco/issues/771)), and links one only where the parent's own header confirms it. That rests on how bcftools writes a header: the VCF specification says header lines "may appear in any order", and bcftools can be told not to write its line (`--no-version`). A stated link would not.
+
+**Ask.**
+- Record each subset's parent, as the `chromosome` table does for the PASS callset: an `anvil_activity` row per subset, with the parent in `used_file_id` and the subset and its index in `generated_file_id`, or a column naming the parent.
+- For the 336 whose input is not in the dataset, say which file of the dataset each was made from (for the 240, presumably the `….pass.vcf.gz` of the same name), or add the input.
 
 ## Checked, not reported
 

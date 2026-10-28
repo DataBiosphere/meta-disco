@@ -284,7 +284,8 @@ def test_the_classifier_claims_not_classified_with_the_reason_under_the_rule_tha
 
 
 def test_the_variant_origin_passes_across_an_index_a_merge_a_cohort_merge_variant_processing_joint_genotyping_and_a_genome_annotation():
-    """A filter can drop calls but not change where they arose, so variant processing passes the origin (#658);
+    """A filter can drop calls, and a subset samples or regions (#771), but neither changes where a kept call
+    arose, so variant processing passes the origin (#658);
     a joint genotyping calls nothing its gVCFs did not hold (#678); a genome sequence's annotation is not a
     callset, so it takes the sequence's `not_applicable` (#682)."""
     passing = {term for term in activities.declarations() if "variant_origin" in activities.passes(term)}
@@ -294,7 +295,8 @@ def test_the_variant_origin_passes_across_an_index_a_merge_a_cohort_merge_varian
         activities.COHORT_MERGE,
         activities.JOINT_GENOTYPING,
         "VariantProcessingActivity",
-        "VariantFilterActivity",
+        activities.VARIANT_FILTER,
+        activities.VARIANT_SUBSET,
         "GenomeAnnotationActivity",
     }
 

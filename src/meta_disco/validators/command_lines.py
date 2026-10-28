@@ -155,7 +155,7 @@ class Step:
     ``input_lists`` are the files listing its inputs (:attr:`ToolArguments.input_lists`),
     never among ``inputs``.
 
-    ``output`` is None where the tool wrote to stdout (bcftools with no ``-o``) or the
+    ``output`` is None where the tool wrote to stdout (bcftools with no ``-o``, or ``-o -``) or the
     line names no single output (GATK 3's HaplotypeCaller names none). ``read`` is False
     for a line whose tool :data:`TOOL_ARGUMENTS` does not declare; such a step names no
     input or output. ``family`` is None for a line of no family :meth:`VcfCommand.step`
@@ -164,6 +164,10 @@ class Step:
     argument is ``-``: an input read from stdin, which names no file and is not in ``inputs``.
     ``mode`` is the value of the line's :attr:`ToolArguments.mode` option (the first, where
     the line gives it twice), None where it gives none; two lines alike but for it are two steps.
+    ``options`` is each option name an option-form line gives, in order, as the line is split into
+    options and values: ``--min-ac`` of ``--min-ac=1``, ``-O`` of ``-Oz``, and a cluster led by a flag
+    declared as taking no value whole (``-pG``, and ``-Wtbi``: ``-W``'s optional value is not modelled) (#771). A GATK 3 ``key=value`` line gives none. It is
+    not compared; ``producer_steps.steps_of`` tells two steps apart by it.
     """
 
     family: str | None
@@ -174,6 +178,7 @@ class Step:
     stdin: bool = False
     input_lists: tuple[str, ...] = ()
     mode: str | None = None
+    options: tuple[str, ...] = field(default=(), compare=False)
 
 
 # A VCF header line that records how the file was produced. GATK writes
@@ -202,13 +207,16 @@ class VcfCommand:
     (``key=value`` options) rather than a command line.
 
     ``text`` is the command as recorded, a quote inside a quoted attribute unescaped.
-    :attr:`words` and :attr:`step` are read from it once, on first use.
+    :attr:`words` and :attr:`step` are read from it once, on first use. ``line`` is the header
+    line it was read from, verbatim and not compared, so a reader can find the command a known
+    line holds (#771).
     """
 
     key: str
     tool_id: str | None
     text: str
     options_form: bool = False
+    line: str = field(default="", compare=False)
 
     @cached_property
     def words(self) -> tuple[str, ...]:
@@ -265,11 +273,11 @@ def vcf_commands(lines: Iterable[str]) -> list[VcfCommand]:
                 found = _VCF_COMMAND_ID_RE.search(value)
                 tool_id = found.group(1) if found else None
                 text = attr.group(2).replace('\\"', '"')
-                commands.append(VcfCommand(key, tool_id, text, attr.group(1) == "CommandLineOptions"))
+                commands.append(VcfCommand(key, tool_id, text, attr.group(1) == "CommandLineOptions", line=line))
         elif len(value) >= 2 and value[0] == value[-1] == '"':
-            commands.append(VcfCommand(key, None, value[1:-1]))
+            commands.append(VcfCommand(key, None, value[1:-1], line=line))
         else:
-            commands.append(VcfCommand(key, None, value))
+            commands.append(VcfCommand(key, None, value, line=line))
     return commands
 
 
@@ -334,11 +342,13 @@ def _option_step(family: str, tool: str, words: Sequence[str], arguments: ToolAr
     outputs: list[str] = []
     input_lists: list[str] = []
     mode: str | None = None
+    options: list[str] = []
     stdin = False
     i = 0
     while i < len(words):
         word = words[i]
         i += 1
+        recorded = None
         if not word.startswith("-") or word == "-":
             # A positional argument; `-` is stdin, which names no file.
             if arguments.positional:
@@ -350,22 +360,34 @@ def _option_step(family: str, tool: str, words: Sequence[str], arguments: ToolAr
         if word.startswith("--") and "=" in word:
             option, value = word.split("=", 1)
         elif word in arguments.no_value:
-            continue
+            option, value = word, None
         elif arguments.positional and not word.startswith("--") and len(word) > 2:
             # A short option with its value attached, as bcftools writes `-Oz` or `-Wtbi`.
             option, value = word[:2], word[2:]
+            if option in arguments.no_value:
+                recorded = word
         else:
             option, value = word, words[i] if i < len(words) else None
             i += 1
+        options.append(recorded or option)
         if value is not None and option in arguments.inputs:
             inputs.append(value)
-        elif value is not None and option in arguments.outputs:
+        elif value is not None and option in arguments.outputs and value != "-":
             outputs.append(value)
         elif value is not None and option in arguments.input_lists:
             input_lists.append(value)
         elif value is not None and option in arguments.mode and mode is None:
             mode = value
-    return Step(family, tool, tuple(inputs), _sole(outputs), stdin=stdin, input_lists=tuple(input_lists), mode=mode)
+    return Step(
+        family,
+        tool,
+        tuple(inputs),
+        _sole(outputs),
+        stdin=stdin,
+        input_lists=tuple(input_lists),
+        mode=mode,
+        options=tuple(options),
+    )
 
 
 def _sole(paths: list[str]) -> str | None:

@@ -190,6 +190,14 @@ def test_an_unread_command_line_gives_no_kind():
     assert reading.value is None and reading.reason.startswith(callers.UNREAD_STEP)
 
 
+def test_an_unread_command_line_gives_no_kind_even_where_the_last_line_is_a_view():
+    """The step reader takes the last line's view past an unread line (#771); the caller reader does
+    not, since the unread tool may be the caller."""
+    view = "##bcftools_viewCommand=view -S /r/CEU.txt /p/x.vcf.gz; Date=y"
+    reading = kind("##bcftools_pluginCommand=plugin fill-tags -- -t AF; Date=x", view)
+    assert reading.value is None and reading.reason.startswith(callers.UNREAD_STEP)
+
+
 def test_a_pvar_gives_no_kind():
     assert kind(HC, name="EUR.10.pvar").reason.startswith(callers.PVAR)
 
@@ -310,8 +318,9 @@ def test_a_merge_naming_no_caller_gives_no_kind():
     assert reading.value is None and reading.reason.startswith(callers.NO_CALLER_LINE)
 
 
-def test_with_no_one_producing_step_a_merge_in_the_header_settles_the_kind():
-    # T2T's population subsets: several `view` steps write to stdout, so no one step made the file.
+def test_where_no_step_wrote_the_producing_views_input_a_merge_in_the_header_settles_the_kind():
+    # T2T's population subsets: the view on the last line made the file (#771), but its input is the
+    # PASS filter's, which wrote to stdout, so no step the header records wrote it.
     other_view = (
         "##bcftools_viewCommand=view -s HG00096 /cromwell_root/z/1kgp.chr1.recalibrated.snp_indel.pass.vcf.gz; Date=x"
     )
