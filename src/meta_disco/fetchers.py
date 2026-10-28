@@ -859,6 +859,10 @@ def fetch_bam_header(
     return header_text
 
 
+# A gzip-compressed file's name suffixes: `.bgz` is bgzip's BGZF, as 1000 Genomes phase 3 names its VCFs (#561).
+GZIP_SUFFIXES = (".gz", ".bgz")
+
+
 # =============================================================================
 # VCF FETCHER
 # =============================================================================

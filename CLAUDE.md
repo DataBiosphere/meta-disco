@@ -417,15 +417,21 @@ reworded title renames a member: name one by its value (`DataModalityEnum("genom
     activity declares. What each role passes is `rules/activities.yaml`'s to say, read
     through `meta_disco.activities` and trusted by its readers; a term may take its
     declaration from an abstract parent, and no step names an abstract term (#610). Inference
-    states eight of `code_rules.EDGE_RULES`'s nine (the ninth is reconcile's, an external sample map's
+    states twelve of `code_rules.EDGE_RULES`'s thirteen (the thirteenth is reconcile's, an external sample map's
     members, #710): two from the child's own name through
     `meta_disco.edges`, the index producer's `IndexActivity` and the catch-all's
-    `ChecksumActivity` for a `.md5`, two from a VCF's header through
+    `ChecksumActivity` for a `.md5`, six from a VCF's header through
     `meta_disco.producer_steps` (#609, #610): the end of the header's data flow (ADR-0002
     decision 6), a `HaplotypeCaller` giving `VariantCallActivity` (an input name several
     alignments carry settled, on a GATK 4 line, by which one's `@SQ` contigs all fit the VCF's `##contig`s, read
-    from the BAM producer's cache or with samtools into it on a miss, #620) and a bcftools `concat`
-    giving `MergeActivity` with every input VCF a `shard`, and three of T2T's joint-calling
+    from the BAM producer's cache or with samtools into it on a miss, #620), a bcftools `concat`
+    giving `MergeActivity` with every input VCF a `shard`, and a bcftools `view` of one VCF giving
+    `VariantSubsetActivity` (`-S`, `-R`: samples or regions kept) or `VariantFilterActivity` (`-f`, `--min-ac`:
+    rows kept by a test on the calls) with it `processed`, by its options, read where the flow names no step
+    (no one end, as its views write to stdout, or an unread line) from the header's **last** `##` line when that is a view's (#771: bcftools
+    appends its line, GATK and Picard re-sort, so a lifted callset fails it; a step so read has its own rule id,
+    `variant_subset_by_last_line` or `variant_filter_by_last_line`, whose rationale states the assumptions, and is written
+    only where its parent's own header, from the VCF cache, is the file's less bcftools' own lines, `fits_parent`), and three of T2T's joint-calling
     cohort through `meta_disco.cohort_steps` (#621): a GATK sample-name map's rows giving
     `CohortDefinitionActivity` with every listed gVCF a `member` (the `sample_map` producer),
     and a GenomicsDB workspace tar's own `vcfheader.vcf` giving `CohortMergeActivity` with the
@@ -441,7 +447,7 @@ reworded title renames a member: name one by its value (`DataModalityEnum("genom
     holds each list once under `rebuilt_lists` (`records.REBUILT_LISTS_KEY`), and reconcile holds it under
     its address and writes it to `reconciled/rebuilt_lists.ndjson.gz` (its report block, `reconcile_rebuilt`). A rebuilt list
     names no samples.
-    **A bcftools stats report's own `ID` line** (#683) gives the eighth, through `meta_disco.bcftools_stats`
+    **A bcftools stats report's own `ID` line** (#683) gives the twelfth, through `meta_disco.bcftools_stats`
     (the `bcftools_stats` producer, claiming `.bcftools.stats.txt`, `.per_sample.stats.txt` and
     `.chm13_afr.stats.txt` by name, each read whole): one input, a VCF by name whose base name one file of the dataset carries
     (the folder settling several, #717), gives `QualityControlActivity` with it `reported_on`; two or more inputs, or a line 1 that is not bcftools

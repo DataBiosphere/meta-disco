@@ -692,7 +692,7 @@ class CreditedToEnum(str, Enum):
 
 class ActivityTypeEnum(str, Enum):
     """
-    The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its released LinkML schema spells them, plus twelve of our own, each under the term it narrows. `meaning` is TerraCore's class, else EDAM's operation for the same step; a near EDAM operation is a close mapping. What each passes is in `rules/activities.yaml`.
+    The kind of step that made a file (ADR-0002, #580): AnVIL FSS's `ActivityTypes` as its released LinkML schema spells them, plus thirteen of our own, each under the term it narrows. `meaning` is TerraCore's class, else EDAM's operation for the same step; a near EDAM operation is a close mapping. What each passes is in `rules/activities.yaml`.
     """
     Activity = "Activity"
     """
@@ -756,7 +756,11 @@ class ActivityTypeEnum(str, Enum):
     """
     VariantFilterActivity = "VariantFilterActivity"
     """
-    Labelling a callset's rows by a filter (GATK's ApplyVQSR) or keeping only those that pass (`bcftools view -f PASS`). Our own term; TerraCore has no such class, and EDAM's Variant filtering is the same step.
+    Labelling a callset's rows by a test on their calls (GATK's ApplyVQSR) or keeping only the rows that pass one (`bcftools view -f PASS`, or `--min-ac 1`, keeping the sites a kept sample carries, #771). Our own term; TerraCore has no such class, and EDAM's Variant filtering is the same step.
+    """
+    VariantSubsetActivity = "VariantSubsetActivity"
+    """
+    Keeping some of a callset's samples or regions, whatever its calls are: `bcftools view -S` keeping one population's samples, `-R` the calls in a set of regions (#771). Every call kept is as it was made; a test on the calls is a VariantFilterActivity. Our own term; neither TerraCore nor EDAM has this class, so no id is recorded.
     """
     MergeActivity = "MergeActivity"
     """

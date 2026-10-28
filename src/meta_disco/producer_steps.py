@@ -19,9 +19,18 @@ that one. Otherwise the reader declines. Identical repeated lines are one step. 
 with a step the parse could not read (its tool undeclared) is declined: that step's
 inputs and output are unknown, so the chain cannot be read.
 
+**Where the flow names no step, a bcftools view on the header's last line is taken** (#771):
+for want of one end, or for a line it cannot read (:data:`LAST_LINE_AFTER`). Views writing to
+stdout leave several unnamed ends, but bcftools appends its line and GATK and
+Picard re-sort a header they rewrite, so a view on the last ``##`` line was the last step to write
+it (:func:`last_line_view`). The one line whose position is read, and only where the end of the
+flow (:func:`end_of_flow`) names no step; :func:`producing_step` gives either, for every reader; ``code_rules.VARIANT_SUBSET_BY_LAST_LINE`` states its assumptions.
+
 **Which producing step is a step we write** is :data:`STEP_RULES`: a ``HaplotypeCaller``
 with exactly one alignment input is a ``VariantCallActivity``, and a bcftools ``concat``
-joining two or more VCFs is a ``MergeActivity`` with each input a ``shard`` (#610). Each
+joining two or more VCFs is a ``MergeActivity`` with each input a ``shard`` (#610). A bcftools
+``view`` of one VCF is a ``VariantSubsetActivity`` where its options keep samples or regions and a
+``VariantFilterActivity`` where they test the calls, with the VCF ``processed`` (:func:`view_rule`). Each
 parent is found by file name within the child's dataset (#438's rule), and a step is
 written only when every input names exactly one file there. Every other producing step
 gives no step. Each file's outcome is one of :data:`OUTCOMES`, which the VCF producer
@@ -51,11 +60,11 @@ from pathlib import Path, PurePosixPath
 
 from . import code_rules, edges
 from .code_rules import EdgeRule
-from .fetchers import FetchError, fetch_bam_header
+from .fetchers import GZIP_SUFFIXES, FetchError, fetch_bam_header, fetch_vcf_header
 from .plink import is_pvar
 from .record_keys import RecordKey
 from .validators.command_lines import BCFTOOLS, GATK, GATK3, Step
-from .validators.header_extractors import VCFHeader
+from .validators.header_extractors import VCFHeader, parse_vcf_head
 from .validators.reference_builds import ContigSignature, observe_sam, observe_vcf_header
 
 # Why a file got the step it did, or none. Counted per dataset by the VCF producer.
@@ -68,6 +77,9 @@ NO_ACTIVITY = "no_activity"
 PARENT_NOT_FOUND = "parent_not_found"
 PARENT_AMBIGUOUS = "parent_ambiguous"
 PARENT_UNREADABLE = "parent_unreadable"
+# A view read from the header's last line whose named parent's header is not this file's less the
+# view's own lines (#771): the name named another file, or something else rewrote the header.
+PARENT_HEADER_DIFFERS = "parent_header_differs"
 # A PLINK 2 `.pvar` keeps the `##` command lines of the VCF it was converted from and adds
 # none of its own, so its header never names the step that made it (#561).
 NOT_A_VCF = "not_a_vcf"
@@ -82,6 +94,7 @@ OUTCOMES = (
     PARENT_NOT_FOUND,
     PARENT_AMBIGUOUS,
     PARENT_UNREADABLE,
+    PARENT_HEADER_DIFFERS,
     NOT_A_VCF,
 )
 
@@ -115,18 +128,100 @@ STEP_RULES: dict[str, StepRule] = {
     "concat": StepRule(code_rules.MERGE_BY_HEADER, frozenset({BCFTOOLS}), "variants", many=True),
 }
 
+# A bcftools view's options, by what they make of the one VCF it reads (#771). Subsetting keeps
+# samples' columns or regions' rows whatever the calls are; filtering keeps the rows whose calls
+# pass a test. The output options change only how the output is written, and ``--force-samples``
+# only lets ``-S`` name samples the file lacks, so none changes which calls are kept. A view giving an option
+# in none of these, both a subset and a filter option, or neither, gives no step.
+VIEW_SUBSET_OPTIONS = frozenset(
+    {"-s", "--samples", "-S", "--samples-file", "-r", "--regions", "-R", "--regions-file"}
+    | {"-t", "--targets", "-T", "--targets-file"}
+)
+VIEW_FILTER_OPTIONS = frozenset(
+    {"-f", "--apply-filters", "-i", "--include", "-e", "--exclude", "-c", "--min-ac", "-C", "--max-ac"}
+    | {"-q", "--min-af", "-Q", "--max-af", "-v", "--types", "-V", "--exclude-types"}
+    | {"-m", "--min-alleles", "-M", "--max-alleles", "-g", "--genotype", "-k", "--known", "-n", "--novel"}
+    | {"-p", "--phased", "-P", "--exclude-phased", "-u", "--uncalled", "-U", "--exclude-uncalled"}
+    | {"-x", "--private", "-X", "--exclude-private"}
+)
+VIEW_OUTPUT_OPTIONS = frozenset(
+    {"-o", "--output", "-O", "--output-type", "--threads", "-W", "--write-index", "--no-version"}
+    | {"-l", "--compression-level", "--force-samples"}
+)
+# The options of bcftools view's in ``command_lines.TOOL_ARGUMENTS`` that are neither a subset, a
+# filter nor an output option (genotypes dropped, alleles trimmed, the header alone or none, INFO
+# left as it was): declared here so each parser option has a stated effect; a view giving one gives no step.
+VIEW_NO_STEP_OPTIONS = frozenset(
+    {"-G", "--drop-genotypes", "-h", "--header-only", "-H", "--no-header", "-a", "--trim-alt-alleles"}
+    | {"-A", "--trim-unseen-allele", "-I", "--no-update"}
+)
+# The view rules, (subset, filter), as the end of the flow found the view and as the last line did:
+# their own ids, so the edges that rest on the last line's assumptions can be found (#771).
+VIEW_RULES = (
+    StepRule(code_rules.VARIANT_SUBSET_BY_HEADER, frozenset({BCFTOOLS}), "variants"),
+    StepRule(code_rules.VARIANT_FILTER_BY_HEADER, frozenset({BCFTOOLS}), "variants"),
+)
+LAST_LINE_VIEW_RULES = (
+    StepRule(code_rules.VARIANT_SUBSET_BY_LAST_LINE, frozenset({BCFTOOLS}), "variants"),
+    StepRule(code_rules.VARIANT_FILTER_BY_LAST_LINE, frozenset({BCFTOOLS}), "variants"),
+)
+# Where :func:`end_of_flow` names no step, the outcomes after which the header's last line is read.
+LAST_LINE_AFTER = frozenset({NO_SINGLE_END, OUTPUT_NOT_THIS_FILE, UNKNOWN_TOOL})
+
+
+def view_rule(step: Step, by_last_line: bool = False) -> StepRule | None:
+    """The rule a bcftools ``view`` step is, by its options and whether the header's last line named it
+    (:data:`LAST_LINE_VIEW_RULES`) or the end of the flow did (:data:`VIEW_RULES`); None for any other step, or a view
+    whose options give both a subset and a filter, neither, or one in none of :data:`VIEW_SUBSET_OPTIONS`,
+    :data:`VIEW_FILTER_OPTIONS` and :data:`VIEW_OUTPUT_OPTIONS` (as :data:`VIEW_NO_STEP_OPTIONS`'s are)."""
+    if step.family != BCFTOOLS or step.tool != "view":
+        return None
+    options = set(step.options)
+    if options - VIEW_SUBSET_OPTIONS - VIEW_FILTER_OPTIONS - VIEW_OUTPUT_OPTIONS:
+        return None
+    subset, filtered = bool(options & VIEW_SUBSET_OPTIONS), bool(options & VIEW_FILTER_OPTIONS)
+    if subset == filtered:
+        return None
+    subset_rule, filter_rule = LAST_LINE_VIEW_RULES if by_last_line else VIEW_RULES
+    return subset_rule if subset else filter_rule
+
+
+def last_line_view(header: VCFHeader, file_name: str) -> Step | None:
+    """The bcftools ``view`` on the header's last ``##`` line, where it made ``file_name``; else None.
+
+    Only for a header read to a VCF's ``#CHROM`` line, one cut short having no last line, and
+    never for a PLINK ``.pvar``, which keeps the lines of the VCF it was converted from. The view
+    made the file where it names no output (stdout) or names this file, compared as
+    :func:`data_name` compares a chain.
+    """
+    if is_pvar(file_name) or not header.vcf_columns or header.last_meta_line is None:
+        return None
+    command = next((c for c in header.commands if c.line == header.last_meta_line), None)
+    if command is None:
+        return None
+    step = command.step
+    if step.family != BCFTOOLS or step.tool != "view":
+        return None
+    if step.output is not None and data_name(step.output) != data_name(file_name):
+        return None
+    return step
+
 
 def steps_of(header: VCFHeader) -> list[Step] | None:
     """Every command line in a parsed VCF header as a step, or None if one is unread.
 
-    Identical steps are kept once.
+    Identical steps are kept once; two alike but for their set of options (``Step.options``,
+    not compared) are two, so one view's options never stand for another's (#771).
     """
     steps: list[Step] = []
+    seen: set[tuple[Step, frozenset[str]]] = set()
     for command in header.commands:
-        if not command.step.read:
+        step = command.step
+        if not step.read:
             return None
-        if command.step not in steps:
-            steps.append(command.step)
+        if (step, frozenset(step.options)) not in seen:
+            seen.add((step, frozenset(step.options)))
+            steps.append(step)
     return steps
 
 
@@ -137,12 +232,30 @@ def data_name(path: str) -> str:
 
 
 def producing_step(header: VCFHeader, file_name: str) -> tuple[Step | None, str]:
-    """The step in a VCF header that made ``file_name``, the one end of its data flow, and the outcome.
+    """The step in a VCF header that made ``file_name``, and the outcome: the one end of its data
+    flow or, where that names none for an outcome in :data:`LAST_LINE_AFTER`, the bcftools view on
+    its last ``##`` line (:func:`last_line_view`, #771).
 
     See the module docstring for the rule. ``(step, STEPPED)``, or ``(None, reason)``:
     :data:`NOT_A_VCF`, :data:`NO_COMMAND_LINE`, :data:`UNKNOWN_TOOL`, :data:`NO_SINGLE_END` or
-    :data:`OUTPUT_NOT_THIS_FILE`.
+    :data:`OUTPUT_NOT_THIS_FILE`, the end of the flow's outcome.
     """
+    step, outcome, _ = found_step(header, file_name)
+    return step, outcome
+
+
+def found_step(header: VCFHeader, file_name: str) -> tuple[Step | None, str, bool]:
+    """:func:`producing_step`'s step and outcome, and whether the header's last line named the step."""
+    step, outcome = end_of_flow(header, file_name)
+    if step is None and outcome in LAST_LINE_AFTER:
+        view = last_line_view(header, file_name)
+        if view is not None:
+            return view, STEPPED, True
+    return step, outcome, False
+
+
+def end_of_flow(header: VCFHeader, file_name: str) -> tuple[Step | None, str]:
+    """The one end of a VCF header's data flow that made ``file_name``, as :func:`producing_step` gives it before the last line is read."""
     if is_pvar(file_name):
         return None, NOT_A_VCF
     steps = steps_of(header)
@@ -225,24 +338,98 @@ class AlignmentContigs:
             return self._read[md5]
 
 
+def bcftools_line(line: str) -> bool:
+    """Whether a ``##`` line is one bcftools writes of its own: its version and command lines."""
+    return line.startswith("##bcftools_")
+
+
+def fits_parent(child: VCFHeader, parent: VCFHeader) -> bool:
+    """Whether ``child``'s header is ``parent``'s with only bcftools' own lines added, and its samples are among the parent's.
+
+    What a bcftools view of ``parent`` writes (#771): every contig, INFO, FORMAT, ALT, reference
+    and ``##source`` line as the parent has it, and the parent's other ``##`` lines, with the
+    view's version and command lines added. Its FILTER lines are compared less ``PASS``, which
+    htslib writes in its own words. A view of a header a later tool rewrote, or of another file
+    of the name, does not fit.
+    """
+    if parent.sample_columns is None or not set(child.sample_columns or ()) <= set(parent.sample_columns):
+        return False
+    same = (
+        child.contig_lines == parent.contig_lines
+        and child.info_fields == parent.info_fields
+        and child.format_fields == parent.format_fields
+        and child.alt_fields == parent.alt_fields
+        and child.reference == parent.reference
+        and child.sources == parent.sources
+        and child.unkeyed_meta == parent.unkeyed_meta
+        and _filters(child) == _filters(parent)
+    )
+    child_other, parent_other = set(child.other_meta or ()), set(parent.other_meta or ())
+    return same and parent_other <= child_other and all(bcftools_line(x) for x in child_other - parent_other)
+
+
+def _filters(header: VCFHeader) -> list:
+    return [f for f in header.filter_fields or () if f.fields.get("ID") != "PASS"]
+
+
+class ParentHeaders:
+    """Each VCF parent's header, read once per file in a run: from the VCF producer's cache, or on a
+    miss fetched into it (``fetch_vcf_header``), under a lock, as :class:`AlignmentContigs` reads alignments."""
+
+    def __init__(self, evidence_dir: Path):
+        self.evidence_dir = evidence_dir
+        self._read: dict[str, VCFHeader | None] = {}
+        self._lock = threading.Lock()
+
+    def __call__(self, record: dict) -> VCFHeader | None:
+        """The parent's parsed header; None if it cannot be read."""
+        md5 = record["file_md5sum"]
+        with self._lock:
+            if md5 not in self._read:
+                name = record["file_name"]
+                try:
+                    head = fetch_vcf_header(
+                        self.evidence_dir,
+                        md5,
+                        file_name=name,
+                        is_gzipped=name.lower().endswith(GZIP_SUFFIXES),
+                        url=record.get("url"),
+                    )
+                except FetchError:
+                    self._read[md5] = None
+                else:
+                    self._read[md5] = parse_vcf_head(head)
+            return self._read[md5]
+
+
 class HeaderSteps:
     """A run's reader of the step each VCF's header states, with what it resolves parents against.
 
     Built once per run from every loaded record (:meth:`for_run`), and called per file.
-    It keeps only the records a rule in :data:`STEP_RULES` could take as a parent, and of
+    It keeps only the records a rule in :data:`STEP_RULES`, or a view's, could take as a parent, and of
     each only what an edge reads and what reading its header takes (its md5 and any
     content URL), so the run's other records are not held.
     """
 
-    def __init__(self, index: edges.NameIndex, key: RecordKey, contigs_of: Callable[[dict], Contigs | None]):
+    def __init__(
+        self,
+        index: edges.NameIndex,
+        key: RecordKey,
+        contigs_of: Callable[[dict], Contigs | None],
+        header_of: Callable[[dict], VCFHeader | None],
+    ):
         self.index = index
         self.key = key
         self.contigs_of = contigs_of
+        self.header_of = header_of
 
     @classmethod
-    def for_run(cls, records: Iterable[dict], key: RecordKey, evidence_base: Path, *, alignments: str) -> HeaderSteps:
-        """The run's reader, reading an alignment's header from the cache ``alignments`` names under ``evidence_base``."""
-        kinds = {rule.kind for rule in STEP_RULES.values()}
+    def for_run(
+        cls, records: Iterable[dict], key: RecordKey, evidence_base: Path, *, alignments: str, variants: str
+    ) -> HeaderSteps:
+        """The run's reader, reading an alignment's header from the cache ``alignments`` names under
+        ``evidence_base``, and a VCF parent's from the one ``variants`` names."""
+        kinds = {rule.kind for rule in (*STEP_RULES.values(), *VIEW_RULES, *LAST_LINE_VIEW_RULES)}
 
         def keep(name: str) -> bool:
             return edges.parent_kind_of(name) in kinds
@@ -250,14 +437,15 @@ class HeaderSteps:
         index = edges.parent_index(
             records, key, keep, "ground a header step's input on its parent", also=("file_md5sum", "url")
         )
-        return cls(index, key, AlignmentContigs(evidence_base / alignments))
+        return cls(index, key, AlignmentContigs(evidence_base / alignments), ParentHeaders(evidence_base / variants))
 
     def __call__(
         self, header: VCFHeader, file_name: str, dataset_id: str, folder: str | None
     ) -> tuple[dict | None, str]:
         """A VCF's ``generated_by`` from its header, and the outcome (one of :data:`OUTCOMES`).
 
-        A producing step in :data:`STEP_RULES`, of a family its rule names, reading nothing
+        A producing step (:func:`producing_step`) in :data:`STEP_RULES`, or a ``view`` that :func:`view_rule`
+        names a rule for, of a family its rule names, reading nothing
         from stdin, whose inputs are all of the kind its rule names (exactly one, or two or
         more where the rule takes several) gives that rule's step, each parent the one file of
         ``dataset_id`` carrying the input's base name, case-folded, as ``edges.matches``
@@ -267,12 +455,14 @@ class HeaderSteps:
         name, give none, as :data:`PARENT_AMBIGUOUS` — except that, for a rule that settles a
         shared name by contigs, a GATK 4 line's one input's parent is the one carrier whose
         contigs fit the VCF's (:meth:`by_contigs`). Any other producing step gives none, as
-        :data:`NO_ACTIVITY`.
+        :data:`NO_ACTIVITY`. A view the header's last line named is written only where its parent's
+        header fits (:func:`fits_parent`): as :data:`PARENT_UNREADABLE` where the parent's header cannot
+        be read, as :data:`PARENT_HEADER_DIFFERS` where it does not fit.
         """
-        step, outcome = producing_step(header, file_name)
+        step, outcome, by_last_line = found_step(header, file_name)
         if step is None:
             return None, outcome
-        rule = STEP_RULES.get(step.tool)
+        rule = view_rule(step, by_last_line) or STEP_RULES.get(step.tool)
         if rule is None or step.family not in rule.families or step.stdin:
             return None, NO_ACTIVITY
         paths = list(dict.fromkeys(step.inputs))
@@ -291,6 +481,12 @@ class HeaderSteps:
             parents, outcome = self.by_contigs(header, dataset_id, names[0], folder)
         if parents is None:
             return None, outcome
+        if by_last_line:
+            parent = self.header_of(parents[0])
+            if parent is None:
+                return None, PARENT_UNREADABLE
+            if not fits_parent(header, parent):
+                return None, PARENT_HEADER_DIFFERS
         return edges.generated_by(rule.edge_rule, parents, self.key), STEPPED
 
     def by_contigs(

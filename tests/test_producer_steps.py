@@ -19,7 +19,7 @@ from meta_disco.pipeline import ClassifyPipeline
 from meta_disco.reconcile import content_step_counts, run_metadata
 from meta_disco.record_keys import RecordKey
 from meta_disco.validators import header_extractors, reference_builds
-from meta_disco.validators.command_lines import GATK, GATK3, Step
+from meta_disco.validators.command_lines import BCFTOOLS, GATK, GATK3, TOOL_ARGUMENTS, Step
 from meta_disco.validators.header_extractors import VCFHeader, parse_vcf_header
 from tests.metadata_fixtures import write_metadata
 
@@ -175,14 +175,14 @@ def test_the_producer_is_the_end_of_the_flow_not_the_last_line(lines, file_name,
     assert made(header(*lines), file_name).tool == tool
 
 
-def test_a_stdout_end_beside_an_end_set_aside_declines():
+def test_a_stdout_end_beside_an_end_set_aside_is_no_end_of_the_flow_but_the_last_line_names_it():
     # The PASS filter writes to stdout. The import's workspace is an end too, set aside for
-    # naming another file, so nothing says the unnamed end made this one (#610 revisits it).
+    # naming another file, so nothing in the flow says the unnamed end made this one; the PASS
+    # filter is the header's last line, which does (#771).
     lines = (VQSR_INDEL, VQSR_SNP, IMPORT, SELECT, CONCAT, PASS)
-    assert ps.producing_step(header(*lines), "1kgp.chr1.recalibrated.snp_indel.pass.vcf.gz") == (
-        None,
-        ps.NO_SINGLE_END,
-    )
+    file_name = "1kgp.chr1.recalibrated.snp_indel.pass.vcf.gz"
+    assert ps.end_of_flow(header(*lines), file_name) == (None, ps.NO_SINGLE_END)
+    assert made(header(*lines), file_name).options == ("-f",)
 
 
 def test_the_indel_pass_is_found_wherever_gatk_sorted_it():
@@ -192,10 +192,11 @@ def test_the_indel_pass_is_found_wherever_gatk_sorted_it():
     )
 
 
-def test_two_unnamed_ends_decline():
+def test_two_unnamed_ends_are_no_end_of_the_flow_and_the_last_line_names_the_step():
     a = "##bcftools_viewCommand=view -f PASS /p/x.vcf.gz; Date=x"
     b = "##bcftools_viewCommand=view -s AFR /p/x.pass.vcf; Date=y"
-    assert ps.producing_step(header(a, b), "x.pass.AFR.vcf.gz")[1] == ps.NO_SINGLE_END
+    assert ps.end_of_flow(header(a, b), "x.pass.AFR.vcf.gz")[1] == ps.NO_SINGLE_END
+    assert made(header(a, b), "x.pass.AFR.vcf.gz").inputs == ("/p/x.pass.vcf",)
 
 
 def test_an_end_that_names_another_file_is_not_this_files_producer():
@@ -222,10 +223,13 @@ def test_a_header_with_no_command_line_or_an_undeclared_tool_declines():
 # --- the step a producing HaplotypeCaller gives ------------------------------------------
 
 
-def reader(*entries) -> ps.HeaderSteps:
-    """A run's step reader over these (file name, dataset) records, keyed by ``file_id`` f0, f1, …"""
+def reader(*entries, parent: tuple[str, ...] | None = None) -> ps.HeaderSteps:
+    """A run's step reader over these (file name, dataset) records, keyed by ``file_id`` f0, f1, …,
+    reading every VCF parent's header as ``parent``'s lines (None: unreadable)."""
     records = [{"file_id": f"f{n}", "file_name": name, "dataset_id": ds} for n, (name, ds) in enumerate(entries)]
-    return ps.HeaderSteps.for_run(records, KEY, EVIDENCE, alignments=BAM_CONFIG.name)
+    steps = ps.HeaderSteps.for_run(records, KEY, EVIDENCE, alignments=BAM_CONFIG.name, variants=VCF_CONFIG.name)
+    steps.header_of = lambda record: None if parent is None else header(*parent)
+    return steps
 
 
 def test_a_haplotypecaller_calls_from_the_one_alignment_of_that_name_in_the_dataset():
@@ -343,9 +347,223 @@ def test_the_reader_keeps_only_the_records_a_rule_could_take_as_a_parent():
 
 
 def test_the_edge_rules_are_declared_with_the_others():
-    for rule in (code_rules.VARIANT_CALL_BY_HEADER, code_rules.MERGE_BY_HEADER):
+    for rule in (
+        code_rules.VARIANT_CALL_BY_HEADER,
+        code_rules.MERGE_BY_HEADER,
+        code_rules.VARIANT_SUBSET_BY_HEADER,
+        code_rules.VARIANT_FILTER_BY_HEADER,
+        code_rules.VARIANT_SUBSET_BY_LAST_LINE,
+        code_rules.VARIANT_FILTER_BY_LAST_LINE,
+    ):
         assert rule in code_rules.EDGE_RULES
         assert rule.source_type == SOURCE_CONTENT_READ
+
+
+# --- a bcftools view: by its options, and on the header's last line (#771) ------------------
+
+# T2T's CHM13 chain as a population subset carries it: the joint calling, the PASS filter to
+# stdout, then the subset of that, also to stdout. Two unnamed ends, so the flow has no one end.
+CHAIN = (VQSR_INDEL, VQSR_SNP, IMPORT, SELECT, CONCAT, PASS)
+PASSED = "1kgp.chr1.recalibrated.snp_indel.pass.vcf.gz"
+CEU = "1kgp.chr1.recalibrated.snp_indel.pass.CEU.vcf.gz"
+
+
+def view(options: str, path: str = f"/cromwell_root/w/{PASSED}") -> str:
+    return f"##bcftools_viewCommand=view {options} {path}; Date=Thu Apr 22 03:34:28 2021"
+
+
+def test_a_view_line_records_each_option_as_written():
+    (step,) = steps(header(view("-S /r/CEU.txt --force-samples --min-ac=1 -Oz")))
+    assert step.options == ("-S", "--force-samples", "--min-ac", "-O")
+
+
+def test_every_option_the_view_parser_declares_has_a_declared_effect():
+    """The options' effects are declared beside the rules, apart from the parser's ``TOOL_ARGUMENTS``;
+    an option the parser learns must be given an effect too, or every view giving it silently gives no step."""
+    arguments = TOOL_ARGUMENTS[(BCFTOOLS, "view")]
+    declared = ps.VIEW_SUBSET_OPTIONS | ps.VIEW_FILTER_OPTIONS | ps.VIEW_OUTPUT_OPTIONS | ps.VIEW_NO_STEP_OPTIONS
+    assert set(arguments.outputs) | set(arguments.no_value) <= declared
+    groups = (ps.VIEW_SUBSET_OPTIONS, ps.VIEW_FILTER_OPTIONS, ps.VIEW_OUTPUT_OPTIONS, ps.VIEW_NO_STEP_OPTIONS)
+    assert sum(len(g) for g in groups) == len(declared), "an option is in two groups"
+
+
+def test_two_views_alike_but_for_their_options_are_two_steps_and_name_no_single_producer():
+    """Kept as one, the first line's options would decide the activity of a file the second made (#771)."""
+    a, b = view("-S a.txt", "/p/tmp.vcf.gz"), view("-f PASS", "/p/tmp.vcf.gz")
+    assert len(steps(header(a, b))) == 2
+    assert len(steps(header(a, view("-S b.txt", "/p/tmp.vcf.gz")))) == 1
+    assert ps.end_of_flow(header(a, b), CEU)[1] == ps.NO_SINGLE_END
+    assert made(header(a, b), CEU).options == ("-f",)
+
+
+@pytest.mark.parametrize(
+    ("options", "rule"),
+    [
+        ("-S /r/CEU.txt --force-samples", code_rules.VARIANT_SUBSET_BY_LAST_LINE),
+        ("-R /r/chm13v1_unique_100mer_coverage.bed", code_rules.VARIANT_SUBSET_BY_LAST_LINE),
+        ("--min-ac 1", code_rules.VARIANT_FILTER_BY_LAST_LINE),
+        (f"-q 1 -Oz -o {CEU}", code_rules.VARIANT_FILTER_BY_LAST_LINE),
+    ],
+)
+def test_a_last_line_view_of_one_vcf_is_a_subset_or_a_filter_of_it_by_its_options(options, rule):
+    assert ps.end_of_flow(header(*CHAIN, view(options)), CEU)[1] == ps.NO_SINGLE_END
+    step, outcome = reader((PASSED, "D"), parent=CHAIN)(header(*CHAIN, view(options)), CEU, "D", None)
+    assert outcome == ps.STEPPED and step is not None
+    assert step["activity"] == rule.activity
+    (used,) = step["inputs"]
+    assert (used["role"], used["parent_file"], used["parent_key"], used["parent_kind"]) == (
+        "processed",
+        PASSED,
+        "f0",
+        "variants",
+    )
+    assert step["named_by"] == [{"source_type": SOURCE_CONTENT_READ, "rule_id": rule.id}]
+
+
+def test_the_pass_filter_on_the_last_line_names_the_callset_it_filtered():
+    """The step the chromosome table states for the PASS callset, so the two agree at reconcile."""
+    entries = (("1kgp.chr1.recalibrated.snp_indel.vcf.gz", "D"),)
+    step, outcome = reader(*entries, parent=CHAIN[:-1])(header(*CHAIN), PASSED, "D", None)
+    assert outcome == ps.STEPPED and step is not None
+    assert step["activity"] == "VariantFilterActivity"
+    assert step["inputs"][0]["parent_file"] == "1kgp.chr1.recalibrated.snp_indel.vcf.gz"
+    assert step["named_by"][0]["rule_id"] == code_rules.VARIANT_FILTER_BY_LAST_LINE.id
+
+
+def test_a_lone_view_is_the_one_end_of_the_flow_and_takes_its_rule_by_options():
+    step, outcome = reader((PASSED, "D"))(header(view("-S /r/CEU.txt --force-samples")), CEU, "D", None)
+    assert outcome == ps.STEPPED and step is not None and step["activity"] == "VariantSubsetActivity"
+    assert step["named_by"][0]["rule_id"] == code_rules.VARIANT_SUBSET_BY_HEADER.id
+
+
+def test_a_last_line_view_is_read_where_another_lines_tool_is_undeclared():
+    """An undeclared tool's line leaves the chain unread; a later tool's own line would be last, so the view is."""
+    unread = gatk4("LeftAlignAndTrimVariants", "-V a.vcf -O b.vcf")
+    assert ps.end_of_flow(header(unread, view("-S /r/CEU.txt")), CEU)[1] == ps.UNKNOWN_TOOL
+    step, outcome = reader((PASSED, "D"), parent=(unread,))(header(unread, view("-S /r/CEU.txt")), CEU, "D", None)
+    assert outcome == ps.STEPPED and step is not None and step["activity"] == "VariantSubsetActivity"
+    assert step["named_by"][0]["rule_id"] == code_rules.VARIANT_SUBSET_BY_LAST_LINE.id
+
+
+CEU_SAMPLES = "\tFORMAT\tHG00096\tHG00097"
+
+
+def with_samples(parsed: VCFHeader, *samples: str) -> VCFHeader:
+    return dataclasses.replace(parsed, sample_columns=samples)
+
+
+def test_a_last_line_view_is_written_only_where_its_parents_header_fits():
+    step = reader((PASSED, "D"), parent=CHAIN)
+    assert step(header(*CHAIN, view("-S /r/CEU.txt")), CEU, "D", None)[1] == ps.STEPPED
+    # The name resolved, but the file it names is not the one the view read.
+    other = reader((PASSED, "D"), parent=(IMPORT, SELECT, CONCAT, "##contig=<ID=chr1,length=248387328>"))
+    assert other(header(*CHAIN, view("-S /r/CEU.txt")), CEU, "D", None) == (None, ps.PARENT_HEADER_DIFFERS)
+    assert reader((PASSED, "D"))(header(*CHAIN, view("-S /r/CEU.txt")), CEU, "D", None) == (None, ps.PARENT_UNREADABLE)
+
+
+@pytest.mark.parametrize(
+    ("child", "parent", "fits"),
+    [
+        ((*CHAIN, view("-S /r/CEU.txt")), CHAIN, True),
+        # bcftools' version line on its first pass, and htslib's own words for PASS.
+        (
+            (
+                *CHAIN,
+                "##bcftools_viewVersion=1.9+htslib-1.9",
+                '##FILTER=<ID=PASS,Description="All filters passed">',
+                PASS,
+            ),
+            (*CHAIN[:-1], '##FILTER=<ID=PASS,Description="Site contains at least one allele that passes filters">'),
+            True,
+        ),
+        ((*CHAIN, "##contig=<ID=chr1,length=10>", view("-S /r/CEU.txt")), CHAIN, False),
+        ((*CHAIN, "##reference=file:/r/other.fa", view("-S /r/CEU.txt")), CHAIN, False),
+        ((*CHAIN, '##INFO=<ID=AF,Number=A,Type=Float,Description="x">', view("-S /r/CEU.txt")), CHAIN, False),
+        ((*CHAIN[1:], view("-S /r/CEU.txt")), CHAIN, False),
+        ((*CHAIN, "##fileDate=20210422", view("-S /r/CEU.txt")), CHAIN, False),
+    ],
+    ids=[
+        "view-of-it",
+        "first-pass",
+        "contig-added",
+        "reference-changed",
+        "info-added",
+        "line-dropped",
+        "other-line-added",
+    ],
+)
+def test_a_childs_header_fits_its_parent_where_only_bcftools_own_lines_are_added(child, parent, fits):
+    assert ps.fits_parent(header(*child), header(*parent)) is fits
+
+
+def test_a_child_whose_samples_its_parent_lacks_does_not_fit():
+    parent = with_samples(header(*CHAIN), "HG00096", "HG00097")
+    child = header(*CHAIN, view("-S /r/CEU.txt"))
+    assert ps.fits_parent(with_samples(child, "HG00096"), parent)
+    assert not ps.fits_parent(with_samples(child, "HG00096", "NA12878"), parent)
+    assert not ps.fits_parent(with_samples(child, "HG00096"), dataclasses.replace(parent, sample_columns=None))
+
+
+def test_a_lifted_callset_whose_header_was_re_sorted_after_the_view_gives_no_step():
+    """Picard's LiftoverVcf writes no command line, but its re-sort leaves lines after the view's (#771)."""
+    lifted = header(*CHAIN, "##reference=file:/r/chm13.v1.1.fasta", "##source=SelectVariants")
+    file_name = "1kgp.chr1.recalibrated.snp_indel.pass.chm13.v1.1.liftover.vcf.gz"
+    entries = (("1kgp.chr1.recalibrated.snp_indel.vcf.gz", "D"),)
+    assert reader(*entries)(lifted, file_name, "D", None) == (None, ps.NO_SINGLE_END)
+
+
+def test_the_end_of_the_flow_wins_over_a_last_line_view_naming_another_output():
+    other = view("-S /r/CEU.txt -o other.vcf.gz", "/p/unrelated.vcf.gz")
+    step, outcome = reader(("HG00096.cram", "D"))(header(HC, other), "HG00096.chr10.hc.vcf.gz", "D", None)
+    assert outcome == ps.STEPPED and step is not None and step["activity"] == "VariantCallActivity"
+
+
+@pytest.mark.parametrize(
+    ("last", "outcome"),
+    [
+        (view("-S /r/CEU.txt -o other.vcf.gz"), ps.OUTPUT_NOT_THIS_FILE),
+        (view("-S /r/CEU.txt -f PASS"), ps.NO_ACTIVITY),
+        (view("-Oz"), ps.NO_ACTIVITY),
+        (view("-S /r/CEU.txt -G"), ps.NO_ACTIVITY),
+        (view("-S /r/CEU.txt", "-"), ps.NO_ACTIVITY),
+        (view("-S /r/CEU.txt", f"/p/{PASSED} /p/{CEU}"), ps.NO_ACTIVITY),
+        (view("-S /r/CEU.txt", "/p/tmp.3.vcf"), ps.PARENT_NOT_FOUND),
+        (view("-S /r/CEU.txt", "/p/ceu_samples.txt"), ps.NO_ACTIVITY),
+    ],
+    ids=[
+        "another-output",
+        "subset-and-filter",
+        "neither",
+        "undeclared-option",
+        "stdin",
+        "two-inputs",
+        "no-parent",
+        "not-a-vcf",
+    ],
+)
+def test_a_last_line_view_gives_no_step_where_its_output_options_or_input_say_nothing(last, outcome):
+    entries = ((PASSED, "D"), (CEU, "D"), ("ceu_samples.txt", "D"))
+    assert reader(*entries)(header(IMPORT, last), CEU, "D", None) == (None, outcome)
+
+
+def test_a_last_line_views_parent_two_files_carry_gives_no_step():
+    entries = ((PASSED, "D"), (PASSED.upper(), "D"))
+    assert reader(*entries)(header(*CHAIN, view("-S /r/CEU.txt")), CEU, "D", None) == (None, ps.PARENT_AMBIGUOUS)
+
+
+def test_a_header_cut_short_of_its_chrom_line_has_no_last_line_to_read():
+    text = "\n".join(["##fileformat=VCFv4.2", *CHAIN, view("-S /r/CEU.txt")])
+    assert reader((PASSED, "D"))(parse_vcf_header(text), CEU, "D", None) == (None, ps.NO_SINGLE_END)
+
+
+def test_a_pvar_takes_no_step_from_a_view_its_vcf_ended_with():
+    pvar = "1kgp.chr1.recalibrated.snp_indel.pass.CEU.pvar"
+    assert reader((PASSED, "D"))(header(*CHAIN, view("-S /r/CEU.txt")), pvar, "D", None) == (None, ps.NOT_A_VCF)
+
+
+def test_the_last_line_is_the_headers_last_double_hash_line_whatever_its_key():
+    assert header(*CHAIN, "##contig=<ID=chr1,length=10>").last_meta_line == "##contig=<ID=chr1,length=10>"
+    assert parse_vcf_header("#CHROM\tPOS").last_meta_line is None
 
 
 # --- a name several alignments carry, settled by contigs (#620) ----------------------------
@@ -387,7 +605,7 @@ def carriers(tmp_path, *headers: str | None, folders: tuple[str, ...] = ()) -> p
             records[-1]["file_path"] = f"{folders[n]}/HG00096.cram"
         if text is not None:
             BamEvidence(md5sum=md5, file_name="HG00096.cram", header_text=text).save(tmp_path / BAM_CONFIG.name)
-    return ps.HeaderSteps.for_run(records, KEY, tmp_path, alignments=BAM_CONFIG.name)
+    return ps.HeaderSteps.for_run(records, KEY, tmp_path, alignments=BAM_CONFIG.name, variants=VCF_CONFIG.name)
 
 
 def test_of_alignments_sharing_a_name_the_parent_is_the_one_with_the_vcfs_contigs(tmp_path, fetches):
@@ -573,7 +791,11 @@ def test_an_unnamed_end_beside_one_set_aside_for_another_file_is_not_taken():
 def test_a_candidate_parent_with_no_record_key_stops_the_run_when_the_reader_is_built():
     with pytest.raises(ValueError, match="file_id"):
         ps.HeaderSteps.for_run(
-            [{"file_name": "HG00096.cram", "dataset_id": "D"}], KEY, EVIDENCE, alignments=BAM_CONFIG.name
+            [{"file_name": "HG00096.cram", "dataset_id": "D"}],
+            KEY,
+            EVIDENCE,
+            alignments=BAM_CONFIG.name,
+            variants=VCF_CONFIG.name,
         )
 
 

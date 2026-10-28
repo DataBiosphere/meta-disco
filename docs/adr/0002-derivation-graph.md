@@ -5,7 +5,7 @@
 - **Extends, and supersedes in part:** `docs/derived-file-data-model.md` (#109), which settled the edge for companion files only; see [What this supersedes](#what-this-supersedes)
 - **Contract:** adds 4.9 to `docs/claims-contract.md` (inheritance) and its entry under "What is not true yet"; amends 2.8, 3.1, 4.1, 4.2 and 6.6 to match
 - **Related:** #356 (companion edges), #357 (sample identity), #358 (alignment ← reads), #359 (variants ← alignments), #360 (assemblies), #361 (sample ← donor), #362 (consistency and coverage), #371 (the edge carries the parent's record key), #413 (index inheritance and contract 1.1), #438 (ambiguous index parents)
-- **Amended by:** [#580](https://github.com/DataBiosphere/meta-disco/issues/580) (2026-09-29): a step is an activity from AnVIL FSS's vocabulary, not a verb between two files (decision 5); [#609](https://github.com/DataBiosphere/meta-disco/issues/609) (2026-10-03): which of a header's command lines made the file (decision 6); [#620](https://github.com/DataBiosphere/meta-disco/issues/620) (2026-10-05): a header-named alignment several files carry is settled by contigs (decision 6); [#357](https://github.com/DataBiosphere/meta-disco/issues/357) (2026-10-12): the namespaces, a declared rewrite, and a file's samples as a field (decision 1, Open); [#693](https://github.com/DataBiosphere/meta-disco/issues/693) (2026-10-16, epic [#692](https://github.com/DataBiosphere/meta-disco/issues/692)): donors and samples are records keyed by their identifier (decision 1)
+- **Amended by:** [#580](https://github.com/DataBiosphere/meta-disco/issues/580) (2026-09-29): a step is an activity from AnVIL FSS's vocabulary, not a verb between two files (decision 5); [#609](https://github.com/DataBiosphere/meta-disco/issues/609) (2026-10-03): which of a header's command lines made the file (decision 6); [#771](https://github.com/DataBiosphere/meta-disco/issues/771) (2026-10-27): a bcftools view on a header's last line, where the flow names no step (decision 6); [#620](https://github.com/DataBiosphere/meta-disco/issues/620) (2026-10-05): a header-named alignment several files carry is settled by contigs (decision 6); [#357](https://github.com/DataBiosphere/meta-disco/issues/357) (2026-10-12): the namespaces, a declared rewrite, and a file's samples as a field (decision 1, Open); [#693](https://github.com/DataBiosphere/meta-disco/issues/693) (2026-10-16, epic [#692](https://github.com/DataBiosphere/meta-disco/issues/692)): donors and samples are records keyed by their identifier (decision 1)
 
 ## Context
 
@@ -240,7 +240,7 @@ its own.
 *Amended by #580.* A step is named by its **activity**, not by a verb between two files. The
 vocabulary is `activity_type_enum`: AnVIL FSS's `ActivityTypes`, spelled as FSS's released LinkML schema
 spells them (`DataBiosphere/biocore-data-model`, `AnVILDataSubmissionFindabilitySubsetSchema.linkml.yaml`),
-plus twelve of our own (`CoverageActivity` added by #595; `VariantProcessingActivity` and `VariantFilterActivity` by #610; `CohortDefinitionActivity` and `CohortMergeActivity` by #621; `JointGenotypingActivity` by #678; `AssemblyAlignmentActivity` and `GenomeAnnotationActivity` by #682). FSS's values spreadsheet spells three differently (`VariantCallingActivity`,
+plus thirteen of our own (`CoverageActivity` added by #595; `VariantProcessingActivity` and `VariantFilterActivity` by #610; `VariantSubsetActivity` by #771; `CohortDefinitionActivity` and `CohortMergeActivity` by #621; `JointGenotypingActivity` by #678; `AssemblyAlignmentActivity` and `GenomeAnnotationActivity` by #682). FSS's values spreadsheet spells three differently (`VariantCallingActivity`,
 `ImagingActivity`, `IndexingActivity`); the schema a submission is validated against wins. A term's `meaning` is the Terra
 Interoperability Model's class where it has one, else EDAM's operation where EDAM defines the same step.
 TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `generated_file_id` are PROV's
@@ -261,7 +261,8 @@ TerraCore's `Activity` is a `prov:Activity`, and FSS's `used_file_id` and `gener
 | `CohortDefinitionActivity` (ours; #621) | list ← each file it lists (`member`) | a GATK sample-name map's own rows (T2T `chrN_sample_map.tsv` ← its gVCFs) | — |
 | `CoverageActivity` (ours, under `AnalysisActivity`; #595) | coverage track ← the alignment it covers | `anvil_activity` (ENCORE `Track: bedGraphToBigWig`) | — |
 | `GenomeAnnotationActivity` (ours, under `AnalysisActivity`; #682) | annotation ← the genome sequence it annotates (`annotated`) | submitter row keyed by the assembly's id (HPRC_R2 `censat`, `repeat_masker_bed`, `segdups`, `liftoff_genes` and four more ← `assembly`) | — |
-| `VariantFilterActivity` (ours, under the abstract `VariantProcessingActivity`; #610) | filtered callset ← the callset it filtered | submitter same-row (T2T `chromosome`: raw → recalibrated → PASS on CHM13; recalibrated → PASS on GRCh38, whose raw callset the table does not hold) | — |
+| `VariantFilterActivity` (ours, under the abstract `VariantProcessingActivity`; #610) | filtered callset ← the callset it filtered | submitter same-row (T2T `chromosome`: raw → recalibrated → PASS on CHM13; recalibrated → PASS on GRCh38, whose raw callset the table does not hold); the VCF's header, a bcftools `view` testing the calls (`-f`, `--min-ac`, #771) | — |
+| `VariantSubsetActivity` (ours, under `VariantProcessingActivity`; #771) | subset callset ← the callset whose samples or regions it keeps | the VCF's header, a bcftools `view -S` or `-R` (T2T's population, singleton and region subsets), read from its last `##` line where the flow names no step | — |
 | `LiftoverActivity` (ours, under `AnalysisActivity`) | lifted file ← the file it was lifted from | a source naming the parent (schema changes, `source_assembly`) | `lifted_over_from` |
 | `AssemblyActivity` (ours) | assembly ← reads | HPRC assembly sample sheets, where the output resolves to a held assembly (Open) | `assembled_from` |
 | `SequenceActivity` | reads ← sample id | `anvil_activity` `Sequencing`, submitter tables (#357) | `sample_of`, for reads |
@@ -332,8 +333,9 @@ shares one **abstract** parent that declares, once, what passes, and each step i
 it does, declaring only its reason. `VariantProcessingActivity` is such a parent (a callset in, a callset
 out, every call it keeps made from the same reads against the same reference, though a subset drops
 samples); `VariantFilterActivity` is its first child (GATK's
-ApplyVQSR labelling every row, `bcftools view -f PASS` keeping the passing ones). Annotation,
-normalization and a population subset would be further children, each one enum line. No step names an
+ApplyVQSR labelling every row, `bcftools view -f PASS` keeping the passing ones), and
+`VariantSubsetActivity` its second (#771: a population's samples or a set of regions kept). Annotation
+and normalization would be further children, each one enum line. No step names an
 abstract term: `activities.require_writable` refuses one in an activity-map row, and every edge rule is
 held to it. Which operation a step was can also be read by comparing its input with its output (rows
 removed, samples dropped, annotation fields added), so the leaves need not multiply past what a reader
@@ -387,6 +389,26 @@ not declared (`validators.command_lines.TOOL_ARGUMENTS`, about tools, never data
 paths are where the workflow ran, so the parent resolves by name within the child's dataset, as a
 filename edge does. Built at inference, in the VCF producer, from the cached header: it is the file's own
 bytes (input kind 1), and reconcile merges it with the steps the tables state.
+
+*Amended by #771 (2026-10-27): where the flow names no step (no one end, or a line it cannot read), a
+bcftools view on the header's last line made the file.* bcftools writes to stdout unless given `-o`, so a chain of views (T2T's `view -f PASS`, then
+`view -S CEU.txt` of that) has several unnamed ends. bcftools adds its line after every line of the header
+it read (htslib's `bcf_hdr_add_hrec` appends the record), and GATK and Picard re-sort a header they rewrite,
+so a `##bcftools_viewCommand` that is the header's last `##` line was the last step to write it. That is the
+one line whose position is read, and only where the end of the flow names no step: for want of one end, or
+because a line's tool is undeclared (a later tool's own line would be last). A lifted callset fails it
+(Picard's LiftoverVcf writes no line of its own, but its re-sort leaves `##reference` and `##source` after the
+view's), and a tool that rewrites the records but not the header is not seen, as it is not seen by the end of
+the flow. A view's options decide its term: samples or regions kept (`-S`, `-R`) a `VariantSubsetActivity`,
+rows kept by a test on the calls (`-f`, `--min-ac`) a `VariantFilterActivity`; both, neither, or an option of
+neither gives no step. A step read from the last line names its own rule (`variant_subset_by_last_line`,
+`variant_filter_by_last_line`), apart from a view that is the one end of the flow (`…_by_header`), so the
+edges that rest on the last line's assumptions can be counted and found; the assumptions are stated in
+`variant_subset_by_last_line`'s rationale. Each such step is checked against the parent's own header, read
+from the VCF cache: the file's header must be the parent's less bcftools' own lines, with no sample the parent
+lacks (`producer_steps.fits_parent`), so a parent that is another file of the name is refused. A later view run
+with `--no-version` writes no line, and is not caught: the file is then linked to its grandparent, in the same
+chain, so what passes is the same.
 
 *Amended by #620 (2026-10-05): a name several alignments carry is settled by their contigs.* T2T
 re-aligned some samples' reads to a second reference under the same file name, so a `HaplotypeCaller`'s
@@ -458,7 +480,7 @@ authority, and this table is its reading when #580 wrote it, amended where a row
 
 | activity | `data_modality` | `assay_type` | `platform` | `instrument_model` | `reference_assembly` |
 |---|---|---|---|---|---|
-| `IndexActivity`, `QualityControlActivity`, `CoverageActivity` (amended by #595), `MergeActivity`, `VariantCallActivity`, `JointGenotypingActivity` (#678, which also passes `variant_kind` and `variant_origin`), `VariantFilterActivity` (#610, from its parent `VariantProcessingActivity`), `GenomeAnnotationActivity` (#682, which also passes `variant_kind` and `variant_origin`) | yes | yes | yes | yes | yes |
+| `IndexActivity`, `QualityControlActivity`, `CoverageActivity` (amended by #595), `MergeActivity`, `VariantCallActivity`, `JointGenotypingActivity` (#678, which also passes `variant_kind` and `variant_origin`), `VariantFilterActivity` (#610) and `VariantSubsetActivity` (#771), each from its parent `VariantProcessingActivity`, `GenomeAnnotationActivity` (#682, which also passes `variant_kind` and `variant_origin`) | yes | yes | yes | yes | yes |
 | `AlignmentActivity` | yes, from `reads` | yes, from `reads` | yes, from `reads` | yes, from `reads` | from its `reference` input only, not from the reads |
 | `AssemblyAlignmentActivity` (#682) | yes, from `query` | yes, from `query` | yes, from `query` | yes, from `query` | from its `reference` input only, not from the assembly |
 | `LiftoverActivity` | yes | yes | yes | yes | **no** — liftover changes it |

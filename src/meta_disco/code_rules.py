@@ -802,6 +802,106 @@ MERGE_BY_HEADER = EdgeRule(
     ),
 )
 
+_VIEW_READS = (
+    "the VCF's own header, its producing step found as for variant_call_by_header, where that step is "
+    "a bcftools view of one VCF: the view's options, and its input VCF's base name, matched "
+    "case-insensitively within the dataset" + _FOLDER_READ
+)
+_LAST_LINE_VIEW_READS = (
+    "the VCF's own header, where its command lines' data flow has no one end or holds a line whose "
+    "tool is undeclared, and its last ## line, read to its #CHROM line, is a bcftools view of one VCF "
+    "writing to stdout or to this file: the view's options, and its input VCF's base name, matched "
+    "case-insensitively within the dataset" + _FOLDER_READ + "; and that parent's own header, from the "
+    "VCF producer's cache or fetched into it"
+)
+_SUBSET = (
+    "A bcftools view given samples (-S, -s) or regions (-R, -r, -T, -t) keeps those samples' columns "
+    "or the calls in those regions of the one callset it reads, each kept genotype as it was called: "
+    "ANVIL_T2T's population, singleton and founder subsets of its joint callsets, and its region subsets."
+)
+_FILTER = (
+    "A bcftools view given a test on the calls (-f, -i, -e, -c, -C, -q, -Q, -v, -V, -m, -M and "
+    "bcftools' other row tests) keeps the rows of the one callset it reads that pass, each as it was "
+    "made: ANVIL_T2T's PASS callsets (-f PASS, the same step the chromosome table states) and the "
+    "sites some kept sample carries (--min-ac 1)."
+)
+_ONE_END = " Here the view is the one end of the header's data flow, found as for variant_call_by_header."
+# The assumptions a view read from the header's last line rests on (#771), stated on the
+# subset rule and cited by the filter rule.
+_VIEW_ASSUMPTIONS = (
+    "A view taken from the header's last line rests on five assumptions. (1) bcftools adds its "
+    "command line after every line of the header it read: bcftools view records its command through "
+    "bcf_hdr_append_version, and htslib's bcf_hdr_add_hrec puts a new record after the others (read "
+    "in their source); 2,910 ANVIL_T2T headers end in a view line. So a view line that is last was "
+    "the last step to write the header. (2) GATK and Picard write a header they rewrite in their own "
+    "order, not appending (seen in the corpus, not read in their source), so a later step by either "
+    "leaves the view line off the end; this is why no other line's position is read. (3) That is what "
+    "keeps a lifted callset out: Picard's LiftoverVcf writes no command line, but ANVIL_T2T's lifted "
+    "callsets carry ##reference and ##source lines after the view line, and a step from the view "
+    "would pass the lifted file the reference it was lifted from. (4) A tool that changes the records "
+    "but leaves the header as it was is not "
+    "seen, and its output is taken as the view's; such a tool writes no line, so the end of the data "
+    "flow cannot see it either. (5) bcftools view keeps the coordinates, the reads and the caller "
+    "of every call it keeps, so what a VariantProcessingActivity passes holds for the subset; it can "
+    "select by type, which is why the variant kind does not pass. A view giving both rules' options, "
+    "or neither's, or an option producer_steps declares as no rule's (VIEW_NO_STEP_OPTIONS) or does "
+    "not declare at all, gives no step, nor does a header whose #CHROM line was not read (a header "
+    "cut short has no last line to read). Each step so read is checked against its parent's own "
+    "header (producer_steps.fits_parent): written only where the parent's header is this file's less "
+    "bcftools' own lines and holds every sample this file does, so a parent that is another file of the "
+    "name, or a header some later step rewrote, gives none (parent_header_differs). The check does not "
+    "catch a later view run with --no-version, which writes no line: the file is then linked to its "
+    "grandparent, in the same chain, so what passes is the same."
+)
+
+VARIANT_SUBSET_BY_HEADER = EdgeRule(
+    id="variant_subset_by_header",
+    module=PRODUCER_STEPS,
+    activity=activities.VARIANT_SUBSET,
+    role="processed",
+    source_type=SOURCE_CONTENT_READ,
+    reads=_VIEW_READS,
+    rationale=_SUBSET + _ONE_END,
+)
+
+VARIANT_FILTER_BY_HEADER = EdgeRule(
+    id="variant_filter_by_header",
+    module=PRODUCER_STEPS,
+    activity=activities.VARIANT_FILTER,
+    role="processed",
+    source_type=SOURCE_CONTENT_READ,
+    reads=_VIEW_READS,
+    rationale=_FILTER + _ONE_END,
+)
+
+# The same two steps, read from the header's last line (#771): their own ids, so the edges and
+# fire counts that rest on the last-line assumptions can be told from the end of the flow's.
+VARIANT_SUBSET_BY_LAST_LINE = EdgeRule(
+    id="variant_subset_by_last_line",
+    module=PRODUCER_STEPS,
+    activity=activities.VARIANT_SUBSET,
+    role="processed",
+    source_type=SOURCE_CONTENT_READ,
+    reads=_LAST_LINE_VIEW_READS,
+    rationale=(
+        _SUBSET + " bcftools writes to stdout unless given -o, so a chain of views leaves the data flow "
+        "with no one end, and the header's last line names the view that made the file. " + _VIEW_ASSUMPTIONS
+    ),
+)
+
+VARIANT_FILTER_BY_LAST_LINE = EdgeRule(
+    id="variant_filter_by_last_line",
+    module=PRODUCER_STEPS,
+    activity=activities.VARIANT_FILTER,
+    role="processed",
+    source_type=SOURCE_CONTENT_READ,
+    reads=_LAST_LINE_VIEW_READS,
+    rationale=(
+        _FILTER + " The view is read from the header's last line, on the assumptions "
+        "variant_subset_by_last_line states."
+    ),
+)
+
 MERGE_BY_WORKSPACE_HEADER = EdgeRule(
     id="merge_by_workspace_header",
     module=COHORT_STEPS,
@@ -912,6 +1012,10 @@ EDGE_RULES = (
     CHECKSUM_BY_NAME,
     VARIANT_CALL_BY_HEADER,
     MERGE_BY_HEADER,
+    VARIANT_SUBSET_BY_HEADER,
+    VARIANT_FILTER_BY_HEADER,
+    VARIANT_SUBSET_BY_LAST_LINE,
+    VARIANT_FILTER_BY_LAST_LINE,
     MERGE_BY_WORKSPACE_HEADER,
     COHORT_BY_SAMPLE_MAP,
     COHORT_BY_REBUILT_SAMPLE_MAP,

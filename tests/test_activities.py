@@ -125,6 +125,17 @@ def test_a_term_declared_by_its_reason_alone_takes_its_abstract_parents_inputs()
     assert not loaded["VariantFilterActivity"].abstract
 
 
+def test_a_subset_and_a_filter_pass_what_variant_processing_declares_and_no_kind_or_samples():
+    """Both keep each call as it was made (#771); a view can select by type, and a subset drops samples."""
+    declared = activities.declarations()
+    parent = declared["VariantProcessingActivity"]
+    for term in (activities.VARIANT_SUBSET, activities.VARIANT_FILTER):
+        assert declared[term].inputs == parent.inputs
+        assert activities.passes(term) == activities.passes("VariantProcessingActivity")
+        assert "variant_kind" not in activities.passes(term)
+        assert not any(role.passes_samples for role in declared[term].inputs)
+
+
 def test_a_term_declared_by_its_reason_alone_under_a_concrete_parent_is_refused():
     """The nearest ancestor that declares is concrete (AnalysisActivity), so its declaration is not taken."""
     entries = _every_term(VariantProcessingActivity=_taking("VariantProcessingActivity"))

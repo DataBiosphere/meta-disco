@@ -41,9 +41,9 @@ Their biology is `genomic`, so meta-disco gives these files `genomic` and record
 
 FSS's `data_modality` is multivalued, and its values are MODAL's labels (`DNA methylation`, `whole genome`). meta-disco stores one value per file, the most specific its evidence supports, spelled as the term's path in MODAL's tree (`epigenomic.methylation`). Each value carries its MODAL id as `meaning` (`MODAL:0000008`), and FSS's spelling is that term's MODAL label (`DNA methylation`); `title` is the label with its first letter capitalised (`Genomic` for FSS's `genomic`), so it matches FSS's spelling only where capitalising leaves the label unchanged (`DNA methylation`, `3D contact maps`).
 
-## 3. activity\_type: twelve activity types of our own
+## 3. activity\_type: thirteen activity types of our own
 
-meta-disco's `activity_type` holds FSS's eleven `ActivityTypes` as FSS spells them, plus twelve of its own, each under the term it narrows: `AssemblyActivity`, `AssemblyAlignmentActivity`, `CohortDefinitionActivity`, `CohortMergeActivity`, `CoverageActivity`, `GenomeAnnotationActivity`, `JointGenotypingActivity`, `LiftoverActivity`, `MergeActivity`, `QualityControlActivity`, `VariantFilterActivity` and `VariantProcessingActivity` (ADR-0002, #580). They exist because what crosses a step from a file's parents depends on the kind of step, and FSS's `AnalysisActivity` is too broad to say what passes (`rules/activities.yaml`).
+meta-disco's `activity_type` holds FSS's eleven `ActivityTypes` as FSS spells them, plus thirteen of its own, each under the term it narrows: `AssemblyActivity`, `AssemblyAlignmentActivity`, `CohortDefinitionActivity`, `CohortMergeActivity`, `CoverageActivity`, `GenomeAnnotationActivity`, `JointGenotypingActivity`, `LiftoverActivity`, `MergeActivity`, `QualityControlActivity`, `VariantFilterActivity`, `VariantProcessingActivity` and `VariantSubsetActivity` (ADR-0002, #580). They exist because what crosses a step from a file's parents depends on the kind of step, and FSS's `AnalysisActivity` is too broad to say what passes (`rules/activities.yaml`).
 
 **Ask.** For FSS: whether any belong in `ActivityTypes`.
 
