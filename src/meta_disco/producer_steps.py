@@ -377,6 +377,10 @@ def _filters(header: VCFHeader) -> list:
     return [f for f in header.filter_fields or () if f.fields.get("ID") != "PASS"]
 
 
+def _text(value: object) -> str:
+    return value if isinstance(value, str) else ""
+
+
 class ParentHeaders:
     """Each VCF parent's header, read once per file in a run: from the VCF producer's cache, or on a
     miss fetched into it (``fetch_vcf_header``), under a lock, as :class:`AlignmentContigs` reads alignments."""
@@ -398,7 +402,7 @@ class ParentHeaders:
                         md5,
                         file_name=name,
                         is_gzipped=any(
-                            n.lower().endswith(GZIP_SUFFIXES) for n in (name, record.get("file_format") or "")
+                            n.lower().endswith(GZIP_SUFFIXES) for n in (name, _text(record.get("file_format")))
                         ),
                         url=record.get("url"),
                     )
@@ -480,9 +484,9 @@ class HeaderSteps:
         names = [PurePosixPath(path).name for path in paths]
         if any(edges.parent_kind_of(name) != rule.kind for name in names):
             return None, NO_ACTIVITY
-        # An input named as this file (a copy, or a recompression of its twin) would resolve to the
-        # file itself, a parent of its own that stops reconcile; the name cannot tell them apart.
-        if any(data_name(name) == data_name(file_name) for name in names):
+        # An input of this file's own name (a copy from another folder) would resolve, as parents
+        # resolve, to the file itself: a parent of its own, which stops reconcile.
+        if any(name.lower() == PurePosixPath(file_name).name.lower() for name in names):
             return None, NO_ACTIVITY
         # GATK 4 refuses an alignment with a contig its reference lacks; GATK 3's check is
         # not relied on (it may accept a partial overlap), so its lines keep the name rule.

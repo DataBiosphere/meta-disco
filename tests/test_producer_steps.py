@@ -522,6 +522,14 @@ def test_an_input_named_as_the_file_itself_gives_no_step():
     assert reader((CEU, "D"), parent=(IMPORT,))(header(IMPORT, copy), CEU, "D", None) == (None, ps.NO_ACTIVITY)
 
 
+def test_a_recompression_of_a_twin_another_file_carries_is_a_step():
+    """`view -Oz -o x.vcf.gz x.vcf` reads its uncompressed twin, a file of another name."""
+    twin = PASSED.removesuffix(".gz")
+    line = view(f"-f PASS -Oz -o {PASSED}", f"/p/{twin}")
+    step, outcome = reader((twin, "D"), (PASSED, "D"), parent=())(header(line), PASSED, "D", None)
+    assert outcome == ps.STEPPED and step is not None and step["inputs"][0]["parent_file"] == twin
+
+
 def test_an_explicit_stdout_output_is_stdout():
     (step,) = steps(header(view("-S /r/CEU.txt -o -")))
     assert step.output is None
@@ -554,7 +562,8 @@ def test_a_parents_compression_is_read_from_its_name_or_its_file_format(monkeypa
     read({"file_md5sum": "a" * 32, "file_name": "p.vcf", "file_format": ".vcf.gz"})
     read({"file_md5sum": "b" * 32, "file_name": "p.vcf", "file_format": ".vcf"})
     read({"file_md5sum": "c" * 32, "file_name": "p.vcf.gz"})
-    assert seen == [True, False, True]
+    read({"file_md5sum": "d" * 32, "file_name": "p.vcf.gz", "file_format": 42})
+    assert seen == [True, False, True, True]
 
 
 def test_a_lifted_callset_whose_header_was_re_sorted_after_the_view_gives_no_step():
