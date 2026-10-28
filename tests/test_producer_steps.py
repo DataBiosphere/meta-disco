@@ -529,6 +529,34 @@ def test_an_explicit_stdout_output_is_stdout():
     assert result[1] == ps.STEPPED
 
 
+def test_a_lone_view_in_a_header_cut_short_of_its_chrom_line_gives_no_step():
+    text = "\n".join(["##fileformat=VCFv4.2", view("-S /r/CEU.txt")])
+    assert ps.end_of_flow(parse_vcf_header(text), CEU)[1] == ps.STEPPED
+    assert reader((PASSED, "D"), parent=())(parse_vcf_header(text), CEU, "D", None) == (None, ps.PARENT_HEADER_DIFFERS)
+
+
+def test_a_cluster_led_by_a_flag_taking_no_value_is_recorded_whole_and_gives_no_step():
+    (step,) = steps(header(view("-pG")))
+    assert step.options == ("-pG",)
+    assert ps.view_rule(step) is None
+    assert ps.view_rule(steps(header(view("-p")))[0]) is ps.VIEW_RULES[1]
+
+
+def test_a_parents_compression_is_read_from_its_name_or_its_file_format(monkeypatch):
+    seen = []
+
+    def fetch(evidence_dir, md5, **kwargs):
+        seen.append(kwargs["is_gzipped"])
+        raise FetchError("not fetched")
+
+    monkeypatch.setattr(ps, "fetch_vcf_header", fetch)
+    read = ps.ParentHeaders(EVIDENCE)
+    read({"file_md5sum": "a" * 32, "file_name": "p.vcf", "file_format": ".vcf.gz"})
+    read({"file_md5sum": "b" * 32, "file_name": "p.vcf", "file_format": ".vcf"})
+    read({"file_md5sum": "c" * 32, "file_name": "p.vcf.gz"})
+    assert seen == [True, False, True]
+
+
 def test_a_lifted_callset_whose_header_was_re_sorted_after_the_view_gives_no_step():
     """Picard's LiftoverVcf writes no command line, but its re-sort leaves lines after the view's (#771)."""
     lifted = header(*CHAIN, "##reference=file:/r/chm13.v1.1.fasta", "##source=SelectVariants")

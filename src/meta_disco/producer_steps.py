@@ -347,13 +347,17 @@ def bcftools_line(line: str) -> bool:
 def fits_parent(child: VCFHeader, parent: VCFHeader) -> bool:
     """Whether ``child``'s header is ``parent``'s with only bcftools' own lines added, and its samples are among the parent's.
 
+    False for a child whose header was not read to a VCF's ``#CHROM`` line (cut short), or a parent with no ``#CHROM`` line.
+
     What a bcftools view of ``parent`` writes (#771): every contig, INFO, FORMAT, ALT, reference
     and ``##source`` line as the parent has it, and the parent's other ``##`` lines, with the
     view's version and command lines added. Its FILTER lines are compared less ``PASS``, which
     htslib writes in its own words. A view of a header a later tool rewrote, or of another file
     of the name, does not fit.
     """
-    if parent.sample_columns is None or not set(child.sample_columns or ()) <= set(parent.sample_columns):
+    if not child.vcf_columns or child.sample_columns is None or parent.sample_columns is None:
+        return False
+    if not set(child.sample_columns) <= set(parent.sample_columns):
         return False
     same = (
         child.contig_lines == parent.contig_lines
@@ -393,7 +397,9 @@ class ParentHeaders:
                         self.evidence_dir,
                         md5,
                         file_name=name,
-                        is_gzipped=name.lower().endswith(GZIP_SUFFIXES),
+                        is_gzipped=any(
+                            n.lower().endswith(GZIP_SUFFIXES) for n in (name, record.get("file_format") or "")
+                        ),
                         url=record.get("url"),
                     )
                 except FetchError:
@@ -436,7 +442,7 @@ class HeaderSteps:
             return edges.parent_kind_of(name) in kinds
 
         index = edges.parent_index(
-            records, key, keep, "ground a header step's input on its parent", also=("file_md5sum", "url")
+            records, key, keep, "ground a header step's input on its parent", also=("file_md5sum", "url", "file_format")
         )
         return cls(index, key, AlignmentContigs(evidence_base / alignments), ParentHeaders(evidence_base / variants))
 

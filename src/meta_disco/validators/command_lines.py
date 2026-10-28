@@ -165,7 +165,8 @@ class Step:
     ``mode`` is the value of the line's :attr:`ToolArguments.mode` option (the first, where
     the line gives it twice), None where it gives none; two lines alike but for it are two steps.
     ``options`` is each option name an option-form line gives, in order, as the line is split into
-    options and values: ``--min-ac`` of ``--min-ac=1``, ``-O`` of ``-Oz`` (#771). A GATK 3 ``key=value`` line gives none. It is
+    options and values: ``--min-ac`` of ``--min-ac=1``, ``-O`` of ``-Oz``, and a cluster led by a flag
+    taking no value whole (``-pG``, and so ``-Wtbi``), its flags unknown (#771). A GATK 3 ``key=value`` line gives none. It is
     not compared; ``producer_steps.steps_of`` tells two steps apart by it.
     """
 
@@ -347,6 +348,7 @@ def _option_step(family: str, tool: str, words: Sequence[str], arguments: ToolAr
     while i < len(words):
         word = words[i]
         i += 1
+        recorded = None
         if not word.startswith("-") or word == "-":
             # A positional argument; `-` is stdin, which names no file.
             if arguments.positional:
@@ -362,10 +364,12 @@ def _option_step(family: str, tool: str, words: Sequence[str], arguments: ToolAr
         elif arguments.positional and not word.startswith("--") and len(word) > 2:
             # A short option with its value attached, as bcftools writes `-Oz` or `-Wtbi`.
             option, value = word[:2], word[2:]
+            if option in arguments.no_value:
+                recorded = word
         else:
             option, value = word, words[i] if i < len(words) else None
             i += 1
-        options.append(option)
+        options.append(recorded or option)
         if value is not None and option in arguments.inputs:
             inputs.append(value)
         elif value is not None and option in arguments.outputs and value != "-":
