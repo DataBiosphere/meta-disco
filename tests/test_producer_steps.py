@@ -431,7 +431,7 @@ def test_the_pass_filter_on_the_last_line_names_the_callset_it_filtered():
 
 
 def test_a_lone_view_is_the_one_end_of_the_flow_and_takes_its_rule_by_options():
-    step, outcome = reader((PASSED, "D"))(header(view("-S /r/CEU.txt --force-samples")), CEU, "D", None)
+    step, outcome = reader((PASSED, "D"), parent=())(header(view("-S /r/CEU.txt --force-samples")), CEU, "D", None)
     assert outcome == ps.STEPPED and step is not None and step["activity"] == "VariantSubsetActivity"
     assert step["named_by"][0]["rule_id"] == code_rules.VARIANT_SUBSET_BY_HEADER.id
 
@@ -502,6 +502,31 @@ def test_a_child_whose_samples_its_parent_lacks_does_not_fit():
     assert ps.fits_parent(with_samples(child, "HG00096"), parent)
     assert not ps.fits_parent(with_samples(child, "HG00096", "NA12878"), parent)
     assert not ps.fits_parent(with_samples(child, "HG00096"), dataclasses.replace(parent, sample_columns=None))
+
+
+def test_a_view_that_is_the_one_end_of_the_flow_is_checked_against_its_parents_header_too():
+    """A lifting tool that writes no line leaves a named view the one end, and other contigs than its parent's."""
+    named = view(f"-f PASS -o {PASSED}", "/p/1kgp.chr1.recalibrated.snp_indel.vcf.gz")
+    lifted = header(named, "##contig=<ID=chr1,length=248387328>")
+    entries = (("1kgp.chr1.recalibrated.snp_indel.vcf.gz", "D"),)
+    assert ps.end_of_flow(lifted, PASSED)[1] == ps.STEPPED
+    assert reader(*entries, parent=())(lifted, PASSED, "D", None) == (None, ps.PARENT_HEADER_DIFFERS)
+    step, outcome = reader(*entries, parent=())(header(named), PASSED, "D", None)
+    assert outcome == ps.STEPPED and step is not None
+    assert step["named_by"][0]["rule_id"] == code_rules.VARIANT_FILTER_BY_HEADER.id
+
+
+def test_an_input_named_as_the_file_itself_gives_no_step():
+    """It would resolve to the file, a parent of its own, which reconcile refuses as a cycle."""
+    copy = view("-S /r/CEU.txt", f"/elsewhere/{CEU}")
+    assert reader((CEU, "D"), parent=(IMPORT,))(header(IMPORT, copy), CEU, "D", None) == (None, ps.NO_ACTIVITY)
+
+
+def test_an_explicit_stdout_output_is_stdout():
+    (step,) = steps(header(view("-S /r/CEU.txt -o -")))
+    assert step.output is None
+    result = reader((PASSED, "D"), parent=CHAIN)(header(*CHAIN, view("-S /r/CEU.txt -o -")), CEU, "D", None)
+    assert result[1] == ps.STEPPED
 
 
 def test_a_lifted_callset_whose_header_was_re_sorted_after_the_view_gives_no_step():

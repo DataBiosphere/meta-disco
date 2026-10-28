@@ -805,7 +805,8 @@ MERGE_BY_HEADER = EdgeRule(
 _VIEW_READS = (
     "the VCF's own header, its producing step found as for variant_call_by_header, where that step is "
     "a bcftools view of one VCF: the view's options, and its input VCF's base name, matched "
-    "case-insensitively within the dataset" + _FOLDER_READ
+    "case-insensitively within the dataset" + _FOLDER_READ + "; and that parent's own header, from the "
+    "VCF producer's cache or fetched into it"
 )
 _LAST_LINE_VIEW_READS = (
     "the VCF's own header, where its command lines' data flow has no one end or holds a line whose "
@@ -825,7 +826,11 @@ _FILTER = (
     "made: ANVIL_T2T's PASS callsets (-f PASS, the same step the chromosome table states) and the "
     "sites some kept sample carries (--min-ac 1)."
 )
-_ONE_END = " Here the view is the one end of the header's data flow, found as for variant_call_by_header."
+_ONE_END = (
+    " Here the view is the one end of the header's data flow, found as for variant_call_by_header, and "
+    "the step is written only where its parent's header fits, as variant_subset_by_last_line states: a "
+    "lifting tool that wrote no line of its own leaves contigs and a reference the parent's are not."
+)
 # The assumptions a view read from the header's last line rests on (#771), stated on the
 # subset rule and cited by the filter rule.
 _VIEW_ASSUMPTIONS = (

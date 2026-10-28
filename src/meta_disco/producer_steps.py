@@ -165,6 +165,7 @@ LAST_LINE_VIEW_RULES = (
     StepRule(code_rules.VARIANT_SUBSET_BY_LAST_LINE, frozenset({BCFTOOLS}), "variants"),
     StepRule(code_rules.VARIANT_FILTER_BY_LAST_LINE, frozenset({BCFTOOLS}), "variants"),
 )
+VIEWS = frozenset((*VIEW_RULES, *LAST_LINE_VIEW_RULES))
 # Where :func:`end_of_flow` names no step, the outcomes after which the header's last line is read.
 LAST_LINE_AFTER = frozenset({NO_SINGLE_END, OUTPUT_NOT_THIS_FILE, UNKNOWN_TOOL})
 
@@ -455,9 +456,11 @@ class HeaderSteps:
         name, give none, as :data:`PARENT_AMBIGUOUS` — except that, for a rule that settles a
         shared name by contigs, a GATK 4 line's one input's parent is the one carrier whose
         contigs fit the VCF's (:meth:`by_contigs`). Any other producing step gives none, as
-        :data:`NO_ACTIVITY`. A view the header's last line named is written only where its parent's
-        header fits (:func:`fits_parent`): as :data:`PARENT_UNREADABLE` where the parent's header cannot
-        be read, as :data:`PARENT_HEADER_DIFFERS` where it does not fit.
+        :data:`NO_ACTIVITY`, as does an input named as this file. A view is written only where its
+        parent's header fits (:func:`fits_parent`), whether the end of the flow or the last line named
+        it: as :data:`PARENT_UNREADABLE` where the parent's header cannot be read, as
+        :data:`PARENT_HEADER_DIFFERS` where it does not fit. A step a lifting tool wrote no line for
+        leaves its header's contigs and reference other than its parent's.
         """
         step, outcome, by_last_line = found_step(header, file_name)
         if step is None:
@@ -471,6 +474,10 @@ class HeaderSteps:
         names = [PurePosixPath(path).name for path in paths]
         if any(edges.parent_kind_of(name) != rule.kind for name in names):
             return None, NO_ACTIVITY
+        # An input named as this file (a copy, or a recompression of its twin) would resolve to the
+        # file itself, a parent of its own that stops reconcile; the name cannot tell them apart.
+        if any(data_name(name) == data_name(file_name) for name in names):
+            return None, NO_ACTIVITY
         # GATK 4 refuses an alignment with a contig its reference lacks; GATK 3's check is
         # not relied on (it may accept a partial overlap), so its lines keep the name rule.
         # Where the contigs can settle a shared name they do, before the folder: content
@@ -481,7 +488,7 @@ class HeaderSteps:
             parents, outcome = self.by_contigs(header, dataset_id, names[0], folder)
         if parents is None:
             return None, outcome
-        if by_last_line:
+        if rule in VIEWS:
             parent = self.header_of(parents[0])
             if parent is None:
                 return None, PARENT_UNREADABLE

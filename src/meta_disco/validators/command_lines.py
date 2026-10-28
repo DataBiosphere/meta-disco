@@ -155,7 +155,7 @@ class Step:
     ``input_lists`` are the files listing its inputs (:attr:`ToolArguments.input_lists`),
     never among ``inputs``.
 
-    ``output`` is None where the tool wrote to stdout (bcftools with no ``-o``) or the
+    ``output`` is None where the tool wrote to stdout (bcftools with no ``-o``, or ``-o -``) or the
     line names no single output (GATK 3's HaplotypeCaller names none). ``read`` is False
     for a line whose tool :data:`TOOL_ARGUMENTS` does not declare; such a step names no
     input or output. ``family`` is None for a line of no family :meth:`VcfCommand.step`
@@ -368,7 +368,7 @@ def _option_step(family: str, tool: str, words: Sequence[str], arguments: ToolAr
         options.append(option)
         if value is not None and option in arguments.inputs:
             inputs.append(value)
-        elif value is not None and option in arguments.outputs:
+        elif value is not None and option in arguments.outputs and value != "-":
             outputs.append(value)
         elif value is not None and option in arguments.input_lists:
             input_lists.append(value)
