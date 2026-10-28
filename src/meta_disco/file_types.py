@@ -129,8 +129,10 @@ BAM_CONFIG = FileTypeConfig(
     samples=BAM_SAMPLES,
 )
 
+VCF_NAME = "vcf"
+
 VCF_CONFIG = FileTypeConfig(
-    name="vcf",
+    name=VCF_NAME,
     # A `.vcf.bgz` is a bgzipped VCF (1000 Genomes phase 3, in ANVIL_1000G_PRIMED). A PLINK 2
     # `.pvar` is no VCF, but one written from a VCF keeps its `##` header, so its `##contig`
     # lengths give its reference (#561); the VCF header rules, scoped to VCF extensions, do
@@ -147,7 +149,7 @@ VCF_CONFIG = FileTypeConfig(
     # A HaplotypeCaller's input several alignments carry is settled from their headers: the
     # BAM producer's cache, or samtools into it on a miss (#620), so every VCF run with work
     # checks for samtools first, its own headers cached or not.
-    step=partial(HeaderSteps.for_run, alignments=BAM_CONFIG.name, variants="vcf"),
+    step=partial(HeaderSteps.for_run, alignments=BAM_CONFIG.name, variants=VCF_NAME),
     preflight=require_samtools,
     samples=VCF_SAMPLES,
 )

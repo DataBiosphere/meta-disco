@@ -12,8 +12,8 @@ listed with its ``somatic_mode``; one that mixes origins is not listed). So ``va
    whose tool is undeclared names no caller (rule 6), even where its last line is a view.
 2. **Walked back** from it through steps that keep their input's calls (``keeps_calls``), each to the
    step that wrote its input, to the first step that does not. That step is the caller.
-   Where the chain names none — no producing step (a step whose output the file was renamed
-   from), or a kept step
+   Where the chain names none — no producing step (several stdout steps whose last line is not a
+   bcftools view, or a step whose output the file was renamed from), or a kept step
    whose input no step the header records wrote (T2T's
    ``SelectVariants`` reads a callset whose ``GenotypeGVCFs`` line is not in the header) —
    the header's other steps, those that do not keep calls, name it: a merge among them

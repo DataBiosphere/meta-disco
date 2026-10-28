@@ -227,8 +227,8 @@ activities:
     reason: >-
       A subset keeps some samples' columns or the rows in some regions, each call as it was made,
       so nothing about the reads, reference or caller behind a kept call changes, and it passes
-      what its parent declares (#771). It holds fewer samples than its callset, so none pass: the
-      subset's header names its own.
+      what its parent declares (#771). A sample subset holds fewer samples than its callset, so
+      no samples pass, a region subset's included: each subset's header names its own.
   - term: MergeActivity
     output: {form: [file]}
     inputs:

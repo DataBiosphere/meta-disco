@@ -481,6 +481,19 @@ def test_a_last_line_view_is_written_only_where_its_parents_header_fits():
         ((*CHAIN, '##INFO=<ID=AF,Number=A,Type=Float,Description="x">', view("-S /r/CEU.txt")), CHAIN, False),
         ((*CHAIN[1:], view("-S /r/CEU.txt")), CHAIN, False),
         ((*CHAIN, "##fileDate=20210422", view("-S /r/CEU.txt")), CHAIN, False),
+        ((*CHAIN, '##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="x">', view("-S /r/CEU.txt")), CHAIN, False),
+        ((*CHAIN, '##ALT=<ID=DEL,Description="Deletion">', view("-S /r/CEU.txt")), CHAIN, False),
+        ((*CHAIN, "##source=LiftoverVcf", view("-S /r/CEU.txt")), CHAIN, False),
+        ((*CHAIN, GATK3_HC, view("-S /r/CEU.txt")), CHAIN, False),
+        ((*CHAIN, '##FILTER=<ID=LowQual,Description="x">', view("-S /r/CEU.txt")), CHAIN, False),
+        # Another bcftools step came between the parent and the view.
+        (
+            (*CHAIN, "##bcftools_normCommand=norm -m -any -o /t/x.vcf.gz /p/x.vcf.gz; Date=x", view("-S /r/CEU.txt")),
+            CHAIN,
+            False,
+        ),
+        ((*CHAIN, view("-f PASS", "/p/a.vcf.gz"), view("-S /r/CEU.txt")), CHAIN, False),
+        ((*CHAIN, view("-S /r/CEU.txt")), ("##fileformat=VCFv4.1", *CHAIN), True),
     ],
     ids=[
         "view-of-it",
@@ -490,6 +503,14 @@ def test_a_last_line_view_is_written_only_where_its_parents_header_fits():
         "info-added",
         "line-dropped",
         "other-line-added",
+        "format-added",
+        "alt-added",
+        "source-added",
+        "unkeyed-added",
+        "filter-added",
+        "norm-between",
+        "two-views",
+        "fileformat-not-compared",
     ],
 )
 def test_a_childs_header_fits_its_parent_where_only_bcftools_own_lines_are_added(child, parent, fits):
@@ -564,6 +585,35 @@ def test_a_parents_compression_is_read_from_its_name_or_its_file_format(monkeypa
     read({"file_md5sum": "c" * 32, "file_name": "p.vcf.gz"})
     read({"file_md5sum": "d" * 32, "file_name": "p.vcf.gz", "file_format": 42})
     assert seen == [True, False, True, True]
+
+
+def test_a_bcftools_step_that_is_not_a_view_is_no_view_whatever_its_options():
+    """`norm -m -any -o …` has a view filter's `-m` and an output option, and is no view."""
+    (norm,) = steps(header("##bcftools_normCommand=norm -m -any -o x.norm.vcf.gz /p/x.vcf.gz; Date=x"))
+    assert ps.view_rule(norm) is None
+
+
+def test_a_parent_header_cut_short_is_unreadable():
+    text = "\n".join(["##fileformat=VCFv4.2", *CHAIN])
+    steps_ = reader((PASSED, "D"), parent=CHAIN)
+    steps_.header_of = lambda record: parse_vcf_header(text)
+    assert steps_(header(*CHAIN, view("-S /r/CEU.txt")), CEU, "D", None) == (None, ps.PARENT_UNREADABLE)
+
+
+def test_a_child_whose_chrom_line_is_not_a_vcfs_does_not_fit():
+    child = parse_vcf_header(header_text(*CHAIN, view("-S /r/CEU.txt")).replace("\tQUAL\tFILTER\tINFO", ""))
+    assert child.sample_columns is not None and not child.vcf_columns
+    assert not ps.fits_parent(child, header(*CHAIN))
+
+
+def test_last_line_view_never_reads_a_pvar():
+    assert ps.last_line_view(header(*CHAIN, view("-S /r/CEU.txt")), "x.pvar") is None
+    assert ps.last_line_view(header(*CHAIN, view("-S /r/CEU.txt")), CEU) is not None
+
+
+def test_an_input_named_as_the_file_itself_in_another_case_gives_no_step():
+    copy = view("-S /r/CEU.txt", f"/elsewhere/{CEU.upper()}")
+    assert reader((CEU, "D"), parent=(IMPORT,))(header(IMPORT, copy), CEU, "D", None) == (None, ps.NO_ACTIVITY)
 
 
 def test_a_lifted_callset_whose_header_was_re_sorted_after_the_view_gives_no_step():

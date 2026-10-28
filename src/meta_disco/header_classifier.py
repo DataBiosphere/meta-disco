@@ -443,8 +443,7 @@ GVCF_ALLELES = frozenset({NON_REF, ANY_ALLELE})
 def why_gvcf(header: VCFHeader, file_name: str) -> str | None:
     """Why ``file_name`` is a gVCF, for the claim's reason; None where its header and records do not both say so.
 
-    Both must: the step that made the file, the end of the header's data flow
-    (``producer_steps.producing_step``), is a HaplotypeCaller in one of :data:`GVCF_MODES`
+    Both must: the step that made the file (``producer_steps.producing_step``) is a HaplotypeCaller in one of :data:`GVCF_MODES`
     (``Step.mode``); and every record the head read (``VCFHeader.records``) has
     ``<NON_REF>`` among its ALT alleles, and one at least has it alone: a record of a site
     with no variant, which a gVCF has and a VCF filtered to its variant sites does not. The header's ``##ALT=<ID=NON_REF>`` and

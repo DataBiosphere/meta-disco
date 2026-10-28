@@ -4,8 +4,8 @@ A VCF header carries a line per program that touched the data, each read once, o
 use, by ``VCFHeader.commands`` into a **step** with inputs and an output (how a line is
 read, and what each tool's arguments mean, is ``validators.command_lines``, #615).
 Lines pile up: a file carries its first input's lines as well as its own, and GATK sorts
-its lines, so neither the last line nor any one line's position says which step made the
-file.
+its lines, so no line's position says which step made the file, with one exception for
+bcftools (below, #771).
 
 **The producing step is the end of the data flow.** Steps chain where one's output is
 another's input, compared by base name with any ``.gz`` or ``.bgz`` dropped (``chr1.genotyped.vcf``
@@ -77,8 +77,8 @@ NO_ACTIVITY = "no_activity"
 PARENT_NOT_FOUND = "parent_not_found"
 PARENT_AMBIGUOUS = "parent_ambiguous"
 PARENT_UNREADABLE = "parent_unreadable"
-# A view read from the header's last line whose named parent's header is not this file's less the
-# view's own lines (#771): the name named another file, or something else rewrote the header.
+# A view whose named parent's header is not this file's less the view's own lines (#771,
+# :func:`fits_parent`): another step came between, a later tool rewrote it, or it was cut short.
 PARENT_HEADER_DIFFERS = "parent_header_differs"
 # A PLINK 2 `.pvar` keeps the `##` command lines of the VCF it was converted from and adds
 # none of its own, so its header never names the step that made it (#561).
@@ -167,7 +167,7 @@ LAST_LINE_VIEW_RULES = (
 )
 VIEWS = frozenset((*VIEW_RULES, *LAST_LINE_VIEW_RULES))
 # Where :func:`end_of_flow` names no step, the outcomes after which the header's last line is read.
-LAST_LINE_AFTER = frozenset({NO_SINGLE_END, OUTPUT_NOT_THIS_FILE, UNKNOWN_TOOL})
+LAST_LINE_AFTER = frozenset({NO_SINGLE_END, UNKNOWN_TOOL})
 
 
 def view_rule(step: Step, by_last_line: bool = False) -> StepRule | None:
@@ -211,8 +211,9 @@ def last_line_view(header: VCFHeader, file_name: str) -> Step | None:
 def steps_of(header: VCFHeader) -> list[Step] | None:
     """Every command line in a parsed VCF header as a step, or None if one is unread.
 
-    Identical steps are kept once; two alike but for their set of options (``Step.options``,
-    not compared) are two, so one view's options never stand for another's (#771).
+    Identical steps are kept once; two alike but for their set of option names (``Step.options``,
+    not compared) are two, so one view's options never stand for another's kind of view (#771).
+    Two alike but for an option's value (``-S a.txt``, ``-S b.txt``) are one.
     """
     steps: list[Step] = []
     seen: set[tuple[Step, frozenset[str]]] = set()
@@ -339,21 +340,21 @@ class AlignmentContigs:
             return self._read[md5]
 
 
-def bcftools_line(line: str) -> bool:
-    """Whether a ``##`` line is one bcftools writes of its own: its version and command lines."""
-    return line.startswith("##bcftools_")
+VIEW_COMMAND_LINE = "##bcftools_viewCommand="
+VIEW_VERSION_LINE = "##bcftools_viewVersion="
 
 
 def fits_parent(child: VCFHeader, parent: VCFHeader) -> bool:
-    """Whether ``child``'s header is ``parent``'s with only bcftools' own lines added, and its samples are among the parent's.
+    """Whether ``child``'s header is ``parent``'s with one bcftools view's own lines added, and its samples are among the parent's.
 
     False for a child whose header was not read to a VCF's ``#CHROM`` line (cut short), or a parent with no ``#CHROM`` line.
 
     What a bcftools view of ``parent`` writes (#771): every contig, INFO, FORMAT, ALT, reference
-    and ``##source`` line as the parent has it, and the parent's other ``##`` lines, with the
-    view's version and command lines added. Its FILTER lines are compared less ``PASS``, which
-    htslib writes in its own words. A view of a header a later tool rewrote, or of another file
-    of the name, does not fit.
+    and ``##source`` line as the parent has it, and the parent's other ``##`` lines, with exactly
+    one view command line added and, on bcftools' first pass, its version line. Its FILTER lines
+    are compared less ``PASS``, which htslib writes in its own words, and ``##fileformat`` is not
+    compared: bcftools writes its own. A header another step wrote between the parent and the
+    view (a ``norm`` of a file of the parent's name) adds that step's line, and does not fit.
     """
     if not child.vcf_columns or child.sample_columns is None or parent.sample_columns is None:
         return False
@@ -370,7 +371,14 @@ def fits_parent(child: VCFHeader, parent: VCFHeader) -> bool:
         and _filters(child) == _filters(parent)
     )
     child_other, parent_other = set(child.other_meta or ()), set(parent.other_meta or ())
-    return same and parent_other <= child_other and all(bcftools_line(x) for x in child_other - parent_other)
+    added = child_other - parent_other
+    views = [x for x in added if x.startswith(VIEW_COMMAND_LINE)]
+    return (
+        same
+        and parent_other <= child_other
+        and len(views) == 1
+        and all(x.startswith((VIEW_COMMAND_LINE, VIEW_VERSION_LINE)) for x in added)
+    )
 
 
 def _filters(header: VCFHeader) -> list:
@@ -468,8 +476,9 @@ class HeaderSteps:
         contigs fit the VCF's (:meth:`by_contigs`). Any other producing step gives none, as
         :data:`NO_ACTIVITY`, as does an input named as this file. A view is written only where its
         parent's header fits (:func:`fits_parent`), whether the end of the flow or the last line named
-        it: as :data:`PARENT_UNREADABLE` where the parent's header cannot be read, as
-        :data:`PARENT_HEADER_DIFFERS` where it does not fit. A step a lifting tool wrote no line for
+        it: as :data:`PARENT_UNREADABLE` where the parent's header cannot be read, or was not read to
+        its ``#CHROM`` line, as :data:`PARENT_HEADER_DIFFERS` where it does not fit (this file's own
+        header cut short among the ways). A step a lifting tool wrote no line for
         leaves its header's contigs and reference other than its parent's.
         """
         step, outcome, by_last_line = found_step(header, file_name)
@@ -500,7 +509,7 @@ class HeaderSteps:
             return None, outcome
         if rule in VIEWS:
             parent = self.header_of(parents[0])
-            if parent is None:
+            if parent is None or not parent.vcf_columns:
                 return None, PARENT_UNREADABLE
             if not fits_parent(header, parent):
                 return None, PARENT_HEADER_DIFFERS

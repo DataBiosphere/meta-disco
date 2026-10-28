@@ -166,7 +166,7 @@ class Step:
     the line gives it twice), None where it gives none; two lines alike but for it are two steps.
     ``options`` is each option name an option-form line gives, in order, as the line is split into
     options and values: ``--min-ac`` of ``--min-ac=1``, ``-O`` of ``-Oz``, and a cluster led by a flag
-    taking no value whole (``-pG``, and so ``-Wtbi``), its flags unknown (#771). A GATK 3 ``key=value`` line gives none. It is
+    declared as taking no value whole (``-pG``, and ``-Wtbi``: ``-W``'s optional value is not modelled) (#771). A GATK 3 ``key=value`` line gives none. It is
     not compared; ``producer_steps.steps_of`` tells two steps apart by it.
     """
 
