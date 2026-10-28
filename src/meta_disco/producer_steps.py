@@ -344,7 +344,7 @@ VIEW_COMMAND_LINE = "##bcftools_viewCommand="
 VIEW_VERSION_LINE = "##bcftools_viewVersion="
 
 
-def fits_parent(child: VCFHeader, parent: VCFHeader) -> bool:
+def fits_parent(child: VCFHeader, parent: VCFHeader, made_by: Step | None = None) -> bool:
     """Whether ``child``'s header is ``parent``'s with one bcftools view's own lines added, and its samples are among the parent's.
 
     False for a child whose header was not read to a VCF's ``#CHROM`` line (cut short), or a parent with no ``#CHROM`` line.
@@ -354,7 +354,9 @@ def fits_parent(child: VCFHeader, parent: VCFHeader) -> bool:
     one view command line added and, on bcftools' first pass, its version line. Its FILTER lines
     are compared less ``PASS``, which htslib writes in its own words, and ``##fileformat`` is not
     compared: bcftools writes its own. A header another step wrote between the parent and the
-    view (a ``norm`` of a file of the parent's name) adds that step's line, and does not fit.
+    view (a ``norm`` of a file of the parent's name) adds that step's line, and does not fit. Where
+    ``made_by`` is given, the one view line added must be that step (its inputs, output and option
+    names), so a view line the parent's header already held never stands for the one that made the child.
     """
     if not child.vcf_columns or child.sample_columns is None or parent.sample_columns is None:
         return False
@@ -378,7 +380,14 @@ def fits_parent(child: VCFHeader, parent: VCFHeader) -> bool:
         and parent_other <= child_other
         and len(views) == 1
         and all(x.startswith((VIEW_COMMAND_LINE, VIEW_VERSION_LINE)) for x in added)
+        and (made_by is None or _is_step(child, views[0], made_by))
     )
+
+
+def _is_step(header: VCFHeader, line: str, step: Step) -> bool:
+    """Whether the command ``header`` read from ``line`` is ``step``, its option names included."""
+    command = next((c for c in header.commands if c.line == line), None)
+    return command is not None and command.step == step and set(command.step.options) == set(step.options)
 
 
 def _filters(header: VCFHeader) -> list:
@@ -511,7 +520,7 @@ class HeaderSteps:
             parent = self.header_of(parents[0])
             if parent is None or not parent.vcf_columns:
                 return None, PARENT_UNREADABLE
-            if not fits_parent(header, parent):
+            if not fits_parent(header, parent, made_by=step):
                 return None, PARENT_HEADER_DIFFERS
         return edges.generated_by(rule.edge_rule, parents, self.key), STEPPED
 

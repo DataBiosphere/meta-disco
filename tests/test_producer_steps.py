@@ -517,6 +517,16 @@ def test_a_childs_header_fits_its_parent_where_only_bcftools_own_lines_are_added
     assert ps.fits_parent(header(*child), header(*parent)) is fits
 
 
+def test_the_view_line_a_child_adds_must_be_the_step_that_made_it():
+    """A view line the parent already held never stands for the one the child added (Copilot, #772)."""
+    child = header(*CHAIN, view("-S /r/CEU.txt"))
+    added, inherited = steps(header(view("-S /r/CEU.txt")))[0], steps(header(PASS))[0]
+    assert ps.fits_parent(child, header(*CHAIN), made_by=added)
+    assert not ps.fits_parent(child, header(*CHAIN), made_by=inherited)
+    other_options = steps(header(view("-R /r/x.bed")))[0]
+    assert not ps.fits_parent(child, header(*CHAIN), made_by=other_options)
+
+
 def test_a_child_whose_samples_its_parent_lacks_does_not_fit():
     parent = with_samples(header(*CHAIN), "HG00096", "HG00097")
     child = header(*CHAIN, view("-S /r/CEU.txt"))
