@@ -76,6 +76,11 @@ and a parent not found there is `external` (decision 2). Only sample and donor i
    (`sgdp:S_Spanish-2` on `coriell:HG01504`, as SGDP's metadata file says), so a reader can show the
    dataset's name and find the record by either (the explorer's search is a follow-up). Joining namespaces by rule (`giab:HG002` and
    `coriell:NA24385`) stays #361's, and one canonical-identity resolver #674's.
+   *Extended by #770:* a sample's own row naming its donors is read, both where the submitter's sample
+   table names them (IGVF's `sample.donors`) and where AnVIL's biosample does (`anvil_biosample.donor_id`,
+   read as the donor records its ids tie to), and a sample may be collected from **several donors**: a
+   pooled sample, as 305 of IGVF's mouse samples are (8 to 96 mice each). `collected_from` is then the
+   set of donors; each source names a set, and sources naming different sets give none.
 4. **The AnVIL model is followed**: its donor fields (`phenotypic_sex`, `reported_ethnicity`,
    `genetic_ancestry`) and the vocabularies its submission guide suggests. `phenotypic_sex` takes
    AnVIL's values, `Female` and `Male`, with PATO's terms as their `meaning`; population codes are

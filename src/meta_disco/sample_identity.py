@@ -265,7 +265,7 @@ def identifier_order(identifier: Identifier) -> tuple[str, str, str]:
     return (identifier.namespace, identifier.id, identifier.dataset or "")
 
 
-def _sorted(members: Iterable[Identifier]) -> list[dict]:
+def in_identifier_order(members: Iterable[Identifier]) -> list[dict]:
     """The distinct members as ``EntityIdentifier`` dicts, in one canonical order.
 
     Sorted by a plain tuple key rather than the dataclass's own ordering, whose comparisons
@@ -283,12 +283,12 @@ def _digest(entries: list[dict]) -> str:
 
 def list_id(members: Iterable[Identifier]) -> str:
     """The digest that names a set of members: the first 16 hex of the sha256 of their sorted form."""
-    return _digest(_sorted(members))
+    return _digest(in_identifier_order(members))
 
 
 def sample_list(members: Iterable[Identifier]) -> dict:
     """A ``SampleList``: its id and its members, sorted."""
-    entries = _sorted(members)
+    entries = in_identifier_order(members)
     return {"list_id": _digest(entries), "members": entries}
 
 
