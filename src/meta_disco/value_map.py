@@ -80,6 +80,7 @@ from .source_evidence import (
     DEFAULT_SOURCE_EVIDENCE_ROOT,
     EvidenceEntry,
     EvidenceFileEnvelope,
+    cell_values,
     discover,
     iter_evidence,
     list_cell,
@@ -135,8 +136,7 @@ def match_key(raw_value: str | Iterable[str]) -> Key:
     """The key a raw value matches on: a list cell's elements normalized as a set, else a one-element set."""
     if not isinstance(raw_value, str):
         return frozenset(normalize(e) for e in raw_value)
-    elements = list_cell(raw_value)
-    return frozenset(normalize(e) for e in elements) if elements is not None else frozenset({normalize(raw_value)})
+    return frozenset(normalize(e) for e in cell_values(raw_value))
 
 
 def row_id(slot: str, key: Key) -> str:

@@ -262,6 +262,8 @@ KIND_OF_IDENTITY_LINK: dict[str, Literal["donor", "sample"]] = {
     SAME_DONOR_AS: "donor",
 }
 SYNONYMS = "synonyms"
+# The entity evidence fields whose value is a repository's own identifier, which only its published table issues.
+REPOSITORY_ISSUED_FIELDS = (*REPOSITORY_ID_FIELDS, COLLECTED_FROM_REPOSITORY_ID)
 # Every entity evidence field, and whose identifier its line is keyed by: a donor's or a sample's.
 KIND_OF_ENTITY_FIELD: dict[str, Literal["donor", "sample"]] = {
     **KIND_OF_SLOT,

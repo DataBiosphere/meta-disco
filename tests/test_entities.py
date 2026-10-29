@@ -688,7 +688,6 @@ def test_a_sample_is_collected_from_its_same_identifier_donor_which_then_has_a_r
         "unknown_site_lines": [],
         "unreviewed": {},
         "no_donor": {},
-        "without_donor": {},
     }
     for sample in result.samples:
         SampleRecord(**sample)

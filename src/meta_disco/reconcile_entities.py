@@ -88,6 +88,7 @@ from .models import (
     PARENT_FIELDS,
     REPOSITORY_ID_FIELDS,
     REPOSITORY_IDS,
+    REPOSITORY_ISSUED_FIELDS,
     SAME_DONOR_AS,
     SAMPLE_SLOTS,
     SOURCE_IDENTIFIER_RULE,
@@ -110,10 +111,11 @@ from .sample_identity import (
     Identifier,
     IdentifierRuleSet,
     identifier_order,
+    in_identifier_order,
     members_of,
     most_frequent,
 )
-from .source_evidence import EvidenceEntry, discover, list_cell
+from .source_evidence import EvidenceEntry, EvidenceFileEnvelope, cell_values, discover
 from .value_map import ValueMap
 
 # How many unrecognised identifiers the report names per table.
@@ -352,11 +354,10 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
     referenced_in: dict[tuple[str, EntityKind], set[Identifier]] = defaultdict(set)
     files, unrecognised = [], defaultdict(Counter)
     repository_ids: dict[tuple[EntityKind, Identifier], set[RepositoryId]] = defaultdict(set)
-    tied: dict[tuple[EntityKind, str, str], tuple[Identifier, Path]] = {}
-    # The identifier rule that recognised each donor a repository's donor identifier ties to, by ``RepositoryId.key``.
-    donor_rule: dict[tuple[str, str], str] = {}
-    # Each ``collected_from_repository_id`` line, read once every donor's repository identifiers are (#770).
-    by_repository_id: list[tuple[Identifier, str, tuple[str | None, str | None], str, str, EvidenceEntry]] = []
+    # Each repository identifier's record, the file that tied it, and the identifier rule that recognised the record.
+    tied: dict[tuple[EntityKind, str, str], tuple[Identifier, Path, str]] = {}
+    # Each line naming a sample's donors, read once every donor's repository identifiers are (#770).
+    donor_links: list[tuple[Identifier, EvidenceFileEnvelope, EvidenceEntry]] = []
     no_value_lines: dict[str, Counter] = defaultdict(Counter)
     unrecognised_parents: dict[tuple[str | None, str | None], Counter] = defaultdict(Counter)
     for path in paths:
@@ -366,9 +367,7 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
         for entry in entries(path, envelope, _ENTITY_FIELDS):
             lines += 1
             alias_kind = KIND_OF_REPOSITORY_ID.get(entry.field)
-            if (alias_kind is not None or entry.field == COLLECTED_FROM_REPOSITORY_ID) and (
-                envelope.source_type != SOURCE_PUBLISHED_VALUE
-            ):
+            if entry.field in REPOSITORY_ISSUED_FIELDS and envelope.source_type != SOURCE_PUBLISHED_VALUE:
                 raise ValueError(
                     f"{relative_to(path, entity_root)}: carries {entry.field}, a repository's own identifier, in a "
                     f"{envelope.source_type} file; only the repository's published table issues one"
@@ -406,28 +405,14 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
                     slots[links.main(named.identifier)]  # the identifier it names has a record, joined or not
                     referenced_in[(str(dataset), DONOR)].add(links.main(named.identifier))
                 continue  # the link itself is read by _main_identifiers
-            if entry.field == COLLECTED_FROM:
-                named = _named_values(entry.raw_value)
-                found = [rules.recognise(raw, dataset, DONOR) for raw in named]
-                if None in found:  # all of a line's donors or none
-                    links.unrecognised[where][named[found.index(None)]] += 1
-                    continue
-                donors = frozenset(links.main(d.identifier) for d in found if d is not None)
-                for rule_id in sorted({d.rule_id for d in found if d is not None}):
-                    attribution = _link_attribution(envelope.source_type, rule_id, entry)
-                    links.collected_from[ident].append((donors, attribution))
-                referenced_in[(str(dataset), DONOR)].update(donors)
-                continue
-            if entry.field == COLLECTED_FROM_REPOSITORY_ID:
-                by_repository_id.append(
-                    (ident, str(dataset), where, envelope.source.repository, envelope.source_type, entry)
-                )
+            if entry.field in (COLLECTED_FROM, COLLECTED_FROM_REPOSITORY_ID):
+                donor_links.append((ident, envelope, entry))
                 continue
             if alias_kind is not None:
                 alias = RepositoryId(
                     envelope.source.repository, str(dataset), str(envelope.source.table), entry.raw_value
                 )
-                earlier, earlier_path = tied.setdefault((kind, *alias.key), (ident, path))
+                earlier, earlier_path, _ = tied.setdefault((kind, *alias.key), (ident, path, got.rule_id))
                 if earlier != ident:
                     raise ValueError(
                         f"{relative_to(path, entity_root)}: {alias.repository} {kind} {alias.id!r} ties to "
@@ -436,8 +421,6 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
                         "and which is not chosen"
                     )
                 repository_ids[(kind, ident)].add(alias)
-                if kind == DONOR:
-                    donor_rule[alias.key] = got.rule_id
                 continue
             # Not where a rule rewrote it (GM19908 -> NA19908), nor where it is a synonym of the record's identifier.
             exact = ident.id == entry.target_key_value and ident == got.identifier
@@ -469,17 +452,7 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
                 "unrecognised": misses,
             }
         )
-    for sample, dataset, where, repository, source_type, entry in by_repository_id:
-        keys = [(repository, raw) for raw in _named_values(entry.raw_value)]
-        missing = [raw for repo, raw in keys if (DONOR, repo, raw) not in tied]
-        if missing:  # all of a line's donors or none
-            links.unresolved[where][missing[0]] += 1
-            continue
-        donors = frozenset(tied[(DONOR, repo, raw)][0] for repo, raw in keys)
-        for rule_id in sorted({donor_rule[key] for key in keys}):
-            attribution = _link_attribution(source_type, rule_id, entry)
-            links.collected_from[sample].append((donors, attribution))
-        referenced_in[(dataset, DONOR)].update(donors)
+    _read_donor_links(donor_links, rules, tied, links, referenced_in)
     return EntityEvidence(
         slots=slots,
         sample_slots=sample_slots,
@@ -493,14 +466,59 @@ def gather(paths: Iterable[Path], entity_root: Path, table: ValueMap, rules: Ide
         links=links,
         outcomes=dict(outcomes),
         samples_by_repository_id={
-            (repo, id_): ident for (kind, repo, id_), (ident, _) in tied.items() if kind == SAMPLE
+            (repo, id_): ident for (kind, repo, id_), (ident, *_) in tied.items() if kind == SAMPLE
         },
     )
 
 
-def _named_values(raw_value: str) -> list[str]:
-    """The identifiers a link's cell names: a list cell's elements (``source_evidence.list_cell``), else the cell."""
-    return list_cell(raw_value) or [raw_value]
+def _read_donor_links(
+    held: list[tuple[Identifier, EvidenceFileEnvelope, EvidenceEntry]],
+    rules: IdentifierRuleSet,
+    tied: dict[tuple[EntityKind, str, str], tuple[Identifier, Path, str]],
+    links: IdentityLinks,
+    referenced_in: dict[tuple[str, EntityKind], set[Identifier]],
+) -> None:
+    """Each held line's donors onto ``links.collected_from``, as one set with an attribution per identifier rule (#559, #770).
+
+    A ``collected_from`` line names a donor by its identifier, recognised in the line's dataset by the identifier rules
+    and read as its main identifier; a ``collected_from_repository_id`` line by a repository's identifier for it, read
+    as the donor record that identifier ties to (``tied``) and cited by the rule that recognised that record. A list
+    cell names each of its elements. All of a line's donors or none: a line naming one its field cannot resolve is
+    counted by that value, in ``links.unrecognised`` or ``links.unresolved``.
+    """
+    for sample, envelope, entry in held:
+        dataset, repository = envelope.target.dataset, envelope.source.repository
+        named = cell_values(entry.raw_value)
+        if entry.field == COLLECTED_FROM:
+            found = [_recognised_donor(raw, dataset, rules, links) for raw in named]
+            misses = links.unrecognised
+        else:
+            found = [_tied_donor(raw, repository, tied) for raw in named]
+            misses = links.unresolved
+        resolved = [f for f in found if f is not None]
+        if len(resolved) < len(found):
+            misses[(dataset, envelope.source.table)][named[found.index(None)]] += 1
+            continue
+        donors = frozenset(donor for donor, _ in resolved)
+        for rule_id in sorted({rule_id for _, rule_id in resolved}):
+            links.collected_from[sample].append((donors, _link_attribution(envelope.source_type, rule_id, entry)))
+        referenced_in[(str(dataset), DONOR)].update(donors)
+
+
+def _recognised_donor(
+    raw: str, dataset: str | None, rules: IdentifierRuleSet, links: IdentityLinks
+) -> tuple[Identifier, str] | None:
+    """The donor ``raw`` names in ``dataset``, as its main identifier, and the rule recognising it; None where none does."""
+    found = rules.recognise(raw, dataset, DONOR)
+    return None if found is None else (links.main(found.identifier), found.rule_id)
+
+
+def _tied_donor(
+    raw: str, repository: str, tied: dict[tuple[EntityKind, str, str], tuple[Identifier, Path, str]]
+) -> tuple[Identifier, str] | None:
+    """The donor record ``repository``'s identifier ``raw`` ties to, and the rule that recognised it; None where none."""
+    found = tied.get((DONOR, repository, raw))
+    return None if found is None else (found[0], found[2])
 
 
 def _names_no_value(entry: EvidenceEntry) -> str | None:
@@ -609,11 +627,6 @@ def _collected_from(
     return {donors: list(distinct(attributions)) for donors, attributions in by_donors.items()}
 
 
-def _in_order(donors: AbstractSet[Identifier]) -> list[dict]:
-    """``donors`` as identifier dicts, in identifier order."""
-    return [d.to_dict() for d in sorted(donors, key=identifier_order)]
-
-
 def _parents(slots: dict[Identifier, dict[str, SlotEvidence]]) -> set[Identifier]:
     """Every donor a ``mother`` or ``father`` claim in ``slots`` names."""
     return {
@@ -652,7 +665,6 @@ def reconcile_entities(
     sample_records, linked, conflicts = [], Counter(), []
     donors_of: dict[Identifier, frozenset[Identifier]] = {}  # each sample linked to its donors
     linked_by: Counter = Counter()
-    pooled = 0
     collected_conflicts: list[dict] = []
     sample_settled: dict[Identifier, dict[str, str]] = {}
     unreviewed: dict[EntityKind, Counter] = {DONOR: Counter(), SAMPLE: Counter()}
@@ -665,19 +677,18 @@ def reconcile_entities(
             slots[donor]  # a donor a source names for a sample has a record, evidence or none, link or conflict
         if len(by_donors) == 1:
             ((donors, named_by),) = by_donors.items()
-            record[COLLECTED_FROM] = {"donors": _in_order(donors), "named_by": named_by}
+            record[COLLECTED_FROM] = {"donors": in_identifier_order(donors), "named_by": named_by}
             donors_of[sample] = donors
             linked[sample.namespace] += 1
             linked_by.update({a["source_type"] for a in named_by})
-            pooled += len(donors) > 1
         elif by_donors:
             collected_conflicts.append(
                 {
                     "identifier": sample.to_dict(),
-                    "named": sorted(
-                        ({"donors": _in_order(d), "named_by": by_donors[d]} for d in by_donors),
-                        key=lambda n: [identifier_order(Identifier(**d)) for d in n["donors"]],
-                    ),
+                    "named": [
+                        {"donors": in_identifier_order(d), "named_by": by_donors[d]}
+                        for d in sorted(by_donors, key=lambda d: sorted(map(identifier_order, d)))
+                    ],
                 }
             )
         sample_settled[sample] = _settle_record(
@@ -747,12 +758,11 @@ def reconcile_entities(
             "collected_from": dict(linked),
             "collected_from_by_source": dict(sorted(linked_by.items())),
             "collected_from_conflicts": collected_conflicts,
-            "pooled": pooled,
+            "pooled": sum(len(donors) > 1 for donors in donors_of.values()),
             "statuses": {slot: dict(Counter(s[slot] for s in sample_settled.values())) for slot in SAMPLE_SLOTS},
             UNKNOWN_SITE_LINES: _lines_per_table(evidence.no_value_lines.get(UNKNOWN_SITE_LINES, Counter())),
             "unreviewed": {slot: n for slot, n in unreviewed[SAMPLE].items() if n},
             NO_DONOR: no_donor,
-            "without_donor": {dataset: len(rows) for dataset, rows in no_donor.items()},
         },
         DONOR_REACH: reach,
         UNREACHED: _unreached_counts(unreached),

@@ -56,7 +56,7 @@ from .models import (
     SOURCE_REPOSITORY_METADATA,
     UNKNOWN_PARENT,
 )
-from .sample_identity import DONOR, REPOSITORY_ID_FIELD, SAMPLE, EntityKind, identifier_rules
+from .sample_identity import DONOR, REPOSITORY_ID_FIELD, EntityKind, identifier_rules
 from .schema.classification_model import EntityEvidenceRow, ImporterSourceTypeEnum, JoinKeyEnum
 from .source_evidence import (
     EvidenceFileEnvelope,
@@ -156,15 +156,14 @@ def _check_dataset(entity_map: EntityMap, dataset: str, path: Path) -> list[str]
     rows: Counter = Counter()
     seen: dict[str, set[str]] = {name: set() for name in tables}
     identifiers: dict[str, list[str]] = {name: [] for name in tables}
-    # Each column whose cells name donors, by what it holds: a parent, or a sample's donors (#770), a string or a
-    # list of them.
-    held = {
-        (name, column): "parent" if f in PARENT_FIELDS else "donor"
+    # Each column whose cells name donors, read as reconcile reads them: a parent's, a string, PED's `0` naming none; or
+    # a sample's donors (#770), a string or a list of them.
+    parents: dict[tuple[str, str], list[str]] = {
+        (name, column): []
         for name, t in tables.items()
         for f in (*PARENT_FIELDS, COLLECTED_FROM)
         for column in t.slots.get(f, ())
     }
-    parents: dict[tuple[str, str], list[str]] = {key: [] for key in held}
     sources: dict[str, set[str]] = {name: set() for name in published}
     published_seen: dict[str, set[str]] = {name: set() for name in published}
     published_keys: dict[str, set[str]] = {name: set() for name in published}
@@ -182,10 +181,11 @@ def _check_dataset(entity_map: EntityMap, dataset: str, path: Path) -> list[str]
         if isinstance(raw, str) and raw:
             identifiers[entity_type].append(raw)
         for (name, column), values in parents.items():
-            parent = row.get(column) if name == entity_type else None
-            for named in parent if isinstance(parent, list) else [parent]:
-                if isinstance(named, str) and named and named != UNKNOWN_PARENT:
-                    values.append(named)
+            cell = row.get(column) if name == entity_type else None
+            if COLLECTED_FROM in tables[name].slots:
+                values.extend(v for v in (cell if isinstance(cell, list) else [cell]) if isinstance(v, str) and v)
+            elif isinstance(cell, str) and cell and cell != UNKNOWN_PARENT:
+                values.append(cell)
     problems = []
     for name, table in tables.items():
         at = f"{dataset}/{name}"
@@ -209,7 +209,7 @@ def _check_dataset(entity_map: EntityMap, dataset: str, path: Path) -> list[str]
         missed = [raw for raw in values if rules.recognise(raw, dataset, DONOR) is None]
         if 2 * len(missed) > len(values):
             problems.append(
-                f"{dataset}/{name}: {len(missed):,} of {len(values):,} values of {held[(name, column)]} column {column!r} are not "
+                f"{dataset}/{name}: {len(missed):,} of {len(values):,} values of {'donor' if COLLECTED_FROM in tables[name].slots else 'parent'} column {column!r} are not "
                 f"a donor any identifier rule recognises (e.g. {missed[:_EXAMPLES]})"
             )
     for entity in entity_map.published:
@@ -230,9 +230,9 @@ def _check_dataset(entity_map: EntityMap, dataset: str, path: Path) -> list[str]
 def _kinds_served(
     table: EntityTable, published: tuple[PublishedEntities, ...], sources: dict[str, set[str]]
 ) -> list[EntityKind]:
-    """What ``table``'s identifier names: a sample where it reads its donors (``collected_from``, #770), else a donor
-    where it reads a slot, and each kind a published table makes records of from its rows."""
-    kinds: list[EntityKind] = [SAMPLE] if COLLECTED_FROM in table.slots else [DONOR] if table.slots else []
+    """What ``table``'s identifier names: whose slots it reads (``models.KIND_OF_ENTITY_FIELD``: a donor's, or a sample's
+    donors, #770), and each kind a published table makes records of from its rows."""
+    kinds = table.kinds
     for entity in published:
         if table.table in sources[entity.table] and entity.kind not in kinds:
             kinds.append(entity.kind)

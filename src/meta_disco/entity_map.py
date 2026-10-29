@@ -29,7 +29,14 @@ from importlib.resources import files
 
 from .azul_manifest import HARMONIZED_PREFIX
 from .lineage_map import expect_keys, expect_mapping, expect_name, map_document
-from .models import COLLECTED_FROM, COLLECTED_FROM_REPOSITORY_ID, DONOR_FIELDS, DONOR_SLOTS, SAMPLE_SLOTS
+from .models import (
+    COLLECTED_FROM,
+    COLLECTED_FROM_REPOSITORY_ID,
+    DONOR_FIELDS,
+    DONOR_SLOTS,
+    KIND_OF_ENTITY_FIELD,
+    SAMPLE_SLOTS,
+)
 from .sample_identity import DONOR, REPOSITORY_ID_FIELD, SAMPLE, EntityKind
 from .slot_map import Readable, unique_key_loader
 
@@ -58,6 +65,12 @@ class EntityTable:
     table: str
     identifier: str
     slots: Mapping[str, tuple[str, ...]]
+
+    @property
+    def kinds(self) -> list[EntityKind]:
+        """Whose slots the table reads (``models.KIND_OF_ENTITY_FIELD``), so what its identifier names; the loader
+        refuses a table reading two kinds'."""
+        return sorted({KIND_OF_ENTITY_FIELD[slot] for slot in self.slots})
 
 
 @dataclass(frozen=True)
@@ -99,7 +112,7 @@ def load_entity_map(source: Readable | None = None) -> EntityMap:
     Checked here: the shape, each slot one of ``DONOR_FIELDS`` (or, on a table, ``FAMILY_FIELDS``
     or ``collected_from``, which a table reads alone; on the published samples, ``SAMPLE_SLOTS`` and
     ``collected_from_repository_id``) with a non-empty list of
-    distinct columns, no column read both as the identifier (or a published table's source
+    distinct columns, ``collected_from_repository_id`` only beside a published donor kind, no column read both as the identifier (or a published table's source
     rows or repository identifier) and as a slot's, a slot only on a table or on a published
     kind, at least one table per dataset reading a slot, and no harmonized table under
     ``datasets``. Whether the columns exist and hold
@@ -118,12 +131,13 @@ def load_entity_map(source: Readable | None = None) -> EntityMap:
             expect_keys(entry, {IDENTIFIER}, {IDENTIFIER, *_TABLE_SLOTS}, at)
             identifier = expect_name(entry[IDENTIFIER], f"{at} identifier")
             slots = _slots(entry, at, {identifier}, _TABLE_SLOTS)
-            if COLLECTED_FROM in slots and len(slots) > 1:
+            mapped = EntityTable(dataset=dataset, table=str(table), identifier=identifier, slots=slots)
+            if len(mapped.kinds) > 1:
                 raise ValueError(
-                    f"{at}: reads {COLLECTED_FROM}, so its identifier names a sample, and a sample's table "
-                    f"reads no donor's slot; it reads {sorted(set(slots) - {COLLECTED_FROM})} too"
+                    f"{at}: reads {sorted(slots)}, the slots of a {' and a '.join(mapped.kinds)}; its identifier "
+                    "names one, so a table reads one's slots"
                 )
-            tables.append(EntityTable(dataset=dataset, table=str(table), identifier=identifier, slots=slots))
+            tables.append(mapped)
     published = _published(document["published"])
     for dataset in document["datasets"]:
         if not any(t.slots for t in tables if t.dataset == dataset):
@@ -164,6 +178,12 @@ def _published(document: dict) -> tuple[PublishedEntities, ...]:
     tables = [p.table for p in published]
     if len(set(tables)) != len(tables):
         raise ValueError(f"{at}: two kinds name one table, {tables}")
+    kinds = {p.kind for p in published}
+    if any(COLLECTED_FROM_REPOSITORY_ID in p.slots for p in published) and DONOR not in kinds:
+        raise ValueError(
+            f"{at}: sample reads {COLLECTED_FROM_REPOSITORY_ID}, the repository's identifiers for its donors, "
+            "which tie to donor records only through a published donor table, and none is declared"
+        )
     return tuple(published)
 
 

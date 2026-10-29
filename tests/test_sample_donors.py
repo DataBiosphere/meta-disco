@@ -177,7 +177,7 @@ def test_a_donor_id_line_outside_a_published_table_is_refused(tmp_path):
 @pytest.mark.parametrize(
     ("table", "message"),
     [
-        ("t: {identifier: x, phenotypic_sex: [y], collected_from: [z]}", "a sample's table reads no donor's slot"),
+        ("t: {identifier: x, phenotypic_sex: [y], collected_from: [z]}", "the slots of a donor and a sample"),
         ("t: {identifier: x, collected_from_repository_id: [z]}", "keys are"),
     ],
 )
@@ -189,12 +189,25 @@ def test_the_loader_refuses_a_sample_table_reading_more_than_its_donors(tmp_path
         load_entity_map(path)
 
 
-def test_the_check_reads_a_sample_tables_donor_column_as_naming_donors(tmp_path):
-    """A table reading ``collected_from`` is keyed by samples, and its cells must name donors."""
+def test_the_loader_refuses_a_samples_donor_ids_with_no_published_donor_table_to_tie_them(tmp_path):
+    path = tmp_path / "map.yaml"
+    published = (
+        "published: {sample: {table: anvil_biosample, source_rows: s, repository_id: i, "
+        "collected_from_repository_id: [d]}}\n"
+    )
+    path.write_text(f"catalog: anvil15\ndatasets:\n  D:\n    t: {{identifier: x, phenotypic_sex: [y]}}\n{published}")
+    with pytest.raises(ValueError, match="none is declared"):
+        load_entity_map(path)
+
+
+@pytest.mark.parametrize("named", [("x1", "x2"), ("0", "0")])
+def test_the_check_reads_a_sample_tables_donor_column_as_naming_donors(tmp_path, named):
+    """A table reading ``collected_from`` is keyed by samples, and its cells must name donors: as reconcile reads them,
+    PED's ``0`` among them, which names no parent but is no donor either."""
     map_path = tmp_path / "entity_map.yaml"
     map_path.write_text(MAP)
-    write_dataset(tmp_path / "m", IGVF, igvf(donors_of_s1=("x1", "x2")))
+    write_dataset(tmp_path / "m", IGVF, igvf(donors_of_s1=named))
     assert ae.check(load_entity_map(map_path), tmp_path / "m", CATALOG) == [
         f"{IGVF}/sample: 2 of 3 values of donor column 'donors' are not a donor any identifier rule recognises "
-        "(e.g. ['x1', 'x2'])"
+        f"(e.g. {list(named)})"
     ]

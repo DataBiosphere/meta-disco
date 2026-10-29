@@ -2634,7 +2634,7 @@ class FamilyIdClassification(Classification):
 
 class SampleRecord(ConfiguredBaseModel):
     """
-    One sample (#693): every sample a reconciled file names, and every sample a repository's own sample record ties to (#669), in `reconciled/samples.ndjson.gz`, with the donor it was collected from where a rule says, and what the repository's own record of it says (#699), each slot settled and carrying `use` as a donor's does.
+    One sample (#693): every sample a reconciled file names, and every sample a repository's own sample record ties to (#669), in `reconciled/samples.ndjson.gz`, with the donors it was collected from where its sources agree (`CollectedFrom`, #770), and what the repository's own record of it says (#699), each slot settled and carrying `use` as a donor's does.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 

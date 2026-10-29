@@ -75,7 +75,7 @@ from .sample_identity import (
     sample_list,
     sorted_lists,
 )
-from .source_evidence import list_cell
+from .source_evidence import cell_values
 
 # How a file's samples settled; the report counts each per dataset.
 AGREED = "agreed"  # two or more kinds of the file's own source named the same samples
@@ -132,12 +132,10 @@ def from_line(
 ) -> Named | None:
     """The samples one evidence line names, or None where any string it holds no rule recognises.
 
-    A list cell names each of its elements. Each distinct identifier rule that recognised
-    one is an attribution of its own, with the line's source: ``Attribution`` names one rule.
+    Each distinct identifier rule that recognised one is an attribution of its own, with the line's source.
     """
-    elements = list_cell(raw_value)
     members, rule_ids = set(), []
-    for element in elements if elements is not None else [raw_value]:
+    for element in cell_values(raw_value):
         got = rules.recognise(element, dataset, SAMPLE)
         if got is None:
             return None
