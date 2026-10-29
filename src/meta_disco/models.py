@@ -243,16 +243,24 @@ SAMPLE_REPOSITORY_ID = "sample_repository_id"
 REPOSITORY_ID_FIELDS = (DONOR_REPOSITORY_ID, SAMPLE_REPOSITORY_ID)
 REPOSITORY_IDS = "repository_ids"
 
-# The entity evidence fields whose value names a donor (#559), recognised through
-# `rules/sample_namespaces.yaml` as a parent's is: `collected_from`, about a sample, names the
-# donor it was collected from; `same_donor_as`, about a donor, names another identifier for it,
+# The entity evidence fields whose value names a donor (#559): `collected_from`, about a sample,
+# names the donor or donors it was collected from (several for a pooled sample, as a list cell,
+# #770), recognised through `rules/sample_namespaces.yaml` as a parent's is;
+# `collected_from_repository_id`, about a sample, names them by the repository's own identifiers
+# for them (AnVIL's `anvil_biosample.donor_id`, #770), each read through the donor record it ties to
+# (`DONOR_REPOSITORY_ID`); `same_donor_as`, about a donor, names another identifier for it,
 # followed to the end of the chain, whose identifier is the main one; the others are kept on that
 # record as synonyms. Links, not slots: never translated,
 # never settled as a slot is. Each maps to whose identifier the line is keyed by.
 COLLECTED_FROM = "collected_from"
+COLLECTED_FROM_REPOSITORY_ID = "collected_from_repository_id"
 SAME_DONOR_AS = "same_donor_as"
-IDENTITY_LINK_FIELDS = (COLLECTED_FROM, SAME_DONOR_AS)
-KIND_OF_IDENTITY_LINK: dict[str, Literal["donor", "sample"]] = {COLLECTED_FROM: "sample", SAME_DONOR_AS: "donor"}
+IDENTITY_LINK_FIELDS = (COLLECTED_FROM, COLLECTED_FROM_REPOSITORY_ID, SAME_DONOR_AS)
+KIND_OF_IDENTITY_LINK: dict[str, Literal["donor", "sample"]] = {
+    COLLECTED_FROM: "sample",
+    COLLECTED_FROM_REPOSITORY_ID: "sample",
+    SAME_DONOR_AS: "donor",
+}
 SYNONYMS = "synonyms"
 # Every entity evidence field, and whose identifier its line is keyed by: a donor's or a sample's.
 KIND_OF_ENTITY_FIELD: dict[str, Literal["donor", "sample"]] = {

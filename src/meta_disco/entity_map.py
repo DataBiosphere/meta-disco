@@ -3,7 +3,9 @@
 The slot map keys a raw value for a *file's* dimension by a file-link column; this map keys a
 raw value for a *donor's* or, on the repository's own sample table, a *sample's* slot (``models.DONOR_FIELDS``, and on a submitter table the family's,
 ``models.FAMILY_FIELDS``, #582) by the column naming the donor, since
-rows such as 1000 Genomes' ``pedigree`` have no file-link column. ``anvil_entities`` reads it.
+rows such as 1000 Genomes' ``pedigree`` have no file-link column. A submitter table whose
+identifier names a sample may read instead the donor or donors it was collected from
+(``collected_from``, #770), and nothing else. ``anvil_entities`` reads it.
 It maps structure, never meaning; the shape is ``sources/anvil_entity_map.yaml``'s.
 
 Per table: ``identifier`` and per slot its columns. A table reading no slot names only its
@@ -14,7 +16,8 @@ repository's own table of that kind, read in every dataset the map names: its co
 source rows (``<table>:<datarepo_row_id>``), through which each record is attached to an
 identifier in that table's ``identifier`` column; its column holding the repository's own
 identifier for the record (``repository_id``, #669); and each slot's columns, a donor's
-(``models.DONOR_FIELDS``) or a sample's (``models.SAMPLE_SLOTS``, #699).
+(``models.DONOR_FIELDS``) or a sample's (``models.SAMPLE_SLOTS``, #699, and
+``collected_from_repository_id``, the repository's own identifiers for its donors, #770).
 No ``notes`` member, for the slot map's reason.
 """
 
@@ -26,7 +29,7 @@ from importlib.resources import files
 
 from .azul_manifest import HARMONIZED_PREFIX
 from .lineage_map import expect_keys, expect_mapping, expect_name, map_document
-from .models import DONOR_FIELDS, DONOR_SLOTS, SAMPLE_SLOTS
+from .models import COLLECTED_FROM, COLLECTED_FROM_REPOSITORY_ID, DONOR_FIELDS, DONOR_SLOTS, SAMPLE_SLOTS
 from .sample_identity import DONOR, REPOSITORY_ID_FIELD, SAMPLE, EntityKind
 from .slot_map import Readable, unique_key_loader
 
@@ -34,8 +37,15 @@ _WHERE = "entity map"
 IDENTIFIER = "identifier"
 _PUBLISHED_KEYS = frozenset({"table", "source_rows", "repository_id"})
 # The slots a published record of each kind may read: a donor's, but not its family, which AnVIL's
-# model has no field for; and a sample's (#699).
-_PUBLISHED_SLOTS: dict[EntityKind, tuple[str, ...]] = {DONOR: DONOR_FIELDS, SAMPLE: SAMPLE_SLOTS}
+# model has no field for; and a sample's (#699), and its donors by the repository's own identifiers
+# for them (#770).
+_PUBLISHED_SLOTS: dict[EntityKind, tuple[str, ...]] = {
+    DONOR: DONOR_FIELDS,
+    SAMPLE: (*SAMPLE_SLOTS, COLLECTED_FROM_REPOSITORY_ID),
+}
+# What a submitter table may read: a donor's slots and family, or, on a table whose identifier names a
+# sample, the donor or donors it was collected from (#770).
+_TABLE_SLOTS = (*DONOR_SLOTS, COLLECTED_FROM)
 
 _UniqueKeyLoader = unique_key_loader(_WHERE)
 
@@ -86,8 +96,9 @@ def default_entity_map_resource():
 def load_entity_map(source: Readable | None = None) -> EntityMap:
     """Load and check an entity map, the bundled one by default; ``ValueError`` naming where it is wrong.
 
-    Checked here: the shape, each slot one of ``DONOR_FIELDS`` (or, on a table, ``FAMILY_FIELDS``;
-    on the published samples, ``SAMPLE_SLOTS``) with a non-empty list of
+    Checked here: the shape, each slot one of ``DONOR_FIELDS`` (or, on a table, ``FAMILY_FIELDS``
+    or ``collected_from``, which a table reads alone; on the published samples, ``SAMPLE_SLOTS`` and
+    ``collected_from_repository_id``) with a non-empty list of
     distinct columns, no column read both as the identifier (or a published table's source
     rows or repository identifier) and as a slot's, a slot only on a table or on a published
     kind, at least one table per dataset reading a slot, and no harmonized table under
@@ -104,9 +115,14 @@ def load_entity_map(source: Readable | None = None) -> EntityMap:
             at = f"{_WHERE} {dataset}/{table}"
             if str(table).startswith(HARMONIZED_PREFIX):
                 raise ValueError(f"{at}: a harmonized table is the repository's, not a submitter's; see `published`")
-            expect_keys(entry, {IDENTIFIER}, {IDENTIFIER, *DONOR_SLOTS}, at)
+            expect_keys(entry, {IDENTIFIER}, {IDENTIFIER, *_TABLE_SLOTS}, at)
             identifier = expect_name(entry[IDENTIFIER], f"{at} identifier")
-            slots = _slots(entry, at, {identifier}, DONOR_SLOTS)
+            slots = _slots(entry, at, {identifier}, _TABLE_SLOTS)
+            if COLLECTED_FROM in slots and len(slots) > 1:
+                raise ValueError(
+                    f"{at}: reads {COLLECTED_FROM}, so its identifier names a sample, and a sample's table "
+                    f"reads no donor's slot; it reads {sorted(set(slots) - {COLLECTED_FROM})} too"
+                )
             tables.append(EntityTable(dataset=dataset, table=str(table), identifier=identifier, slots=slots))
     published = _published(document["published"])
     for dataset in document["datasets"]:

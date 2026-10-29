@@ -506,8 +506,11 @@ reworded title renames a member: name one by its value (`DataModalityEnum("genom
     `DonorRecord` per donor with `phenotypic_sex`, `genetic_ancestry` and more (`models.DONOR_FIELDS`)
     settled by `reconcile.settle` (now in `resolution`, re-exported), and
     `reconciled/samples.ndjson.gz`, a `SampleRecord` per sample a reconciled file names or an
-    AnVIL biosample ties to, with its `collected_from` donor where an identifier rule naming both
-    a sample and a donor says so (`IdentifierRuleSet.collected_from`). A donor's slots come from **entity evidence**,
+    AnVIL biosample ties to, with its `collected_from` donors where an identifier rule naming both
+    a sample and a donor says so (`IdentifierRuleSet.collected_from`), or a sample's own row does (#770:
+    IGVF's `sample.donors` and AnVIL's `anvil_biosample.donor_id`, read through the donor records its
+    ids tie to, `collected_from_repository_id`); a **pooled sample** has several (305 IGVF samples, 8 to
+    96 mice each), each source names a set, and different sets give none. A donor's slots come from **entity evidence**,
     `data/entity_evidence/` (`entity_evidence`), its own root because every reader of
     `data/source_evidence/` reads each file there as a file's slot lines: lines
     (`EntityEvidenceRow`) keyed by the identifier as the source wrote it (`target_key:
@@ -541,8 +544,8 @@ reworded title renames a member: name one by its value (`DataModalityEnum("genom
     three more; `code_rules.IDENTITY_CHECKS`, each sample's checks in the generation's `outcomes.json`, and
     reconcile's `entities.donor_reach`), each line cited to its source: T2T_CHRY's tables' pairing as
     `repository_metadata`, SGDP's facts as `external_ground_truth`. Its links are the two **identity
-    links** (`models.IDENTITY_LINK_FIELDS`): `collected_from` names a sample's donor, beside the
-    identifier rule's link, and `same_donor_as` names another identifier for a donor, followed to the end
+    links** (`models.IDENTITY_LINK_FIELDS`, with #770's `collected_from_repository_id`): `collected_from`
+    names a sample's donor, beside the identifier rule's link, and `same_donor_as` names another identifier for a donor, followed to the end
     of its chain, so the record is keyed by `coriell:HG01504` or `hgdp:HGDP01163` and lists SGDP's own
     `sgdp:S_Spanish-2` under `synonyms`.
     No donor value is copied onto a file record.

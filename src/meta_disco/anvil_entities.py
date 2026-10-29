@@ -14,14 +14,16 @@ spells it (1000 Genomes' ``pedigree.sex`` is the number ``1``). Neither is inter
 here: the identifier rules recognise the identifier and, at reconcile, the value map
 translates a translated slot's value (``models.TRANSLATED_FIELDS``), while an untranslated one
 (``models.UNTRANSLATED_SLOTS``: a family's, #582; a sample's site, #699) is read there as written
-or as a parent's identifier. A null or empty-list cell, or a row whose identifier cell is not
+or as a parent's identifier, and a sample's donors (``collected_from``, #770; IGVF's ``sample.donors``, a
+list of a pooled sample's mice) as their identifiers. A null or empty-list cell, or a row whose identifier cell is not
 a non-empty string, writes nothing and is counted.
 
 **AnVIL's published donor and biosample** name no identifier of ours: each is attached to
 one through the submitter row it was made from (``source_rows``), read in that row's table's
 identifier column, and writes a line carrying AnVIL's own identifier for it
 (``repository_id``, written as ``donor_repository_id`` or ``sample_repository_id``) beside
-its slots' lines. A record whose source rows are in no mapped table, are not found, or name
+its slots' lines; a biosample's ``donor_id``, AnVIL's identifiers for its donors, is the line
+``collected_from_repository_id`` (#770). A record whose source rows are in no mapped table, are not found, or name
 two identifiers writes nothing and is counted.
 
 Offline: it reads what ``make download`` left on disk.
@@ -47,13 +49,14 @@ from .azul_manifest import (
 from .entity_evidence import write_entity_file
 from .entity_map import EntityMap, EntityTable, PublishedEntities
 from .models import (
+    COLLECTED_FROM,
     JOIN_KEY_ENTITY_IDENTIFIER,
     PARENT_FIELDS,
     SOURCE_PUBLISHED_VALUE,
     SOURCE_REPOSITORY_METADATA,
     UNKNOWN_PARENT,
 )
-from .sample_identity import DONOR, REPOSITORY_ID_FIELD, EntityKind, identifier_rules
+from .sample_identity import DONOR, REPOSITORY_ID_FIELD, SAMPLE, EntityKind, identifier_rules
 from .schema.classification_model import EntityEvidenceRow, ImporterSourceTypeEnum, JoinKeyEnum
 from .source_evidence import (
     EvidenceFileEnvelope,
@@ -153,9 +156,15 @@ def _check_dataset(entity_map: EntityMap, dataset: str, path: Path) -> list[str]
     rows: Counter = Counter()
     seen: dict[str, set[str]] = {name: set() for name in tables}
     identifiers: dict[str, list[str]] = {name: [] for name in tables}
-    parents: dict[tuple[str, str], list[str]] = {
-        (name, column): [] for name, t in tables.items() for f in PARENT_FIELDS for column in t.slots.get(f, ())
+    # Each column whose cells name donors, by what it holds: a parent, or a sample's donors (#770), a string or a
+    # list of them.
+    held = {
+        (name, column): "parent" if f in PARENT_FIELDS else "donor"
+        for name, t in tables.items()
+        for f in (*PARENT_FIELDS, COLLECTED_FROM)
+        for column in t.slots.get(f, ())
     }
+    parents: dict[tuple[str, str], list[str]] = {key: [] for key in held}
     sources: dict[str, set[str]] = {name: set() for name in published}
     published_seen: dict[str, set[str]] = {name: set() for name in published}
     published_keys: dict[str, set[str]] = {name: set() for name in published}
@@ -174,8 +183,9 @@ def _check_dataset(entity_map: EntityMap, dataset: str, path: Path) -> list[str]
             identifiers[entity_type].append(raw)
         for (name, column), values in parents.items():
             parent = row.get(column) if name == entity_type else None
-            if isinstance(parent, str) and parent and parent != UNKNOWN_PARENT:
-                values.append(parent)
+            for named in parent if isinstance(parent, list) else [parent]:
+                if isinstance(named, str) and named and named != UNKNOWN_PARENT:
+                    values.append(named)
     problems = []
     for name, table in tables.items():
         at = f"{dataset}/{name}"
@@ -199,7 +209,7 @@ def _check_dataset(entity_map: EntityMap, dataset: str, path: Path) -> list[str]
         missed = [raw for raw in values if rules.recognise(raw, dataset, DONOR) is None]
         if 2 * len(missed) > len(values):
             problems.append(
-                f"{dataset}/{name}: {len(missed):,} of {len(values):,} values of parent column {column!r} are not "
+                f"{dataset}/{name}: {len(missed):,} of {len(values):,} values of {held[(name, column)]} column {column!r} are not "
                 f"a donor any identifier rule recognises (e.g. {missed[:_EXAMPLES]})"
             )
     for entity in entity_map.published:
@@ -220,8 +230,9 @@ def _check_dataset(entity_map: EntityMap, dataset: str, path: Path) -> list[str]
 def _kinds_served(
     table: EntityTable, published: tuple[PublishedEntities, ...], sources: dict[str, set[str]]
 ) -> list[EntityKind]:
-    """What ``table``'s identifier names: a donor where it reads a slot, and each kind a published table makes records of from its rows."""
-    kinds: list[EntityKind] = [DONOR] if table.slots else []
+    """What ``table``'s identifier names: a sample where it reads its donors (``collected_from``, #770), else a donor
+    where it reads a slot, and each kind a published table makes records of from its rows."""
+    kinds: list[EntityKind] = [SAMPLE] if COLLECTED_FROM in table.slots else [DONOR] if table.slots else []
     for entity in published:
         if table.table in sources[entity.table] and entity.kind not in kinds:
             kinds.append(entity.kind)

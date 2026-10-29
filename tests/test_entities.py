@@ -29,6 +29,8 @@ from meta_disco.entity_map import load_entity_map
 from meta_disco.lineage_evidence import write_lineage_file
 from meta_disco.models import (
     CLASSIFIED,
+    COLLECTED_FROM,
+    COLLECTED_FROM_REPOSITORY_ID,
     CONFLICT,
     DONOR_FIELDS,
     DONOR_REPOSITORY_ID,
@@ -220,12 +222,13 @@ def lines(root: Path, kind: str, dataset: str, table: str) -> list[dict]:
 # --- the map -------------------------------------------------------------------------
 
 
-def test_the_bundled_map_loads_and_reads_only_donor_slots():
+def test_the_bundled_map_loads_and_reads_only_donor_slots_and_sample_donors():
     entity_map = load_entity_map()
     assert entity_map.catalog == "anvil15"
-    assert {slot for t in entity_map.tables for slot in t.slots} <= {*DONOR_FIELDS, *FAMILY_FIELDS}
+    assert {slot for t in entity_map.tables for slot in t.slots} <= {*DONOR_FIELDS, *FAMILY_FIELDS, COLLECTED_FROM}
     by_kind = {p.kind: set(p.slots) for p in entity_map.published}
-    assert by_kind["donor"] <= set(DONOR_FIELDS) and by_kind["sample"] <= set(SAMPLE_SLOTS)
+    assert by_kind["donor"] <= set(DONOR_FIELDS)
+    assert by_kind["sample"] <= {*SAMPLE_SLOTS, COLLECTED_FROM_REPOSITORY_ID}
     assert [(p.kind, p.table, p.repository_id) for p in entity_map.published] == [
         ("donor", "anvil_donor", "donor_id"),
         ("sample", "anvil_biosample", "biosample_id"),
@@ -666,7 +669,7 @@ def test_a_sample_is_collected_from_its_same_identifier_donor_which_then_has_a_r
     result = settled(tmp_path / "entity_evidence", tmp_path, [sample_list(members)])
     samples = by_id(result.samples)
     assert samples["HG00096"]["collected_from"] == {
-        "donor": {"id": "HG00096", "namespace": "coriell"},
+        "donors": [{"id": "HG00096", "namespace": "coriell"}],
         "named_by": [{"source_type": SOURCE_IDENTIFIER_RULE, "rule_id": "coriell_hg"}],
     }
     assert "collected_from" not in samples["SRS1"]
@@ -680,10 +683,12 @@ def test_a_sample_is_collected_from_its_same_identifier_donor_which_then_has_a_r
         "collected_from": {"coriell": 3},
         "collected_from_by_source": {SOURCE_IDENTIFIER_RULE: 3},
         "collected_from_conflicts": [],
+        "pooled": 0,
         "statuses": {slot: {NOT_CLASSIFIED: 4} for slot in SAMPLE_SLOTS},
         "unknown_site_lines": [],
         "unreviewed": {},
         "no_donor": {},
+        "without_donor": {},
     }
     for sample in result.samples:
         SampleRecord(**sample)
@@ -733,7 +738,7 @@ def test_every_repository_identifier_is_listed_on_the_one_record_it_ties_to(impo
     assert samples["HG02300"] == {
         "identifier": {"id": "HG02300", "namespace": "coriell"},
         "collected_from": {
-            "donor": {"id": "HG02300", "namespace": "coriell"},
+            "donors": [{"id": "HG02300", "namespace": "coriell"}],
             "named_by": [{"source_type": SOURCE_IDENTIFIER_RULE, "rule_id": "coriell_hg"}],
         },
         "biosample_type": UNSETTLED,
@@ -881,7 +886,7 @@ def test_a_run_writes_donors_and_samples_beside_its_records(imported, tmp_path):
     donors = by_id(list(iter_reconciled_artifact(run, DONORS_FILE)))
     assert donors["HG00096"]["phenotypic_sex"]["value"] == "Male"
     samples = by_id(list(iter_reconciled_artifact(run, SAMPLES_FILE)))
-    assert samples["HG00096"]["collected_from"]["donor"] == {"id": "HG00096", "namespace": "coriell"}
+    assert samples["HG00096"]["collected_from"]["donors"] == [{"id": "HG00096", "namespace": "coriell"}]
     assert {r["id"] for r in samples["HG00096"][REPOSITORY_IDS]} == {"g1k-b1", "r2-b1"}
     assert report[ENTITIES_KEY]["donors"] == len(donors)
     first = json.loads(gzip.decompress((run / RECONCILED_DIR / DONORS_FILE).read_bytes()).splitlines()[0])
