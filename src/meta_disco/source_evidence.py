@@ -637,6 +637,12 @@ def list_cell(raw_value: str) -> list[str] | None:
     return None
 
 
+def cell_values(raw_value: str) -> list[str]:
+    """The values a cell holds: a list cell's elements (:func:`list_cell`), else the cell itself."""
+    elements = list_cell(raw_value)
+    return elements if elements is not None else [raw_value]
+
+
 def read_envelope(path: Path) -> EvidenceFileEnvelope:
     """The evidence file's envelope, read from its first line alone.
 

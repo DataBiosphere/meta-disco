@@ -448,7 +448,7 @@ def test_a_sample_is_collected_from_its_donors_main_identifier_citing_each_table
     result = settled(tmp_path / "entity_evidence", tmp_path, [sample_list(members)])
     samples = by_id(result.samples)
     linked = samples["simons_data_sample_1"][COLLECTED_FROM]
-    assert linked["donor"] == {"id": "HG01504", "namespace": "coriell"}
+    assert linked["donors"] == [{"id": "HG01504", "namespace": "coriell"}]
     # Each T2T_CHRY table pairing the sample with its genome, cited by the rule recognising the genome's name.
     assert [
         (a["source_type"], a["rule_id"], a["source"]["table"], a["source"]["column"]) for a in linked["named_by"]
@@ -459,9 +459,9 @@ def test_a_sample_is_collected_from_its_donors_main_identifier_citing_each_table
     # A sample no line names (no check confirmed it at import) has no donor.
     assert COLLECTED_FROM not in samples["simons_data_sample_4"]
     # One the genotype record confirmed has its donor, as one whose sex agrees does.
-    assert samples["simons_data_sample_3"][COLLECTED_FROM]["donor"] == {"id": "HGDP00725", "namespace": "hgdp"}
+    assert samples["simons_data_sample_3"][COLLECTED_FROM]["donors"] == [{"id": "HGDP00725", "namespace": "hgdp"}]
     # A sample a line names has a record though no file names it.
-    assert samples["simons_data_sample_7"][COLLECTED_FROM]["donor"] == {"id": "S_Dinka-2", "namespace": "sgdp"}
+    assert samples["simons_data_sample_7"][COLLECTED_FROM]["donors"] == [{"id": "S_Dinka-2", "namespace": "sgdp"}]
     assert result.report["samples"]["collected_from"] == {"dataset_local": 4}
     assert result.report["samples"]["collected_from_by_source"] == {SOURCE_REPOSITORY_METADATA: 4}
     for record_ in result.samples:
@@ -473,7 +473,7 @@ def test_a_line_and_an_identifier_rule_naming_one_donor_are_both_listed(tmp_path
     lines_file(root, "D", [(COLLECTED_FROM, "HG00096", "HG00096")], SOURCE_EXTERNAL_GROUND_TRUTH, "ext")
     result = settled(root, tmp_path)
     linked = by_id(result.samples)["HG00096"][COLLECTED_FROM]
-    assert linked["donor"] == {"id": "HG00096", "namespace": "coriell"}
+    assert linked["donors"] == [{"id": "HG00096", "namespace": "coriell"}]
     assert [a["source_type"] for a in linked["named_by"]] == [SOURCE_IDENTIFIER_RULE, SOURCE_EXTERNAL_GROUND_TRUTH]
 
 
@@ -487,9 +487,9 @@ def test_sources_naming_different_donors_give_a_sample_none_each_donor_a_record_
     (conflict,) = result.report["samples"]["collected_from_conflicts"]
     assert conflict["identifier"] == {"id": "HG00096", "namespace": "coriell"}
     # Who named which donor.
-    assert [(d["donor"]["id"], [a["source_type"] for a in d["named_by"]]) for d in conflict["donors"]] == [
-        ("HG00096", [SOURCE_IDENTIFIER_RULE]),
-        ("HG00097", [SOURCE_EXTERNAL_GROUND_TRUTH]),
+    assert [([x["id"] for x in d["donors"]], [a["source_type"] for a in d["named_by"]]) for d in conflict["named"]] == [
+        (["HG00096"], [SOURCE_IDENTIFIER_RULE]),
+        (["HG00097"], [SOURCE_EXTERNAL_GROUND_TRUTH]),
     ]
 
 
@@ -601,7 +601,7 @@ def test_a_run_reaches_an_sgdp_files_donor_through_its_sample_and_the_synonym(im
     report = go(run, tmp_path, tmp_path / "source_evidence", load(tmp_path, TABLE))
 
     samples = by_id(list(iter_reconciled_artifact(run, SAMPLES_FILE)))
-    assert samples["simons_data_sample_1"][COLLECTED_FROM]["donor"] == {"id": "HG01504", "namespace": "coriell"}
+    assert samples["simons_data_sample_1"][COLLECTED_FROM]["donors"] == [{"id": "HG01504", "namespace": "coriell"}]
     donors = by_id(list(iter_reconciled_artifact(run, DONORS_FILE)))
     assert donors["HG01504"][SYNONYMS][0]["identifier"] == {"id": "S_Spanish-2", "namespace": "sgdp"}
     assert report[ENTITIES_KEY][SYNONYMS]["synonyms"] == 3
@@ -699,7 +699,7 @@ def test_the_identifier_rules_donor_is_read_as_its_main_identifier_too(tmp_path)
     lines_file(root, "D", rows, SOURCE_EXTERNAL_GROUND_TRUTH, "ext")
     result = settled(root, tmp_path, [sample_list([Identifier("coriell", "HG01504")])])
     linked = by_id(result.samples)["HG01504"][COLLECTED_FROM]
-    assert linked["donor"] == {"id": "NA99999", "namespace": "coriell"}
+    assert linked["donors"] == [{"id": "NA99999", "namespace": "coriell"}]
     assert [a["source_type"] for a in linked["named_by"]] == [SOURCE_IDENTIFIER_RULE, SOURCE_EXTERNAL_GROUND_TRUTH]
     assert "HG01504" not in by_id(result.donors)
 

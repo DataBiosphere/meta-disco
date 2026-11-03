@@ -53,7 +53,10 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     until its values are mapped to an ontology (#702).
     Two kinds of line name another identifier rather than a value, read through the identifier rules
     as a parent is and never translated (#559): `collected_from`, about a sample, names the donor it
-    was collected from, settled with an identifier rule's link and none where they differ; and
+    was collected from, or a pooled sample's several donors as a list cell (#770), settled with an
+    identifier rule's link and with `collected_from_repository_id` (a repository's line naming them by its
+    own donor identifiers, each read as the donor record it ties to, #770): each source names a set of
+    donors, and sources naming different sets give none; and
     `same_donor_as`, about a donor, names another identifier for it, followed to the end of the chain,
     so the record is keyed by the last one and keeps the others as synonyms, and whatever is said under
     any is settled on it; a chain that branches or comes back on itself joins nothing.

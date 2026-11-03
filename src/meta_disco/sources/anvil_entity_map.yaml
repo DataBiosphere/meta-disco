@@ -9,7 +9,8 @@
 # AnVIL's `anvil_biosample` is made from the table's rows), read through
 # rules/sample_namespaces.yaml at reconcile; and for each of a donor's slots
 # (models.DONOR_FIELDS, and its family's, models.FAMILY_FIELDS, #582), the columns whose
-# cells it reads. A `mother` or `father` cell names the parent as the source wrote it, PED's
+# cells it reads. A table keyed by the sample may read instead `collected_from`, the donor or
+# donors the sample was collected from (#770), and nothing else. A `mother` or `father` cell names the parent as the source wrote it, PED's
 # `0` ("not known") included; reconcile recognises it as a donor, and makes no claim of a `0`.
 # A `family_id` cell is taken as written (an empty or blank one makes no claim). A table naming only its
 # `identifier` reads no slot: it is there for AnVIL's records made from its rows to tie to
@@ -100,9 +101,13 @@ datasets:
     donor:
       identifier: donor_id
       phenotypic_sex: [phenotypic_sex]
-    # IGVF's samples, keyed by their IGVF sample accession (`IGVFSM…`).
+    # IGVF's samples, keyed by their IGVF sample accession (`IGVFSM…`): `donors`, the mice each was
+    # collected from (#770), a list of donor accessions, one mouse on 1,630 of 1,935 rows and 8 to 96 on the
+    # 305 pooled samples; the same donors as AnVIL's `anvil_biosample.donor_id` on all 1,935 (measured on
+    # anvil15, 2026-10-28).
     sample:
       identifier: sample_id
+      collected_from: [donors]
   AnVIL_MAGE:
     # MAGE's 1000 Genomes samples: `population`, the person's 1000 Genomes code. Its `sex`
     # (XX/XY) is a karyotype, a sample's fact, and is not read here.
@@ -142,6 +147,10 @@ datasets:
 # `organism_type` on 9,842 of 10,086 donors (Human, Mouse), `reported_ethnicity` on 3 (NIA_CARD),
 # `genetic_ancestry` on none; `biosample_type` and `anatomical_site` on 2,168 of 17,181
 # biosamples (IGVF, HPRC_R2, NIA_CARD), the site `Unknown` on every one of HPRC_R2's and NIA_CARD's.
+# A biosample's `donor_id` (#770) is a list of AnVIL donor ids, each an `anvil_donor`'s `donor_id`,
+# read at reconcile as the donor record that id ties to: one per biosample in 1000G_high_coverage_2019,
+# 1000G_PRIMED, HPRC, HPRC_R2, NIA_CARD and T2T, and in IGVF one or a pooled sample's 8 to 96 mice;
+# MAGE fills it on none and T2T_CHRY has no biosample (measured on anvil15, 2026-10-28).
 published:
   donor:
     table: anvil_donor
@@ -157,3 +166,4 @@ published:
     repository_id: biosample_id
     biosample_type: [biosample_type]
     anatomical_site: [anatomical_site]
+    collected_from_repository_id: [donor_id]
