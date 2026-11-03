@@ -62,6 +62,7 @@ from .source_evidence import (
     EvidenceFileEnvelope,
     EvidenceFileSource,
     EvidenceTarget,
+    cell_values,
     evidence_file_path,
     generation_dir,
     new_generation,
@@ -124,11 +125,12 @@ def check(entity_map: EntityMap, manifest_root: Path, catalog: str, datasets: li
 
     Per mapped dataset (or those in ``datasets``, which must be in the map): its verbatim
     manifest is on disk. Per mapped table: it has rows; the identifier column and every slot
-    column appear on some row; it serves a kind, a donor where it reads a slot or a published
-    donor is made from its rows, a sample where a published sample is; and for each kind it
+    column appear on some row; it serves a kind, whose slots it reads (``EntityTable.kinds``: a donor's, or a
+    sample's donors, #770) or whose published records are made from its rows; and for each kind it
     serves, at least half the identifier column's non-empty strings are recognised as that
-    kind by the identifier rules, or the column names something else; and at least half of each
-    parent column's (#582) non-empty strings other than PED's ``0`` are recognised as donors. Per published table
+    kind by the identifier rules, or the column names something else; at least half of each
+    parent column's (#582) non-empty strings other than PED's ``0`` are recognised as donors; and at least
+    half of each sample's donor column's values (#770), its ``0`` among them, are. Per published table
     with rows: its source rows and repository identifier columns hold a value on some row, each
     slot column is a column of some row (#699), and every table its records were made from is
     mapped. Not that a published slot column holds a value: 1000 Genomes' donors carry no
@@ -156,8 +158,9 @@ def _check_dataset(entity_map: EntityMap, dataset: str, path: Path) -> list[str]
     rows: Counter = Counter()
     seen: dict[str, set[str]] = {name: set() for name in tables}
     identifiers: dict[str, list[str]] = {name: [] for name in tables}
-    # Each column whose cells name donors, read as reconcile reads them: a parent's, a string, PED's `0` naming none; or
-    # a sample's donors (#770), a string or a list of them.
+    # Each column whose cells name donors: a parent's, a string, PED's `0` naming none; or a sample's donors (#770), each
+    # value as reconcile reads it from the line the importer writes (`cell_values` of `cell_as_written`). The threshold
+    # below is over values, where reconcile drops a whole line any one of whose values it cannot read, and counts it.
     parents: dict[tuple[str, str], list[str]] = {
         (name, column): []
         for name, t in tables.items()
@@ -183,7 +186,8 @@ def _check_dataset(entity_map: EntityMap, dataset: str, path: Path) -> list[str]
         for (name, column), values in parents.items():
             cell = row.get(column) if name == entity_type else None
             if COLLECTED_FROM in tables[name].slots:
-                values.extend(v for v in (cell if isinstance(cell, list) else [cell]) if isinstance(v, str) and v)
+                if (written := cell_as_written(cell)) is not None:
+                    values.extend(cell_values(written))
             elif isinstance(cell, str) and cell and cell != UNKNOWN_PARENT:
                 values.append(cell)
     problems = []

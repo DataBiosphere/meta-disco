@@ -688,6 +688,11 @@ def test_a_sample_is_collected_from_its_same_identifier_donor_which_then_has_a_r
         "unknown_site_lines": [],
         "unreviewed": {},
         "no_donor": {},
+        # SRS1 has no donor, but no dataset's files or evidence name it here.
+        "by_dataset": {
+            G1K: {"samples": 1, "without_collected_from": 0},
+            R2: {"samples": 2, "without_collected_from": 0},
+        },
     }
     for sample in result.samples:
         SampleRecord(**sample)

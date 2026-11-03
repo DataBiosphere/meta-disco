@@ -698,7 +698,8 @@ classes:
         pattern: "^[^\\r\\n]+\\Z"
         description: >-
           The identifier the source wrote for the donor, or for the sample on a sample's
-          slot, `sample_repository_id` or `collected_from` line, verbatim.
+          slot, `sample_repository_id`, `collected_from` or `collected_from_repository_id`
+          line, verbatim.
       column:
         required: true
         pattern: "^[^\\r\\n]+\\Z"

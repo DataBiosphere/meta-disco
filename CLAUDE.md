@@ -543,8 +543,8 @@ reworded title renames a member: name one by its value (`DataModalityEnum("genom
     (275 of 279) or whose genotypes `sources/sgdp_genotype_checks.yaml` records matching its SGDP genome (#718,
     three more; `code_rules.IDENTITY_CHECKS`, each sample's checks in the generation's `outcomes.json`, and
     reconcile's `entities.donor_reach`), each line cited to its source: T2T_CHRY's tables' pairing as
-    `repository_metadata`, SGDP's facts as `external_ground_truth`. Its links are the two **identity
-    links** (`models.IDENTITY_LINK_FIELDS`, with #770's `collected_from_repository_id`): `collected_from`
+    `repository_metadata`, SGDP's facts as `external_ground_truth`. Its links are two of the three **identity
+    links** (`models.IDENTITY_LINK_FIELDS`; the third, #770's `collected_from_repository_id`, is AnVIL's): `collected_from`
     names a sample's donor, beside the identifier rule's link, and `same_donor_as` names another identifier for a donor, followed to the end
     of its chain, so the record is keyed by `coriell:HG01504` or `hgdp:HGDP01163` and lists SGDP's own
     `sgdp:S_Spanish-2` under `synonyms`.

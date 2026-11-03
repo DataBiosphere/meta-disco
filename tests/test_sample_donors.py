@@ -106,6 +106,7 @@ def test_a_pooled_sample_is_collected_from_every_mouse_both_sources_name(tmp_pat
     assert ids(samples[S2][COLLECTED_FROM]["donors"]) == [C]
     report = result.report["samples"]
     assert (report["collected_from"], report["pooled"], report["collected_from_conflicts"]) == ({"igvf": 2}, 1, [])
+    assert report["by_dataset"] == {IGVF: {"samples": 2, "without_collected_from": 0}}
     # Every file reaches every mouse of its sample, and no mouse is left unreached.
     assert result.report[DONOR_REACH] == {IGVF: {"files_with_samples": 4, "every_sample_has_a_donor": 4}}
     assert "donor" not in result.report[UNREACHED].get(IGVF, {})
@@ -117,6 +118,8 @@ def test_sources_naming_different_sets_of_mice_give_a_pooled_sample_none(tmp_pat
     root = imported(tmp_path, anvil_donors_of_s1=("u-a",))
     result = settled(root, tmp_path)
     assert COLLECTED_FROM not in by_id(result.samples)[S1]
+    # Named by IGVF's evidence, though no file of this test reaches it.
+    assert result.report["samples"]["by_dataset"] == {IGVF: {"samples": 2, "without_collected_from": 1}}
     (conflict,) = result.report["samples"]["collected_from_conflicts"]
     assert [(ids(n["donors"]), [a["source_type"] for a in n["named_by"]]) for n in conflict["named"]] == [
         ([A], [SOURCE_PUBLISHED_VALUE]),
@@ -165,6 +168,14 @@ def test_a_donor_id_resolves_through_a_donor_record_another_dataset_ties_it_to(t
     assert ids(linked["donors"]) == ["HG00096"]
     assert [a["source_type"] for a in linked["named_by"]] == [SOURCE_IDENTIFIER_RULE, SOURCE_PUBLISHED_VALUE]
     assert result.report["samples"]["pooled"] == 0
+
+
+def test_a_pooled_line_cites_each_identifier_rule_recognising_one_of_its_donors(tmp_path):
+    root = tmp_path / "entity_evidence"
+    write_entity_lines(root, "D", COLLECTED_FROM, [('["HG00096", "NA12878"]', S1)], SOURCE_REPOSITORY_METADATA)
+    linked = by_id(reconcile_entities(gathered(root, tmp_path), identifier_rules(), []).samples)[S1][COLLECTED_FROM]
+    assert ids(linked["donors"]) == ["HG00096", "NA12878"]
+    assert sorted(a["rule_id"] for a in linked["named_by"]) == ["coriell_cell_line_or_dna", "coriell_hg"]
 
 
 def test_a_donor_id_line_outside_a_published_table_is_refused(tmp_path):

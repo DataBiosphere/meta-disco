@@ -723,7 +723,9 @@ def reconcile_entities(
         noun, statuses = ("samples", sample_settled) if KIND_OF_SLOT[slot] == SAMPLE else ("donors", settled)
         by_dataset[dataset][slot] = {noun: len(named), **Counter(statuses[r][slot] for r in named)}
     reach, no_donor = _donor_reach(files_by_list or Counter(), members, donors_of.keys(), evidence.outcomes)
-    unreached = _unreached(evidence, files_by_list or Counter(), members, donors_of)
+    named_by_dataset = _named_by_dataset(evidence)
+    reached = _reached_by_dataset(files_by_list or Counter(), members)
+    unreached = _unreached(named_by_dataset, reached, donors_of)
     report = {
         "files": files,
         "skipped_files": skipped or [],
@@ -763,6 +765,7 @@ def reconcile_entities(
             UNKNOWN_SITE_LINES: _lines_per_table(evidence.no_value_lines.get(UNKNOWN_SITE_LINES, Counter())),
             "unreviewed": {slot: n for slot, n in unreviewed[SAMPLE].items() if n},
             NO_DONOR: no_donor,
+            "by_dataset": _samples_by_dataset(named_by_dataset, reached, donors_of.keys()),
         },
         DONOR_REACH: reach,
         UNREACHED: _unreached_counts(unreached),
@@ -771,20 +774,13 @@ def reconcile_entities(
     return EntityResult(donors, sample_records, report, unreached)
 
 
-def _unreached(
-    evidence: EntityEvidence,
-    files_by_list: Counter,
-    members: dict[str, frozenset[Identifier]],
-    donors_of: dict[Identifier, frozenset[Identifier]],
-) -> list[dict]:
-    """Per dataset, each sample and donor its entity evidence names that no file of the dataset reaches (#698).
+def _named_by_dataset(evidence: EntityEvidence) -> dict[tuple[str, EntityKind], set[Identifier]]:
+    """Per dataset and kind, the records its entity evidence names (#698).
 
     A dataset's evidence names a record where a line of it is about the record (a slot's line, named in
     :attr:`EntityEvidence.named_in`, or an identity link's), names it as its value (a parent, a
     ``collected_from`` donor, a ``same_donor_as`` identifier; both in :attr:`EntityEvidence.referenced_in`),
-    or ties one of the repository's identifiers to it. A file of the dataset
-    reaches each sample of the list its samples settled to, and each of those samples' donors (``collected_from``).
-    Rows in dataset order, samples before donors, each kind in identifier order.
+    or ties one of the repository's identifiers to it.
     """
     named: dict[tuple[str, EntityKind], set[Identifier]] = defaultdict(set)
     for (dataset, slot), idents in evidence.named_in.items():
@@ -794,9 +790,28 @@ def _unreached(
     for (kind, ident), aliases in evidence.repository_ids.items():
         for alias in aliases:
             named[(alias.dataset, kind)].add(ident)
+    return named
+
+
+def _reached_by_dataset(
+    files_by_list: Counter, members: dict[str, frozenset[Identifier]]
+) -> dict[str, set[Identifier]]:
+    """Per dataset, the samples its files reach: each sample of the list a file's samples settled to."""
     reached: dict[str, set[Identifier]] = defaultdict(set)
     for dataset, list_id in files_by_list:
         reached[dataset] |= members[list_id]
+    return reached
+
+
+def _unreached(
+    named: dict[tuple[str, EntityKind], set[Identifier]],
+    reached: dict[str, set[Identifier]],
+    donors_of: dict[Identifier, frozenset[Identifier]],
+) -> list[dict]:
+    """Per dataset, each sample and donor its entity evidence names (``named``, :func:`_named_by_dataset`) that no file
+    of the dataset reaches (#698): a file reaches the samples ``reached`` holds for its dataset, and each of those
+    samples' donors (``collected_from``). Rows in dataset order, samples before donors, each kind in identifier order.
+    """
     rows = []
     for dataset, kind in sorted(named, key=lambda k: (k[0], k[1] != SAMPLE)):
         samples = reached.get(dataset, set())
@@ -804,6 +819,20 @@ def _unreached(
         for ident in sorted(named[(dataset, kind)] - reaches, key=identifier_order):
             rows.append({"dataset": dataset, "kind": kind, "identifier": ident.to_dict()})
     return rows
+
+
+def _samples_by_dataset(
+    named: dict[tuple[str, EntityKind], set[Identifier]],
+    reached: dict[str, set[Identifier]],
+    with_donor: AbstractSet[Identifier],
+) -> dict[str, dict[str, int]]:
+    """Per dataset, in dataset order: the samples its entity evidence names or its files reach, and how many of them have
+    no ``collected_from`` (#711)."""
+    by_dataset = {}
+    for dataset in sorted({d for d, kind in named if kind == SAMPLE} | set(reached)):
+        samples = named.get((dataset, SAMPLE), set()) | reached.get(dataset, set())
+        by_dataset[dataset] = {"samples": len(samples), "without_collected_from": len(samples - with_donor)}
+    return by_dataset
 
 
 def _unreached_counts(rows: list[dict]) -> dict:
