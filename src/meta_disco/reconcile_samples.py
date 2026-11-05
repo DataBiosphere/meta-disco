@@ -57,6 +57,7 @@ from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
+from itertools import groupby
 
 from . import activities, code_rules
 from .edges import distinct, parent_node
@@ -184,15 +185,17 @@ def in_source_order(named: Iterable[Named]) -> list[Named]:
     ]
     if len(ordered) < 2:
         return ordered
-    return sorted(ordered, key=_source_place)
+    ordered.sort(key=_cites)
+    # Only sources tied on what they cite (two rows of one column) sort their samples, which can be a cohort's.
+    result: list[Named] = []
+    for _, group in groupby(ordered, key=_cites):
+        tied = list(group)
+        result += tied if len(tied) < 2 else sorted(tied, key=lambda n: sorted(map(identifier_order, n.members)))
+    return result
 
 
-def _source_place(named: Named) -> tuple:
-    return (
-        KINDS.index(named.kind),
-        [example_order(a) for a in named.named_by],
-        sorted(map(identifier_order, named.members)),
-    )
+def _cites(named: Named) -> tuple[int, list[str]]:
+    return KINDS.index(named.kind), [example_order(a) for a in named.named_by]
 
 
 def settle(named: Iterable[Named]) -> tuple[str, dict | None, frozenset[Identifier]]:
