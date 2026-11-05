@@ -670,7 +670,7 @@ def test_a_report_written_before_samples_says_so():
     assert "predates samples at reconcile" in "\n".join(rr._samples_section(None))
 
 
-def test_the_most_frequent_unrecognised_strings_are_shown_whatever_the_stable_order():
+def test_the_most_frequent_unrecognised_strings_are_shown_whatever_the_report_order():
     """The report JSON is written with sorted keys; the section ranks by count."""
     assert rr._strings({"a": 1, "b": 1, "c": 9, "d": 1, "e": 1, "f": 1}, limit=2) == "`c` (9), `a` (1)"
 
