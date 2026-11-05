@@ -164,7 +164,11 @@ def load_hprc_results(hprc_results_path: Path) -> _ComparisonResults:
             "we_inferred": 0,
             "not_classified": unknown,
             "no_truth": 0,
-            "discrepancy_categories": discrepancy_categories,
+            # Most frequent first, ties by category, for the Markdown and the dashboard alike.
+            "discrepancy_categories": {
+                k: discrepancy_categories[k]
+                for k in most_frequent({k: c["count"] for k, c in discrepancy_categories.items()})
+            },
         }
 
     # If old format without dimensions, try legacy fields
@@ -310,7 +314,7 @@ def build_source_section(name: str, results: _ComparisonResults) -> str:
         # Discrepancy categories ordered by count
         cats = stats.get("discrepancy_categories", {})
         if cats:
-            sorted_cats = [cats[k] for k in most_frequent({k: c["count"] for k, c in cats.items()})]
+            sorted_cats = list(cats.values())
             lines.append("#### Discrepancies")
             lines.append("")
             lines.append(f"| Count | Inferred | {source_label} | Example |")

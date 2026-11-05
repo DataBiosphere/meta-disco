@@ -153,7 +153,7 @@ from .source_evidence import (
     report_evidence_files,
     require_one_published_source,
 )
-from .stable_order import by_file_name, keep_smallest, most_frequent, past_smallest
+from .stable_order import by_file_name, example_order, keep_smallest, most_frequent, past_smallest
 from .value_map import ValueMap, load_value_map
 
 INFERENCE = "inference"
@@ -929,7 +929,10 @@ class Report:
                 {
                     "file_name": reconciled.get("file_name"),
                     "role": conflict.role,
-                    "said": [{"said": what, "by": by} for what, by in conflict.said],
+                    "said": [
+                        {"said": what, "by": by}
+                        for what, by in sorted(conflict.said, key=lambda wb: (wb[0], example_order(wb[1])))
+                    ],
                 },
                 MAX_EXAMPLES,
                 key=by_file_name,

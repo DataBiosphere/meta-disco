@@ -17,6 +17,9 @@ def test_discrepancies_rank_ties_by_category_and_show_the_smallest_file(tmp_path
         path = tmp_path / f"{name}.json"
         path.write_text(json.dumps({"dimensions": {"platform": {"match": 1, "mismatch": 4}}, "mismatches": order}))
         results = load_hprc_results(path)
-        assert results["dimensions"]["platform"]["discrepancy_categories"]["ONT vs PACBIO"]["example"] == "a.bam"
+        categories = results["dimensions"]["platform"]["discrepancy_categories"]
+        # In this order for the dashboard too, which serialises the mapping as it is.
+        assert list(categories) == ["ILLUMINA vs PACBIO", "ONT vs PACBIO"]
+        assert categories["ONT vs PACBIO"]["example"] == "a.bam"
         sections.append(build_source_section("HPRC", results))
     assert sections[0] == sections[1]

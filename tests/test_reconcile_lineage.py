@@ -13,9 +13,10 @@ from pathlib import Path
 import pytest
 
 from meta_disco.activity_map import load_activity_map
+from meta_disco.edges import StepConflict
 from meta_disco.models import SOURCE_REPOSITORY_ACTIVITY, SOURCE_REPOSITORY_METADATA
 from meta_disco.output_utils import iter_reconciled_records
-from meta_disco.reconcile import reconcile_run
+from meta_disco.reconcile import Report, reconcile_run
 from meta_disco.schema.classification_model import ClassificationRecord
 from tests.lineage_fixtures import (
     activity_line,
@@ -324,3 +325,17 @@ def test_a_misfit_two_inputs_show_is_counted_once_for_its_file(tmp_path, roots):
     )
     found = {(m["problem"], m["detail"]): m["files"] for m in report["lineage"]["misfits"]}
     assert found[("input kind (reads)", "alignments")] == 1
+
+
+def test_a_step_conflicts_statements_are_listed_by_content_whatever_order_the_sources_arrived_in():
+    """Two sources naming different activities for one file, in either order (#732)."""
+    by_name = {"source_type": "filename_rule", "rule_id": "index_by_name"}
+    by_table = {"source_type": SOURCE_REPOSITORY_ACTIVITY, "rule_id": "row"}
+    said = (("QualityControlActivity", by_table), ("IndexActivity", by_name))
+    examples = []
+    for order in (said, said[::-1]):
+        report = Report(coverage={})
+        report.add_step({"dataset_title": DATASET, "file_name": "a.tbi"}, StepConflict("activity", None, order), [])
+        examples.append(report.step_conflicts[DATASET]["activity"]["examples"])
+    assert examples[0] == examples[1]
+    assert [s["said"] for s in examples[0][0]["said"]] == ["IndexActivity", "QualityControlActivity"]
