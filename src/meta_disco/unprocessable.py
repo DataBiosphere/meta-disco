@@ -43,6 +43,7 @@ from .metadata_schema import VALIDATION_RULE_ID
 from .models import CLASSIFICATION_FIELDS, field_evidence
 from .output_utils import iter_records
 from .records import coerce_identity
+from .stable_order import keep_smallest
 from .summaries import escape_md_cell
 
 # Datasets and examples are capped so a category running to thousands of files stays a
@@ -148,7 +149,7 @@ def _section_header(reason: Reason) -> list[str]:
 
 @dataclass
 class RowGroup:
-    """Per-dataset tally of one row-backed reason, with a bounded sample of filenames."""
+    """Per-dataset tally of one row-backed reason, with the ``max_examples`` smallest distinct filenames."""
 
     dataset: str
     count: int = 0
@@ -156,8 +157,7 @@ class RowGroup:
 
     def add(self, file_name: str, max_examples: int) -> None:
         self.count += 1
-        if len(self.examples) < max_examples:
-            self.examples.append(file_name)
+        keep_smallest(self.examples, file_name, max_examples)
 
 
 @dataclass

@@ -7,10 +7,12 @@ from collections import Counter
 import pytest
 
 from meta_disco.corpus_diff import (
+    DimensionDiff,
     _sort_key,
     classified_by_dataset,
     diff_runs,
     read_snapshot,
+    render_changes_section,
     render_dataset_section,
     render_report,
     run_labels,
@@ -379,3 +381,18 @@ def test_render_report_says_so_when_no_label_changed(tmp_path):
         artifact="inference",
     )
     assert "No file present in both runs changed a label." in report
+
+
+def test_tied_transitions_are_listed_by_label_whatever_order_they_were_counted_in():
+    """A None label ties beside a string one, sorting first, without failing to sort (#732)."""
+    pairs = [(None, "GRCh38"), ("GRCh37", "GRCh38"), ("CHM13", None)]
+    sections = []
+    for order in (pairs, pairs[::-1]):
+        diffs = {
+            f: DimensionDiff(f, Counter(), Counter(), Counter(), Counter(), Counter()) for f in CLASSIFICATION_FIELDS
+        }
+        for pair in order:
+            diffs["reference_assembly"].changed[pair] += 1
+        sections.append(render_changes_section(diffs, limit=2))
+    assert sections[0] == sections[1]
+    assert [line.split("|")[1].strip() for line in sections[0] if line.startswith("| `")] == ["`None`", "`CHM13`"]

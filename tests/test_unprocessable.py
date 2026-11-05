@@ -90,6 +90,15 @@ class TestGather:
         assert len(groups["Study A"].examples) == 3
         assert groups["Study B"].count == 1
 
+    def test_the_examples_are_the_smallest_names_whatever_order_the_run_wrote(self, tmp_path):
+        """A re-downloaded input holds the same files in another order; the examples must not move (#732)."""
+        records = [_reason_record(FETCH_FAILED_RULE_ID, f"f{i}.bam", "Study A") for i in range(9)]
+        examples = [
+            gather(write_run(tmp_path / name, order), max_examples=3).rows[CONTENT_UNREADABLE.key]["Study A"].examples
+            for name, order in (("forward", records), ("backward", records[::-1]))
+        ]
+        assert examples[0] == examples[1] == ["f0.bam", "f1.bam", "f2.bam"]
+
     def test_a_drifted_file_name_is_not_collapsed_to_empty(self, tmp_path):
         """A file_name of 0 is drift the report exists to surface; `str(x or "")` would
         have shown it as a blank example, hiding it."""

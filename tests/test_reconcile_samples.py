@@ -40,6 +40,7 @@ from meta_disco.reconcile_samples import (
     SampleReport,
     from_line,
     from_record,
+    in_source_order,
     lists_disagree,
     name_disagrees,
     settle,
@@ -98,6 +99,22 @@ def test_different_members_sharing_no_namespace_are_incomparable_and_give_no_sam
     """`NA19770` and `SRS006871` may be one person, but only a crosswalk could say (#361)."""
     sra = Identifier("sra_sample", "SRS006871")
     assert settle([header("NA19770"), table_says(sra)]) == (INCOMPARABLE, None, frozenset())
+
+
+def test_sources_and_their_attributions_settle_in_one_order_whatever_order_they_arrived_in():
+    """Two table lines naming one sample, in either order, give the same ``named_by`` (#767)."""
+    one = table_says(coriell("HG00096"), column="participant_id")
+    two = table_says(coriell("HG00096"), column="sample_id")
+    assert settle([header("HG00096"), one, two]) == settle([two, one, header("HG00096")])
+    _, samples, _ = settle([two, one, header("HG00096")])
+    assert samples is not None
+    assert [a.get("source", {}).get("column") for a in samples["named_by"]] == [None, "participant_id", "sample_id"]
+
+
+def test_a_conflicts_sources_citing_the_same_column_are_listed_by_their_samples():
+    """Two rows of one table naming the file with different samples, in either order (#750)."""
+    one, two = table_says(coriell("HG00096")), table_says(coriell("HG00097"))
+    assert in_source_order([two, one]) == in_source_order([one, two]) == [one, two]
 
 
 def test_no_source_gives_nothing():
@@ -291,6 +308,38 @@ def test_a_run_settles_header_and_table_and_writes_each_list_once(tmp_path, run,
     ]
 
 
+def test_a_runs_conflicts_files_without_samples_and_examples_are_in_file_order_whatever_order_it_wrote(
+    tmp_path, evidence, table
+):
+    """The same files written in opposite orders give the same artifacts, TSV and report block (#750, #732)."""
+    conflicting = range(1, MAX_EXAMPLES + 3)
+    rows = [with_header_samples(record(n), "HG00096")[0] for n in conflicting] + [record(n) for n in (20, 21, 22)]
+    entry = with_header_samples(record(1), "HG00096")[1]
+    write_evidence(
+        evidence,
+        [(SAMPLES_FIELD, drs(n), "HG00097") for n in conflicting],
+        table="participant",
+        column="participant_id",
+    )
+    outputs = []
+    for name, order in (("forward", rows), ("backward", rows[::-1])):
+        run_dir = tmp_path / name / "20261012_000000"
+        write_bam_run(run_dir, order, [entry])
+        report = go(run_dir, tmp_path / name, evidence, table)
+        outputs.append(
+            (
+                conflict_tsv(iter_reconciled_artifact(run_dir, SAMPLE_CONFLICTS_FILE)),
+                [r["file_name"] for r in iter_reconciled_artifact(run_dir, FILES_WITHOUT_SAMPLES_FILE)],
+                report[SAMPLES_FIELD]["by_dataset"][DATASET],
+            )
+        )
+    assert outputs[0] == outputs[1]
+    tsv, without, block = outputs[0]
+    assert [line.split("\t")[3] for line in tsv.splitlines()[1::2]] == [f"f{n}.bam" for n in conflicting]
+    assert without == ["f20.bam", "f21.bam", "f22.bam"]
+    assert block["conflict_examples"] == [f"f{n}.bam" for n in range(1, MAX_EXAMPLES + 1)]
+
+
 def test_without_evidence_the_header_samples_stand(tmp_path, run, table):
     row, entry = with_header_samples(record(1), "HG00096")
     write_bam_run(run, [row], [entry])
@@ -453,13 +502,14 @@ def test_each_activity_keeps_its_own_disagreement_examples():
     def step(activity: str) -> dict:
         return {"activity": activity, "inputs": [{"role": "x", "parent_key": "parent", "parent_file": "p.bam"}]}
 
-    for n in range(MAX_EXAMPLES + 1):
+    # Arriving largest first: the examples kept are still the smallest (#732).
+    for n in reversed(range(MAX_EXAMPLES + 1)):
         report._check_parents(DATASET, f"a{n}.vcf.gz", child_says, step("VariantCallActivity"))
     report._check_parents(DATASET, "b.cram", child_says, step("AlignmentActivity"))
     assert report.parent_disagreements[DATASET] == {"VariantCallActivity": MAX_EXAMPLES + 1, "AlignmentActivity": 1}
-    assert [e["file_name"] for e in report.parent_examples[DATASET] if e["activity"] == "AlignmentActivity"] == [
-        "b.cram"
-    ]
+    examples = report.parent_examples[DATASET]
+    assert [e["file_name"] for e in examples["AlignmentActivity"]] == ["b.cram"]
+    assert [e["file_name"] for e in examples["VariantCallActivity"]] == [f"a{n}.vcf.gz" for n in range(MAX_EXAMPLES)]
 
 
 def test_parents_in_one_role_naming_different_lists_pass_nothing():

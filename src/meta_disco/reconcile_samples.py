@@ -51,10 +51,11 @@ disagree are counted (:func:`lists_disagree`): a CRAM whose ``@RG SM`` is not it
 
 from __future__ import annotations
 
+import heapq
 import sys
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import lru_cache
 
 from . import activities, code_rules
@@ -76,6 +77,7 @@ from .sample_identity import (
     sorted_lists,
 )
 from .source_evidence import cell_values
+from .stable_order import by_file_name, example_order, keep_smallest, past_smallest
 
 # How a file's samples settled; the report counts each per dataset.
 AGREED = "agreed"  # two or more kinds of the file's own source named the same samples
@@ -175,17 +177,35 @@ def from_record(record: dict, lists: dict[str, dict], members: dict[str, frozens
     return Named(members[key], tuple(samples["named_by"]), kind=HEADER, list_id=key)
 
 
+def in_source_order(named: Iterable[Named]) -> list[Named]:
+    """``named`` by kind (``KINDS``), then attributions, then samples; each source's attributions by content (#767)."""
+    ordered = [
+        n if len(n.named_by) < 2 else replace(n, named_by=tuple(sorted(n.named_by, key=example_order))) for n in named
+    ]
+    if len(ordered) < 2:
+        return ordered
+    return sorted(ordered, key=_source_place)
+
+
+def _source_place(named: Named) -> tuple:
+    return (
+        KINDS.index(named.kind),
+        [example_order(a) for a in named.named_by],
+        sorted(map(identifier_order, named.members)),
+    )
+
+
 def settle(named: Iterable[Named]) -> tuple[str, dict | None, frozenset[Identifier]]:
     """``(outcome, samples, members)`` for one file from every source that named its samples.
 
     ``samples`` is the record's ``samples`` where the sources agree, else None; ``members``
     are then the settled members, else empty. Agreeing sources are listed header first, then
     tables, then the activity, then the fileset's sample table, then the parent (``KINDS``), each
-    attribution once. The outcome is ``agreed`` where two or more kinds of source other than the
+    attribution once, in :func:`in_source_order`. The outcome is ``agreed`` where two or more kinds of source other than the
     parent (header, table, activity, fileset) named them, the one kind's where one did, and
     ``inherited`` where only its parent did.
     """
-    named = list(named)
+    named = in_source_order(named)
     if not named:
         return NONE, None, frozenset()
     sets = {n.members for n in named}
@@ -194,7 +214,7 @@ def settle(named: Iterable[Named]) -> tuple[str, dict | None, frozenset[Identifi
         overlapping = any(a & b for i, a in enumerate(namespaces) for b in namespaces[i + 1 :])
         return (CONFLICT if overlapping else INCOMPARABLE), None, frozenset()
     members = next(iter(sets))
-    named_by = list(distinct(a for n in sorted(named, key=lambda n: KINDS.index(n.kind)) for a in n.named_by))
+    named_by = list(distinct(a for n in named for a in n.named_by))
     own = {n.kind for n in named} - {PARENT}
     if not own:
         outcome = INHERITED
@@ -209,7 +229,7 @@ def settle(named: Iterable[Named]) -> tuple[str, dict | None, frozenset[Identifi
 @dataclass
 class ActivityLinks:
     """:func:`activity_sources`' result: per record key, the samples its biosample links name; per dataset, what
-    became of the links (``LINK_OUTCOMES``), and the first few biosample ids that tie to no sample record."""
+    became of the links (``LINK_OUTCOMES``), and the smallest few biosample ids that tie to no sample record."""
 
     named: dict[str, Named] = field(default_factory=dict)
     counts: dict[str, Counter] = field(default_factory=lambda: defaultdict(Counter))
@@ -238,8 +258,7 @@ def activity_sources(lineage: LineageJoin, samples_by_id: Mapping[tuple[str, str
             result.counts[dataset][UNTIED] += 1
             examples = result.untied_examples[dataset]
             for biosample in untied:
-                if len(examples) < MAX_EXAMPLES and biosample not in examples:
-                    examples.append(biosample)
+                keep_smallest(examples, biosample, MAX_EXAMPLES)
             continue
         result.counts[dataset][TIED] += 1
         members = frozenset(samples_by_id[(k.repository, k.biosample)] for k in links)
@@ -333,9 +352,11 @@ class SampleReport:
     # Per dataset and activity, what each role passing samples gave a child (``PASSING_OUTCOMES``).
     passing: dict[str, dict[str, Counter]] = field(default_factory=lambda: defaultdict(lambda: defaultdict(Counter)))
     # Per dataset and activity, the child and parent pairs whose lists disagree, across a step
-    # passing no samples (:func:`lists_disagree`), and the first few per activity.
+    # passing no samples (:func:`lists_disagree`), and the smallest few per activity (``keep_smallest``).
     parent_disagreements: dict[str, Counter] = field(default_factory=lambda: defaultdict(Counter))
-    parent_examples: dict[str, list[dict]] = field(default_factory=lambda: defaultdict(list))
+    parent_examples: dict[str, dict[str, list[dict]]] = field(
+        default_factory=lambda: defaultdict(lambda: defaultdict(list))
+    )
     # The keys of the lists that name no samples by design (rebuilt lists, #726), counted apart when passing.
     names_none: set[str] = field(default_factory=set)
     # What became of the repository's links from each file to its biosamples (#698).
@@ -345,7 +366,7 @@ class SampleReport:
     # Per dataset, what each fileset's sample table gave its members (``PASSING_OUTCOMES``).
     fileset_outcomes: dict[str, Counter] = field(default_factory=lambda: defaultdict(Counter))
     # Each file whose sources named different samples, with every source (#698), and each file no
-    # source named a sample for, in the order settled.
+    # source named a sample for, in the order settled; reconcile writes them in :func:`file_order`.
     conflicts: list[dict] = field(default_factory=list)
     without_samples: list[dict] = field(default_factory=list)
     # Per child whose step passes samples, its own sources and dataset, until :meth:`inherit` reads them.
@@ -500,7 +521,7 @@ class SampleReport:
                     "record_key": identity,
                     **identity_from(record),
                     "outcome": outcome,
-                    "sources": [_source_row(n) for n in named],
+                    "sources": [_source_row(n) for n in in_source_order(named)],
                 }
             )
         elif outcome == NONE:
@@ -525,20 +546,19 @@ class SampleReport:
             named = name_disagrees(file_name, members, self.rules)
             if named is not None:
                 self.name_disagreements[dataset] += 1
-                if len(self.name_examples[dataset]) < MAX_EXAMPLES:
-                    self.name_examples[dataset].append(
-                        {
-                            "file_name": file_name,
-                            "name_names": named.to_dict(),
-                            "samples": [m.to_dict() for m in sorted(members)[:MAX_EXAMPLES]],
-                        }
+                if not past_smallest(self.name_examples[dataset], file_name, MAX_EXAMPLES):
+                    keep_smallest(
+                        self.name_examples[dataset],
+                        {"file_name": file_name, "name_names": named.to_dict(), "samples": _first(members)},
+                        MAX_EXAMPLES,
+                        key=by_file_name,
                     )
             if generated_by is not None:
                 self._check_parents(dataset, file_name, members, generated_by)
         return samples
 
     def links_to_dict(self, dataset: str) -> dict:
-        """The report's ``activity_links`` for ``dataset``: each ``LINK_OUTCOMES`` count, and the first untied biosamples."""
+        """The report's ``activity_links`` for ``dataset``: each ``LINK_OUTCOMES`` count, and the smallest untied biosamples."""
         counts = self.activity.counts.get(dataset, Counter())
         block: dict = {o: counts[o] for o in LINK_OUTCOMES if counts[o]}
         if examples := self.activity.untied_examples.get(dataset):
@@ -559,16 +579,20 @@ class SampleReport:
             if parent is None or not lists_disagree(members, self.members[parent]):
                 continue
             self.parent_disagreements[dataset][activity] += 1
-            if sum(e["activity"] == activity for e in self.parent_examples[dataset]) < MAX_EXAMPLES:
-                self.parent_examples[dataset].append(
-                    {
-                        "file_name": file_name,
-                        "activity": activity,
-                        "parent_file": i.get("parent_file"),
-                        "samples": [m.to_dict() for m in sorted(members)[:MAX_EXAMPLES]],
-                        "parent_samples": [m.to_dict() for m in sorted(self.members[parent])[:MAX_EXAMPLES]],
-                    }
-                )
+            if past_smallest(self.parent_examples[dataset][activity], file_name, MAX_EXAMPLES):
+                continue
+            keep_smallest(
+                self.parent_examples[dataset][activity],
+                {
+                    "file_name": file_name,
+                    "activity": activity,
+                    "parent_file": i.get("parent_file"),
+                    "samples": _first(members),
+                    "parent_samples": _first(self.members[parent]),
+                },
+                MAX_EXAMPLES,
+                key=by_file_name,
+            )
 
     def to_dict(self, headers: dict[str, dict], unrecognised: dict[str, dict[tuple[str, str, str], set[str]]]) -> dict:
         """The report's ``samples`` block: per dataset, what the headers said, how files settled, and what was not read.
@@ -591,11 +615,10 @@ class SampleReport:
             | set(self.activity.counts)
             | set(self.fileset_outcomes)
         )
-        # Per dataset and outcome (conflict, incomparable), the first few files.
+        # Per dataset and outcome (conflict, incomparable), the smallest few file names.
         examples: dict[tuple[str, str], list[str]] = defaultdict(list)
         for row in self.conflicts:
-            if len(names := examples[(row["dataset_title"], row["outcome"])]) < MAX_EXAMPLES:
-                names.append(row["file_name"])
+            keep_smallest(examples[(row["dataset_title"], row["outcome"])], row["file_name"], MAX_EXAMPLES)
         by_dataset = {}
         for dataset in datasets:
             ranked = sorted(unrecognised.get(dataset, {}).items(), key=lambda kv: (-len(kv[1]), kv[0]))
@@ -616,7 +639,9 @@ class SampleReport:
                     for activity, counts in sorted(self.passing.get(dataset, {}).items())
                 },
                 "parent_disagreements": dict(sorted(self.parent_disagreements.get(dataset, Counter()).items())),
-                "parent_disagreement_examples": self.parent_examples.get(dataset, []),
+                "parent_disagreement_examples": [
+                    e for _, kept in sorted(self.parent_examples.get(dataset, {}).items()) for e in kept
+                ],
                 "activity_links": self.links_to_dict(dataset),
                 "filesets": {o: n for o in PASSING_OUTCOMES if (n := self.fileset_outcomes.get(dataset, Counter())[o])},
             }
@@ -625,6 +650,16 @@ class SampleReport:
     def sorted_lists(self) -> list[dict]:
         """The run's lists in id order, as the artifact writes them."""
         return sorted_lists(self.lists)
+
+
+def file_order(row: dict) -> tuple[str, str, str]:
+    """A conflict or no-samples row's place, as reconcile writes them: by dataset, file name, then record key (#750)."""
+    return (row["dataset_title"], row["file_name"], row["record_key"])
+
+
+def _first(members: Iterable[Identifier]) -> list[dict]:
+    """The ``MAX_EXAMPLES`` smallest of ``members``, without sorting them all."""
+    return [m.to_dict() for m in heapq.nsmallest(MAX_EXAMPLES, members)]
 
 
 def _source_row(named: Named) -> dict:

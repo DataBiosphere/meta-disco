@@ -41,6 +41,7 @@ from meta_disco.reconcile_samples import (
     ACTIVITY_ONLY,
     AGREED,
     CONFLICT,
+    MAX_EXAMPLES,
     NONE,
     PARENT_CONFLICT,
     TIED,
@@ -133,6 +134,22 @@ def test_a_files_links_name_each_biosamples_sample_once_per_activity():
     assert named.kind == ACTIVITY and named.members == {coriell("HG00096"), coriell("HG00097")}
     assert [a["activity_id"] for a in named.named_by] == ["a1", "a2"]
     assert result.counts[DATASET] == {TIED: 1}
+
+
+def test_a_files_activities_are_cited_in_id_order_whatever_order_the_manifest_held_them():
+    """ANVIL_1000G_high_coverage_2019's case: two activities, each naming one of the person's two biosamples (#767)."""
+    by_id = {("anvil", "b1"): coriell("HG03301"), ("anvil", "b2"): coriell("HG03301")}
+    links = [link("f1", "b1", "a2"), link("f1", "b2", "a1")]
+    forward, backward = (settle([linked(order, carriers("f1"), by_id).named["f1"]]) for order in (links, links[::-1]))
+    _, samples, _ = forward
+    assert forward == backward and samples is not None
+    assert [a["activity_id"] for a in samples["named_by"]] == ["a1", "a2"]
+
+
+def test_the_untied_biosamples_listed_are_the_smallest_whatever_order_they_arrive_in():
+    links = [link(f"f{n}", f"b{n}") for n in reversed(range(MAX_EXAMPLES + 2))]
+    result = linked(links, carriers(*(f"f{n}" for n in range(MAX_EXAMPLES + 2))), {})
+    assert result.untied_examples[DATASET] == [f"b{n}" for n in range(MAX_EXAMPLES)]
 
 
 def test_a_file_one_of_whose_biosamples_ties_to_no_sample_gets_none_and_is_counted():

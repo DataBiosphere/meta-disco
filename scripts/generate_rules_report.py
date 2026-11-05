@@ -95,6 +95,7 @@ from meta_disco.rule_engine import CONFLICT_MARKER, CONTENT_TIER, NOT_CLASSIFIED
 from meta_disco.rule_loader import RuleLoader, default_rules_resource
 from meta_disco.sample_identity import DONOR, SAMPLE, identifier_rule_declarations, identifier_rules
 from meta_disco.schema_vocab import marker_values, value_ancestors, value_in_vocabulary
+from meta_disco.stable_order import most_frequent
 from meta_disco.summaries import embed_json, md_code, md_table
 from meta_disco.value_map import default_value_map_resource, load_value_map
 
@@ -638,8 +639,8 @@ def _counted(entry: Tally | None) -> dict:
         "claims": entry.claims,
         "files": entry.files,
         "won": entry.won,
-        "datasets": dict(entry.datasets.most_common()),
-        "source_types": {k or "(none)": v for k, v in entry.source_types.most_common()},
+        "datasets": most_frequent(entry.datasets),
+        "source_types": most_frequent({k or "(none)": v for k, v in entry.source_types.items()}),
     }
 
 

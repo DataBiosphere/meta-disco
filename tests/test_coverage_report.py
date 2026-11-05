@@ -58,11 +58,14 @@ def test_tally_counts_conflict_apart_from_both_neighbours(records):
 
 
 def test_conflict_rows_group_by_extension_and_competing_values(records):
-    assert report.Tally(records, REF).conflict_rows() == [
+    """Ties by extension, whatever order the records were read in (#732)."""
+    expected = [
         {"ext": ".bed", "competing": "CHM13 vs GRCh38", "count": 2},
-        {"ext": ".vcf", "competing": "GRCh37 vs GRCh38", "count": 1},
         {"ext": ".idx", "competing": report.COMPETING_NOT_RECORDED, "count": 1},
+        {"ext": ".vcf", "competing": "GRCh37 vs GRCh38", "count": 1},
     ]
+    assert report.Tally(records, REF).conflict_rows() == expected
+    assert report.Tally(records[::-1], REF).conflict_rows() == expected
 
 
 def test_section_lists_the_conflict_row_and_table_only_where_there_is_one(records):

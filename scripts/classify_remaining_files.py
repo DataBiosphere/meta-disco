@@ -34,6 +34,7 @@ from meta_disco.provenance import run_provenance
 from meta_disco.record_keys import RecordKey, input_key_value, keyed_rows, record_key, repeated_key_values
 from meta_disco.records import InvalidRecord, OutputRecord, RunMetadata
 from meta_disco.rule_engine import RuleEngine
+from meta_disco.stable_order import most_frequent
 
 
 def load_already_classified(classification_paths: list[Path], key: RecordKey) -> set[str]:
@@ -146,7 +147,7 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
 
     print(f"\nClassified {len(results):,} remaining files")
     print("\nBy extension:")
-    for ext, count in ext_counts.most_common(20):
+    for ext, count in most_frequent(ext_counts, 20).items():
         print(f"  {ext}: {count:,}")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -160,7 +161,7 @@ def classify_remaining(metadata_path: Path, output_path: Path, classification_pa
                     from_cache=0,
                     content_unreadable=0,
                     provenance=provenance,
-                    details={"by_extension": dict(ext_counts.most_common())},
+                    details={"by_extension": most_frequent(ext_counts)},
                 ).to_dict(),
                 "classifications": results,
             },

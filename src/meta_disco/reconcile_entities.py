@@ -113,9 +113,9 @@ from .sample_identity import (
     identifier_order,
     in_identifier_order,
     members_of,
-    most_frequent,
 )
 from .source_evidence import EvidenceEntry, EvidenceFileEnvelope, cell_values, discover
+from .stable_order import most_frequent
 from .value_map import ValueMap
 
 # How many unrecognised identifiers the report names per table.

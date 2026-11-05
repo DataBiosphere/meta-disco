@@ -24,6 +24,7 @@ from meta_disco.file_name import FileName
 from meta_disco.models import CLASSIFICATION_FIELDS, CONFLICT, NOT_CLASSIFIED, field_evidence, field_label
 from meta_disco.output_utils import CLASSIFICATION_FILES, RUN_DIR_FORMAT, find_latest_run
 from meta_disco.rule_engine import CONFLICT_MARKER
+from meta_disco.stable_order import most_frequent
 from meta_disco.summaries import escape_md_cell, md_code
 
 # Each dimension's report label and note. The report covers CLASSIFICATION_FIELDS, in
@@ -199,20 +200,21 @@ class Tally:
         self.nc_exts: Counter = self.by_ext.get(NOT_CLASSIFIED, Counter()) + self.by_ext.get("None", Counter())
 
     def nc_breakdown(self) -> list[_NotClassifiedRow]:
-        """Not-classified files by extension, most frequent first, each with the most
-        common evidence reason for that extension."""
+        """Not-classified files by extension, most frequent first and ties by extension, each with the most
+        common evidence reason for that extension, ties by the reason (``most_frequent``)."""
         rows: list[_NotClassifiedRow] = []
-        for ext, count in self.nc_exts.most_common():
+        for ext, count in most_frequent(self.nc_exts).items():
             reasons = self._nc_reasons.get(ext, Counter())
-            why = reasons.most_common(1)[0][0] if reasons else "No reason recorded"
+            why = next(iter(most_frequent(reasons, 1)), "No reason recorded")
             rows.append({"ext": ext, "count": count, "why": why})
         return rows
 
     def conflict_rows(self) -> list[_ConflictRow]:
         """Conflicts grouped by extension and the disagreeing values, most frequent
-        first. Empty when nothing is in conflict."""
+        first, ties by both. Empty when nothing is in conflict."""
         return [
-            {"ext": ext, "competing": competing, "count": n} for (ext, competing), n in self._conflicts.most_common()
+            {"ext": ext, "competing": competing, "count": n}
+            for (ext, competing), n in most_frequent(self._conflicts).items()
         ]
 
 
@@ -254,10 +256,9 @@ def build_section(tally: Tally, total: int, label: str, extra_notes: str = "") -
     lines.append(f"| {label} | count | % | extensions |")
     lines.append("|---|---:|---:|---|")
 
-    for val, count in tally.totals.most_common():
+    for val, count in most_frequent(tally.totals).items():
         pct = 100 * count / total
-        all_exts = tally.by_ext[val].most_common()
-        ext_str = "<br>".join(f"{e} ({c:,})" for e, c in all_exts)
+        ext_str = "<br>".join(f"{e} ({c:,})" for e, c in most_frequent(tally.by_ext[val]).items())
         lines.append(f"| `{val}` | {count:,} | {pct:.1f}% | {ext_str} |")
 
     if extra_notes:
@@ -343,7 +344,7 @@ def main():
                     "see [unprocessable files](unprocessable-report.md) for why)"
                 )
             out.write(".\n\n")
-            for title, count in dataset_counts.most_common():
+            for title, count in most_frequent(dataset_counts).items():
                 out.write(f"- {title} ({count:,} files)\n")
             out.write("\n")
         else:
@@ -424,9 +425,9 @@ def generate_html_dashboard(
 ):
     """Generate HTML dashboard with embedded chart data. ``tallies`` is one
     ``(field, label, notes, Tally)`` per dimension, as ``main`` built them."""
-    datasets: list[_NamedCount] = (
-        [{"name": name, "count": count} for name, count in dataset_counts.most_common()] if dataset_counts else []
-    )
+    datasets: list[_NamedCount] = [
+        {"name": name, "count": count} for name, count in most_frequent(dataset_counts).items()
+    ]
     dashboard_data: _DashboardData = {
         "total": total,
         "run_time": run_time,
@@ -439,9 +440,9 @@ def generate_html_dashboard(
             {
                 "name": val,
                 "count": count,
-                "extensions": [{"ext": e, "count": c} for e, c in tally.by_ext[val].most_common()],
+                "extensions": [{"ext": e, "count": c} for e, c in most_frequent(tally.by_ext[val]).items()],
             }
-            for val, count in tally.totals.most_common()
+            for val, count in most_frequent(tally.totals).items()
         ]
         dashboard_data["dimensions"].append(
             {
