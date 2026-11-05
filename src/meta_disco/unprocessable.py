@@ -321,7 +321,7 @@ def _excluded_tables(excluded: list[ExcludedFile]) -> list[str]:
         files = by_dataset[dataset]
         lines += [f"#### {escape_md_cell(dataset)} — {len(files):,} file(s)", ""]
         lines += ["| file_name | entry_id | file_id | file_size | drs_uri |", "|---|---|---|---|---|"]
-        for f in sorted(files, key=lambda x: x.file_name):
+        for f in sorted(files, key=lambda x: (str(x.file_name), str(x.file_id), str(x.entry_id), str(x.drs_uri))):
             lines.append(
                 "| {} | {} | {} | {} | {} |".format(
                     escape_md_cell(f.file_name) or "—",

@@ -19,6 +19,7 @@ from meta_disco.unprocessable import (
     CONTRACT_VIOLATION,
     NO_CHECKSUM,
     UNKNOWN_DATASET,
+    _excluded_tables,
     gather,
     render_report,
 )
@@ -327,3 +328,20 @@ class TestRenderReport:
         run_dir = write_run(tmp_path, [_reason_record(FETCH_FAILED_RULE_ID, "x.bam", "A | B")])
         report = render_report(gather(run_dir))
         assert "A \\| B" in report
+
+
+def test_excluded_files_sharing_a_name_are_listed_in_one_order_whatever_order_the_run_wrote():
+    """One base name in two folders, read from a re-downloaded input in another order (#732)."""
+    one, two = (
+        ExcludedFile(
+            file_name="x.bam",
+            dataset_title="D",
+            entry_id=None,
+            file_id=file_id,
+            drs_uri=None,
+            file_size=1,
+            reason="no checksum",
+        )
+        for file_id in ("f2", "f1")
+    )
+    assert _excluded_tables([one, two]) == _excluded_tables([two, one])

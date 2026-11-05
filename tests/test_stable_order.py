@@ -58,3 +58,15 @@ def test_an_example_past_the_smallest_is_known_before_it_is_built():
     assert past_smallest(kept, "c.bam", 2)
     assert not past_smallest(kept, "b.bam", 2)  # an equal name may still sort before by content
     assert not past_smallest(kept, "c.bam", 3)
+
+
+def test_examples_sharing_a_file_name_are_kept_by_content_whatever_order_they_arrive_in():
+    """One base name in several folders: the content, not the arrival, decides which are kept (#732)."""
+    a, b, c = ({"file_name": "x.vcf.gz", "parent_file": p} for p in ("c", "a", "b"))
+    kept_forward: list = []
+    kept_back: list = []
+    for example in (a, b, c):
+        keep_smallest(kept_forward, example, 2, key=by_file_name)
+    for example in (c, b, a):
+        keep_smallest(kept_back, example, 2, key=by_file_name)
+    assert kept_forward == kept_back == [b, c]

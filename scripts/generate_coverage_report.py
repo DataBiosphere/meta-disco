@@ -344,8 +344,8 @@ def main():
                     "see [unprocessable files](unprocessable-report.md) for why)"
                 )
             out.write(".\n\n")
-            for title, count in most_frequent(dataset_counts).items():
-                out.write(f"- {title} ({count:,} files)\n")
+            for dataset in ranked_datasets(dataset_counts):
+                out.write(f"- {dataset['name']} ({dataset['count']:,} files)\n")
             out.write("\n")
         else:
             out.write(f"Coverage of {total:,} classified file records across {len(DIMENSIONS)} dimensions.\n\n")
@@ -420,14 +420,17 @@ class _DashboardData(TypedDict):
     dimensions: list[_DimensionPanel]
 
 
+def ranked_datasets(dataset_counts: Counter) -> list[_NamedCount]:
+    """The datasets by file count, ties by name, as the report and the dashboard list them."""
+    return [{"name": name, "count": count} for name, count in most_frequent(dataset_counts).items()]
+
+
 def generate_html_dashboard(
     tallies: list[tuple[str, str, str, Tally]], total: int, run_time: str, dataset_counts: Counter, output_path: Path
 ):
     """Generate HTML dashboard with embedded chart data. ``tallies`` is one
     ``(field, label, notes, Tally)`` per dimension, as ``main`` built them."""
-    datasets: list[_NamedCount] = [
-        {"name": name, "count": count} for name, count in most_frequent(dataset_counts).items()
-    ]
+    datasets = ranked_datasets(dataset_counts)
     dashboard_data: _DashboardData = {
         "total": total,
         "run_time": run_time,

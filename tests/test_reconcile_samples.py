@@ -342,6 +342,22 @@ def test_a_runs_conflicts_files_without_samples_and_examples_are_in_file_order_w
     assert block["conflict_examples"] == [f"f{n}.bam" for n in range(1, MAX_EXAMPLES + 1)]
 
 
+def test_the_conflicts_tsv_lists_files_in_file_order_whatever_order_the_artifact_holds_them():
+    """A run reconciled before #750 holds its conflicts in the order files settled."""
+    source = {"kind": "table", "named_by": [{"source_type": "repository_metadata", "rule_id": "r"}], "samples": []}
+    rows = [
+        {"dataset_title": d, "file_name": f, "record_key": k, "outcome": CONFLICT, "sources": [source]}
+        for d, f, k in [("B", "a.bam", "1"), ("A", "b.bam", "2"), ("A", "a.bam", "3")]
+    ]
+    _, *lines = conflict_tsv(rows).splitlines()
+    assert [(line.split("\t")[0], line.split("\t")[3]) for line in lines] == [
+        ("A", "a.bam"),
+        ("A", "b.bam"),
+        ("B", "a.bam"),
+    ]
+    assert conflict_tsv(rows) == conflict_tsv(rows[::-1])
+
+
 def test_without_evidence_the_header_samples_stand(tmp_path, run, table):
     row, entry = with_header_samples(record(1), "HG00096")
     write_bam_run(run, [row], [entry])
