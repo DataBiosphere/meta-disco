@@ -34,7 +34,7 @@ could not tell them apart, and a third producer of that shape would be misattrib
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import astuple, dataclass, field
 from pathlib import Path
 
 from .exclusions import ExcludedFile, read_excluded
@@ -321,7 +321,7 @@ def _excluded_tables(excluded: list[ExcludedFile]) -> list[str]:
         files = by_dataset[dataset]
         lines += [f"#### {escape_md_cell(dataset)} — {len(files):,} file(s)", ""]
         lines += ["| file_name | entry_id | file_id | file_size | drs_uri |", "|---|---|---|---|---|"]
-        for f in sorted(files, key=lambda x: (str(x.file_name), str(x.file_id), str(x.entry_id), str(x.drs_uri))):
+        for f in sorted(files, key=lambda x: tuple(map(str, astuple(x)))):
             lines.append(
                 "| {} | {} | {} | {} | {} |".format(
                     escape_md_cell(f.file_name) or "—",

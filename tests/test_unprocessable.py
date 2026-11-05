@@ -337,11 +337,11 @@ def test_excluded_files_sharing_a_name_are_listed_in_one_order_whatever_order_th
             file_name="x.bam",
             dataset_title="D",
             entry_id=None,
-            file_id=file_id,
+            file_id=None,
             drs_uri=None,
-            file_size=1,
+            file_size=size,
             reason="no checksum",
         )
-        for file_id in ("f2", "f1")
+        for size in (2, 1)
     )
     assert _excluded_tables([one, two]) == _excluded_tables([two, one])
