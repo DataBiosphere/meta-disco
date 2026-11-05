@@ -19,6 +19,7 @@ from meta_disco.unprocessable import (
     CONTRACT_VIOLATION,
     NO_CHECKSUM,
     UNKNOWN_DATASET,
+    _excluded_tables,
     gather,
     render_report,
 )
@@ -89,6 +90,15 @@ class TestGather:
         assert groups["Study A"].count == 9
         assert len(groups["Study A"].examples) == 3
         assert groups["Study B"].count == 1
+
+    def test_the_examples_are_the_smallest_names_whatever_order_the_run_wrote(self, tmp_path):
+        """A re-downloaded input holds the same files in another order; the examples must not move (#732)."""
+        records = [_reason_record(FETCH_FAILED_RULE_ID, f"f{i}.bam", "Study A") for i in range(9)]
+        examples = [
+            gather(write_run(tmp_path / name, order), max_examples=3).rows[CONTENT_UNREADABLE.key]["Study A"].examples
+            for name, order in (("forward", records), ("backward", records[::-1]))
+        ]
+        assert examples[0] == examples[1] == ["f0.bam", "f1.bam", "f2.bam"]
 
     def test_a_drifted_file_name_is_not_collapsed_to_empty(self, tmp_path):
         """A file_name of 0 is drift the report exists to surface; `str(x or "")` would
@@ -318,3 +328,20 @@ class TestRenderReport:
         run_dir = write_run(tmp_path, [_reason_record(FETCH_FAILED_RULE_ID, "x.bam", "A | B")])
         report = render_report(gather(run_dir))
         assert "A \\| B" in report
+
+
+def test_excluded_files_sharing_a_name_are_listed_in_one_order_whatever_order_the_run_wrote():
+    """One base name in two folders, read from a re-downloaded input in another order (#732)."""
+    one, two = (
+        ExcludedFile(
+            file_name="x.bam",
+            dataset_title="D",
+            entry_id=None,
+            file_id=None,
+            drs_uri=None,
+            file_size=size,
+            reason="no checksum",
+        )
+        for size in (2, 1)
+    )
+    assert _excluded_tables([one, two]) == _excluded_tables([two, one])

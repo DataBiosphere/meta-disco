@@ -21,8 +21,8 @@ re-infers or fetches, so answering a review item costs a reconcile, not a corpus
 **The join** is an equality lookup on the key each evidence envelope names
 (``target_key``), against that field of our output records. A line whose key value is
 carried by exactly one record attaches to it; by two or more, to none — it is counted
-ambiguous, and the report names every carrier for the first few such lines per file (the
-#371 problem, seen from the evidence side). The join runs within the envelope's target
+ambiguous, and the report names every carrier for the few such lines per file that sort first by
+content (``stable_order.example_order``; the #371 problem, seen from the evidence side). The join runs within the envelope's target
 dataset when it names one.
 An evidence file none of whose lines match is an error naming its source and dataset:
 silence is not success (5.3). The record's identity in the report is the repository's
@@ -129,7 +129,7 @@ from .reconcile_inherit import (
     reference_build,
 )
 from .reconcile_lineage import Carrier, Locator, PendingLineage, applies, resolve_lineage, translate_lineage
-from .reconcile_samples import Named, from_line
+from .reconcile_samples import Named, file_order, from_line
 from .record_keys import PUBLISHED_TABLES, RecordKey, is_key_value, record_key
 from .records import JOIN_KEY_OUTPUT_FIELDS, SAMPLE_OUTCOMES_KEY, STEP_OUTCOMES_KEY, UNRECOGNISED_SAMPLES_KEY
 from .resolution import NO_EVIDENCE, SlotEvidence, translate
@@ -140,7 +140,7 @@ from .resolution import settle as settle
 from .resolution import use_for as use_for
 from .rule_engine import CONFLICT_MARKER
 from .run_lineage_map import RunLineageMap, load_run_lineage_map
-from .sample_identity import identifier_rules, most_frequent
+from .sample_identity import identifier_rules
 from .schema.classification_model import EvidenceFileEnvelope
 from .schema_vocab import most_specific
 from .slot_map import load_slot_map, published_slot_map_resource
@@ -153,6 +153,7 @@ from .source_evidence import (
     report_evidence_files,
     require_one_published_source,
 )
+from .stable_order import by_file_name, example_order, keep_smallest, most_frequent, past_smallest
 from .value_map import ValueMap, load_value_map
 
 INFERENCE = "inference"
@@ -587,13 +588,11 @@ def join(
             ev = evidence[n]
             if not found:
                 ev.unmatched += 1
-                if len(ev.unmatched_examples) < MAX_EXAMPLES and value not in ev.unmatched_examples:
-                    ev.unmatched_examples.append(value)
+                keep_smallest(ev.unmatched_examples, value, MAX_EXAMPLES)
             elif len(found) > 1:
                 ev.ambiguous += 1
                 example = {record_field: value, key.output_field: sorted(found)}
-                if len(ev.ambiguous_examples) < MAX_EXAMPLES and example not in ev.ambiguous_examples:
-                    ev.ambiguous_examples.append(example)
+                keep_smallest(ev.ambiguous_examples, example, MAX_EXAMPLES)
             else:
                 ev.matched += 1
                 if entry.field == SAMPLES_FIELD:
@@ -815,7 +814,7 @@ class Report:
     # The lineage pass (#577): per source type and dataset, what became of its lines
     # (`reconcile_lineage.OUTCOMES`); per dataset, the files whose `generated_by` each
     # combination of source types named; per dataset and conflict kind, the files and the
-    # first few with who said what; per (dataset, activity, problem, detail), the steps that
+    # smallest few (`stable_order.keep_smallest`) with who said what; per (dataset, activity, problem, detail), the steps that
     # do not fit their declaration (`edges.misfits`).
     lineage_counts: dict = field(default_factory=dict)
     # Per producer and dataset, what its step reader made of each file's content
@@ -923,15 +922,21 @@ class Report:
         if conflict is not None:
             tally = self.step_conflicts[dataset][conflict.kind]
             tally["files"] += 1
-            examples = tally["examples"]
-            if len(examples) < MAX_EXAMPLES:
-                examples.append(
-                    {
-                        "file_name": reconciled.get("file_name"),
-                        "role": conflict.role,
-                        "said": [{"said": what, "by": by} for what, by in conflict.said],
-                    }
-                )
+            if past_smallest(tally["examples"], str(reconciled.get("file_name")), MAX_EXAMPLES):
+                return
+            keep_smallest(
+                tally["examples"],
+                {
+                    "file_name": reconciled.get("file_name"),
+                    "role": conflict.role,
+                    "said": [
+                        {"said": what, "by": by}
+                        for what, by in sorted(conflict.said, key=lambda wb: (wb[0], example_order(wb[1])))
+                    ],
+                },
+                MAX_EXAMPLES,
+                key=by_file_name,
+            )
             return
         if not step:
             return
@@ -1047,7 +1052,7 @@ class Report:
                     slot: {
                         category: [
                             {"inputs": {name: list(values) for name, values in competing}, "files": n}
-                            for competing, n in sorted(tally.items(), key=lambda item: (-item[1], item[0]))
+                            for competing, n in most_frequent(tally).items()
                         ]
                         for category, tally in sorted(per_category.items())
                     }
@@ -1406,8 +1411,8 @@ def reconcile_run(
     written = {entry["list_id"] for entry in run_lists}
     write_reconciled_file(staging / EXTERNAL_LISTS_FILE, header, (h.row(written) for h in external_held))
     write_reconciled_file(staging / REBUILT_LISTS_FILE, header, (rebuilt[ref] for ref in sorted(rebuilt)))
-    write_reconciled_file(staging / SAMPLE_CONFLICTS_FILE, header, samples.conflicts)
-    write_reconciled_file(staging / FILES_WITHOUT_SAMPLES_FILE, header, samples.without_samples)
+    write_reconciled_file(staging / SAMPLE_CONFLICTS_FILE, header, sorted(samples.conflicts, key=file_order))
+    write_reconciled_file(staging / FILES_WITHOUT_SAMPLES_FILE, header, sorted(samples.without_samples, key=file_order))
     write_reconciled_file(staging / UNREACHED_ENTITIES_FILE, header, entities.unreached)
 
     full_report = {

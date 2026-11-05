@@ -63,11 +63,12 @@ from meta_disco.reconcile import (
 )
 from meta_disco.reconcile_inherit import OUTCOMES as INHERITANCE_COLUMNS
 from meta_disco.reconcile_lineage import OUTCOMES
-from meta_disco.reconcile_samples import LINK_OUTCOMES, PASSING_OUTCOMES
+from meta_disco.reconcile_samples import LINK_OUTCOMES, PASSING_OUTCOMES, file_order
 from meta_disco.reconcile_samples import NONE as SAMPLE_NONE
 from meta_disco.reconcile_samples import OUTCOMES as SAMPLE_OUTCOMES
 from meta_disco.sample_identity import NAMED, NO_SAMPLE, UNREAD, UNRECOGNISED
 from meta_disco.schema_vocab import top_term
+from meta_disco.stable_order import most_frequent
 from meta_disco.summaries import embed_json, md_code, md_table
 
 # Every outcome a producer's step reader gives, the VCF producer's first (#609, #621, #683).
@@ -324,7 +325,7 @@ def values_matrix(report: dict, slot: str) -> dict:
     for counts in per_dataset.values():
         for value, n in counts.items():
             totals[value] = totals.get(value, 0) + n
-    values = sorted((v for v in totals if v not in VALUE_STATUSES), key=lambda v: (-totals[v], v))
+    values = [v for v in most_frequent(totals) if v not in VALUE_STATUSES]
     statuses = [v for v in VALUE_STATUSES if v in totals]
     return {
         "values": values,
@@ -437,7 +438,7 @@ def lineage_rows(report: dict) -> dict | None:
     ``content_steps``: per producer and dataset, what its step reader made of each file's
     content (#609, #621), a report written before #621 read as the VCF producer's, and empty
     for one written before #609; ``steps``: per dataset, the files
-    whose ``generated_by`` each combination of source types named; ``conflicts``: per dataset and kind, the files and the first few with who
+    whose ``generated_by`` each combination of source types named; ``conflicts``: per dataset and kind, the files and the first few by file name, with who
     said what; ``misfits``: the steps that do not fit their activity's declaration.
     """
     lineage = report.get("lineage")
@@ -451,7 +452,7 @@ def lineage_rows(report: dict) -> dict | None:
     steps = [
         {"dataset": dataset, "named_by": named_by, "files": files}
         for dataset, per in sorted(lineage["steps"].items())
-        for named_by, files in sorted(per.items(), key=lambda kv: (-kv[1], kv[0]))
+        for named_by, files in most_frequent(per).items()
     ]
     conflicts = [
         {"dataset": dataset, "kind": kind, "files": c["files"], "examples": c["examples"]}
@@ -488,8 +489,8 @@ def samples_rows(report: dict) -> list[dict] | None:
     Each row: ``headers``, the files per header outcome (``sample_identity``) with the most
     frequent strings no identifier rule recognised; ``settled``, the files per outcome
     (``reconcile_samples.OUTCOMES`` and ``none``); every table value no rule recognised, with
-    its table, column and files; the files whose name names another sample; and the first few
-    examples of each. Since #668, also per activity what each role passing samples gave a child
+    its table, column and files; the files whose name names another sample; and the smallest few
+    examples of each (``stable_order.keep_smallest``, a file's by its name). Since #668, also per activity what each role passing samples gave a child
     (``inheritance``) and the child and parent pairs whose lists disagree across a step passing
     none (``parent_disagreements``, with examples); empty in a report written before it. Since #751,
     what each PLINK fileset's sample table gave its members (``filesets``); None before it.
@@ -1177,7 +1178,7 @@ def _lineage_section(lineage: dict | None) -> list[str]:
         lines += [
             "A file whose sources name two activities, or two parents in a role that takes one, or, in any role, "
             "other parents than inference names there (#609), or a generic `Activity` step naming a parent no "
-            "specific source names, gets no `generated_by`; the first few are listed with who said what.",
+            "specific source names, gets no `generated_by`; the first few by file name are listed with who said what.",
             "",
             *md_table(
                 ["dataset", "kind", "files", "e.g."],
@@ -1223,12 +1224,11 @@ def _lineage_section(lineage: dict | None) -> list[str]:
 
 
 def _strings(counts: dict[str, int], limit: int = 5) -> str:
-    """The ``limit`` most frequent strings of ``counts`` (ties by the string), with how often each was seen, as code spans.
+    """The ``limit`` most frequent strings of ``counts``, with how often each was seen, as code spans.
 
     Ranked here: ``reconcile_report.json`` is written with sorted keys, so its order is the strings', not their counts'.
     """
-    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:limit]
-    return ", ".join(f"{md_code(k)} ({_n(v)})" for k, v in ranked)
+    return ", ".join(f"{md_code(k)} ({_n(v)})" for k, v in most_frequent(counts, limit).items())
 
 
 def _by_value(entries: list[dict]) -> dict[str, int]:
@@ -1547,11 +1547,13 @@ CONFLICT_COLUMNS = (
 
 def conflict_tsv(conflicts) -> str:
     """The rows of ``reconciled/sample_conflicts.ndjson.gz`` as a TSV: one line per file and attribution of each source,
-    its samples as ``namespace:id``, comma-separated; header first, files in the order the artifact holds them."""
+    its samples as ``namespace:id``, comma-separated; header first, files by dataset, file name and record key
+    (``reconcile_samples.file_order``, #750) whatever order the artifact holds them in, and each file's sources and
+    their attributions in the artifact's order."""
     out = io.StringIO()
     writer = csv.writer(out, delimiter="\t", lineterminator="\n")
     writer.writerow(CONFLICT_COLUMNS)
-    for row in conflicts:
+    for row in sorted(conflicts, key=file_order):
         for source in row["sources"]:
             samples = ",".join(_identifier(m) for m in source["samples"])
             for attribution in source["named_by"]:

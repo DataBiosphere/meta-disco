@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import TypedDict
 
 from meta_disco.output_utils import RUN_DIR_FORMAT
+from meta_disco.stable_order import most_frequent
 from meta_disco.summaries import escape_md_cell
 
 DIMENSIONS = ["data_modality", "data_type", "platform", "reference_assembly", "assay_type"]
@@ -148,14 +149,14 @@ def load_hprc_results(hprc_results_path: Path) -> _ComparisonResults:
                 ours = info.get("ours", "")
                 expected = info.get("expected", "")
                 cat_key = f"{ours} vs {expected}"
-                if cat_key not in discrepancy_categories:
-                    discrepancy_categories[cat_key] = {
-                        "ours": ours,
-                        "truth_mapped": expected,
-                        "count": 0,
-                        "example": m.get("file") or "",
-                    }
-                discrepancy_categories[cat_key]["count"] += 1
+                file = m.get("file") or ""
+                category = discrepancy_categories.setdefault(
+                    cat_key, {"ours": ours, "truth_mapped": expected, "count": 0, "example": ""}
+                )
+                category["count"] += 1
+                # The smallest file name, not the first seen, so the validator's order moves nothing (#732).
+                if file and (not category["example"] or file < category["example"]):
+                    category["example"] = file
 
         dimensions[dim] = {
             "agree": match,
@@ -163,7 +164,11 @@ def load_hprc_results(hprc_results_path: Path) -> _ComparisonResults:
             "we_inferred": 0,
             "not_classified": unknown,
             "no_truth": 0,
-            "discrepancy_categories": discrepancy_categories,
+            # Most frequent first, ties by category, for the Markdown and the dashboard alike.
+            "discrepancy_categories": {
+                k: discrepancy_categories[k]
+                for k in most_frequent({k: c["count"] for k, c in discrepancy_categories.items()})
+            },
         }
 
     # If old format without dimensions, try legacy fields
@@ -309,7 +314,7 @@ def build_source_section(name: str, results: _ComparisonResults) -> str:
         # Discrepancy categories ordered by count
         cats = stats.get("discrepancy_categories", {})
         if cats:
-            sorted_cats = sorted(cats.values(), key=lambda c: c["count"], reverse=True)
+            sorted_cats = list(cats.values())
             lines.append("#### Discrepancies")
             lines.append("")
             lines.append(f"| Count | Inferred | {source_label} | Example |")

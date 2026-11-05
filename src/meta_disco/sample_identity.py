@@ -20,7 +20,6 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections import Counter
 from collections.abc import Callable, Collection, Iterable, Sequence
 from dataclasses import dataclass
 from functools import cache, cached_property, lru_cache
@@ -307,12 +306,6 @@ def reference(members: Iterable[Identifier], named_by: list[dict], known: str | 
 def sorted_lists(lists: dict[str, dict]) -> list[dict]:
     """A run's sample lists by id, in id order, as a producer file and the reconciled artifact write them."""
     return [lists[key] for key in sorted(lists)]
-
-
-def most_frequent(counts: Counter, limit: int | None = None) -> dict[str, int]:
-    """``counts`` most frequent first, ties by the string, so the same counts give the same order however they were made."""
-    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
-    return dict(ranked if limit is None else ranked[:limit])
 
 
 def members_of(sample_list_entry: dict) -> frozenset[Identifier]:

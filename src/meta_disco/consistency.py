@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from functools import cache
 from importlib.resources import files
 from pathlib import Path
@@ -25,6 +25,7 @@ from meta_disco import schema_vocab
 from meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED, _entry_value, _field_entry, status_for_value
 from meta_disco.output_utils import find_latest_run, iter_records
 from meta_disco.slot_map import unique_key_loader
+from meta_disco.stable_order import example_order
 
 
 @dataclass
@@ -291,7 +292,8 @@ def render_report(
         lines.append("_No violations._")
     else:
         shown: Counter = Counter()
-        for v in violations:
+        # By rule, then file, then the rest of what it says, not the order the run's records arrived in (#732).
+        for v in sorted(violations, key=lambda v: (v.rule_id, str(v.file_name), example_order(asdict(v)))):
             if shown[v.rule_id] >= examples:
                 continue
             shown[v.rule_id] += 1

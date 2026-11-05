@@ -7,8 +7,8 @@ from typing import TypedDict
 
 import pytest
 
-from meta_disco.consistency import check_record, load_rules, render_report
-from meta_disco.models import CLASSIFICATION_FIELDS
+from meta_disco.consistency import Violation, check_record, load_rules, render_report
+from meta_disco.models import CLASSIFICATION_FIELDS, CLASSIFIED
 from meta_disco.output_utils import iter_records
 
 RULES = load_rules()
@@ -252,6 +252,40 @@ def test_render_report_lists_violations():
     assert "**Total violations: 1**" in md
     assert "assay_for_transcriptomic" in md
     assert "assay_type=WGS" in md
+
+
+def test_the_examples_shown_are_the_smallest_file_names_whatever_order_the_run_wrote():
+    """A re-downloaded input holds the same files in another order; the examples must not move (#732)."""
+    records = [
+        _rec(md5=f"md5{n}", name=f"f{n}.bam", data_modality=_c("transcriptomic"), assay_type=_c("WGS"))
+        for n in range(5)
+    ]
+    reports = [
+        render_report(
+            Path("r"),
+            5,
+            [v for r in order for v in check_record(r, RULES)],
+            Counter({"assay_for_transcriptomic": 5}),
+            RULES,
+            examples=2,
+        )
+        for order in (records, records[::-1])
+    ]
+    assert reports[0] == reports[1]
+    assert "`f0.bam`" in reports[0] and "`f1.bam`" in reports[0] and "`f4.bam`" not in reports[0]
+
+
+def test_violations_of_one_file_are_shown_by_what_they_say_whatever_order_they_arrived_in():
+    """Two records sharing a file name and md5, offending with different values (Copilot, #732)."""
+    wgs, wes = (
+        Violation("md5", "x.bam", "assay_for_transcriptomic", {}, "assay_type", value, CLASSIFIED, None)
+        for value in ("WGS", "WES")
+    )
+    reports = [
+        render_report(Path("r"), 2, order, Counter({"assay_for_transcriptomic": 2}), RULES, examples=1)
+        for order in ([wgs, wes], [wes, wgs])
+    ]
+    assert reports[0] == reports[1] and "assay_type=WES" in reports[0]
 
 
 def test_iter_records_skips_a_file_whose_records_are_not_a_list(tmp_path):

@@ -36,6 +36,7 @@ from pathlib import Path
 from .inputs import load_snapshot
 from .models import CLASSIFICATION_FIELDS, STATUS_LABELS, field_label
 from .output_utils import ARTIFACT_READERS
+from .stable_order import most_frequent
 from .summaries import escape_md_cell
 
 # Which artifact of a run a comparison reads (contract 6.9, #432). Neither is a default:
@@ -550,7 +551,7 @@ def render_changes_section(diffs: dict[str, DimensionDiff], limit: int = 15) -> 
 
     These are classifier-behaviour differences: the corpus identity is the same and
     the label moved. Lists at most ``limit`` transitions per dimension, largest
-    first, and says how many were elided.
+    first and ties by the labels, and says how many were elided.
     """
     lines = ["## Label changes on files present in both runs", ""]
     if not any(diff.changed for diff in diffs.values()):
@@ -567,7 +568,10 @@ def render_changes_section(diffs: dict[str, DimensionDiff], limit: int = 15) -> 
             "| old label | new label | files |",
             "|---|---|---:|",
         ]
-        for (old_label, new_label), count in changed.most_common(limit):
+        ranked = most_frequent(
+            changed, limit, key=lambda labels: [(label is not None, label or "") for label in labels]
+        )
+        for (old_label, new_label), count in ranked.items():
             lines.append(f"| `{old_label}` | `{new_label}` | {count:,} |")
         remaining = len(changed) - min(limit, len(changed))
         if remaining:

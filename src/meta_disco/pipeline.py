@@ -42,7 +42,8 @@ from .records import (
     OutputRecord,
     RunMetadata,
 )
-from .sample_identity import HeaderSamples, most_frequent, sorted_lists
+from .sample_identity import HeaderSamples, sorted_lists
+from .stable_order import most_frequent
 
 
 def load_classifiable_records(input_path: Path, run_dir: Path | None = None) -> list[dict]:

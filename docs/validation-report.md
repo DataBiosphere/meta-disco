@@ -76,7 +76,7 @@ Of the 1,173 inferred reference assembly values, 1,171 (99.8%) matched HPRC. The
 
 | Count | Inferred | HPRC | Example |
 |---:|---|---|---|
-| 2 | GRCh38 | CHM13 | hprc-v1.0-mc-chm13.grch38.vcf.gz.tbi |
+| 2 | GRCh38 | CHM13 | hprc-v1.0-mc-chm13.grch38.vcf.gz |
 
 ### Assay Type Validation
 

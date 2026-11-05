@@ -1217,3 +1217,26 @@ def test_the_schema_refuses_an_unknown_credited_to():
     assert PlatformClassification.model_validate(entry).credited_to == "filled_by_inference"
     with pytest.raises(ValidationError):
         PlatformClassification.model_validate({**entry, "credited_to": "filled_by_guessing"})
+
+
+def test_the_join_examples_shown_are_the_smallest_whatever_order_the_lines_came_in(tmp_path, table):
+    """Unmatched and ambiguous lines are named by their smallest few, not the first in the file (#732)."""
+    rows = [record(1)]
+    for n in range(10, 17):
+        twin = record(n + 100)
+        twin["drs_uri"] = drs(n)
+        rows += [record(n), twin]
+    lines = [("platform", drs(1), "PACBIO_SMRT")]
+    lines += [("platform", drs(n), "PACBIO_SMRT") for n in range(10, 17)]
+    lines += [("platform", f"drs://gone/{n}", "PACBIO_SMRT") for n in range(7)]
+    results = []
+    for name, order in (("forward", lines), ("backward", lines[::-1])):
+        run_dir, root = tmp_path / name / "output" / "20261012_000000", tmp_path / name / "evidence"
+        root.mkdir(parents=True)
+        write_run(run_dir, rows)
+        write_evidence(root, order)
+        (ev,) = go(run_dir, tmp_path / name, root, table)["evidence"]
+        results.append((ev["unmatched_examples"], ev["ambiguous_examples"]))
+    assert results[0] == results[1]
+    assert results[0][0] == [f"drs://gone/{n}" for n in range(5)]
+    assert [e["drs_uri"] for e in results[0][1]] == [drs(n) for n in range(10, 15)]

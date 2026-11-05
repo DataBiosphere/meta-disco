@@ -34,7 +34,7 @@ could not tell them apart, and a third producer of that shape would be misattrib
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import astuple, dataclass, field
 from pathlib import Path
 
 from .exclusions import ExcludedFile, read_excluded
@@ -43,6 +43,7 @@ from .metadata_schema import VALIDATION_RULE_ID
 from .models import CLASSIFICATION_FIELDS, field_evidence
 from .output_utils import iter_records
 from .records import coerce_identity
+from .stable_order import keep_smallest
 from .summaries import escape_md_cell
 
 # Datasets and examples are capped so a category running to thousands of files stays a
@@ -148,7 +149,7 @@ def _section_header(reason: Reason) -> list[str]:
 
 @dataclass
 class RowGroup:
-    """Per-dataset tally of one row-backed reason, with a bounded sample of filenames."""
+    """Per-dataset tally of one row-backed reason, with the ``max_examples`` smallest distinct filenames."""
 
     dataset: str
     count: int = 0
@@ -156,8 +157,7 @@ class RowGroup:
 
     def add(self, file_name: str, max_examples: int) -> None:
         self.count += 1
-        if len(self.examples) < max_examples:
-            self.examples.append(file_name)
+        keep_smallest(self.examples, file_name, max_examples)
 
 
 @dataclass
@@ -321,7 +321,7 @@ def _excluded_tables(excluded: list[ExcludedFile]) -> list[str]:
         files = by_dataset[dataset]
         lines += [f"#### {escape_md_cell(dataset)} — {len(files):,} file(s)", ""]
         lines += ["| file_name | entry_id | file_id | file_size | drs_uri |", "|---|---|---|---|---|"]
-        for f in sorted(files, key=lambda x: x.file_name):
+        for f in sorted(files, key=lambda x: tuple(map(str, astuple(x)))):
             lines.append(
                 "| {} | {} | {} | {} | {} |".format(
                     escape_md_cell(f.file_name) or "—",

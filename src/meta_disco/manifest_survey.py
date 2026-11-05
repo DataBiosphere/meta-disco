@@ -60,6 +60,7 @@ from .azul_manifest import (
     manifest_path,
     sidecar_datasets,
 )
+from .stable_order import most_frequent
 from .summaries import md_table
 
 # A cell or field holding one of these, stripped and lowercased, is absent. AC2
@@ -1203,7 +1204,7 @@ def _compact_section(survey: Survey, keys: list[str]) -> list[str]:
     spellings: Counter = Counter()
     for dataset in datasets:
         spellings.update(dataset.absent_spellings)
-    observed = ", ".join(f"`{name}` {count:,}" for name, count in spellings.most_common())
+    observed = ", ".join(f"`{name}` {count:,}" for name, count in most_frequent(spellings).items())
     out += [
         "",
         "### Which absent spellings actually occur",

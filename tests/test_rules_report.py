@@ -236,6 +236,19 @@ def test_files_won_and_datasets_are_counted_per_rule(data):
     assert rules["never_fires"]["files"] == 0
 
 
+def test_a_rules_tied_datasets_are_listed_by_name_whatever_order_they_were_counted_in():
+    """Ties by name, so a run whose records arrive in another order lists them the same way (#732)."""
+    forward, backward = grr.Tally(), grr.Tally()
+    forward.datasets.update({"B": 1, "A": 1, "C": 2})
+    backward.datasets.update({"C": 2, "A": 1, "B": 1})
+    forward.source_types.update({SOURCE_REPOSITORY_METADATA: 1, None: 1})
+    backward.source_types.update({None: 1, SOURCE_REPOSITORY_METADATA: 1})
+    # As lists: a dict comparison would ignore the order under test.
+    for counted in (grr._counted(forward), grr._counted(backward)):
+        assert list(counted["datasets"]) == ["C", "A", "B"]
+        assert list(counted["source_types"]) == ["(none)", SOURCE_REPOSITORY_METADATA]
+
+
 def test_a_translation_row_is_counted_by_source_type(data):
     revio = by_id(data)["platform.revio"]
     assert (revio["files"], revio["won"]) == (1, 1)
