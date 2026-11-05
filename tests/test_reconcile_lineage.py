@@ -339,3 +339,14 @@ def test_a_step_conflicts_statements_are_listed_by_content_whatever_order_the_so
         examples.append(report.step_conflicts[DATASET]["activity"]["examples"])
     assert examples[0] == examples[1]
     assert [s["said"] for s in examples[0][0]["said"]] == ["IndexActivity", "QualityControlActivity"]
+
+
+def test_the_step_conflicts_shown_are_the_smallest_file_names_whatever_order_files_arrive_in():
+    by_name = {"source_type": "filename_rule", "rule_id": "index_by_name"}
+    said = (("IndexActivity", by_name), ("QualityControlActivity", by_name))
+    report = Report(coverage={})
+    for n in reversed(range(7)):
+        report.add_step({"dataset_title": DATASET, "file_name": f"f{n}.tbi"}, StepConflict("activity", None, said), [])
+    tally = report.step_conflicts[DATASET]["activity"]
+    assert tally["files"] == 7
+    assert [e["file_name"] for e in tally["examples"]] == [f"f{n}.tbi" for n in range(5)]

@@ -615,6 +615,7 @@ class SampleReport:
             | set(headers)
             | set(unrecognised)
             | set(self.passing)
+            | set(self.parent_disagreements)
             | set(self.activity.counts)
             | set(self.fileset_outcomes)
         )

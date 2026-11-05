@@ -489,8 +489,8 @@ def samples_rows(report: dict) -> list[dict] | None:
     Each row: ``headers``, the files per header outcome (``sample_identity``) with the most
     frequent strings no identifier rule recognised; ``settled``, the files per outcome
     (``reconcile_samples.OUTCOMES`` and ``none``); every table value no rule recognised, with
-    its table, column and files; the files whose name names another sample; and the first few
-    examples of each, by content (``stable_order.keep_smallest``). Since #668, also per activity what each role passing samples gave a child
+    its table, column and files; the files whose name names another sample; and the smallest few
+    examples of each (``stable_order.keep_smallest``, a file's by its name). Since #668, also per activity what each role passing samples gave a child
     (``inheritance``) and the child and parent pairs whose lists disagree across a step passing
     none (``parent_disagreements``, with examples); empty in a report written before it. Since #751,
     what each PLINK fileset's sample table gave its members (``filesets``); None before it.
@@ -1548,7 +1548,8 @@ CONFLICT_COLUMNS = (
 def conflict_tsv(conflicts) -> str:
     """The rows of ``reconciled/sample_conflicts.ndjson.gz`` as a TSV: one line per file and attribution of each source,
     its samples as ``namespace:id``, comma-separated; header first, files by dataset, file name and record key
-    (``reconcile_samples.file_order``, #750), so a run reconciled before that order was written gives the same TSV."""
+    (``reconcile_samples.file_order``, #750) whatever order the artifact holds them in, and each file's sources and
+    their attributions in the artifact's order."""
     out = io.StringIO()
     writer = csv.writer(out, delimiter="\t", lineterminator="\n")
     writer.writerow(CONFLICT_COLUMNS)

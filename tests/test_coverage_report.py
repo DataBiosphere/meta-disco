@@ -98,3 +98,30 @@ def test_a_reason_carrying_file_content_is_shown_literally_not_as_markup():
     records = [{"ext": ".idat", REF: NOT_CLASSIFIED, f"{REF}_reason": reason}]
     section = report.build_section(report.Tally(records, REF), 1, "Reference Assembly")
     assert f"`{reason}`" in section
+
+
+def test_every_section_and_the_dashboard_rank_ties_by_name_whatever_order_the_records_came_in(tmp_path):
+    """#732's case: tied extensions (`.snarls`, `.gg`, `.min`) and tied values reordered on a re-download."""
+    rows = [
+        {"ext": ext, REF: value, f"{REF}_reason": reason, "dataset_title": dataset}
+        for ext, value, reason, dataset in [
+            (".snarls", NOT_CLASSIFIED, "No rule for .snarls", "B"),
+            (".gg", NOT_CLASSIFIED, "No rule for .gg", "A"),
+            (".min", NOT_CLASSIFIED, "No rule for .min", "B"),
+            (".bam", "GRCh38", None, "A"),
+            (".cram", "GRCh37", None, "C"),
+            (".gg", NOT_CLASSIFIED, "Another reason", "C"),
+        ]
+    ]
+    outputs = []
+    for name, order in (("forward", rows), ("backward", rows[::-1])):
+        tally = report.Tally(order, REF)
+        html = tmp_path / f"{name}.html"
+        report.generate_html_dashboard(
+            [(REF, "Reference", "", tally)], len(order), "run", Counter(r["dataset_title"] for r in order), html
+        )
+        outputs.append((report.build_section(tally, len(order), "Reference"), html.read_text()))
+    assert outputs[0] == outputs[1]
+    section = outputs[0][0]
+    assert section.index("| .gg |") < section.index("| .min |") < section.index("| .snarls |")
+    assert "`GRCh37`" in section and section.index("`GRCh37`") < section.index("`GRCh38`")

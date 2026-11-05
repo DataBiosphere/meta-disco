@@ -34,6 +34,6 @@ def keep_smallest(examples: list, example: Any, limit: int, key: Callable[[Any],
 
 
 def past_smallest(examples: Sequence[Mapping[str, Any]], file_name: str, limit: int) -> bool:
-    """Whether an example naming ``file_name`` would be cut from ``examples`` (kept :func:`by_file_name`), so it need
-    not be built."""
+    """Whether an example naming ``file_name`` would certainly be cut from ``examples`` (kept :func:`by_file_name`), so
+    it need not be built; an equal name is left to :func:`keep_smallest`."""
     return len(examples) >= limit and str(examples[-1]["file_name"]) < file_name

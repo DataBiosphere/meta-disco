@@ -328,13 +328,15 @@ def test_a_runs_conflicts_files_without_samples_and_examples_are_in_file_order_w
         report = go(run_dir, tmp_path / name, evidence, table)
         outputs.append(
             (
+                [r["file_name"] for r in iter_reconciled_artifact(run_dir, SAMPLE_CONFLICTS_FILE)],
                 conflict_tsv(iter_reconciled_artifact(run_dir, SAMPLE_CONFLICTS_FILE)),
                 [r["file_name"] for r in iter_reconciled_artifact(run_dir, FILES_WITHOUT_SAMPLES_FILE)],
                 report[SAMPLES_FIELD]["by_dataset"][DATASET],
             )
         )
     assert outputs[0] == outputs[1]
-    tsv, without, block = outputs[0]
+    conflicts, tsv, without, block = outputs[0]
+    assert conflicts == [f"f{n}.bam" for n in conflicting]
     assert [line.split("\t")[3] for line in tsv.splitlines()[1::2]] == [f"f{n}.bam" for n in conflicting]
     assert without == ["f20.bam", "f21.bam", "f22.bam"]
     assert block["conflict_examples"] == [f"f{n}.bam" for n in range(1, MAX_EXAMPLES + 1)]
@@ -507,9 +509,36 @@ def test_each_activity_keeps_its_own_disagreement_examples():
         report._check_parents(DATASET, f"a{n}.vcf.gz", child_says, step("VariantCallActivity"))
     report._check_parents(DATASET, "b.cram", child_says, step("AlignmentActivity"))
     assert report.parent_disagreements[DATASET] == {"VariantCallActivity": MAX_EXAMPLES + 1, "AlignmentActivity": 1}
-    examples = report.parent_examples[DATASET]
-    assert [e["file_name"] for e in examples["AlignmentActivity"]] == ["b.cram"]
-    assert [e["file_name"] for e in examples["VariantCallActivity"]] == [f"a{n}.vcf.gz" for n in range(MAX_EXAMPLES)]
+    examples = report.to_dict({}, {})["by_dataset"][DATASET]["parent_disagreement_examples"]
+    assert [(e["activity"], e["file_name"]) for e in examples] == [
+        ("AlignmentActivity", "b.cram"),
+        *(("VariantCallActivity", f"a{n}.vcf.gz") for n in range(MAX_EXAMPLES)),
+    ]
+
+
+def test_a_conflicts_sources_are_listed_in_one_order_whatever_order_they_arrived_in():
+    one, two = (
+        table_says(coriell("HG00096"), column="sample_id"),
+        table_says(coriell("HG00097"), column="participant_id"),
+    )
+    rows = []
+    for table in ([one, two], [two, one]):
+        report = SampleReport(identifier_rules())
+        report.settle(record(1), {}, table, "file-1", None, None)
+        (row,) = report.conflicts
+        rows.append(row)
+    assert rows[0] == rows[1]
+    assert [s["named_by"][0]["source"]["column"] for s in rows[0]["sources"]] == ["participant_id", "sample_id"]
+
+
+def test_the_name_disagreements_shown_are_the_smallest_file_names_whatever_order_files_settle_in():
+    report = SampleReport(identifier_rules())
+    for n in reversed(range(MAX_EXAMPLES + 2)):
+        row = record(n)
+        row["file_name"] = f"NA1287{n}.cram"
+        report.settle(row, {}, [table_says(coriell("HG00096"))], f"file-{n}", None, None)
+    assert report.name_disagreements[DATASET] == MAX_EXAMPLES + 2
+    assert [e["file_name"] for e in report.name_examples[DATASET]] == [f"NA1287{n}.cram" for n in range(MAX_EXAMPLES)]
 
 
 def test_parents_in_one_role_naming_different_lists_pass_nothing():

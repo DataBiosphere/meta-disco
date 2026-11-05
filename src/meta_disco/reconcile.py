@@ -21,8 +21,8 @@ re-infers or fetches, so answering a review item costs a reconcile, not a corpus
 **The join** is an equality lookup on the key each evidence envelope names
 (``target_key``), against that field of our output records. A line whose key value is
 carried by exactly one record attaches to it; by two or more, to none — it is counted
-ambiguous, and the report names every carrier for a few such lines per file, the smallest (the
-#371 problem, seen from the evidence side). The join runs within the envelope's target
+ambiguous, and the report names every carrier for the few such lines per file that sort first by
+content (``stable_order.example_order``; the #371 problem, seen from the evidence side). The join runs within the envelope's target
 dataset when it names one.
 An evidence file none of whose lines match is an error naming its source and dataset:
 silence is not success (5.3). The record's identity in the report is the repository's

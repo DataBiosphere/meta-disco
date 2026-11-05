@@ -291,7 +291,8 @@ def render_report(
         lines.append("_No violations._")
     else:
         shown: Counter = Counter()
-        for v in violations:
+        # By rule, then file, not the order the run's records arrived in (#732).
+        for v in sorted(violations, key=lambda v: (v.rule_id, str(v.file_name), str(v.md5sum), v.offending_field)):
             if shown[v.rule_id] >= examples:
                 continue
             shown[v.rule_id] += 1
