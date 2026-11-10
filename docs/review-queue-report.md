@@ -1,6 +1,6 @@
 # Review queue
 
-Source values the slot map or the entity map routed to a slot but that no authored translation rule reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per source, dataset, table and column it was found in; "rule it would use" names the seeded rule that matches it, or — where none does. For a donor's slot (phenotypic_sex, genetic_ancestry, organism_type, reported_ethnicity), files counts donors, and for a sample's slot (biosample_type), samples, each dataset's identifiers apart. 155 listed, from evidence under data/source_evidence and data/entity_evidence.
+Source values the slot map or the entity map routed to a slot but that no authored translation rule reads yet, so they make no claim (contract 5.2), by kind of source and then by slot. A value is listed once per source, dataset, table and column it was found in; "rule it would use" names the seeded rule that matches it, or — where none does. For a donor's slot (phenotypic_sex, genetic_ancestry, organism_type, reported_ethnicity), files counts donors, and for a sample's slot (biosample_type), samples, each dataset's identifiers apart. 153 listed, from evidence under data/source_evidence and data/entity_evidence.
 
 ## Published: the catalog's published columns
 
@@ -34,8 +34,6 @@ Source values the slot map or the entity map routed to a slot but that no author
 | 462 | `'alignments'` | `anvil` | `AnVIL_HPRC_R2` | `alignments_winnowmap` |  | data_type.alignments |
 | 462 | `'chains'` | `anvil` | `AnVIL_HPRC_R2` | `chains_to_chm13_mc` |  | data_type.chains |
 | 462 | `'chains'` | `anvil` | `AnVIL_HPRC_R2` | `chains_to_grch38_mc` |  | data_type.chains |
-| 462 | `'gaps'` | `anvil` | `AnVIL_HPRC_R2` | `gaps` |  | data_type.gaps |
-| 462 | `'sequences'` | `anvil` | `AnVIL_HPRC_R2` | `t2t_sequences` |  | data_type.sequences |
 | 25 | `'barcode to sample mapping'` | `anvil` | `AnVIL_IGVF_Mouse_R1` | `file` | `content_type` | — |
 | 12 | `'alignments'` | `anvil` | `AnVIL_HPRC_R2` | `alignments_v2` |  | data_type.alignments |
 | 11 | `'Nanopore reads'` | `anvil` | `AnVIL_IGVF_Mouse_R1` | `file` | `content_type` | — |
@@ -236,8 +234,10 @@ Every authored translation rule, by slot and most files first: the source values
 | 466 | 0 | 466 | 0 | data_type.assembly | `any` | `'assembly'` | data_type: assembly | The `assembly` table-name span; its files are the de-novo assemblies (.fa.gz). |
 | 462 | 0 | 462 | 0 | data_type.censat | `any` | `'censat'` | data_type: annotations | Centromeric satellite annotation tracks (BED) of an assembly. |
 | 462 | 0 | 462 | 0 | data_type.censat_centromeres | `any` | `'censat_centromeres'` | data_type: annotations | Centromere annotation tracks (BED) of an assembly. |
+| 462 | 0 | 462 | 0 | data_type.gaps | `anvil / AnVIL_HPRC_R2` | `'gaps'` | data_type: annotations | The `gaps` table-name span (#765): each file is a BED of one assembly's gaps, on the assembly's own sequences. HPRC files it under the assembly's `annotation/chrom_assignment/` folder, and the HPRC Data Explorer's annotations catalog lists it as "ChromAlias Gaps". Scoped to this dataset: elsewhere the word need not name an assembly's annotation. |
 | 462 | 0 | 462 | 0 | data_type.liftoff | `any` | `'liftoff'` | data_type: annotations | Gene annotations lifted onto an assembly with Liftoff (GFF3). |
 | 462 | 0 | 462 | 0 | data_type.segdups | `any` | `'segdups'` | data_type: annotations | Segmental duplication tracks (BED) of an assembly. |
+| 462 | 0 | 462 | 0 | data_type.sequences | `anvil / AnVIL_HPRC_R2` | `'sequences'` | data_type: annotations | The `t2t_sequences` table's span (#765): each file (`.t2t_chromosomes.tsv`) is a table of one assembly's telomere-to-telomere sequences, each with its chromosome and its gaps. HPRC files it under the assembly's `annotation/chrom_assignment/` folder, and the HPRC Data Explorer's annotations catalog lists it as "ChromAlias T2T". Scoped to this dataset: elsewhere a `sequences` table could hold the sequences themselves. |
 | 304 | 0 | 304 | 0 | data_type.kallisto_single_cell_rnaseq_output | `anvil / AnVIL_IGVF_Mouse_R1` | `'kallisto single cell RNAseq output'` | data_modality: transcriptomic | IGVF's `file.content_type`. kallisto's single-cell RNA-seq output, as IGVF names it, so RNA. Most of these files are titled snRNA-seq alone, which already says transcriptomic; on the two of the SHARE-seq pair it is what says which half the file holds (#570). Scoped to this dataset, the one whose vocabulary it is. No data_type: the tar is a bundle of kallisto's outputs — the cached tar heads hold, variously, BUS files, `matrix.ec`, `kb_info.json` and cells × genes `.mtx` matrices — not one data type, though IGVF files it as a cell-by-gene `MatrixFile`. |
 | 288 | 0 | 288 | 0 | data_type.unaligned_reads_with_5mcg_5hmcg_mods | `any` | `'unaligned reads with 5mCG_5hmCG mods'` | data_type: reads | Reads carrying base-modification calls; the modification tags do not change the data type. |
 | 230 | 0 | 230 | 0 | data_type.bam | `any` | `'bam'` | nothing (reviewed, no claim) | A file format, not a data type: the kinnex table's data_type column holds what its filetype column should. Ruled to mean nothing here rather than left queued. |
