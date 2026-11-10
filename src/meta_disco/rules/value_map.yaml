@@ -443,6 +443,13 @@ rows:
     seeded_from: ["anvil/anvil15/AnVIL_IGVF_Mouse_R1/20260928T183417Z"]
   - id: "data_type.gaps"
     match: {slot: data_type, value: "gaps"}
+    scope: {source: anvil, dataset: AnVIL_HPRC_R2}
+    declares: {data_type: annotations}
+    reason: >-
+      The `gaps` table-name span (#765): each file is a BED of one assembly's gaps, on the
+      assembly's own sequences. HPRC files it under the assembly's `annotation/chrom_assignment/`
+      folder, and the HPRC Data Explorer's annotations catalog lists it as "ChromAlias Gaps".
+      Scoped to this dataset: elsewhere the word need not name an assembly's annotation.
     seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
   - id: "data_type.kallisto_single_cell_rnaseq_output"
     match: {slot: data_type, value: "kallisto single cell RNAseq output"}
@@ -474,6 +481,14 @@ rows:
     seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
   - id: "data_type.sequences"
     match: {slot: data_type, value: "sequences"}
+    scope: {source: anvil, dataset: AnVIL_HPRC_R2}
+    declares: {data_type: annotations}
+    reason: >-
+      The `t2t_sequences` table's span (#765): each file (`.t2t_chromosomes.tsv`) is a table of
+      one assembly's telomere-to-telomere sequences, each with its chromosome and its gaps. HPRC
+      files it under the assembly's `annotation/chrom_assignment/` folder, and the HPRC Data
+      Explorer's annotations catalog lists it as "ChromAlias T2T". Scoped to this dataset:
+      elsewhere a `sequences` table could hold the sequences themselves.
     seeded_from: ["anvil/anvil15/AnVIL_HPRC_R2/20260920T175642Z"]
   - id: "data_type.sparse_gene_count_matrix"
     match: {slot: data_type, value: "sparse gene count matrix"}

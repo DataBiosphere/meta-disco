@@ -190,7 +190,7 @@ activities:
     reason: >-
       Features found in one genome sequence and written in its own coordinates (HPRC_R2's
       RepeatMasker, centromeric satellite, segmental duplication and liftoff gene annotations of
-      each assembly, #682) describe that sequence, so they take every dimension but their own
+      each assembly, #682, and its gaps and telomere-to-telomere sequences, #765) describe that sequence, so they take every dimension but their own
       kind, and its samples. An annotation of a genome sequence is not a callset, so the
       sequence's variant kind and origin pass too; a callset's annotation is a
       VariantProcessingActivity, which is why the input is a sequence or an assembly only.
