@@ -1008,8 +1008,6 @@ SEEDED_IN_BUNDLED_TABLE = [
     "data_modality.transcriptomic",
     "data_type.alignments",
     "data_type.chains",
-    "data_type.gaps",
-    "data_type.sequences",
 ]
 
 
@@ -1019,7 +1017,7 @@ def test_the_bundled_table_covers_every_hprc_fixture_value(hprc_fixture_root):
     queued = review_queue(hprc_fixture_root, load_value_map(), datasets=HPRC_DATASETS)
     assert all(e.row_id is not None for e in queued), [e.raw_value for e in queued if e.row_id is None]
     assert sorted({e.row_id for e in queued if e.row_id is not None}) == SEEDED_IN_BUNDLED_TABLE
-    assert len(queued) == 7
+    assert len(queued) == 5
 
 
 def test_the_bundled_table_covers_hprc_and_leaves_the_named_values_seeded():
