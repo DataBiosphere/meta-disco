@@ -284,7 +284,11 @@ def _cells_of(named: Named, rule: SampleAnswer) -> bool:
         return False
     # ``ClaimSource.to_dict`` omits a null member.
     sources = [a["source"] for a in named.named_by]
-    return all(s.get("table") == rule.table and s.get("column") in rule.columns for s in sources)
+    # A source's dataset may differ from the file's: evidence naming none joins every dataset's files.
+    return all(
+        (s.get("dataset"), s.get("table")) == (rule.dataset, rule.table) and s.get("column") in rule.columns
+        for s in sources
+    )
 
 
 class Settled(NamedTuple):

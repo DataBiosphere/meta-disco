@@ -150,6 +150,14 @@ def test_a_cell_of_another_column_or_table_or_dataset_answers_nothing(curator):
     assert answered(curator, [cell(MOTHER), activity_says(CHILD)], name, dataset="AnVIL_OTHER") is None
 
 
+def test_a_cell_another_datasets_evidence_gives_the_file_answers_nothing(curator):
+    """Evidence naming no target dataset joins every dataset's files, so a file's cell may be another dataset's."""
+    own = cell(MOTHER)
+    attribution = {**own.named_by[0], "source": {**own.named_by[0]["source"], "dataset": "AnVIL_OTHER"}}
+    foreign = Named(own.members, (attribution,), kind=own.kind)
+    assert answered(curator, [foreign, activity_says(CHILD)], "NA24695_CTTGTA_L002_R1_034.fastq.gz") is None
+
+
 def test_a_header_alone_beside_the_activity_answers_nothing(curator):
     """The rule answers with its table's cells; a header and an activity disagreeing stand."""
     assert answered(curator, [header_says(MOTHER), activity_says(CHILD)], "NA24695.cram") is None
