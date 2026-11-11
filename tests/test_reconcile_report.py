@@ -616,7 +616,7 @@ def test_the_samples_section_counts_how_each_dataset_settled(tmp_path, evidence,
         "| table_only | activity_only | fileset_only | inherited |"
     )
     assert header in md
-    assert f"| `{DATASET}` | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 1 | 0 |" in md
+    assert f"| `{DATASET}` | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 1 | 0 |" in md
     assert "None in this run." in md
     assert "`Sample` (1)" in md
     # Every table value no rule recognises, with its table, column and files (contract 5.2).

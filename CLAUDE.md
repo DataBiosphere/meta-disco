@@ -185,7 +185,7 @@ reworded title renames a member: name one by its value (`DataModalityEnum("genom
   describes a target state. The evidence file (#401, amended by #421), the slot map
   (#369), the translation table (#414) and the reconcile stage (#432, which absorbed
   read-sources) exist; inference reads neither the evidence nor the table, reconcile
-  reads both. Curator rules (#397) do not exist yet. Its Open section lists what is
+  reads both. One curator rule exists, for a file's samples (#777); general curator rules (#397) do not. Its Open section lists what is
   still undecided. Epic #391 tracks the work.
 
 - **What the code does today, which the contract does not replace:**
@@ -501,6 +501,14 @@ reworded title renames a member: name one by its value (`DataModalityEnum("genom
     `.psam`'s settled samples as one more source (`SampleReport.pair`, before inheritance), credited
     `samples_from_fileset_sample_table` with the `.psam`'s `sample_table_key`. No step is crossed: the four are
     written together, so no `generated_by` is written.
+  - **A curator rule may answer a samples conflict** (contract 1.6, 4.7, #777): `rules/curator_rules.yaml`,
+    loaded by `curator_rules` and applied by `reconcile_samples.answer`. Its one row answers ANVIL_HPRC's parents'
+    reads, where AnVIL's activity names the child: with the samples the file's other sources agree on, where each
+    table among them is the row's (`sample`, `maternal_id` or `paternal_id`) and the file's own content (its header,
+    for these CRAMs a read group) or its name confirms them (a name only checks, and only a single sample; `same_sample` pairs a name's Coriell id with the table's GIAB name
+    for that check alone).
+    The answer is credited `wrangler_annotation` with the rule's id, counted `answered`, and the file stays in
+    `sample_conflicts.ndjson.gz` with every source, `answered_by` the rule. Rules for the eight dimensions are #397's.
   - **Donors and samples are records keyed by their identifier** (#693, ADR-0002 decision 1 as
     amended): reconcile (`reconcile_entities`) writes `reconciled/donors.ndjson.gz`, a
     `DonorRecord` per donor with `phenotypic_sex`, `genetic_ancestry` and more (`models.DONOR_FIELDS`)

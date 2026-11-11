@@ -68,6 +68,8 @@ def test_one_entry_shape(tmp_path):
     sources = entry.slots["platform"]
     assert [(s.form, s.value) for s in sources] == [(SOURCE_CELL, "platform"), (SOURCE_TABLE_NAME, "hifi")]
     assert slot_map.cells("D", "hifi") == {"platform"}
+    assert slot_map.cells("D", "hifi", "platform") == {"platform"}
+    assert slot_map.cells("D", "hifi", "samples") == set()
 
 
 def test_a_dataset_with_nothing_to_map_is_simply_absent(tmp_path):

@@ -975,7 +975,8 @@ classes:
       One source that named a step, an input (ADR-0002 decision 6) or a file's samples
       (#357): sources that agree are each listed. Samples inherited from a parent (#668)
       name the step crossed and the parent, as an inherited claim does; samples a PLINK
-      fileset's sample table gave (#751) name the table.
+      fileset's sample table gave (#751) name the table. A curator rule answering a
+      samples conflict (#777) is listed after the sources it answered with.
     slots:
       - source_type
       - rule_id
@@ -998,7 +999,9 @@ classes:
           for inherited samples, `code_rules.SAMPLES_INHERITED_FROM_PARENT`'s id; for samples
           the repository's record of the step names (#698),
           `code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE`'s id; for samples a PLINK fileset's sample
-          table gave (#751), `code_rules.SAMPLES_FROM_FILESET_SAMPLE_TABLE`'s id.
+          table gave (#751), `code_rules.SAMPLES_FROM_FILESET_SAMPLE_TABLE`'s id; for samples a
+          curator rule answered a conflict with (#777, contract 4.7), that rule's id in
+          `rules/curator_rules.yaml`, its `source_type` `wrangler_annotation`.
       # On inherited samples only (#668): the step crossed, the role its parent plays in
       # it, and the parents' record keys. Required on a step, not here.
       activity:
@@ -1007,7 +1010,7 @@ classes:
   SampleReference:
     description: >-
       Which samples a file's data comes from (#357): the run's sample list it points to,
-      how many members that list has, and every source that named it. A joint VCF names
+      how many members that list has, and the sources that named it. A joint VCF names
       thousands of samples, so
       the members are written as a `SampleList` and each file points to one: once in each
       producer file that points to it (`sample_lists`), and once across the run in the
@@ -1033,7 +1036,9 @@ classes:
           Every source that named these samples: the file's own content, a header or a sample
           map's rows (`code_rules.SAMPLE_RULES`),
           a submitter-table column, the file's parent across a step that passes samples
-          (#668), or each of them where they agree.
+          (#668), or each of them where they agree. Where a curator rule answered a conflict
+          (#777), the sources it answered with, then the rule (`wrangler_annotation`, no
+          `source`); the source it overruled is listed only in `sample_conflicts.ndjson.gz`.
 
   ExternalList:
     description: >-
@@ -1682,7 +1687,8 @@ slots:
   samples:
     description: >-
       The samples the file's data comes from (#357), as a pointer to the run's sample list;
-      null where no source names a sample, or where its sources name different ones.
+      null where no source names a sample, or where its sources name different ones and no
+      curator rule answers them (#777).
     range: SampleReference
     inlined: true
 

@@ -1044,7 +1044,7 @@ class ClassificationRecord(ConfiguredBaseModel):
     dataset_title: Optional[str] = Field(default=None, description="""Title of the dataset the file belongs to.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     classifications: Classifications = Field(default=..., description="""The eight classified dimensions for this file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     generated_by: Optional[GeneratedBy] = Field(default=None, description="""The step that made the file and the inputs it used, by role (ADR-0002 decisions 3, 6, #580); null where no step is recorded.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList', 'RebuiltList']} })
-    samples: Optional[SampleReference] = Field(default=None, description="""The samples the file's data comes from (#357), as a pointer to the run's sample list; null where no source names a sample, or where its sources name different ones.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList']} })
+    samples: Optional[SampleReference] = Field(default=None, description="""The samples the file's data comes from (#357), as a pointer to the run's sample list; null where no source names a sample, or where its sources name different ones and no curator rule answers them (#777).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList']} })
 
 
 class Classifications(ConfiguredBaseModel):
@@ -1999,7 +1999,7 @@ class ActivityInput(ConfiguredBaseModel):
 
 class Attribution(ConfiguredBaseModel):
     """
-    One source that named a step, an input (ADR-0002 decision 6) or a file's samples (#357): sources that agree are each listed. Samples inherited from a parent (#668) name the step crossed and the parent, as an inherited claim does; samples a PLINK fileset's sample table gave (#751) name the table.
+    One source that named a step, an input (ADR-0002 decision 6) or a file's samples (#357): sources that agree are each listed. Samples inherited from a parent (#668) name the step crossed and the parent, as an inherited claim does; samples a PLINK fileset's sample table gave (#751) name the table. A curator rule answering a samples conflict (#777) is listed after the sources it answered with.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
          'slot_usage': {'activity': {'name': 'activity', 'required': False},
@@ -2022,13 +2022,18 @@ class Attribution(ConfiguredBaseModel):
                                                    "id; for samples a PLINK fileset's "
                                                    'sample table gave (#751), '
                                                    "`code_rules.SAMPLES_FROM_FILESET_SAMPLE_TABLE`'s "
-                                                   'id.',
+                                                   'id; for samples a curator rule '
+                                                   'answered a conflict with (#777, '
+                                                   "contract 4.7), that rule's id in "
+                                                   '`rules/curator_rules.yaml`, its '
+                                                   '`source_type` '
+                                                   '`wrangler_annotation`.',
                                     'name': 'rule_id',
                                     'required': True},
                         'source_type': {'name': 'source_type', 'required': True}}})
 
     source_type: SourceTypeEnum = Field(default=..., description="""Kind of source that produced this claim (provenance, #90; populated on every claim by #392) — see `source_type_enum` for the kinds. Absent on a synthetic marker and on the note left by a failed fetch or input contract, neither of which is a claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
-    rule_id: str = Field(default=..., description="""The rule or translation row that turned what the source says into this step, input or sample list: for inference's, a `code_rules.EDGE_RULES` id for a step or input and a `code_rules.SAMPLE_RULES` id for samples; for a submitter table's samples, the identifier rule (`rules/sample_namespaces.yaml`) that read the cell; for inherited samples, `code_rules.SAMPLES_INHERITED_FROM_PARENT`'s id; for samples the repository's record of the step names (#698), `code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE`'s id; for samples a PLINK fileset's sample table gave (#751), `code_rules.SAMPLES_FROM_FILESET_SAMPLE_TABLE`'s id.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
+    rule_id: str = Field(default=..., description="""The rule or translation row that turned what the source says into this step, input or sample list: for inference's, a `code_rules.EDGE_RULES` id for a step or input and a `code_rules.SAMPLE_RULES` id for samples; for a submitter table's samples, the identifier rule (`rules/sample_namespaces.yaml`) that read the cell; for inherited samples, `code_rules.SAMPLES_INHERITED_FROM_PARENT`'s id; for samples the repository's record of the step names (#698), `code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE`'s id; for samples a PLINK fileset's sample table gave (#751), `code_rules.SAMPLES_FROM_FILESET_SAMPLE_TABLE`'s id; for samples a curator rule answered a conflict with (#777, contract 4.7), that rule's id in `rules/curator_rules.yaml`, its `source_type` `wrangler_annotation`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
     activity_id: Optional[str] = Field(default=None, description="""The source's own id for the step (`anvil_activity.activity_id`, or `anvil_sequencingactivity.sequencingactivity_id`), where it gives one.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow', 'Attribution']} })
     source: Optional[ClaimSource] = Field(default=None, description="""The external source that produced this claim, for a claim that is not from one of our rules. Absent on a rule or content claim, which carries `rule_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
     activity: Optional[ActivityTypeEnum] = Field(default=None, description="""The kind of step that made the file (`activity_type_enum`); what passes from each input role is declared per term in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'GeneratedBy', 'Attribution']} })
@@ -2039,13 +2044,13 @@ class Attribution(ConfiguredBaseModel):
 
 class SampleReference(ConfiguredBaseModel):
     """
-    Which samples a file's data comes from (#357): the run's sample list it points to, how many members that list has, and every source that named it. A joint VCF names thousands of samples, so the members are written as a `SampleList` and each file points to one: once in each producer file that points to it (`sample_lists`), and once across the run in the reconciled `sample_lists.ndjson.gz`.
+    Which samples a file's data comes from (#357): the run's sample list it points to, how many members that list has, and the sources that named it. A joint VCF names thousands of samples, so the members are written as a `SampleList` and each file points to one: once in each producer file that points to it (`sample_lists`), and once across the run in the reconciled `sample_lists.ndjson.gz`.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
     list_id: str = Field(default=..., description="""The `SampleList` this file points to: a digest of its sorted members, so two files naming the same samples point to the same list.""", json_schema_extra = { "linkml_meta": {'domain_of': ['SampleReference', 'SampleList']} })
     count: int = Field(default=..., description="""How many members the list has.""", ge=1, json_schema_extra = { "linkml_meta": {'domain_of': ['SampleReference']} })
-    named_by: list[Attribution] = Field(default=..., description="""Every source that named these samples: the file's own content, a header or a sample map's rows (`code_rules.SAMPLE_RULES`), a submitter-table column, the file's parent across a step that passes samples (#668), or each of them where they agree.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy',
+    named_by: list[Attribution] = Field(default=..., description="""Every source that named these samples: the file's own content, a header or a sample map's rows (`code_rules.SAMPLE_RULES`), a submitter-table column, the file's parent across a step that passes samples (#668), or each of them where they agree. Where a curator rule answered a conflict (#777), the sources it answered with, then the rule (`wrangler_annotation`, no `source`); the source it overruled is listed only in `sample_conflicts.ndjson.gz`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy',
                        'ActivityInput',
                        'SampleReference',
                        'Synonym',
