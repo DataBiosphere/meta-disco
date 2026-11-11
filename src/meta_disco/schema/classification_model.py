@@ -2022,13 +2022,18 @@ class Attribution(ConfiguredBaseModel):
                                                    "id; for samples a PLINK fileset's "
                                                    'sample table gave (#751), '
                                                    "`code_rules.SAMPLES_FROM_FILESET_SAMPLE_TABLE`'s "
-                                                   'id.',
+                                                   'id; for samples a curator rule '
+                                                   'answered a conflict with (#777, '
+                                                   "contract 4.7), that rule's id in "
+                                                   '`rules/curator_rules.yaml`, its '
+                                                   '`source_type` '
+                                                   '`wrangler_annotation`.',
                                     'name': 'rule_id',
                                     'required': True},
                         'source_type': {'name': 'source_type', 'required': True}}})
 
     source_type: SourceTypeEnum = Field(default=..., description="""Kind of source that produced this claim (provenance, #90; populated on every claim by #392) — see `source_type_enum` for the kinds. Absent on a synthetic marker and on the note left by a failed fetch or input contract, neither of which is a claim.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
-    rule_id: str = Field(default=..., description="""The rule or translation row that turned what the source says into this step, input or sample list: for inference's, a `code_rules.EDGE_RULES` id for a step or input and a `code_rules.SAMPLE_RULES` id for samples; for a submitter table's samples, the identifier rule (`rules/sample_namespaces.yaml`) that read the cell; for inherited samples, `code_rules.SAMPLES_INHERITED_FROM_PARENT`'s id; for samples the repository's record of the step names (#698), `code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE`'s id; for samples a PLINK fileset's sample table gave (#751), `code_rules.SAMPLES_FROM_FILESET_SAMPLE_TABLE`'s id.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
+    rule_id: str = Field(default=..., description="""The rule or translation row that turned what the source says into this step, input or sample list: for inference's, a `code_rules.EDGE_RULES` id for a step or input and a `code_rules.SAMPLE_RULES` id for samples; for a submitter table's samples, the identifier rule (`rules/sample_namespaces.yaml`) that read the cell; for inherited samples, `code_rules.SAMPLES_INHERITED_FROM_PARENT`'s id; for samples the repository's record of the step names (#698), `code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE`'s id; for samples a PLINK fileset's sample table gave (#751), `code_rules.SAMPLES_FROM_FILESET_SAMPLE_TABLE`'s id; for samples a curator rule answered a conflict with (#777, contract 4.7), that rule's id in `rules/curator_rules.yaml`, its `source_type` `wrangler_annotation`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'Attribution']} })
     activity_id: Optional[str] = Field(default=None, description="""The source's own id for the step (`anvil_activity.activity_id`, or `anvil_sequencingactivity.sequencingactivity_id`), where it gives one.""", json_schema_extra = { "linkml_meta": {'domain_of': ['LineageRow', 'Attribution']} })
     source: Optional[ClaimSource] = Field(default=None, description="""The external source that produced this claim, for a claim that is not from one of our rules. Absent on a rule or content claim, which carries `rule_id`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['EvidenceFileEnvelope', 'Evidence', 'Attribution']} })
     activity: Optional[ActivityTypeEnum] = Field(default=None, description="""The kind of step that made the file (`activity_type_enum`); what passes from each input role is declared per term in `rules/activities.yaml`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['Evidence', 'GeneratedBy', 'Attribution']} })

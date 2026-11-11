@@ -466,8 +466,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     before a reconciled artifact is deployed. Review answers a conflict with a curator rule (4.7) or leaves
     it standing; either is a recorded outcome. Answering costs a reconcile (6.4), never a corpus run.
     The conflicts are listed by `make reconcile-report` (#395), by their competing values but not yet the
-    rule behind each. Until curator rules (#397) exist, this is a stated rule and not a gate; the gate
-    belongs with `make check-catalog` (#405).
+    rule behind each. Until curator rules (#397) answer more than one kind of samples conflict (#777),
+    this is a stated rule and not a gate; the gate belongs with `make check-catalog` (#405).
 
 ## 6. The pipeline
 
@@ -652,7 +652,11 @@ importer's half is built — 7.12 is enforced (below), and the published importe
   SGDP folders and nothing else, and `gvcf_layout` the T2T joint-calling run's map names; a tar naming another
   map is counted `map_not_in_layout`. The 1000 Genomes tars, whose maps are held outside AnVIL (2.11), are
   not rebuilt.
-- **No curator rule exists** (4.7, #397). Every conflict stands unanswered, which 7.13 makes deliverable.
+- **One curator rule exists, for a file's samples** (4.7, #777). `rules/curator_rules.yaml`'s one row answers
+  ANVIL_HPRC's parents' reads, whose activity names the child while the sample table's `maternal_id` or
+  `paternal_id` and the file's read group or name name the parent; each stays listed with every source,
+  `answered_by` the rule. Every other conflict, the eight dimensions' included, stands unanswered (#397), which
+  7.13 makes deliverable.
 - **5.1 is met for values, not rules.** `make reconcile-report` (#395) lists each conflict's competing values
   per input, counted per distinct set; the rule behind each value is on the reconciled record, not in the list.
 

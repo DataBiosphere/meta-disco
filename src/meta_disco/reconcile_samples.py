@@ -47,6 +47,12 @@ or a parent with none, pass nothing.
 
 Across any other step the child keeps its own samples, and a child and parent whose lists
 disagree are counted (:func:`lists_disagree`): a CRAM whose ``@RG SM`` is not its reads' sample.
+
+**A curator rule may answer a conflict** (contract 4.7, #777): ``rules/curator_rules.yaml``'s
+``samples`` rows (``curator_rules``). Which rule answers a file is judged once, from its own sources
+(:func:`answering_rule`); each time the file settles, the rule answers with the samples every source but
+the activity names (:func:`answer`), a parent's or a fileset's included. An answered file takes those, the
+rule cited after them, and is still listed with every source, ``answered`` by the rule.
 """
 
 from __future__ import annotations
@@ -58,10 +64,12 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
 from itertools import groupby
+from typing import NamedTuple
 
 from . import activities, code_rules
+from .curator_rules import CuratorRules, SampleAnswer
 from .edges import distinct, parent_node
-from .models import SOURCE_CONTENT_READ, SOURCE_DERIVATION_INHERITANCE, ClaimSource
+from .models import SOURCE_CONTENT_READ, SOURCE_DERIVATION_INHERITANCE, SOURCE_WRANGLER_ANNOTATION, ClaimSource
 from .reconcile_inherit import PARENT_CONFLICT, Step, parent_first
 from .reconcile_lineage import CHILD_NOT_IN_RUN, CHILD_SEVERAL_MATCH, LineageJoin
 from .records import identity_from
@@ -87,10 +95,11 @@ TABLE_ONLY = "table_only"
 ACTIVITY_ONLY = "activity_only"  # only the repository's record of the step that generated it (#698)
 FILESET_ONLY = "fileset_only"  # only its PLINK fileset's sample table (#751)
 INHERITED = "inherited"  # only the file's parent named them (#668)
+ANSWERED = "answered"  # a curator rule answered the sources' conflict (#777)
 CONFLICT = "conflict"  # two sources named different members in one namespace
 INCOMPARABLE = "incomparable"  # sources named different members, sharing no namespace
 NONE = "none"  # no source named a sample
-OUTCOMES = (AGREED, HEADER_ONLY, TABLE_ONLY, ACTIVITY_ONLY, FILESET_ONLY, INHERITED, CONFLICT, INCOMPARABLE)
+OUTCOMES = (AGREED, HEADER_ONLY, TABLE_ONLY, ACTIVITY_ONLY, FILESET_ONLY, INHERITED, ANSWERED, CONFLICT, INCOMPARABLE)
 
 # Which kind of source named a file's samples, in the order ``named_by`` lists them.
 # ``header`` is whatever inference read from the file's own content, a sample map's rows included.
@@ -229,6 +238,65 @@ def settle(named: Iterable[Named]) -> tuple[str, dict | None, frozenset[Identifi
     return outcome, reference(members, named_by, known=known), members
 
 
+def answering_rule(
+    curator: CuratorRules, named: Iterable[Named], dataset: str, file_name: str, rules: IdentifierRuleSet
+) -> SampleAnswer | None:
+    """The curator rule of ``dataset`` that would answer a file's own sources, ``named``; None where none would.
+
+    A rule would where the sources but the activity are the file's header and one or more cells of the rule's
+    table and columns, agreeing as :func:`settle` settles them, with the header among them or the file name
+    agreeing (``SampleAnswer.name_agrees``); :func:`answer` answers only a conflict with an activity. The
+    loader refuses two rules one file could match (``curator_rules``).
+    """
+    kept = [n for n in named if n.kind != ACTIVITY]
+    tables = [n for n in kept if n.kind != HEADER]
+    if not tables:
+        return None
+    _, samples, members = settle(kept)
+    if samples is None:
+        return None
+    confirmed = any(n.kind == HEADER for n in kept)
+    in_name = None if confirmed else rules.in_name_one(file_name)
+    for rule in curator.samples:
+        if rule.dataset != dataset or not all(_cells_of(n, rule) for n in tables):
+            continue
+        if confirmed or rule.name_agrees(in_name, members):
+            return rule
+    return None
+
+
+def answer(rule: SampleAnswer, named: Iterable[Named]) -> Settled | None:
+    """``named``'s samples, ``answered`` by ``rule``: those of every source but the activity, named by each and then
+    by the rule; None where those differ, or no activity is among them."""
+    named = list(named)
+    kept = [n for n in named if n.kind != ACTIVITY]
+    _, samples, members = settle(kept)
+    if samples is None or len(kept) == len(named):
+        return None
+    named_by = [*samples["named_by"], {"source_type": SOURCE_WRANGLER_ANNOTATION, "rule_id": rule.id}]
+    return Settled(ANSWERED, reference(members, named_by, known=samples["list_id"]), members, rule.id)
+
+
+def _cells_of(named: Named, rule: SampleAnswer) -> bool:
+    if named.kind != TABLE:
+        return False
+    # ``ClaimSource.to_dict`` omits a null member.
+    sources = [a["source"] for a in named.named_by]
+    return all(
+        (s.get("dataset"), s.get("table")) == (rule.dataset, rule.table) and s.get("column") in rule.columns
+        for s in sources
+    )
+
+
+class Settled(NamedTuple):
+    """One file's samples as settled: :func:`settle`'s three, and the curator rule that answered a conflict."""
+
+    outcome: str
+    samples: dict | None
+    members: frozenset[Identifier]
+    answered_by: str | None = None
+
+
 @dataclass
 class ActivityLinks:
     """:func:`activity_sources`' result: per record key, the samples its biosample links name; per dataset, what
@@ -340,6 +408,8 @@ class SampleReport:
     """
 
     rules: IdentifierRuleSet
+    # The curator rules that may answer a conflict (#777).
+    curator: CuratorRules
     outcomes: dict[str, Counter] = field(default_factory=lambda: defaultdict(Counter))
     # Per dataset, the files whose name names another sample than the settled members.
     name_disagreements: Counter = field(default_factory=Counter)
@@ -381,6 +451,8 @@ class SampleReport:
     _from_table: dict[str, Named] = field(default_factory=dict, init=False, repr=False)
     # The record keys whose sources named different samples (a conflict, or incomparable).
     _conflicted: set[str] = field(default_factory=set, init=False, repr=False)
+    # Per record key, the curator rule answering its own sources' conflict, judged once in the first pass (#777).
+    _answers: dict[str, SampleAnswer] = field(default_factory=dict, init=False, repr=False)
     # Per child, the parents in conflict that passed it nothing (``PARENT_CONFLICT``), named on its row if it has none;
     # per fileset member, the sample tables in conflict, named apart, since a table is no parent (#751).
     _conflicted_parents: dict[str, list[str]] = field(default_factory=dict, init=False, repr=False)
@@ -393,7 +465,17 @@ class SampleReport:
         activity = self.activity.named.get(identity)
         return ([header] if header is not None else []) + table + ([activity] if activity is not None else [])
 
-    def _hold(self, identity: str, outcome: str, samples: dict | None, members: frozenset[Identifier]) -> None:
+    def _settle(self, identity: str, named: list[Named]) -> Settled:
+        """:func:`settle`, a conflict the curator rule answering ``identity``'s own sources answers ``answered``."""
+        settled = Settled(*settle(named))
+        rule = self._answers.get(identity)
+        if settled.outcome != CONFLICT or rule is None:
+            return settled
+        answered = answer(rule, named)
+        return settled if answered is None else answered
+
+    def _hold(self, identity: str, settled: Settled) -> None:
+        outcome, samples, members, _ = settled
         # Adding a parent's source cannot settle a file's own conflict, so a key once in conflict stays.
         if outcome in (CONFLICT, INCOMPARABLE):
             self._conflicted.add(identity)
@@ -411,11 +493,18 @@ class SampleReport:
         """The first pass: hold ``record``'s own settled samples, and its sources where ``step`` or a table passes it some."""
         named = self._own_sources(identity, record, inference_lists, table)
         dataset = str(record.get("dataset_title") or "")
+        file_name = str(record.get("file_name") or "")
         if step is not None and activities.samples_roles(step.activity):
             self._own[identity] = (named, dataset)
         if identity in self.tables:
             self._member_own[identity] = (named, dataset)
-        self._hold(identity, *settle(named))
+        settled = Settled(*settle(named))
+        if settled.outcome == CONFLICT and (
+            rule := answering_rule(self.curator, named, dataset, file_name, self.rules)
+        ):
+            self._answers[identity] = rule
+            settled = self._settle(identity, named)
+        self._hold(identity, settled)
 
     def _passing(
         self, child: str, sources: tuple[str, ...], conflicted: dict[str, list[str]]
@@ -459,7 +548,7 @@ class SampleReport:
             sources = [*named, passed]
             if member in self._own:
                 self._own[member] = (sources, dataset)
-            self._hold(member, *settle(sources))
+            self._hold(member, self._settle(member, sources))
 
     def inherit(self, steps: Mapping[str, Step]) -> None:
         """Settle each child whose step passes samples with its parents' settled samples, parents first.
@@ -485,7 +574,7 @@ class SampleReport:
                 self.passing[dataset][step.activity][outcome] += 1
             if passed:
                 self._inherited[key] = tuple(passed)
-                self._hold(key, *settle([*named, *passed]))
+                self._hold(key, self._settle(key, [*named, *passed]))
 
     def settle(
         self,
@@ -496,12 +585,14 @@ class SampleReport:
         generated_by: dict | None,
         data_type: str | None,
     ) -> dict | None:
-        """The reconciled ``samples`` for ``record``, counted; None where no source names them, or sources differ.
+        """The reconciled ``samples`` for ``record``, counted; None where no source names them, or sources differ and no
+        curator rule answers them (:func:`answering_rule`).
 
         ``identity`` is its record key, under which :meth:`pair` kept what its fileset's sample table
         passed and :meth:`inherit` what its parents passed; ``generated_by`` its reconciled step (None where it has none), whose parents in
         roles passing no samples are checked against the settled samples (:func:`lists_disagree`).
-        A file whose sources differ is kept in :attr:`conflicts` with every source, and one no
+        A file whose sources differ is kept in :attr:`conflicts` with every source, its outcome ``answered`` and
+        ``answered_by`` the curator rule where one answered it (:func:`answer`), and one no
         source names samples for in :attr:`without_samples`, with ``data_type``, its reconciled one, and
         ``parent_conflict``, the record keys of the parents whose conflict passed it nothing, where any did
         (``sample_table_conflict`` for a fileset's sample tables, #751);
@@ -512,21 +603,22 @@ class SampleReport:
         if identity in self._from_table:
             named.append(self._from_table[identity])
         named += self._inherited.get(identity, ())
-        outcome, samples, members = settle(named)
         dataset = str(record.get("dataset_title") or "")
         file_name = str(record.get("file_name") or "")
+        outcome, samples, members, answered_by = self._settle(identity, named)
         self.outcomes[dataset][outcome] += 1
-        if outcome in (CONFLICT, INCOMPARABLE):
-            self.conflicts.append(
-                {
-                    "dataset_title": dataset,
-                    "file_name": file_name,
-                    "record_key": identity,
-                    **identity_from(record),
-                    "outcome": outcome,
-                    "sources": [_source_row(n) for n in in_source_order(named)],
-                }
-            )
+        if outcome in (CONFLICT, INCOMPARABLE, ANSWERED):
+            row = {
+                "dataset_title": dataset,
+                "file_name": file_name,
+                "record_key": identity,
+                **identity_from(record),
+                "outcome": outcome,
+            }
+            if answered_by is not None:
+                row["answered_by"] = answered_by  # contract 4.7: answered, not erased
+            row["sources"] = [_source_row(n) for n in in_source_order(named)]
+            self.conflicts.append(row)
         elif outcome == NONE:
             row = {
                 "dataset_title": dataset,

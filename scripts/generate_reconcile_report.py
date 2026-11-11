@@ -1260,7 +1260,11 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
         "the activity, or only the fileset's sample table did; *inherited*: only the file's parent did, across "
         "a step that passes samples (an index, checksum, QC report, coverage track, genome annotation or cohort merge, #668, #682), and a "
         "parent agreeing with the file's own sources is listed beside them without changing its column; "
-        "*conflict*: they named different samples in one namespace; *incomparable*: different samples in "
+        "*answered*: they conflicted only because the activity named another sample, and a curator rule "
+        "(`rules/curator_rules.yaml`, contract 4.7, #777) answered with the others', which the file's header or "
+        "name confirms; the file takes their samples and is still listed with every source in "
+        "`docs/sample-conflicts.tsv`, `answered_by` the rule; "
+        "*conflict*: they named different samples in one namespace, unanswered; *incomparable*: different samples in "
         "no shared namespace, which only a crosswalk could join (#361); *none*: no source named any. A conflict "
         "or an incomparable file gets no `samples`. A file whose name names one other sample than its settled "
         "ones is counted under *name disagrees*; a name is a check, never a source.",
@@ -1465,8 +1469,9 @@ def _unreached_section(unreached: list[dict] | None) -> list[str]:
     lines = [
         "## What no route ties",
         "",
-        "The files whose sources named different samples (the *conflict* and *incomparable* columns above) are "
-        "listed with every source in `reconciled/sample_conflicts.ndjson.gz` and, for sending to the repository, "
+        "The files whose sources named different samples (the *answered*, *conflict* and *incomparable* columns "
+        "above) are listed with every source in `reconciled/sample_conflicts.ndjson.gz` and, for sending to the "
+        "repository, "
         "`docs/sample-conflicts.tsv`; the files no source names a sample for (the *none* column) in "
         "`reconciled/files_without_samples.ndjson.gz`, each naming the parents whose conflict left it none "
         "(`parent_conflict`). Below, per dataset, the *samples* and *donors* its entity evidence names (a line "
@@ -1525,7 +1530,8 @@ def _inheritance_section(rows: list[dict] | None) -> list[str]:
     )
 
 
-# The conflicts TSV's columns (#698): one row per file and source attribution, for sending to the repository.
+# The conflicts TSV's columns (#698): one row per file and source attribution, for sending to the repository;
+# ``answered_by`` names the curator rule that answered the file's conflict (#777), blank where none did.
 # ``from_records`` names the records a source took its samples from: the parents' keys of an inherited
 # source (#668), or the sample table's of a PLINK fileset's (#751); blank for any other.
 CONFLICT_COLUMNS = (
@@ -1534,6 +1540,7 @@ CONFLICT_COLUMNS = (
     "file_id",
     "file_name",
     "outcome",
+    "answered_by",
     "source_kind",
     "source_type",
     "table",
@@ -1565,6 +1572,7 @@ def conflict_tsv(conflicts) -> str:
                         row.get("file_id"),
                         row["file_name"],
                         row["outcome"],
+                        row.get("answered_by"),
                         source["kind"],
                         attribution["source_type"],
                         where.get("table"),

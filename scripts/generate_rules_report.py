@@ -78,6 +78,7 @@ import yaml
 from meta_disco import code_rules
 from meta_disco.activity_map import default_activity_map_resource, describe_match, load_activity_map
 from meta_disco.callers import callers_in_reason, load_callers
+from meta_disco.curator_rules import load_curator_rules
 from meta_disco.models import DONOR_SLOTS, MIXED, SAMPLE_SLOTS, SAMPLES_FIELD, SOURCE_DERIVATION_INHERITANCE
 from meta_disco.output_utils import (
     DONORS_FILE,
@@ -201,6 +202,7 @@ SAMPLE_RULES_NOTE = (
 )
 UNDECLARED_HEAD = "Rule names with no rule behind them"
 SAMPLE_NAMESPACES = "src/meta_disco/rules/sample_namespaces.yaml"
+CURATOR_RULES = "src/meta_disco/rules/curator_rules.yaml"
 UNDECLARED_NOTE = (
     "The counts name these rules, but the rule files in this version of meta-disco do not contain them. That "
     "happens when a rule was renamed or removed after the files were classified, or when a change still under "
@@ -590,7 +592,8 @@ def _names(rule) -> str:
 def sample_rule_rows() -> list[dict]:
     """The sample and donor rules: ``code_rules.SAMPLE_RULES`` (#357; the file-content readers, the parent's, #668, and
     the activity link's, #698),
-    ``code_rules.ENTITY_RULES`` (#582), ``code_rules.IDENTITY_CHECKS`` (#718), then each identifier rule."""
+    ``code_rules.ENTITY_RULES`` (#582), ``code_rules.IDENTITY_CHECKS`` (#718), each identifier rule, then each
+    curator rule answering a samples conflict (#777)."""
     rows = [
         {"id": r.id, "reads": r.reads, "rationale": r.rationale, "defined_in": r.module}
         for r in (*code_rules.SAMPLE_RULES, *code_rules.ENTITY_RULES, *code_rules.IDENTITY_CHECKS)
@@ -603,6 +606,19 @@ def sample_rule_rows() -> list[dict]:
             "defined_in": SAMPLE_NAMESPACES,
         }
         for rule in identifier_rule_declarations()
+    ]
+    rows += [
+        {
+            "id": rule.id,
+            "reads": (
+                f"at reconcile, a conflict in {rule.dataset} between the activity and the file's other sources, "
+                f"agreeing, the tables among them {rule.table}'s {', '.join(sorted(rule.columns))}, confirmed by "
+                f"the file's read group or name; by {rule.author}, {rule.date}"
+            ),
+            "rationale": rule.rationale,
+            "defined_in": CURATOR_RULES,
+        }
+        for rule in load_curator_rules().samples
     ]
     return rows
 

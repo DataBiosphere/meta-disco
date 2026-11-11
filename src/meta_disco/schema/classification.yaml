@@ -998,7 +998,9 @@ classes:
           for inherited samples, `code_rules.SAMPLES_INHERITED_FROM_PARENT`'s id; for samples
           the repository's record of the step names (#698),
           `code_rules.SAMPLES_FROM_ACTIVITY_BIOSAMPLE`'s id; for samples a PLINK fileset's sample
-          table gave (#751), `code_rules.SAMPLES_FROM_FILESET_SAMPLE_TABLE`'s id.
+          table gave (#751), `code_rules.SAMPLES_FROM_FILESET_SAMPLE_TABLE`'s id; for samples a
+          curator rule answered a conflict with (#777, contract 4.7), that rule's id in
+          `rules/curator_rules.yaml`, its `source_type` `wrangler_annotation`.
       # On inherited samples only (#668): the step crossed, the role its parent plays in
       # it, and the parents' record keys. Required on a step, not here.
       activity:

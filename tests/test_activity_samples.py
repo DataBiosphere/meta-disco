@@ -18,6 +18,7 @@ from meta_disco.models import (
     SAMPLES_FIELD,
     SOURCE_REPOSITORY_ACTIVITY,
     SOURCE_REPOSITORY_METADATA,
+    SOURCE_WRANGLER_ANNOTATION,
     ClaimSource,
 )
 from meta_disco.output_utils import (
@@ -27,6 +28,7 @@ from meta_disco.output_utils import (
     UNREACHED_ENTITIES_FILE,
     iter_reconciled_artifact,
 )
+from meta_disco.reconcile import reconcile_run
 from meta_disco.reconcile_lineage import (
     CHILD_NOT_IN_RUN,
     CHILD_SEVERAL_MATCH,
@@ -40,7 +42,9 @@ from meta_disco.reconcile_samples import (
     ACTIVITY,
     ACTIVITY_ONLY,
     AGREED,
+    ANSWERED,
     CONFLICT,
+    INHERITED,
     MAX_EXAMPLES,
     NONE,
     PARENT_CONFLICT,
@@ -53,17 +57,21 @@ from meta_disco.reconcile_samples import (
 from meta_disco.sample_identity import Identifier, reference, sample_list
 from meta_disco.schema.classification_model import ClassificationRecord
 from tests.lineage_fixtures import line, write_lineage
+from tests.test_curator_rules import load as load_curator
 from tests.test_entities import write_entity_lines
-from tests.test_reconcile import DATASET, go, record
+from tests.test_reconcile import DATASET, drs, go, record, write_evidence, write_input
 from tests.test_reconcile_samples import (
     HEADER,
     child,
     coriell,
     header,
+    member,
+    psam_row,
     reconciled,
     table_says,
     with_header_samples,
     write_bam_run,
+    write_psam_run,
 )
 from tests.test_value_map import load
 
@@ -281,6 +289,7 @@ def test_the_conflicts_tsv_has_a_line_per_file_source_and_attribution(tmp_path, 
         "file_id": "file-2",
         "file_name": "f2.bam",
         "outcome": CONFLICT,
+        "answered_by": "",
         "source_kind": ACTIVITY,
         "source_type": SOURCE_REPOSITORY_ACTIVITY,
         "table": "anvil_activity",
@@ -512,3 +521,113 @@ def test_two_files_of_one_name_and_no_file_id_are_told_apart_in_the_tsv_by_recor
         ("md5-a", "", "reads.bam"),
         ("md5-b", "", "reads.bam"),
     ]
+
+
+# --- a curator rule answering the conflict (#777) --------------------------------------
+
+
+def _answered_run(tmp_path, run, evidence, table, cram_name: str = "HG01105.final.cram") -> dict:
+    """file-1, a mother's CRAM listed in her child's row: its header and the row's ``maternal_id`` name her, and
+    the activity made from the row names the child; file-2 is its checksum; file-3, a FASTQ named by a barcode
+    alone in the same column, has no header."""
+    cram, entry = with_header_samples(record(1), "HG01105")
+    cram["file_name"] = cram_name
+    md5 = child(2, f"{cram_name}.md5", code_rules.CHECKSUM_BY_NAME, 1, cram_name)
+    barcode = record(3)
+    barcode["file_name"] = "AGAACGAG-CGGCTAAT_S10_L002_R1_001.fastq.gz"
+    write_bam_run(run, [cram, md5, barcode], [entry])
+    write_evidence(
+        evidence,
+        [(SAMPLES_FIELD, drs(1), "HG01105"), (SAMPLES_FIELD, drs(3), "HG01105")],
+        table="sample",
+        column="maternal_id",
+    )
+    biosample_lines(evidence, (1, "b-child", "a1"), (3, "b-child", "a1"))
+    biosamples(evidence, ("b-child", "HG01106"))
+    return reconcile_run(run, write_input(tmp_path), evidence, table, curator_rules=load_curator(tmp_path))
+
+
+def test_a_conflict_a_curator_rule_answers_names_the_parent_and_stays_listed(tmp_path, run, evidence, table):
+    report = _answered_run(tmp_path, run, evidence, table)
+    rows = reconciled(run)
+    for row in rows.values():
+        ClassificationRecord(**row)
+    samples = rows["file-1"]["samples"]
+    assert samples is not None and samples["count"] == 1
+    assert [a["rule_id"] for a in samples["named_by"]] == [HEADER["rule_id"], "coriell_hg", "parent_reads"]
+    assert samples["named_by"][-1]["source_type"] == SOURCE_WRANGLER_ANNOTATION
+    # Its checksum takes what it now has; the barcode-named FASTQ, which nothing confirms, stays a conflict.
+    assert rows["file-2"]["samples"]["list_id"] == samples["list_id"]
+    assert rows["file-3"]["samples"] is None
+
+    block = report[SAMPLES_FIELD]["by_dataset"][DATASET]
+    assert block["settled"] == {ANSWERED: 1, INHERITED: 1, CONFLICT: 1}
+    assert block["conflict_examples"] == ["AGAACGAG-CGGCTAAT_S10_L002_R1_001.fastq.gz"]
+    assert report["curator_rules_sha256"] == load_curator(tmp_path).digest
+
+    unanswered, answered = iter_reconciled_artifact(run, SAMPLE_CONFLICTS_FILE)  # by file name
+    assert answered["record_key"] == "file-1" and unanswered["record_key"] == "file-3"
+    assert (answered["outcome"], answered["answered_by"]) == (ANSWERED, "parent_reads")
+    assert unanswered["outcome"] == CONFLICT
+    assert [s["kind"] for s in answered["sources"]] == ["header", "table", ACTIVITY]
+    assert "answered_by" not in unanswered
+
+    _, *lines = conflict_tsv([answered, unanswered]).splitlines()
+    tsv = [dict(zip(CONFLICT_COLUMNS, line.split("\t"), strict=True)) for line in lines]
+    assert {(r["record_key"], r["outcome"], r["answered_by"]) for r in tsv} == {
+        ("file-1", ANSWERED, "parent_reads"),
+        ("file-3", CONFLICT, ""),
+    }
+
+
+def test_the_report_renders_an_answered_column(tmp_path, run, evidence, table):
+    _answered_run(tmp_path, run, evidence, table)
+    assert _render(tmp_path, run, tmp_path / "sample-conflicts.tsv") == 0
+    assert "| answered |" in (tmp_path / "r.md").read_text()
+
+
+def test_an_answered_file_whose_parent_passes_the_same_samples_keeps_its_answer(tmp_path, run, evidence, table):
+    """file-2, an index named for the mother, takes her CRAM's samples across its step beside its own answered sources;
+    file-3, another named for her, takes the father's from its CRAM, and stays a conflict."""
+    mother, mother_list = with_header_samples(record(1), "HG01105")
+    mother["file_name"] = "HG01105.final.cram"
+    crai = child(2, "HG01105.final.cram.crai", code_rules.INDEX_BY_NAME, 1, "HG01105.final.cram")
+    father, father_list = with_header_samples(record(4), "HG01104")
+    father["file_name"] = "HG01104.final.cram"
+    other = child(3, "HG01105.final.cram.crai", code_rules.INDEX_BY_NAME, 4, "HG01104.final.cram")
+    md5 = child(5, "HG01105.final.cram.crai.md5", code_rules.CHECKSUM_BY_NAME, 2, "HG01105.final.cram.crai")
+    write_bam_run(run, [mother, crai, other, father, md5], [mother_list, father_list])
+    write_evidence(
+        evidence,
+        [(SAMPLES_FIELD, drs(2), "HG01105"), (SAMPLES_FIELD, drs(3), "HG01105")],
+        table="sample",
+        column="maternal_id",
+    )
+    biosample_lines(evidence, (2, "b-child", "a1"), (3, "b-child", "a1"))
+    biosamples(evidence, ("b-child", "HG01106"))
+    report = reconcile_run(run, write_input(tmp_path), evidence, table, curator_rules=load_curator(tmp_path))
+    rows = reconciled(run)
+    samples = rows["file-2"]["samples"]
+    assert samples is not None and samples["list_id"] == rows["file-1"]["samples"]["list_id"]
+    assert [a["rule_id"] for a in samples["named_by"]][-1] == "parent_reads"
+    assert rows["file-3"]["samples"] is None
+    # The answer holds when the index's own children take its samples.
+    assert rows["file-5"]["samples"]["list_id"] == samples["list_id"]
+    assert report[SAMPLES_FIELD]["by_dataset"][DATASET]["settled"][ANSWERED] == 1
+
+
+def test_an_answered_fileset_member_keeps_its_answer_for_its_own_children(tmp_path, run, evidence, table):
+    """file-2, a `.pgen` named for the mother, takes its `.psam`'s samples beside its answered sources; its checksum takes them."""
+    psam, entry = psam_row(1, "HG01105")
+    write_psam_run(run, psam, entry, [2])
+    pgen = member(2, "HG01105.pgen")
+    md5 = child(3, "HG01105.pgen.md5", code_rules.CHECKSUM_BY_NAME, 2, "HG01105.pgen")
+    write_bam_run(run, [pgen, md5], [])
+    write_evidence(evidence, [(SAMPLES_FIELD, drs(2), "HG01105")], table="sample", column="maternal_id")
+    biosample_lines(evidence, (2, "b-child", "a1"))
+    biosamples(evidence, ("b-child", "HG01106"))
+    reconcile_run(run, write_input(tmp_path), evidence, table, curator_rules=load_curator(tmp_path))
+    rows = reconciled(run)
+    samples = rows["file-2"]["samples"]
+    assert samples is not None and [a["rule_id"] for a in samples["named_by"]][-1] == "parent_reads"
+    assert rows["file-3"]["samples"]["list_id"] == samples["list_id"]

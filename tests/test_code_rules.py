@@ -7,8 +7,10 @@ from pathlib import Path
 import pytest
 
 from meta_disco import activities, code_rules, models, schema_vocab
+from meta_disco.curator_rules import load_curator_rules
 from meta_disco.models import CLASSIFICATION_FIELDS, SOURCE_TYPES
 from meta_disco.rule_loader import get_unified_rules
+from meta_disco.sample_identity import identifier_rule_declarations
 
 DECLARED = (
     *code_rules.CODE_RULES,
@@ -84,6 +86,15 @@ def test_ids_are_unique_undotted_and_not_a_yaml_rule_id():
     # A dot is what marks a translation row's id (`value_map`), so no rule id has one.
     assert [i for i in ids if "." in i] == []
     assert set(ids) & {rule.id for rule in get_unified_rules().rules} == set()
+
+
+def test_curator_rule_ids_are_undotted_and_no_other_rules_id():
+    """The rules report counts a rule by its id alone, so a curator rule's (#777) is no code, YAML or identifier rule's."""
+    curator = [rule.id for rule in load_curator_rules().samples]
+    assert [i for i in curator if "." in i] == []
+    others = {d.id for d in DECLARED} | {r.id for r in get_unified_rules().rules}
+    others |= {r.id for r in identifier_rule_declarations()}
+    assert set(curator) & others == set()
 
 
 @pytest.mark.parametrize("rule", code_rules.CODE_RULES, ids=lambda r: r.id)
