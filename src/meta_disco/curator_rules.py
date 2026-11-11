@@ -13,7 +13,7 @@ from importlib.resources import files
 import yaml
 
 from .lineage_map import expect_keys
-from .models import required_str
+from .models import SAMPLES_FIELD, required_str
 from .sample_identity import SAMPLE, Identifier, IdentifierRuleSet, identifier_rules
 from .slot_map import Readable, SlotMap, load_slot_map, unique_key_loader
 
@@ -76,7 +76,7 @@ def load_curator_rules(
     """Load the rules, the bundled ones by default, checked against ``slot_map`` and the identifier ``rules``.
 
     Raises ``ValueError`` naming where a row is wrong: a key missing or unknown, an id repeated, a column the
-    slot map does not read in the row's dataset and table, a pair whose identifier the identifier rules
+    slot map does not read for samples in the row's dataset and table, a pair whose identifier the identifier rules
     do not recognise as written, a name two pairs of a row share, or two rows one file could match (one
     dataset and table, a column shared).
     """
@@ -109,9 +109,9 @@ def _sample_answer(row: object, n: int, slot_map: SlotMap, rules: IdentifierRule
     dataset, table, columns = row["dataset"], row["table"], row["columns"]
     if not isinstance(columns, list) or not columns or not all(isinstance(c, str) for c in columns):
         raise ValueError(f"{at}: columns is {columns!r}, not a list of column names")
-    unread = sorted(set(columns) - slot_map.cells(dataset, table))
+    unread = sorted(set(columns) - slot_map.cells(dataset, table, SAMPLES_FIELD))
     if unread:
-        raise ValueError(f"{at}: the slot map reads no cell {unread} of {dataset}'s {table}")
+        raise ValueError(f"{at}: the slot map reads no {SAMPLES_FIELD} cell {unread} of {dataset}'s {table}")
     pairs = row["same_sample"]
     if not isinstance(pairs, list):
         raise ValueError(f"{at}: same_sample is a list of pairs")

@@ -23,6 +23,8 @@ datasets:
       mat_reads:
         samples:
           - {{cell: maternal_id}}
+        platform:
+          - {{cell: seq_platform}}
       child_reads:
         samples:
           - {{cell: sample_id}}
@@ -190,8 +192,10 @@ def test_a_rule_is_loaded_with_its_pairs_and_digest(curator):
 @pytest.mark.parametrize(
     ("old", "new", "message"),
     [
-        ("columns: [maternal_id]", "columns: [paternal_id]", "reads no cell"),
-        ("table: sample", "table: participant", "reads no cell"),
+        ("columns: [maternal_id]", "columns: [paternal_id]", "reads no samples cell"),
+        ("columns: [maternal_id]", "columns: [seq_platform]", "reads no samples cell"),  # read for another slot
+        ("table: sample", "table: participant", "reads no samples cell"),
+        ("columns: [maternal_id]", "columns: []", "columns"),
         ("    author: someone\n", "", "author"),
         ("author: someone", "author: someone\n    extra: 1", "extra"),
         ("author: someone", "author: ''", "author"),
@@ -259,3 +263,14 @@ def test_a_repeated_rule_id_is_refused(tmp_path):
 def test_a_document_of_another_kind_is_refused(tmp_path):
     with pytest.raises(ValueError, match="mapping of"):
         load(tmp_path, RULE.replace("samples:", "dimensions:", 1))
+
+
+def test_samples_that_are_no_list_are_refused(tmp_path):
+    with pytest.raises(ValueError, match="samples is a list"):
+        load(tmp_path, "samples: {}\n")
+
+
+def test_pairs_that_are_no_list_are_refused(tmp_path):
+    head = RULE.split("    same_sample:\n", 1)[0]
+    with pytest.raises(ValueError, match="same_sample is a list"):
+        load(tmp_path, head + "    same_sample: {}\n    rationale: A parent's reads.\n")

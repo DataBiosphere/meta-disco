@@ -1999,7 +1999,7 @@ class ActivityInput(ConfiguredBaseModel):
 
 class Attribution(ConfiguredBaseModel):
     """
-    One source that named a step, an input (ADR-0002 decision 6) or a file's samples (#357): sources that agree are each listed. Samples inherited from a parent (#668) name the step crossed and the parent, as an inherited claim does; samples a PLINK fileset's sample table gave (#751) name the table.
+    One source that named a step, an input (ADR-0002 decision 6) or a file's samples (#357): sources that agree are each listed. Samples inherited from a parent (#668) name the step crossed and the parent, as an inherited claim does; samples a PLINK fileset's sample table gave (#751) name the table. A curator rule answering a samples conflict (#777) is listed after the sources it answered with.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml',
          'slot_usage': {'activity': {'name': 'activity', 'required': False},
@@ -2044,13 +2044,13 @@ class Attribution(ConfiguredBaseModel):
 
 class SampleReference(ConfiguredBaseModel):
     """
-    Which samples a file's data comes from (#357): the run's sample list it points to, how many members that list has, and every source that named it. A joint VCF names thousands of samples, so the members are written as a `SampleList` and each file points to one: once in each producer file that points to it (`sample_lists`), and once across the run in the reconciled `sample_lists.ndjson.gz`.
+    Which samples a file's data comes from (#357): the run's sample list it points to, how many members that list has, and the sources that named it. A joint VCF names thousands of samples, so the members are written as a `SampleList` and each file points to one: once in each producer file that points to it (`sample_lists`), and once across the run in the reconciled `sample_lists.ndjson.gz`.
     """
     linkml_meta: ClassVar[LinkMLMeta] = LinkMLMeta({'from_schema': 'https://github.com/DataBiosphere/meta-disco/blob/main/src/meta_disco/schema/classification.yaml'})
 
     list_id: str = Field(default=..., description="""The `SampleList` this file points to: a digest of its sorted members, so two files naming the same samples point to the same list.""", json_schema_extra = { "linkml_meta": {'domain_of': ['SampleReference', 'SampleList']} })
     count: int = Field(default=..., description="""How many members the list has.""", ge=1, json_schema_extra = { "linkml_meta": {'domain_of': ['SampleReference']} })
-    named_by: list[Attribution] = Field(default=..., description="""Every source that named these samples: the file's own content, a header or a sample map's rows (`code_rules.SAMPLE_RULES`), a submitter-table column, the file's parent across a step that passes samples (#668), or each of them where they agree.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy',
+    named_by: list[Attribution] = Field(default=..., description="""Every source that named these samples: the file's own content, a header or a sample map's rows (`code_rules.SAMPLE_RULES`), a submitter-table column, the file's parent across a step that passes samples (#668), or each of them where they agree. Where a curator rule answered a conflict (#777), the sources it answered with, then the rule (`wrangler_annotation`, no `source`); the source it overruled is listed only in `sample_conflicts.ndjson.gz`.""", json_schema_extra = { "linkml_meta": {'domain_of': ['GeneratedBy',
                        'ActivityInput',
                        'SampleReference',
                        'Synonym',

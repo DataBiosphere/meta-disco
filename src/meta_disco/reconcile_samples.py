@@ -19,11 +19,12 @@ file one of whose biosamples ties to no sample record gets none from it, and is 
 
 They settle as a file's step does (``edges.merge_steps``, ADR-0002 decision 6). Sources
 that name the same members give one ``samples``, every source listed in ``named_by``; one
-source alone gives its own. Sources that name different members give **none**, unless a curator
-rule answers them (below), and the file is counted: a ``conflict`` where two of them name members in one namespace
-(``coriell:NA19770`` against ``coriell:NA19771``), ``incomparable`` where they share none
-(``coriell:NA19770`` against ``sra_sample:SRS006871``, which may be one person, but only a
-crosswalk could say, #361). A wrong sample is worse than none.
+source alone gives its own. Sources that name different members give **none**, and the file is
+counted: a ``conflict`` where two of them name members in one namespace (``coriell:NA19770``
+against ``coriell:NA19771``), ``incomparable`` where they share none (``coriell:NA19770`` against
+``sra_sample:SRS006871``, which may be one person, but only a crosswalk could say, #361). A curator
+rule may instead answer a conflict, and the file is counted ``answered`` (below). A wrong sample is
+worse than none.
 
 **A PLINK fileset's sample table** (#751): inference pairs each ``.psam`` with the ``.pgen``, ``.pvar``
 and ``.log`` written beside it under the same stem (``plink.filesets``), and each of those takes the
@@ -245,8 +246,8 @@ def answering_rule(
 
     A rule would where the sources but the activity are one or more cells of the rule's table and columns, and
     the file's header if it has one, agreeing as :func:`settle` settles them, with the header among them or the file name
-    naming their one sample (``SampleAnswer.name_agrees``); :func:`answer` answers only a conflict with an activity. The
-    loader refuses two rules one file could match (``curator_rules``).
+    naming their one sample (``SampleAnswer.name_agrees``). The loader refuses two rules one file could match
+    (``curator_rules``).
     """
     kept = [n for n in named if n.kind != ACTIVITY]
     tables = [n for n in kept if n.kind != HEADER]
@@ -267,7 +268,8 @@ def answering_rule(
 
 def answer(rule: SampleAnswer, named: Iterable[Named]) -> Settled | None:
     """``named``'s samples, ``answered`` by ``rule``: those of every source but the activity, named by each and then
-    by the rule; None where those differ, or no activity is among them."""
+    by the rule; None where those differ, or no activity is among them. It does not check that the activity differs:
+    :meth:`SampleReport._settle` asks it only of a conflict."""
     named = list(named)
     kept = [n for n in named if n.kind != ACTIVITY]
     _, samples, members = settle(kept)
@@ -282,10 +284,7 @@ def _cells_of(named: Named, rule: SampleAnswer) -> bool:
         return False
     # ``ClaimSource.to_dict`` omits a null member.
     sources = [a["source"] for a in named.named_by]
-    return all(
-        (s.get("dataset"), s.get("table")) == (rule.dataset, rule.table) and s.get("column") in rule.columns
-        for s in sources
-    )
+    return all(s.get("table") == rule.table and s.get("column") in rule.columns for s in sources)
 
 
 class Settled(NamedTuple):
