@@ -1337,8 +1337,8 @@ def _samples_section(rows: list[dict] | None) -> list[str]:
             "",
             "Per step that passes samples, what each file's parent gave it, counted once per file and role: "
             "*passed*: its parents named one list; *parents_differ*: its parents named different lists; "
-            "*parent_conflict*: a parent's own sources named different samples, so it is counted as a conflict or "
-            "incomparable above, and listed there; "
+            "*parent_conflict*: a parent's own sources named different samples, unanswered, so it is counted as a "
+            "conflict or incomparable above, and listed there; "
             "*list_names_none*: its parents are lists that name no samples by design, the sample maps inference "
             "rebuilt (#726), whose tars name their own; "
             "*parent_none*: no source named a parent's samples. Nothing passes in the last four.",

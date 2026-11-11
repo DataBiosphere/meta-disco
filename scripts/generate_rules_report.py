@@ -613,7 +613,7 @@ def sample_rule_rows() -> list[dict]:
             "reads": (
                 f"at reconcile, a conflict in {rule.dataset} between the activity and the file's other sources, "
                 f"agreeing, the tables among them {rule.table}'s {', '.join(sorted(rule.columns))}, confirmed by "
-                f"the file's read group or name; by {rule.author}, {rule.date}"
+                f"the file's own content (a header: a read group, sample columns) or its name; by {rule.author}, {rule.date}"
             ),
             "rationale": rule.rationale,
             "defined_in": CURATOR_RULES,

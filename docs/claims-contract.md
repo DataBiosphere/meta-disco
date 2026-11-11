@@ -466,8 +466,8 @@ Importers say what was written. Rules say what it means. Only rules make claims.
     before a reconciled artifact is deployed. Review answers a conflict with a curator rule (4.7) or leaves
     it standing; either is a recorded outcome. Answering costs a reconcile (6.4), never a corpus run.
     The conflicts are listed by `make reconcile-report` (#395), by their competing values but not yet the
-    rule behind each. Until curator rules (#397) answer more than one kind of samples conflict (#777),
-    this is a stated rule and not a gate; the gate belongs with `make check-catalog` (#405).
+    rule behind each. Until curator rules (#397) can answer any conflict (one answers one kind of samples
+    conflict today, #777), this is a stated rule and not a gate; the gate belongs with `make check-catalog` (#405).
 
 ## 6. The pipeline
 

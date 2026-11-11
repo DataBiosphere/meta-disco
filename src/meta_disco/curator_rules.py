@@ -77,7 +77,8 @@ def load_curator_rules(
 
     Raises ``ValueError`` naming where a row is wrong: a key missing or unknown, an id repeated, a column the
     slot map does not read in the row's dataset and table, a pair whose identifier the identifier rules
-    do not recognise as written, or two rows one file could match (one dataset and table, a column shared).
+    do not recognise as written, a name two pairs of a row share, or two rows one file could match (one
+    dataset and table, a column shared).
     """
     text = (source if source is not None else default_curator_rules_resource()).read_text(encoding="utf-8")
     document = yaml.load(text, Loader=_Loader)
@@ -114,6 +115,10 @@ def _sample_answer(row: object, n: int, slot_map: SlotMap, rules: IdentifierRule
     pairs = row["same_sample"]
     if not isinstance(pairs, list):
         raise ValueError(f"{at}: same_sample is a list of pairs")
+    same_sample = tuple(_pair(p, f"{at} same_sample[{i}]", rules) for i, p in enumerate(pairs))
+    names = [p.name for p in same_sample]
+    if len(set(names)) != len(names):
+        raise ValueError(f"{at}: same_sample pairs one name twice")
     return SampleAnswer(
         id=row["id"],
         author=row["author"],
@@ -121,7 +126,7 @@ def _sample_answer(row: object, n: int, slot_map: SlotMap, rules: IdentifierRule
         dataset=dataset,
         table=table,
         columns=frozenset(columns),
-        same_sample=tuple(_pair(p, f"{at} same_sample[{i}]", rules) for i, p in enumerate(pairs)),
+        same_sample=same_sample,
         rationale=row["rationale"],
     )
 

@@ -19,8 +19,8 @@ file one of whose biosamples ties to no sample record gets none from it, and is 
 
 They settle as a file's step does (``edges.merge_steps``, ADR-0002 decision 6). Sources
 that name the same members give one ``samples``, every source listed in ``named_by``; one
-source alone gives its own. Sources that name different members give **none**, and the
-file is counted: a ``conflict`` where two of them name members in one namespace
+source alone gives its own. Sources that name different members give **none**, unless a curator
+rule answers them (below), and the file is counted: a ``conflict`` where two of them name members in one namespace
 (``coriell:NA19770`` against ``coriell:NA19771``), ``incomparable`` where they share none
 (``coriell:NA19770`` against ``sra_sample:SRS006871``, which may be one person, but only a
 crosswalk could say, #361). A wrong sample is worse than none.
@@ -121,7 +121,7 @@ LINK_OUTCOMES = (TIED, UNTIED, CHILD_NOT_IN_RUN, CHILD_SEVERAL_MATCH)
 # conflict, not_classified). A parent outside the run holds no list, so it counts as one with none.
 PASSED = "passed"
 PARENTS_DIFFER = "parents_differ"  # parents in the role name different lists
-# PARENT_CONFLICT: a parent's own sources named different samples, so it has none to pass
+# PARENT_CONFLICT: a parent's own sources named different samples, unanswered (#777), so it has none to pass
 LIST_NAMES_NONE = "list_names_none"  # every parent in the role is a list naming none by design (#726)
 PARENT_NONE = "parent_none"  # a parent in the role has no settled samples: no source named any
 PASSING_OUTCOMES = (PASSED, PARENTS_DIFFER, PARENT_CONFLICT, LIST_NAMES_NONE, PARENT_NONE)
@@ -243,8 +243,8 @@ def answering_rule(
 ) -> SampleAnswer | None:
     """The curator rule of ``dataset`` that would answer a file's own sources, ``named``; None where none would.
 
-    A rule would where the sources but the activity are the file's header and one or more cells of the rule's
-    table and columns, agreeing as :func:`settle` settles them, with the header among them or the file name
+    A rule would where the sources but the activity are one or more cells of the rule's table and columns, and
+    the file's header if it has one, agreeing as :func:`settle` settles them, with the header among them or the file name
     naming their one sample (``SampleAnswer.name_agrees``); :func:`answer` answers only a conflict with an activity. The
     loader refuses two rules one file could match (``curator_rules``).
     """
@@ -449,7 +449,7 @@ class SampleReport:
     # Per fileset member, its own sources and dataset until :meth:`pair` reads them; then what its table passed it.
     _member_own: dict[str, tuple[list[Named], str]] = field(default_factory=dict, init=False, repr=False)
     _from_table: dict[str, Named] = field(default_factory=dict, init=False, repr=False)
-    # The record keys whose sources named different samples (a conflict, or incomparable).
+    # The record keys whose sources named different samples, unanswered (a conflict, or incomparable).
     _conflicted: set[str] = field(default_factory=set, init=False, repr=False)
     # Per record key, the curator rule answering its own sources' conflict, judged once in the first pass (#777).
     _answers: dict[str, SampleAnswer] = field(default_factory=dict, init=False, repr=False)

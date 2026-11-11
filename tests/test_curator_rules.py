@@ -223,11 +223,27 @@ def test_two_rules_one_file_could_match_are_refused(tmp_path):
         load(tmp_path, RULE + body)
 
 
+PATERNAL_SLOT_MAP = SLOT_MAP.replace(
+    "child_reads:", "pat_reads:\n        samples:\n          - {cell: paternal_id}\n      child_reads:"
+)
+
+
+def test_two_rules_sharing_one_column_of_one_table_are_refused(tmp_path):
+    (tmp_path / "slot_map.yaml").write_text(PATERNAL_SLOT_MAP)
+    body = RULE.split("samples:\n", 1)[1].replace("id: parent_reads", "id: both_reads")
+    (tmp_path / "curator_rules.yaml").write_text(RULE + body.replace("[maternal_id]", "[maternal_id, paternal_id]"))
+    with pytest.raises(ValueError, match="could both answer"):
+        load_curator_rules(tmp_path / "curator_rules.yaml", load_slot_map(tmp_path / "slot_map.yaml"))
+
+
+def test_a_name_two_pairs_share_is_refused(tmp_path):
+    twice = '{name: "coriell:NA24695", sample: "giab:HG007", cited: "a registry\'s record"}'
+    with pytest.raises(ValueError, match="one name twice"):
+        load(tmp_path, RULE.replace(twice, twice + "\n      - " + twice.replace("HG007", "HG006")))
+
+
 def test_two_rules_of_one_table_sharing_no_column_both_load(tmp_path):
-    slot_map = SLOT_MAP.replace(
-        "child_reads:", "pat_reads:\n        samples:\n          - {cell: paternal_id}\n      child_reads:"
-    )
-    (tmp_path / "slot_map.yaml").write_text(slot_map)
+    (tmp_path / "slot_map.yaml").write_text(PATERNAL_SLOT_MAP)
     body = RULE.split("samples:\n", 1)[1].replace("id: parent_reads", "id: father_reads")
     (tmp_path / "curator_rules.yaml").write_text(RULE + body.replace("[maternal_id]", "[paternal_id]"))
     loaded = load_curator_rules(tmp_path / "curator_rules.yaml", load_slot_map(tmp_path / "slot_map.yaml"))

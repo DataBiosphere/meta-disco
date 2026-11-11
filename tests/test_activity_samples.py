@@ -11,6 +11,7 @@ import pytest
 from generate_reconcile_report import CONFLICT_COLUMNS, conflict_tsv, dashboard_data, main, render_markdown
 
 from meta_disco import code_rules
+from meta_disco.curator_rules import load_curator_rules
 from meta_disco.edges import lineage_attribution
 from meta_disco.models import (
     COLLECTED_FROM,
@@ -44,6 +45,7 @@ from meta_disco.reconcile_samples import (
     AGREED,
     ANSWERED,
     CONFLICT,
+    INCOMPARABLE,
     INHERITED,
     MAX_EXAMPLES,
     NONE,
@@ -631,3 +633,21 @@ def test_an_answered_fileset_member_keeps_its_answer_for_its_own_children(tmp_pa
     samples = rows["file-2"]["samples"]
     assert samples is not None and [a["rule_id"] for a in samples["named_by"]][-1] == "parent_reads"
     assert rows["file-3"]["samples"]["list_id"] == samples["list_id"]
+
+
+def test_an_activity_in_another_namespace_is_not_answered(tmp_path, run, evidence, table):
+    """The table and the name say giab:HG007, the activity an SRA sample: incomparable, which no rule answers."""
+    fastq = record(1)
+    fastq["file_name"] = "NA24695_CTTGTA_L002_R1_034.fastq.gz"
+    write_bam_run(run, [fastq], [])
+    write_evidence(evidence, [(SAMPLES_FIELD, drs(1), "HG007")], table="sample", column="maternal_id")
+    biosample_lines(evidence, (1, "b-child", "a1"))
+    biosamples(evidence, ("b-child", "SRS006871"))
+    report = reconcile_run(run, write_input(tmp_path), evidence, table, curator_rules=load_curator(tmp_path))
+    assert reconciled(run)["file-1"]["samples"] is None
+    assert report[SAMPLES_FIELD]["by_dataset"][DATASET]["settled"] == {INCOMPARABLE: 1}
+
+
+def test_a_reconcile_given_no_curator_rules_reads_the_bundled_ones(tmp_path, run, evidence, table):
+    write_bam_run(run, [record(1)], [])
+    assert go(run, tmp_path, evidence, table)["curator_rules_sha256"] == load_curator_rules().digest

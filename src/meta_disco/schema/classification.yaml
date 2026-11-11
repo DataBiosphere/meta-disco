@@ -1684,7 +1684,8 @@ slots:
   samples:
     description: >-
       The samples the file's data comes from (#357), as a pointer to the run's sample list;
-      null where no source names a sample, or where its sources name different ones.
+      null where no source names a sample, or where its sources name different ones and no
+      curator rule answers them (#777).
     range: SampleReference
     inlined: true
 

@@ -1044,7 +1044,7 @@ class ClassificationRecord(ConfiguredBaseModel):
     dataset_title: Optional[str] = Field(default=None, description="""Title of the dataset the file belongs to.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     classifications: Classifications = Field(default=..., description="""The eight classified dimensions for this file.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord']} })
     generated_by: Optional[GeneratedBy] = Field(default=None, description="""The step that made the file and the inputs it used, by role (ADR-0002 decisions 3, 6, #580); null where no step is recorded.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList', 'RebuiltList']} })
-    samples: Optional[SampleReference] = Field(default=None, description="""The samples the file's data comes from (#357), as a pointer to the run's sample list; null where no source names a sample, or where its sources name different ones.""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList']} })
+    samples: Optional[SampleReference] = Field(default=None, description="""The samples the file's data comes from (#357), as a pointer to the run's sample list; null where no source names a sample, or where its sources name different ones and no curator rule answers them (#777).""", json_schema_extra = { "linkml_meta": {'domain_of': ['ClassificationRecord', 'ExternalList']} })
 
 
 class Classifications(ConfiguredBaseModel):
