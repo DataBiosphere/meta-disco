@@ -48,8 +48,11 @@ class SampleAnswer:
     rationale: str
 
     def name_agrees(self, named: Identifier | None, members: frozenset[Identifier]) -> bool:
-        """Whether a file name's one identifier, ``named``, is one of ``members``, or a pair's name for one."""
-        if named is None:
+        """Whether a file name's one identifier, ``named``, is the one sample ``members`` holds, or a pair's name for it.
+
+        A name names one sample, so it never confirms several.
+        """
+        if named is None or len(members) != 1:
             return False
         return named in members or any(p.name == named and p.sample in members for p in self.same_sample)
 

@@ -4,9 +4,10 @@
 # generated it (AnVIL's `anvil_activity.used_biosample_id`, #698) names another sample than the file's
 # other sources. It answers with those sources' samples only where every one agrees, each submitter
 # table's is a cell of the row's `table` in one of its `columns`, and the file's own content (a read
-# group) or its name confirms them. A name only confirms: it never enters the answer. `same_sample` pairs a name's
-# identifier with the table's for this check alone; no record, list or identifier rule carries them.
-# The conflict is not erased: reconcile lists it with every source, `answered_by` the row.
+# group) or its name confirms them. A name only confirms, and only one sample: it never enters the answer,
+# and sources naming several need the read group. `same_sample` pairs a name's identifier with the table's
+# for this check alone; no record, list or identifier rule carries them. The conflict is not erased:
+# reconcile lists it with every source, `outcome: answered` and `answered_by` the row.
 samples:
   - id: hprc_parent_reads_named_by_sample_table
     author: NoopDog

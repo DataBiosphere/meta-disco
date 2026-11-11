@@ -245,7 +245,7 @@ def answering_rule(
 
     A rule would where the sources but the activity are the file's header and one or more cells of the rule's
     table and columns, agreeing as :func:`settle` settles them, with the header among them or the file name
-    agreeing (``SampleAnswer.name_agrees``); :func:`answer` answers only a conflict with an activity. The
+    naming their one sample (``SampleAnswer.name_agrees``); :func:`answer` answers only a conflict with an activity. The
     loader refuses two rules one file could match (``curator_rules``).
     """
     kept = [n for n in named if n.kind != ACTIVITY]

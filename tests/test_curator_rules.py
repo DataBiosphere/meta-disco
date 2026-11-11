@@ -131,6 +131,16 @@ def test_without_a_header_a_name_not_agreeing_answers_nothing(curator, file_name
     assert answered(curator, [cell(MOTHER), activity_says(CHILD)], file_name) is None
 
 
+def test_a_name_confirms_no_cell_naming_several_samples_but_a_header_does(curator):
+    father = Identifier("giab", "HG006")
+    both = table_says(MOTHER, father, column="maternal_id", table="sample")
+    name = "NA24695_CTTGTA_L002_R1_034.fastq.gz"
+    assert answered(curator, [both, activity_says(CHILD)], name) is None
+    header = Named(frozenset({MOTHER, father}), (HEADER_ATTRIBUTION,), kind=HEADER)
+    found = answered(curator, [both, header, activity_says(CHILD)], name)
+    assert found is not None and found.members == {MOTHER, father}
+
+
 def test_a_cell_of_another_column_or_table_or_dataset_answers_nothing(curator):
     name = "NA24695_CTTGTA_L002_R1_034.fastq.gz"
     assert answered(curator, [cell(MOTHER, column="sample_id"), activity_says(CHILD)], name) is None

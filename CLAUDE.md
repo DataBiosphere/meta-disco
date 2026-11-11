@@ -505,7 +505,8 @@ reworded title renames a member: name one by its value (`DataModalityEnum("genom
     loaded by `curator_rules` and applied by `reconcile_samples.answer`. Its one row answers ANVIL_HPRC's parents'
     reads, where AnVIL's activity names the child: with the samples the file's other sources agree on, where each
     table among them is the row's (`sample`, `maternal_id` or `paternal_id`) and the file's read group or name confirms them
-    (a name only checks; `same_sample` pairs a name's Coriell id with the table's GIAB name for that check alone).
+    (a name only checks, and only a single sample; `same_sample` pairs a name's Coriell id with the table's GIAB name
+    for that check alone).
     The answer is credited `wrangler_annotation` with the rule's id, counted `answered`, and the file stays in
     `sample_conflicts.ndjson.gz` with every source, `answered_by` the rule. Rules for the eight dimensions are #397's.
   - **Donors and samples are records keyed by their identifier** (#693, ADR-0002 decision 1 as
