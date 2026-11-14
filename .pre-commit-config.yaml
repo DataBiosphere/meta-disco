@@ -1,0 +1,18 @@
+# Pre-commit hooks for Clever Canary repos.
+# Run `pre-commit install` once per clone to activate.
+#
+# gitleaks is the local secret-scanning layer. The hook runs the gitleaks
+# installed on the machine (brew install gitleaks), and the commit fails
+# when gitleaks is not installed.
+repos:
+  - repo: local
+    hooks:
+      - id: gitleaks
+        name: gitleaks
+        entry: gitleaks git --pre-commit --redact --staged --verbose
+        language: system
+        # Keep `pass_filenames: false`. Without it, pre-commit appends the
+        # staged paths: a commit of one file passes unscanned, and a commit
+        # of two or more files fails.
+        pass_filenames: false
+        stages: [pre-commit]

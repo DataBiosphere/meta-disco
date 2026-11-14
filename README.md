@@ -80,6 +80,10 @@ uv run python scripts/validate_outputs.py path/to/metadata.yaml
 
 This validation is crucial for ensuring that the classification output is syntactically correct before it's incorporated into the AnVIL Explorer or Terra Data Repository.
 
+## Development
+
+Gitleaks and Pre-Commit are required in order to perform precommit checks. To install them using Homebrew, run `brew install gitleaks pre-commit`. After making any clone of this repository, run `pre-commit install` to set up precommit hooks.
+
 ## Why This Approach
 
 I'm pattern matching on domain knowledge baked into my training data. When I see `HG00673.paternal.f1_assembly_v1.fa.gz` I know it's a HPRC de novo assembly because I've seen thousands of papers, GitHub repos, and bioinformatics forums that discuss these exact naming conventions. Same with contig lengths — I know chr1 is ~248M in GRCh38 because that fact appears everywhere in the training data.
