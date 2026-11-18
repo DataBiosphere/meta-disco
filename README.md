@@ -82,7 +82,7 @@ This validation is crucial for ensuring that the classification output is syntac
 
 ## Development
 
-Gitleaks and Pre-Commit are required in order to perform precommit checks. To install them using Homebrew, run `brew install gitleaks pre-commit`. After making any clone of this repository, run `pre-commit install` to set up precommit hooks.
+Gitleaks and Pre-Commit are required in order to perform precommit checks. To install them system-wide using Homebrew, run `brew install gitleaks pre-commit`. After making any clone of this repository, run `pre-commit install` in the clone to set up precommit hooks. This will allow commits to be aborted if Gitleaks finds a secret in the staged files.
 
 ## Why This Approach
 
