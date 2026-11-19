@@ -9,7 +9,7 @@ repos:
     hooks:
       - id: gitleaks
         name: gitleaks
-        entry: gitleaks git --pre-commit --redact --staged --verbose
+        entry: ./scripts/do-gitleaks-checks.sh
         language: system
         # Keep `pass_filenames: false`. Without it, pre-commit appends the
         # staged paths: a commit of one file passes unscanned, and a commit
