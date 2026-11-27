@@ -75,10 +75,8 @@ def load_curator_rules(
 ) -> CuratorRules:
     """Load the rules, the bundled ones by default, checked against ``slot_map`` and the identifier ``rules``.
 
-    Raises ``ValueError`` naming where a row is wrong: a key missing or unknown, an id repeated, a column the
-    slot map does not read for samples in the row's dataset and table, a pair whose identifier the identifier rules
-    do not recognise as written, a name two pairs of a row share, or two rows one file could match (one
-    dataset and table, a column shared).
+    Raises ``ValueError`` naming where the document or a row is wrong, and lets ``yaml.YAMLError`` from text that
+    is not YAML propagate.
     """
     text = (source if source is not None else default_curator_rules_resource()).read_text(encoding="utf-8")
     document = yaml.load(text, Loader=_Loader)
