@@ -503,7 +503,7 @@ reworded title renames a member: name one by its value (`DataModalityEnum("genom
     written together, so no `generated_by` is written.
   - **A curator rule may answer a samples conflict** (contract 1.6, 4.7, #777): `rules/curator_rules.yaml`,
     loaded by `curator_rules` and applied by `reconcile_samples.answer`. Its one row answers ANVIL_HPRC's parents'
-    reads, where AnVIL's activity names the child: with the samples the file's other sources agree on, where each
+    reads, where AnVIL's activity names another sample (for these files, the child): with the samples the file's other sources agree on, where each
     table among them is the row's (`sample`, `maternal_id` or `paternal_id`) and the file's own content (its header,
     for these CRAMs a read group) or its name confirms them (a name only checks, and only a single sample; `same_sample` pairs a name's Coriell id with the table's GIAB name
     for that check alone).

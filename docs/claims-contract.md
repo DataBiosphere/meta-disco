@@ -653,7 +653,7 @@ importer's half is built — 7.12 is enforced (below), and the published importe
   map is counted `map_not_in_layout`. The 1000 Genomes tars, whose maps are held outside AnVIL (2.11), are
   not rebuilt.
 - **One curator rule exists, for a file's samples** (4.7, #777). `rules/curator_rules.yaml`'s one row answers
-  ANVIL_HPRC's parents' reads, whose activity names the child while the sample table's `maternal_id` or
+  ANVIL_HPRC's parents' reads, whose activity names another sample (for these files, the child) while the sample table's `maternal_id` or
   `paternal_id` and the file's read group or name name the parent; each stays listed with every source,
   `answered_by` the rule. Every other conflict, the eight dimensions' included, stands unanswered (#397), which
   7.13 makes deliverable.

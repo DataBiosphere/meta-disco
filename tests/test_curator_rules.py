@@ -209,6 +209,7 @@ def test_a_rule_is_loaded_with_its_pairs_and_digest(curator):
         ("author: someone", "author: ''", "author"),
         ('"giab:HG007"', '"coriell:HG007"', "recognise"),
         ('"coriell:NA24695"', '"NA24695"', "recognise"),
+        ('"coriell:NA24695"', '"coriell:GM24695"', "recognise"),  # recognised only through the GM rewrite
         ('cited: "a registry\'s record"', "cited: ''", "cited"),
         ("columns: [maternal_id]", "columns: maternal_id", "columns"),
     ],

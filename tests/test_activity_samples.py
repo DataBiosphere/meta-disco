@@ -635,6 +635,24 @@ def test_an_answered_fileset_member_keeps_its_answer_for_its_own_children(tmp_pa
     assert rows["file-3"]["samples"]["list_id"] == samples["list_id"]
 
 
+def test_an_answerable_fileset_member_whose_sample_table_names_another_sample_stays_a_conflict(
+    tmp_path, run, evidence, table
+):
+    """file-2, a `.pgen` the rule would answer as the mother, beside a `.psam` naming the father; its checksum takes none."""
+    psam, entry = psam_row(1, "HG01104")
+    write_psam_run(run, psam, entry, [2])
+    pgen = member(2, "HG01105.pgen")
+    md5 = child(3, "HG01105.pgen.md5", code_rules.CHECKSUM_BY_NAME, 2, "HG01105.pgen")
+    write_bam_run(run, [pgen, md5], [])
+    write_evidence(evidence, [(SAMPLES_FIELD, drs(2), "HG01105")], table="sample", column="maternal_id")
+    biosample_lines(evidence, (2, "b-child", "a1"))
+    biosamples(evidence, ("b-child", "HG01106"))
+    report = reconcile_run(run, write_input(tmp_path), evidence, table, curator_rules=load_curator(tmp_path))
+    rows = reconciled(run)
+    assert rows["file-2"]["samples"] is None and rows["file-3"]["samples"] is None
+    assert ANSWERED not in report[SAMPLES_FIELD]["by_dataset"][DATASET]["settled"]
+
+
 def test_an_activity_in_another_namespace_is_not_answered(tmp_path, run, evidence, table):
     """The table and the name say giab:HG007, the activity an SRA sample: incomparable, which no rule answers."""
     fastq = record(1)
