@@ -66,6 +66,7 @@ from pathlib import Path
 from . import activities, reconcile_external, reconcile_rebuilt, reconcile_samples
 from .activity_map import ActivityMap, load_activity_map
 from .azul_manifest import REPOSITORY as ANVIL_REPOSITORY
+from .curator_rules import CuratorRules, load_curator_rules
 from .deployments import DEFAULT_DEPLOYMENT, DEPLOYMENTS
 from .edges import LineageStep, StepConflict, generic_only, merge_steps, misfits
 from .entity_evidence import entity_root_beside
@@ -1169,6 +1170,7 @@ def reconcile_run(
     entity_root: Path | None = None,
     external_files: ExternalFiles | None = None,
     external_root: Path | None = None,
+    curator_rules: CuratorRules | None = None,
 ) -> dict:
     """Reconcile one stored run into ``<run>/reconciled/`` and return its report; ``evidence_root=None`` excludes all evidence.
 
@@ -1177,10 +1179,10 @@ def reconcile_run(
     reconciled artifact recoverable: untouched, or moved aside as ``reconciled.replaced`` if
     the process dies between the two renames of the swap, and restored by the next run. No request is made and no written byte depends on the
     clock — the evidence report printed on the way in shows file ages, and nothing
-    written does — so the same run, evidence, lineage, translation table, activity map and
+    written does — so the same run, evidence, lineage, translation table, activity map, curator rules and
     input paths, reconciled by the same code, write the same bytes (criterion 16); line 1's
     ``reconciled_by`` names the commit (not a dirty tree's edits), and it lists the slot evidence, lineage
-    and entity evidence files read. Both tables' sha256 are in the envelope
+    and entity evidence files read. The two tables' and the curator rules' sha256 are in the envelope
     and the report. The report echoes the input path as given, evidence paths
     relative to ``evidence_root`` and entity evidence paths relative to the entity root.
 
@@ -1217,7 +1219,8 @@ def reconcile_run(
 
     The PLINK filesets a run's producer files pair (#751, ``output_utils.run_filesets``) are read before
     the first pass; each member's samples are settled with its ``.psam``'s after it, before inheritance
-    (``reconcile_samples.SampleReport.pair``).
+    (``reconcile_samples.SampleReport.pair``). A samples conflict a row of ``curator_rules`` (the bundled
+    rules by default, #777) answers takes that row's answer, and is still listed with every source.
 
     Inheritance (#571, :mod:`reconcile_inherit`) needs every parent's answer before its
     child is written, and the records come file by file, so inheritance reads the run twice,
@@ -1250,6 +1253,7 @@ def reconcile_run(
     catalog = envelope.get("catalog")
     table = table if table is not None else load_value_map()
     activity_table = activity_table if activity_table is not None else load_activity_map()
+    curator_rules = curator_rules if curator_rules is not None else load_curator_rules()
 
     rules = identifier_rules()
     external: list[reconcile_external.ExternalList] = []
@@ -1304,6 +1308,7 @@ def reconcile_run(
         "evidence": [ev.identity(root) for ev in applicable],
         "value_map_sha256": table.digest,
         "activity_map_sha256": activity_table.digest,
+        "curator_rules_sha256": curator_rules.digest,
         "lineage_files": lineage.files,
         "entity_evidence": [
             {k: f[k] for k in ("path", "source_type", "dataset", "table")} for f in entity_evidence.files
@@ -1344,7 +1349,7 @@ def reconcile_run(
     pending.biosample_links.clear()
     # The PLINK filesets inference paired (#751), read first: the first pass keeps each member's own sources.
     tables = reconcile_samples.tables_of(run_filesets(run_dir))
-    samples = reconcile_samples.SampleReport(rules, activity=activity, tables=tables)
+    samples = reconcile_samples.SampleReport(rules, curator=curator_rules, activity=activity, tables=tables)
     seen: set[str] = set()
     inference_lists: dict[str, dict] = {}
     # The external lists first (#710): each is held under its address, as a record is under its key.

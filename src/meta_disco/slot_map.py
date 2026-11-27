@@ -254,9 +254,14 @@ class SlotMap:
         """Whether any of the dataset's entries is a folder entry, whose files are reached by storage path."""
         return any(e.is_folder for e in self.entries if e.dataset == dataset)
 
-    def cells(self, dataset: str, table: str) -> set[str]:
-        """Every column of ``table`` a ``cell`` source of the dataset reads: in the table's own row, or through a link (#562)."""
-        return {s.value for e, _, s in self._sources(dataset) if s.form == SOURCE_CELL and source_table(e, s) == table}
+    def cells(self, dataset: str, table: str, slot: str | None = None) -> set[str]:
+        """Every column of ``table`` a ``cell`` source of the dataset reads, for ``slot`` where one is given: in the
+        table's own row, or through a link (#562)."""
+        return {
+            s.value
+            for e, at, s in self._sources(dataset)
+            if s.form == SOURCE_CELL and source_table(e, s) == table and slot in (None, at)
+        }
 
     def source_tables(self, dataset: str) -> list[str]:
         """Every table the dataset's sources read a value from, in file order: a mapped table's own

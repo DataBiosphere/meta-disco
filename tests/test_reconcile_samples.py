@@ -9,6 +9,7 @@ import pytest
 from generate_reconcile_report import CONFLICT_COLUMNS, conflict_tsv
 
 from meta_disco import code_rules, edges
+from meta_disco.curator_rules import CuratorRules
 from meta_disco.models import SAMPLES_FIELD, SOURCE_REPOSITORY_METADATA, ClaimSource
 from meta_disco.output_utils import (
     FILES_WITHOUT_SAMPLES_FILE,
@@ -54,6 +55,7 @@ from tests.test_reconcile import DATASET, drs, go, record, write_evidence
 from tests.test_value_map import load
 
 HEADER = {"source_type": "content_read", "rule_id": code_rules.BAM_READ_GROUP_SAMPLES.id}
+NO_CURATOR_RULES = CuratorRules((), "no curator rules")
 SOURCE = ClaimSource(name="anvil", dataset=DATASET, table="participant", column="participant_id")
 
 
@@ -65,8 +67,8 @@ def header(*ids: str) -> Named:
     return Named(frozenset(coriell(i) for i in ids), (HEADER,), kind="header")
 
 
-def table_says(*members: Identifier, column: str = "participant_id") -> Named:
-    source = ClaimSource(name="anvil", dataset=DATASET, table="participant", column=column)
+def table_says(*members: Identifier, column: str = "participant_id", table: str = "participant") -> Named:
+    source = ClaimSource(name="anvil", dataset=DATASET, table=table, column=column)
     attribution = {"source_type": SOURCE_REPOSITORY_METADATA, "rule_id": "coriell_hg", "source": source.to_dict()}
     return Named(frozenset(members), (attribution,))
 
@@ -512,7 +514,7 @@ def test_samples_never_pass_across_a_variant_call_and_a_disagreement_is_counted(
 
 def test_each_activity_keeps_its_own_disagreement_examples():
     """Five examples from one activity do not crowd out another's (#668)."""
-    report = SampleReport(identifier_rules())
+    report = SampleReport(identifier_rules(), NO_CURATOR_RULES)
     report.members["p"] = frozenset({coriell("HG00096")})
     report.held["parent"] = "p"
     child_says = frozenset({coriell("HG00097")})
@@ -539,7 +541,7 @@ def test_a_conflicts_sources_are_listed_in_one_order_whatever_order_they_arrived
     )
     rows = []
     for table in ([one, two], [two, one]):
-        report = SampleReport(identifier_rules())
+        report = SampleReport(identifier_rules(), NO_CURATOR_RULES)
         report.settle(record(1), {}, table, "file-1", None, None)
         (row,) = report.conflicts
         rows.append(row)
@@ -548,7 +550,7 @@ def test_a_conflicts_sources_are_listed_in_one_order_whatever_order_they_arrived
 
 
 def test_the_name_disagreements_shown_are_the_smallest_file_names_whatever_order_files_settle_in():
-    report = SampleReport(identifier_rules())
+    report = SampleReport(identifier_rules(), NO_CURATOR_RULES)
     for n in reversed(range(MAX_EXAMPLES + 2)):
         row = record(n)
         row["file_name"] = f"NA1287{n}.cram"
@@ -558,7 +560,7 @@ def test_the_name_disagreements_shown_are_the_smallest_file_names_whatever_order
 
 
 def test_parents_in_one_role_naming_different_lists_pass_nothing():
-    report = SampleReport(identifier_rules())
+    report = SampleReport(identifier_rules(), NO_CURATOR_RULES)
     report.members.update({"l1": frozenset({coriell("HG00096")}), "l2": frozenset({coriell("HG00097")})})
     report.held.update({"p1": "l1", "p2": "l2"})
     report._own["c"] = ([], DATASET)
@@ -568,7 +570,7 @@ def test_parents_in_one_role_naming_different_lists_pass_nothing():
 
 
 def test_a_parent_named_twice_in_a_step_is_one_disagreement():
-    report = SampleReport(identifier_rules())
+    report = SampleReport(identifier_rules(), NO_CURATOR_RULES)
     report.members["p"] = frozenset({coriell("HG00096")})
     report.held["parent"] = "p"
     twice = [{"role": "calls_from", "parent_key": "parent", "parent_file": "p.cram"}] * 2
@@ -696,7 +698,7 @@ def test_a_members_checksum_takes_what_the_member_took_from_its_table(tmp_path, 
 def test_a_member_two_tables_paired_takes_from_neither_where_they_differ():
     tables = tables_of([{"sample_table": "a", "members": ["m", "x"]}, {"sample_table": "b", "members": ["m"]}])
     assert tables == {"m": ("a", "b"), "x": ("a",)}
-    report = SampleReport(identifier_rules(), tables=tables)
+    report = SampleReport(identifier_rules(), NO_CURATOR_RULES, tables=tables)
     report.members.update({"l1": frozenset({coriell("HG00096")}), "l2": frozenset({coriell("HG00097")})})
     report.held.update({"a": "l1", "b": "l2"})
     report._member_own["m"] = ([], DATASET)
@@ -723,7 +725,7 @@ def test_a_damaged_filesets_block_is_refused(run):
     ],
 )
 def test_what_two_sources_pass_first_match_wins(held, conflicted, outcome):
-    report = SampleReport(identifier_rules())
+    report = SampleReport(identifier_rules(), NO_CURATOR_RULES)
     report.members.update({"l1": frozenset({coriell("HG00096")}), "l2": frozenset({coriell("HG00097")})})
     report.held.update(held)
     report._conflicted.update(conflicted)
@@ -731,7 +733,7 @@ def test_what_two_sources_pass_first_match_wins(held, conflicted, outcome):
 
 
 def test_two_tables_naming_one_list_both_pass_and_are_both_cited():
-    report = SampleReport(identifier_rules(), tables={"m": ("a", "b")})
+    report = SampleReport(identifier_rules(), NO_CURATOR_RULES, tables={"m": ("a", "b")})
     report.members["l"] = frozenset({coriell("HG00096")})
     report.held.update({"a": "l", "b": "l"})
     report._member_own["m"] = ([], DATASET)
@@ -742,7 +744,7 @@ def test_two_tables_naming_one_list_both_pass_and_are_both_cited():
 
 def test_a_member_whose_step_passes_other_samples_keeps_its_tables_source_through_inheritance():
     """The table's source joins the member's own, so a parent naming another sample makes the member a conflict."""
-    report = SampleReport(identifier_rules(), tables={"m": ("t",)})
+    report = SampleReport(identifier_rules(), NO_CURATOR_RULES, tables={"m": ("t",)})
     report.members.update({"l1": frozenset({coriell("HG00096")}), "l2": frozenset({coriell("HG00097")})})
     report.held.update({"t": "l1", "p": "l2"})
     own: list[Named] = []

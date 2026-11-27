@@ -8,6 +8,7 @@ import yaml
 
 from meta_disco import code_rules
 from meta_disco.activity_map import load_activity_map
+from meta_disco.curator_rules import load_curator_rules
 from meta_disco.models import SOURCE_PUBLISHED_VALUE, SOURCE_REPOSITORY_METADATA
 from meta_disco.output_utils import (
     CLASSIFICATION_FILES,
@@ -464,6 +465,18 @@ def test_a_sample_rule_is_counted_by_the_sources_a_records_samples_lists(tmp_pat
     assert rows["coriell_hg"]["files"] == 1
     assert rows[code_rules.VCF_SAMPLE_COLUMNS.id]["files"] == 0
     assert not {u["id"] for u in data["undeclared"]} & set(rows)
+
+
+def test_a_curator_rule_answering_a_files_samples_is_a_declared_sample_rule(tmp_path):
+    """#777: the rule a record's answered samples cite has a row of its own, not an undeclared one."""
+    (rule, *_) = load_curator_rules().samples
+    named_by = [{"source_type": "wrangler_annotation", "rule_id": rule.id}]
+    record = {**RECORDS[0], "samples": {"list_id": "0" * 16, "count": 1, "named_by": named_by}}
+    run_dir = reconciled_run(tmp_path, [record])
+    data = grr.build(*rule_files(tmp_path), iter_reconciled_records(run_dir), run_dir)
+    row = {r["id"]: r for r in data["sample_rules"]}[rule.id]
+    assert row["files"] == 1 and row["defined_in"] == grr.CURATOR_RULES and row["rationale"] == rule.rationale
+    assert rule.id not in {u["id"] for u in data["undeclared"]}
 
 
 def test_every_caller_rule_is_counted_in_the_caller_table():
